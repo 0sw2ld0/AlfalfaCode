@@ -77,7 +77,8 @@ def test_spawn_agent_espera_el_informe_como_agent_de_claude(tmp_path, monkeypatc
     # El explorador sólo lee, no lanza agentes ni cierra el turno del usuario.
     herramientas = nombres_de_herramientas(guion.payloads['a1'][0])
     assert {'read_file', 'search', 'list_files'} <= herramientas
-    assert not herramientas & {'write_file', 'edit_file', 'run_command', 'apply_patch', 'spawn_agent', 'wrap_up'}
+    assert not herramientas & {'write_file', 'edit_file', 'run_command', 'apply_patch', 'spawn_agent', 'wrap_up',
+                               'propose_session'}
     sistema = guion.payloads['a1'][0]['messages'][0]['content']
     assert 'Eres un subagente' in sistema and 'explorador de sólo lectura' in sistema
     # El principal sí tiene las herramientas de Codex, y el manual lista los tipos.

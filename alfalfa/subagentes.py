@@ -71,7 +71,8 @@ EQUIVALENCIAS = {
 }
 SIEMPRE = ('update_plan',)
 # Lo que un subagente nunca recibe: no lanza otros ni cierra el turno del usuario.
-HERRAMIENTAS_DEL_PRINCIPAL = ('spawn_agent', 'send_input', 'wait_agent', 'close_agent', 'list_agents', 'wrap_up')
+HERRAMIENTAS_DEL_PRINCIPAL = ('spawn_agent', 'send_input', 'wait_agent', 'close_agent', 'list_agents', 'wrap_up',
+                              'propose_session')
 MODELOS_DE_CLAUDE = ('inherit', 'sonnet', 'opus', 'haiku', 'fable')
 
 

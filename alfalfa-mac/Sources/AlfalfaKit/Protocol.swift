@@ -404,19 +404,6 @@ public struct Outcome: Equatable, Sendable {
     public var turn: String?
 }
 
-/// Caja «siguiente paso» al final de un turno: resumen y, si el usuario decide, pregunta y botones.
-public struct WrapUp: Equatable, Sendable {
-    public var recap: String
-    public var ask: String?
-    public var options: [String]
-
-    public init(recap: String, ask: String? = nil, options: [String] = []) {
-        self.recap = recap
-        self.ask = ask
-        self.options = options
-    }
-}
-
 public struct SessionSummary: Equatable, Identifiable, Sendable {
     public var id: String
     public var task: String?
@@ -792,12 +779,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                 mcpInstructions: part("instrucciones_mcp"), plugins: part("complementos"))
     }
 
-    private static func wrapUp(_ value: Any?) -> WrapUp? {
-        guard let object = value as? [String: Any], let recap = text(object["resumen"]) else { return nil }
-        let ask = text(object["pregunta"])
-        let options = ask == nil ? [] : (object["opciones"] as? [Any] ?? []).compactMap { text($0) }.prefix(2)
-        return WrapUp(recap: recap, ask: ask, options: Array(options))
-    }
+    private static func wrapUp(_ value: Any?) -> WrapUp? { WrapUp(cierre: value) }
 
     private static func summary(_ row: [String: Any]) -> SessionSummary? {
         guard let id = row["id"] as? String, let state = row["estado"] as? String else { return nil }

@@ -93,7 +93,12 @@ Si en el turno cambiaste archivos, ejecutaste órdenes o hiciste varios pasos,
 llama a wrap_up justo antes de tu respuesta final: un resumen corto de cómo
 queda (qué cambió y qué falta o no verificaste) y, sólo si lo siguiente lo
 decide el usuario, una pregunta con una o dos respuestas cortas, la que
-recomiendas primero. Después escribe tu respuesta completa como siempre.'''
+recomiendas primero. Después escribe tu respuesta completa como siempre.
+Si ves una tarea aparte (algo fuera del encargo, o el siguiente paso que
+recomiendas y no vas a hacer ahora), propónla con propose_session: un título
+corto y el encargo completo, porque la sesión nueva no ve esta conversación.
+Sale como tarjeta y decide el usuario. No la uses para lo que vas a hacer tú
+ni para una pieza que necesitas para responder (para eso, spawn_agent).'''
 SUBAGENTES_MANUAL = '''
 Subagentes (spawn_agent), como Codex y Claude Code: un agente aparte con su propia
 conversación para una tarea acotada. Úsalos cuando el usuario pida subagentes o
@@ -613,11 +618,16 @@ def ollama_orden(args):
 
 def texto_del_cierre(cierre):
     """El cierre del turno para la terminal: resumen, pregunta y respuestas posibles."""
-    lineas = ['', '── Siguiente paso ──', cierre['resumen']]
+    lineas = ['', '── Siguiente paso ──'] + ([cierre['resumen']] if cierre.get('resumen') else [])
     if cierre.get('pregunta'):
         lineas.append(cierre['pregunta'])
     if cierre.get('opciones'):
         lineas.append('Responde: ' + ' · '.join('«' + o + '»' for o in cierre['opciones']))
+    for propuesta in cierre.get('sesiones') or []:
+        # En la terminal no hay tarjeta: el encargo queda a mano para abrir otra sesión.
+        lineas += ['', 'Sesión propuesta: ' + propuesta['titulo'],
+                   '  Para empezarla aparte: alfalfa "<encargo>". Encargo:'] + [
+            '  ' + linea for linea in propuesta['encargo'].splitlines()]
     return '\n'.join(lineas)
 
 

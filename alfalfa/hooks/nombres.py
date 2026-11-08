@@ -46,6 +46,7 @@ SIN_EQUIVALENTE = {
     'invocar_comando': 'Los comandos de Claude son prompts del usuario; aquí sólo se compone su plantilla.',
     'apply_patch': 'Edita varios archivos con un parche; como en Codex, los filtros Edit y Write también lo eligen.',
     'wrap_up': 'El cierre de turno de Claude Code es de la app, no una herramienta que vean los hooks.',
+    'propose_session': 'Las tarjetas «Nueva sesión» de Claude Code son de la app, no una herramienta de los hooks.',
     'command_status': 'BashOutput y KillShell de Claude Code son dos herramientas; aquí es una.',
     'spawn_agent': 'Agent (antes Task) de Claude Code recibe prompt y subagent_type; aquí message y agent_type.',
     'wait_agent': 'Claude Code avisa al terminar un agente en segundo plano; aquí se espera como en Codex.',

@@ -2,7 +2,8 @@ import AlfalfaKit
 import SwiftUI
 
 /// Caja «siguiente paso» del final del turno, como la de Claude Code: resumen, pregunta y
-/// hasta dos respuestas. La primera es la recomendada y responde también con ⌘↩.
+/// hasta dos respuestas. La primera es la recomendada y responde también con ⌘↩. Debajo van
+/// las sesiones que propuso el agente.
 struct WrapUpCard: View {
 
     // MARK: - Propiedades
@@ -15,7 +16,8 @@ struct WrapUpCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
-                Text(MarkdownText.inline(wrapUp.recap)).font(.system(size: 13.5)).foregroundStyle(Theme.secondary)
+                Text(MarkdownText.inline(wrapUp.recap.isEmpty ? "Sesiones propuestas" : wrapUp.recap))
+                    .font(.system(size: 13.5)).foregroundStyle(Theme.secondary)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: dismiss) {
@@ -34,6 +36,9 @@ struct WrapUpCard: View {
                     }
                     .disabled(!canReply).opacity(canReply ? 1 : 0.5)
                 }
+            }
+            ForEach(wrapUp.sessions) { proposal in
+                SessionProposalCard(proposal: proposal, canReply: canReply, session: session)
             }
         }
         .padding(20).frame(maxWidth: .infinity, alignment: .leading)

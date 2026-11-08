@@ -34,51 +34,6 @@ struct SidebarGroup: Identifiable {
     var name: String { title ?? URL(fileURLWithPath: folder).lastPathComponent }
 }
 
-enum Presentation {
-    static let efforts: [(value: String, label: String)] = [
-        ("low", "Bajo"), ("medium", "Medio"), ("high", "Alto"), ("xhigh", "Muy alto"), ("max", "Máximo")
-    ]
-    static let defaultModel = "deepseek-v4.1-flash:cloud"
-
-    static func effortLabel(_ value: String) -> String { efforts.first { $0.value == value }?.label ?? value }
-
-    static func shortModel(_ name: String) -> String {
-        name.hasSuffix(":cloud") ? String(name.dropLast(6)) : name
-    }
-
-    /// El proveedor por el prefijo del modelo, como en el motor: sin prefijo es Ollama.
-    static func provider(of name: String) -> String { ModelProvider.id(of: name) }
-
-    static func abbreviate(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
-    }
-
-    /// Estado guardado en disco de una sesión que esta app no tiene abierta.
-    static func stored(_ state: String) -> (label: String, tone: SidebarRow.Tone) {
-        switch state {
-        case "completed": return ("completada", .done)
-        case "failed": return ("fallida", .problem)
-        case "blocked": return ("bloqueada", .problem)
-        case "corrupta": return ("ilegible", .problem)
-        // Una bifurcación recién hecha: espera su primer mensaje.
-        case "created": return ("lista", .done)
-        default: return ("Interrumpida · se puede reanudar", .attention)
-        }
-    }
-
-    /// Se puede reanudar sin mensaje: sólo lo que se quedó a medias.
-    static func resumable(_ state: String) -> Bool { !["completed", "corrupta", "created"].contains(state) }
-}
-
-/// Lo que enseña el aviso de «Buscar actualización».
-enum UpdateCheck: Equatable {
-    case checking
-    case available(UpdateInfo)
-    case updating
-    case message(title: String, text: String)
-}
-
 @MainActor
 final class AppModel: ObservableObject {
     @Published var route: Route = .new {
@@ -669,4 +624,27 @@ final class AppModel: ObservableObject {
 
 enum CodeActionsShell {
     static func quote(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+}
+
+// MARK: - Sesiones propuestas
+
+extension AppModel {
+    /// «Nueva sesión» de una tarjeta de `propose_session`, como en Claude Code: empieza el encargo en
+    /// la misma carpeta, con el modelo, el esfuerzo y el modo de la sesión que la propuso. No cambia
+    /// de pantalla: la sesión nueva sale en la barra lateral y, si pide permiso, espera a que vayas.
+    /// Va aquí porque `live` sólo se cambia desde este archivo.
+    @discardableResult
+    func startProposed(_ proposal: SessionProposal, from parent: LiveSession) -> Bool {
+        guard let launcher else { return false }
+        let session = LiveSession(cwd: parent.cwd, title: proposal.title, resumeID: nil, model: parent.model,
+                                  effort: parent.effort, readOnly: parent.readOnly, mode: parent.mode)
+        session.onChange = { [weak self] in self?.objectWillChange.send() }
+        live.insert(session, at: 0)
+        session.start(launcher: launcher, task: proposal.task)
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            await reload()
+        }
+        return true
+    }
 }

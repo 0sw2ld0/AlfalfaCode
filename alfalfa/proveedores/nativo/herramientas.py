@@ -574,6 +574,42 @@ def cierre_de_turno(args):
     return cierre
 
 
+# Sesiones propuestas, como las tarjetas «Nueva sesión» de Claude Code: sólo AlfalfaCode.
+MAX_TITULO = 60
+MAX_ENCARGO = 4000
+MAX_PROPUESTAS = 3
+PROPOSE_SESSION_EXAMPLE = {'title': 'Quitar el aviso de deprecación de httpx',
+                           'prompt': 'En tests/test_web.py, httpx avisa de que `app=` está obsoleto. Cámbialo por '
+                                     '`transport=httpx.ASGITransport(app=...)` y comprueba que pytest sale sin '
+                                     'avisos. No toques nada más.'}
+PROPOSE_SESSION_TOOL = schema(
+    'propose_session',
+    'Propose a separate session for a task of its own that the user can start with one click: work you '
+    'noticed outside the request, or the follow-up your answer recommends and you will not do now. The app '
+    'shows a card with "New session" and "Do it here"; nothing runs until the user chooses. title: under 60 '
+    "characters, naming the task. prompt: the complete brief in the user's language (the files or area, what "
+    'done looks like, what you already found), because the new session does not see this conversation. Never '
+    'propose the step you are doing now or a piece you need for your own answer (use spawn_agent for that). '
+    'At most 3 per turn, and do not do that work yourself in this turn.',
+    {'title': STRING, 'prompt': STRING}, ['title', 'prompt'], example=PROPOSE_SESSION_EXAMPLE)
+
+
+def sesion_propuesta(args):
+    """Valida propose_session y devuelve la propuesta que se enseña: título y encargo."""
+    titulo = ' '.join(str(args.get('title') or '').split())
+    encargo = str(args.get('prompt') or '').strip()
+    if not titulo:
+        raise ValueError('propose_session necesita title: unas pocas palabras que nombren la tarea.')
+    if len(titulo) > MAX_TITULO:
+        raise ValueError('title tiene más de ' + str(MAX_TITULO) + ' caracteres; acórtalo.')
+    if len(encargo) < 20:
+        raise ValueError('prompt es el encargo completo de la sesión nueva, que no ve esta conversación: '
+                         'qué hacer, dónde y cuándo está hecho.')
+    if len(encargo) > MAX_ENCARGO:
+        raise ValueError('prompt tiene más de ' + str(MAX_ENCARGO) + ' caracteres; resúmelo.')
+    return {'titulo': titulo, 'encargo': encargo}
+
+
 # Mira el modelo de la sesión (o quien diga ajustes.vision_delegada).
 INSPECT_IMAGE_DESCRIPTION = ('Look at a local image file (PNG, JPEG, GIF, WebP, HEIC, TIFF or BMP) and answer '
                              'question about what it shows: layout, visible text, errors, colors. Use it for '
@@ -590,8 +626,8 @@ def _neutral(tool):
     return INSPECT_IMAGE_TOOL if tool['function']['name'] == 'inspect_image' else tool
 
 
-ON_REQUEST_TOOLS = [_neutral(_on_request(tool)) for tool in TOOLS] + [APPLY_PATCH_TOOL, WRAP_UP_TOOL,
-                                                                      COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS
+ON_REQUEST_TOOLS = [_neutral(_on_request(tool)) for tool in TOOLS] + [
+    APPLY_PATCH_TOOL, WRAP_UP_TOOL, PROPOSE_SESSION_TOOL, COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS
 
 # Herramientas de sesión para los complementos autorizados.
 # Sólo las ofrece un runtime con cargador de complementos; sin él no se
@@ -879,9 +915,25 @@ class WorkspaceTools:
                     if claves and respuesta == sesion.SESION:
                         sesion.recordar(self.runtime.task, claves)
         if name == 'wrap_up':
-            # Sin efectos: lo recoge el transporte al cerrar el turno.
-            self.runtime.task['cierre'] = cierre_de_turno(args)
+            # Sin efectos: lo recoge el transporte al cerrar el turno. Las sesiones propuestas
+            # antes en el mismo turno siguen en el cierre.
+            propuestas = (self.runtime.task.get('cierre') or {}).get('sesiones')
+            cierre = cierre_de_turno(args)
+            if propuestas:
+                cierre['sesiones'] = propuestas
+            self.runtime.task['cierre'] = cierre
             return {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
+        if name == 'propose_session':
+            # Tampoco ejecuta nada: la tarjeta sale con el cierre del turno y decide el usuario.
+            propuesta = sesion_propuesta(args)
+            propuestas = self.runtime.task.setdefault('cierre', {}).setdefault('sesiones', [])
+            if any(p['titulo'] == propuesta['titulo'] for p in propuestas):
+                raise ValueError('Ya propusiste una sesión con ese título en este turno.')
+            if len(propuestas) >= MAX_PROPUESTAS:
+                raise ValueError('Ya hay ' + str(MAX_PROPUESTAS) + ' sesiones propuestas en este turno.')
+            propuestas.append(propuesta)
+            return {'propuesta': True, 'nota': 'El usuario la verá en una tarjeta con «Nueva sesión» y «Hacerlo '
+                                               'aquí». No hagas ese trabajo en este turno.'}
         if name in ('abrir_habilidad', 'invocar_comando'):
             # Sólo el cargador de la sesión resuelve la referencia y
             # siempre desde una raíz autorizada; nunca se ejecuta su texto.
