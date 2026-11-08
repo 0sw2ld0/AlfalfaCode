@@ -43,7 +43,8 @@ Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.
 También valen las variables estándar `OLLAMA_API_KEY` y `OPENAI_API_KEY`, y
 `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
 secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
-La app de Mac lo configura todo desde «Proveedores…» en el selector de modelo.
+La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
+también abre «Proveedores…» en el selector de modelo.
 
 Con un **código de cortesía** de un servicio Alfalfa:
 
@@ -103,7 +104,15 @@ ofrece el catálogo de AlfalfaCode; los agentes del integrador no lo ven.
 
 `--marcar ID titulo|fijada|archivada VALOR`, `--eliminar-sesion ID` (a la Papelera
 de macOS) y `--solo-bifurcar ID` responden una línea JSON. Son lo que usa el menú de
-clic derecho de la barra lateral.
+clic derecho de la barra lateral. En ese menú, «Mostrar en Finder» abre la carpeta del
+proyecto y «Mostrar historial en Finder», la de la sesión en `$ALFALFA_HOME/sesiones`.
+El botón de carpeta de la cabecera de una sesión también abre la del proyecto.
+
+La ventana de Ajustes (⌘,) guarda el nombre del pie de la barra lateral, la carpeta,
+el modelo, el esfuerzo y el modo de permisos de los encargos nuevos, los proveedores y
+la búsqueda de actualizaciones. Para revisarla sin clics, `ALFALFA_ABRIR_AJUSTES=modelo`
+la abre en esa parte al arrancar (`general`, `proveedores`, `modelo` o
+`actualizaciones`).
 
 Al abrir una sesión guardada, la app carga su conversación (`alfalfa --historial ID
 --json`) y la deja lista para seguir, como un hilo de Codex: el siguiente mensaje
@@ -410,8 +419,8 @@ alfalfa --actualizar
 En un clon, `--actualizar` avanza la rama hasta la etiqueta nueva (sólo si no hay
 cambios sin guardar ni commits propios) y reinstala el paquete; instalado con pip,
 lo reinstala desde GitHub en esa etiqueta. La app de Mac tiene el mismo botón en
-la barra lateral (flecha hacia abajo) y en el menú AlfalfaCode → «Buscar
-actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
+la barra lateral (flecha hacia abajo, o el menú del nombre), en Ajustes ▸
+Actualizaciones y en el menú AlfalfaCode → «Buscar actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
 compilarla con `swift build`.
 
 Al publicar una versión, sube `__version__` en `alfalfa/__init__.py` y crea la

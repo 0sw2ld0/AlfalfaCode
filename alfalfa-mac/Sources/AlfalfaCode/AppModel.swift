@@ -46,13 +46,8 @@ enum Presentation {
         name.hasSuffix(":cloud") ? String(name.dropLast(6)) : name
     }
 
-    static let providerNames = ["ollama": "Ollama", "openai": "OpenAI", "alfalfa": "Alfalfa"]
-
     /// El proveedor por el prefijo del modelo, como en el motor: sin prefijo es Ollama.
-    static func provider(of name: String) -> String {
-        let head = name.split(separator: "/", maxSplits: 1).first.map(String.init) ?? ""
-        return name.contains("/") && ["openai", "alfalfa"].contains(head) ? head : "ollama"
-    }
+    static func provider(of name: String) -> String { ModelProvider.id(of: name) }
 
     static func abbreviate(_ path: String) -> String {
         let home = NSHomeDirectory()
@@ -130,7 +125,7 @@ final class AppModel: ObservableObject {
     init() {
         launcher = Launcher.locate()
         recents = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
-        folder = recents.first
+        applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
         // ⌘V con una imagen en el portapapeles la adjunta al compositor visible, como en Codex.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -192,7 +187,7 @@ final class AppModel: ObservableObject {
         var order: [String] = []
         var groups: [String: [String]] = [:]
         for name in names {
-            let provider = models.first { $0.name == name }?.provider ?? Presentation.provider(of: name)
+            let provider = ModelProvider.id(of: name, in: models)
             if groups[provider] == nil { order.append(provider) }
             groups[provider, default: []].append(name)
         }
@@ -200,7 +195,7 @@ final class AppModel: ObservableObject {
     }
 
     func providerName(_ id: String) -> String {
-        providers.first { $0.id == id }?.name ?? Presentation.providerNames[id] ?? id
+        ModelProvider.name(of: id, listed: providers)
     }
 
     // MARK: - Proveedores

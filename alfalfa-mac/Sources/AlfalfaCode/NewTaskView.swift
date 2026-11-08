@@ -13,7 +13,7 @@ struct NewTaskView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var focused: Bool
     @State private var importingOllama = false
-    @State private var choosingProviders = false
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 0) {
@@ -171,16 +171,11 @@ struct NewTaskView: View {
             ModelMenuItems(groups: model.modelGroups, selected: model.model, label: model.label(for:),
                            providerName: model.providerName) { model.model = $0 }
             Divider()
-            Button("Proveedores…") { choosingProviders = true }
+            Button("Proveedores…") { openProviders() }
         } label: {
             Text(model.label(for: model.model)).font(.system(size: 12.5, design: .monospaced))
         }
         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Modelo")
-        .sheet(isPresented: $choosingProviders) { ProvidersView().environmentObject(model) }
-        // Para revisar la interfaz sin clics: ALFALFA_ABRIR_PROVEEDORES abre la hoja al arrancar.
-        .onAppear {
-            if ProcessInfo.processInfo.environment["ALFALFA_ABRIR_PROVEEDORES"] != nil { choosingProviders = true }
-        }
     }
 
     private var effortMenu: some View {
@@ -194,6 +189,16 @@ struct NewTaskView: View {
             Text(Presentation.effortLabel(model.effort)).font(.system(size: 12.5))
         }
         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Esfuerzo")
+    }
+}
+
+// MARK: - Métodos privados
+
+extension NewTaskView {
+    /// «Proveedores…» abre la misma parte de la ventana de Ajustes.
+    private func openProviders() {
+        UserDefaults.standard.set(SettingsSection.proveedores.rawValue, forKey: Preferences.Key.section)
+        openSettings()
     }
 }
 

@@ -28,11 +28,10 @@ struct ModelMenuItems: View {
     }
 }
 
-/// Ollama con su URL y su clave, OpenAI con la del usuario y el proveedor por defecto.
+/// Ajustes ▸ Proveedores: Ollama con su URL y su clave, OpenAI con la del usuario y el proveedor por defecto.
 /// Las claves van al Llavero a través de `alfalfa`; la app no las guarda ni las vuelve a enseñar.
 struct ProvidersView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
     @State private var ollamaURL = ""
     @State private var ollamaKey = ""
     @State private var openAIKey = ""
@@ -43,11 +42,7 @@ struct ProvidersView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("Proveedores").font(.system(size: 17, weight: .semibold))
-                Spacer()
-                Button("Cerrar") { dismiss() }.keyboardShortcut(.cancelAction)
-            }
+            SettingsTitle(text: "Proveedores")
             defaultPicker
             section("Ollama", status: status("ollama"),
                     detail: "Local, u Ollama Cloud con tu clave. Sin URL se usa la de este Mac.") {
@@ -100,8 +95,7 @@ struct ProvidersView: View {
                     .foregroundStyle(model.providersError == nil ? Theme.secondary : Theme.danger)
             }
         }
-        .padding(24)
-        .frame(width: 480)
+        .frame(width: 480, alignment: .leading)
         .task {
             await model.reloadProviders()
             ollamaURL = status("ollama")?.url ?? ""

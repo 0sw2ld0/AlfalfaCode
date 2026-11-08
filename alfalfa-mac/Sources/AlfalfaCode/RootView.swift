@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 0) {
@@ -26,41 +27,16 @@ struct RootView: View {
         .foregroundStyle(Theme.text)
         .overlay(alignment: .top) { TitleBarArea().frame(height: 28) }
         .ignoresSafeArea(.container, edges: .top)
-        .alert(alertTitle, isPresented: alertShown, presenting: model.update) { check in
-            if case .available = check {
-                Button("Actualizar") { model.installUpdate() }
-                Button("Ahora no", role: .cancel) { model.update = nil }
-            } else {
-                Button("Aceptar", role: .cancel) { model.update = nil }
-            }
-        } message: { check in
-            switch check {
-            case let .available(info):
-                Text("Hay una versión nueva: \(info.latest ?? "?") (tienes \(info.installed)).")
-            case let .message(_, text): Text(text)
-            default: EmptyView()
-            }
-        }
+        .modifier(UpdateAlert())
+        .onAppear(perform: openSettingsIfRequested)
     }
 
-    /// Sólo se enseña el aviso con un resultado; mientras busca o instala, el botón muestra el progreso.
-    private var alertShown: Binding<Bool> {
-        Binding(get: {
-            switch model.update {
-            case .available, .message: return true
-            default: return false
-            }
-        }, set: { shown in
-            if !shown, model.update != .updating { model.update = nil }
-        })
-    }
+    // MARK: - Métodos privados
 
-    private var alertTitle: String {
-        switch model.update {
-        case .available: return "Actualización disponible"
-        case let .message(title, _): return title
-        default: return ""
-        }
+    private func openSettingsIfRequested() {
+        guard let section = SettingsSection.requestedAtLaunch() else { return }
+        UserDefaults.standard.set(section.rawValue, forKey: Preferences.Key.section)
+        openSettings()
     }
 }
 
@@ -115,7 +91,7 @@ struct SidebarView: View {
                 .padding(.horizontal, 8)
             }
             Spacer(minLength: 0)
-            footer
+            SidebarFooter()
         }
         .background(Theme.sidebar)
         .alert("Renombrar sesión", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -155,9 +131,15 @@ struct SidebarView: View {
                 if let folder = row.folder { Button("Ruta de la carpeta") { model.copy(folder) } }
                 Button("Orden para reanudar") { model.copy(model.resumeCommand(row)) }
             } label: { Label("Copiar", systemImage: "doc.on.doc") }
-            if let folder = model.sessionFolder(row) {
-                Button { NSWorkspace.shared.activateFileViewerSelecting([folder]) } label: {
+            if let folder = row.folder {
+                Button { NSWorkspace.shared.open(URL(fileURLWithPath: folder, isDirectory: true)) } label: {
                     Label("Mostrar en Finder", systemImage: "folder")
+                }
+                .disabled(!FileManager.default.fileExists(atPath: folder))
+            }
+            if let history = model.sessionFolder(row) {
+                Button { NSWorkspace.shared.activateFileViewerSelecting([history]) } label: {
+                    Label("Mostrar historial en Finder", systemImage: "clock.arrow.circlepath")
                 }
             }
             Divider()
@@ -210,32 +192,6 @@ struct SidebarView: View {
         case .problem: return Theme.danger
         case .idle: return Theme.muted
         }
-    }
-
-    private var footer: some View {
-        HStack(spacing: 10) {
-            Text(String(NSFullUserName().prefix(1)).uppercased())
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 26, height: 26)
-                .background(Theme.alfalfa, in: Circle()).foregroundStyle(Theme.dark)
-            (Text(NSFullUserName()) + Text(" · Ollama").foregroundColor(Theme.muted)).lineLimit(1)
-            Spacer()
-            Button { Task { await model.reload() } } label: {
-                Image(systemName: "arrow.clockwise").foregroundStyle(Theme.secondary)
-            }
-            .buttonStyle(.plain).help("Actualizar sesiones y modelos")
-            Button { model.checkForUpdate() } label: {
-                if model.update == .checking || model.update == .updating {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.down.circle").foregroundStyle(Theme.secondary)
-                }
-            }
-            .buttonStyle(.plain).help("Buscar actualización de AlfalfaCode")
-            .disabled(model.update == .checking || model.update == .updating)
-        }
-        .padding(14)
-        .overlay(alignment: .top) { Divider().overlay(Theme.border) }
     }
 }
 

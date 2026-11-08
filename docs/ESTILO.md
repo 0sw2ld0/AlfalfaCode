@@ -50,16 +50,18 @@ Se apagan dos reglas de la guía:
 
 ### La deuda: `.swiftlint-baseline.json`
 
-Los archivos que ya eran grandes antes de esta guía tienen 376 avisos, que están
+Los archivos que ya eran grandes antes de esta guía tienen 370 avisos, que están
 apuntados en `alfalfa-mac/.swiftlint-baseline.json`. SwiftLint los reconoce por su
 texto, no por el número de línea, así que solo enseña los avisos nuevos. Casi todos son
-de orden de las partes (196) y de líneas largas (164). Están en AppModel (90), Timeline
+de orden de las partes (190) y de líneas largas (164). Están en AppModel (88), Timeline
 (47), SidePanel (35), LiveSession (29), Protocol (29) y SlashCommands (16). El resto son
 las pruebas, con JSON del protocolo en una sola línea, y unos pocos archivos pequeños.
 
 No se corrigieron a mano para no chocar con las ramas abiertas, la de proveedores y la
 del icono. Cuando se parta uno de esos archivos, se corrigen sus avisos y se vuelve a
-escribir la lista:
+escribir la lista. Así se hizo al añadir la ventana de Ajustes: el pie de la barra lateral
+pasó a `SidebarFooter.swift`, el aviso de actualización a `UpdateAlert.swift` y las
+preferencias a `AppModel+Preferences.swift`, y la lista bajó de 376 a 370:
 
 ```bash
 cd alfalfa-mac && swiftlint --write-baseline .swiftlint-baseline.json
@@ -69,7 +71,7 @@ La lista solo debe encoger. Si un cambio la hace crecer, es que trae avisos nuev
 esos se corrigen.
 
 Los siguientes archivos para partir, por tamaño:
-- `AppModel.swift` (677 líneas): carga, proveedores, actualización, carpetas, sesiones y
+- `AppModel.swift` (672 líneas): carga, proveedores, actualización, carpetas, sesiones y
   chats de Ollama, cada parte en una extensión de su propio archivo.
 - `SidePanel.swift` (569): contexto, subagentes, procesos, entorno y cambios, una
   sección por archivo.

@@ -34,9 +34,21 @@ struct SessionView: View {
             Spacer()
             if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
             if session.isDormant { dormantHint }
+            folderButton
         }
         .padding(.horizontal, 24).frame(minHeight: 48).padding(.top, 4)
         .overlay(alignment: .bottom) { Divider().overlay(Theme.border) }
+    }
+
+    /// Abre en Finder la carpeta del proyecto, no la del historial de la sesión.
+    private var folderButton: some View {
+        Button { NSWorkspace.shared.open(session.cwd) } label: {
+            Image(systemName: "folder").foregroundStyle(Theme.secondary)
+                .frame(width: 26, height: 26).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Abrir la carpeta del proyecto en Finder (\(Presentation.abbreviate(session.cwd.path)))")
+        .accessibilityLabel("Abrir la carpeta del proyecto en Finder")
     }
 
     @ViewBuilder private var dormantHint: some View {

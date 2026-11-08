@@ -84,5 +84,10 @@ struct AlfalfaApp: App {
             }
         }
         .defaultSize(width: 1280, height: 800)
+
+        // AlfalfaCode ▸ Ajustes… (⌘,): el sistema pone el título en español gracias al Info.plist.
+        Settings {
+            SettingsView().environmentObject(model)
+        }
     }
 }
