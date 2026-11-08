@@ -177,6 +177,10 @@ struct NewTaskView: View {
         }
         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Modelo")
         .sheet(isPresented: $choosingProviders) { ProvidersView().environmentObject(model) }
+        // Para revisar la interfaz sin clics: ALFALFA_ABRIR_PROVEEDORES abre la hoja al arrancar.
+        .onAppear {
+            if ProcessInfo.processInfo.environment["ALFALFA_ABRIR_PROVEEDORES"] != nil { choosingProviders = true }
+        }
     }
 
     private var effortMenu: some View {
