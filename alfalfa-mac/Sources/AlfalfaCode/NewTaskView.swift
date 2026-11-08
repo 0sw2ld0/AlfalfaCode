@@ -13,6 +13,7 @@ struct NewTaskView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var focused: Bool
     @State private var importingOllama = false
+    @State private var choosingProviders = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -167,15 +168,15 @@ struct NewTaskView: View {
 
     private var modelMenu: some View {
         Menu {
-            ForEach(model.modelChoices, id: \.self) { name in
-                Button { model.model = name } label: {
-                    if name == model.model { Label(name, systemImage: "checkmark") } else { Text(name) }
-                }
-            }
+            ModelMenuItems(groups: model.modelGroups, selected: model.model, label: model.label(for:),
+                           providerName: model.providerName) { model.model = $0 }
+            Divider()
+            Button("Proveedores…") { choosingProviders = true }
         } label: {
-            Text(Presentation.shortModel(model.model)).font(.system(size: 12.5, design: .monospaced))
+            Text(model.label(for: model.model)).font(.system(size: 12.5, design: .monospaced))
         }
         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Modelo")
+        .sheet(isPresented: $choosingProviders) { ProvidersView().environmentObject(model) }
     }
 
     private var effortMenu: some View {

@@ -27,6 +27,24 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(decoded[9], .models([ModelInfo(name: "deepseek-v4.1-flash:cloud"), ModelInfo(name: "llama3.2:3b")]))
     }
 
+    func testDecodesProvidersModelsAndQuota() {
+        let models = #"{"version":2,"tipo":"modelos","modelos":[{"name":"glm-5.3-flash:cloud","proveedor":"ollama","nombre":"glm-5.3-flash:cloud"},{"name":"alfalfa/gpt-6-luna","proveedor":"alfalfa","nombre":"GPT-6 Luna - Alfalfa"}],"fallos":{"openai":"No se pudo consultar OpenAI."}}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: models), .models([
+            ModelInfo(name: "glm-5.3-flash:cloud"),
+            ModelInfo(name: "alfalfa/gpt-6-luna", label: "GPT-6 Luna - Alfalfa", provider: "alfalfa"),
+        ]))
+        let providers = #"{"version":2,"tipo":"proveedores","por_defecto":"openai","proveedores":[{"id":"ollama","nombre":"Ollama","configurado":true,"url":"http://127.0.0.1:11434","clave":false},{"id":"openai","nombre":"OpenAI","configurado":true,"clave":true}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: providers), .providers(defaultProvider: "openai", providers: [
+            ProviderStatus(id: "ollama", name: "Ollama", configured: true, url: "http://127.0.0.1:11434"),
+            ProviderStatus(id: "openai", name: "OpenAI", configured: true, hasKey: true),
+        ]))
+        let quota = #"{"version":2,"tipo":"cuota","cuotas":[{"proveedor":"openai","usado_pct":42.5,"renueva":"2026-12-01"}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([Quota(provider: "openai", usedPercent: 42.5, renews: "2026-12-01")]))
+        var timeline = Timeline()
+        timeline.apply(.quota([Quota(provider: "ollama", usedPercent: 10)]))
+        XCTAssertEqual(timeline.quotas.first?.usedPercent, 10)
+    }
+
     func testDecodesOllamaChats() {
         let line = #"{"version":2,"tipo":"chats_ollama","chats":[{"id":"c1","titulo":"Plan del juego","mensajes":7,"modelos":["glm-5.3-flash:cloud"],"fecha":1793534405.0},{"id":"c2"}]}"#
         guard case let .ollamaChats(chats)? = AlfalfaMessage.decode(line: line) else { return XCTFail("no decodifica") }

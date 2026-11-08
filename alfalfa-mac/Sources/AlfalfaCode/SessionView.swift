@@ -99,13 +99,10 @@ struct SessionView: View {
     /// siguiente turno, como /model en Codex.
     private var modelMenu: some View {
         Menu {
-            ForEach(choices, id: \.self) { name in
-                Button { session.change(model: name) } label: {
-                    if name == session.model { Label(name, systemImage: "checkmark") } else { Text(name) }
-                }
-            }
+            ModelMenuItems(groups: groups, selected: session.model, label: app.label(for:),
+                           providerName: app.providerName) { session.change(model: $0) }
         } label: {
-            Text(Presentation.shortModel(session.model)).font(.system(size: 12.5, design: .monospaced))
+            Text(app.label(for: session.model)).font(.system(size: 12.5, design: .monospaced))
         }
         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Modelo")
         .help(session.timeline.status.isRunning ? "El cambio vale desde el siguiente turno" : "Modelo de la sesión")
@@ -129,6 +126,12 @@ struct SessionView: View {
     private var choices: [String] {
         let names = app.modelChoices
         return names.contains(session.model) ? names : [session.model] + names
+    }
+
+    private var groups: [(provider: String, names: [String])] {
+        let all = app.modelGroups
+        if all.contains(where: { $0.names.contains(session.model) }) { return all }
+        return [(Presentation.provider(of: session.model), [session.model])] + all
     }
 
     private func isPermission(_ item: TimelineItem, _ id: String) -> Bool {
@@ -316,7 +319,7 @@ struct SessionView: View {
             case .modelo:
                 return choices.filter { wanted.isEmpty || $0.lowercased().contains(wanted) }.map { name in
                     CommandSuggestion(id: "modelo:" + name, symbol: name == session.model ? "checkmark" : "cpu",
-                                      title: Presentation.shortModel(name), detail: name == session.model ? "en uso" : "",
+                                      title: app.label(for: name), detail: name == session.model ? "en uso" : "",
                                       enabled: true, action: .argument(.modelo, name))
                 }
             case .modo:

@@ -159,6 +159,14 @@ public final class AlfalfaProcess: @unchecked Sendable {
         }
     }
 
+    /// Escribe una línea suelta por stdin (por ejemplo una clave para `--guardar-clave`).
+    public func write(line: String) {
+        queue.async {
+            guard !self.inputClosed else { return }
+            try? self.input.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
+        }
+    }
+
     /// Cierra stdin (EOF): el proceso termina la sesión.
     public func closeInput() {
         queue.async { self.closeInputNow() }
@@ -180,7 +188,9 @@ public final class AlfalfaProcess: @unchecked Sendable {
     }
 
     /// Consulta de una sola pasada (`--sesiones --json`, `--modelos --json`).
-    public static func query(launcher: URL, arguments: [String], directory: URL) async throws -> [AlfalfaMessage] {
+    /// `input` va por la entrada estándar (una clave para `--guardar-clave`), nunca en los argumentos.
+    public static func query(launcher: URL, arguments: [String], directory: URL,
+                             input: String? = nil) async throws -> [AlfalfaMessage] {
         try await withCheckedThrowingContinuation { continuation in
             let process = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: directory)
             let box = MessageBox()
@@ -196,6 +206,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
             }
             do {
                 try process.start()
+                if let input { process.write(line: input) }
                 process.closeInput()
             } catch {
                 continuation.resume(throwing: error)

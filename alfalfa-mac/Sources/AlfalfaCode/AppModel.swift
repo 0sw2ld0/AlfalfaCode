@@ -46,6 +46,14 @@ enum Presentation {
         name.hasSuffix(":cloud") ? String(name.dropLast(6)) : name
     }
 
+    static let providerNames = ["ollama": "Ollama", "openai": "OpenAI", "alfalfa": "Alfalfa"]
+
+    /// El proveedor por el prefijo del modelo, como en el motor: sin prefijo es Ollama.
+    static func provider(of name: String) -> String {
+        let head = name.split(separator: "/", maxSplits: 1).first.map(String.init) ?? ""
+        return name.contains("/") && ["openai", "alfalfa"].contains(head) ? head : "ollama"
+    }
+
     static func abbreviate(_ path: String) -> String {
         let home = NSHomeDirectory()
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
@@ -90,6 +98,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
     @Published private(set) var models: [ModelInfo] = []
+    /// Ollama, OpenAI y Alfalfa, como los cuenta `alfalfa --proveedores --json`.
+    @Published private(set) var providers: [ProviderStatus] = []
+    @Published private(set) var defaultProvider = "ollama"
+    @Published var providersError: String?
     @Published private(set) var loadError: String?
     @Published var model = Presentation.defaultModel
     @Published var effort = "medium"
@@ -161,8 +173,87 @@ final class AppModel: ObservableObject {
             models = []
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
         }
+        await reloadProviders()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
+    }
+
+    /// El nombre visible de un modelo («GPT-6 Luna - Alfalfa»), o el corto si no está en la lista.
+    func label(for name: String) -> String {
+        models.first { $0.name == name }?.label ?? Presentation.shortModel(name)
+    }
+
+    /// Los modelos del selector agrupados por proveedor, en el orden de la lista.
+    var modelGroups: [(provider: String, names: [String])] {
+        let names = modelChoices
+        var order: [String] = []
+        var groups: [String: [String]] = [:]
+        for name in names {
+            let provider = models.first { $0.name == name }?.provider ?? Presentation.provider(of: name)
+            if groups[provider] == nil { order.append(provider) }
+            groups[provider, default: []].append(name)
+        }
+        return order.map { ($0, groups[$0] ?? []) }
+    }
+
+    func providerName(_ id: String) -> String {
+        providers.first { $0.id == id }?.name ?? Presentation.providerNames[id] ?? id
+    }
+
+    // MARK: Proveedores
+
+    func reloadProviders() async {
+        _ = await providerCommand(["--proveedores", "--json"])
+    }
+
+    /// Guarda una clave en el Llavero a través de `alfalfa`: va por stdin, nunca en los argumentos.
+    func saveKey(_ secret: String, for provider: String) async -> Bool {
+        let clean = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        let ok = await providerCommand(["--guardar-clave", provider, "--json"], input: clean)
+        if ok { await reload() }
+        return ok
+    }
+
+    func deleteKey(for provider: String) async {
+        if await providerCommand(["--borrar-clave", provider, "--json"]) { await reload() }
+    }
+
+    func setURL(_ url: String, for provider: String) async -> Bool {
+        let value = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ok = await providerCommand(["--fijar-url", provider, value.isEmpty ? "-" : value, "--json"])
+        if ok { await reload() }
+        return ok
+    }
+
+    func setDefaultProvider(_ provider: String) async {
+        _ = await providerCommand(["--proveedor-por-defecto", provider, "--json"])
+    }
+
+    @discardableResult
+    private func providerCommand(_ arguments: [String], input: String? = nil) async -> Bool {
+        guard let launcher else { return false }
+        do {
+            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: arguments,
+                                                          directory: home, input: input)
+            for message in messages {
+                switch message {
+                case let .providers(defaultProvider, rows):
+                    self.defaultProvider = defaultProvider
+                    providers = rows
+                    providersError = nil
+                    return true
+                case let .error(text):
+                    providersError = text
+                    return false
+                default: continue
+                }
+            }
+            return false
+        } catch {
+            providersError = error.localizedDescription
+            return false
+        }
     }
 
     var modelChoices: [String] {

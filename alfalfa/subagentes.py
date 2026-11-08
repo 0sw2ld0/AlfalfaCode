@@ -37,7 +37,7 @@ ESPERA_POR_DEFECTO = 120
 MAX_INFORME = 12000     # caracteres del informe que vuelven al principal
 MAX_MENSAJE = 20000
 MAX_TIPOS = 50
-RUIDO = ('Ollama transporte: intento',)
+RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
 NOTA_REDIRIGIDO = ('El usuario te escribió y pidió que lo leas ya: su mensaje está en la conversación. El subagente '
                    'sigue trabajando; recoge su informe después con wait_agent.')
 

@@ -56,8 +56,11 @@ class Proveedor:
         """'local' o 'remote', para explicar los fallos de conexión."""
         return 'remote'
 
-    def cliente(self, timeout):
-        """`httpx.AsyncClient` que habla el formato de Ollama."""
+    def cliente(self, timeout, tarea=None):
+        """`httpx.AsyncClient` que habla el formato de Ollama.
+
+        `tarea` es la de la sesión, por si el proveedor necesita su esfuerzo.
+        """
         raise NotImplementedError
 
     def modelos(self):
@@ -74,6 +77,9 @@ def obtener(ident):
     if ident == 'ollama':
         from .ollama import Ollama
         return Ollama()
+    if ident == 'openai':
+        from .openai import OpenAI
+        return OpenAI()
     raise ErrorDeProveedor('Proveedor desconocido: ' + str(ident))
 
 

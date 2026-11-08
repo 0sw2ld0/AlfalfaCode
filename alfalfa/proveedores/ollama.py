@@ -48,7 +48,7 @@ class Ollama(Proveedor):
         clave = self.clave()
         return {'Authorization': 'Bearer ' + clave} if clave else {}
 
-    def cliente(self, timeout):
+    def cliente(self, timeout, tarea=None):
         return httpx.AsyncClient(base_url=self.url(), headers=self.cabeceras(), timeout=timeout,
                                  trust_env=False)
 

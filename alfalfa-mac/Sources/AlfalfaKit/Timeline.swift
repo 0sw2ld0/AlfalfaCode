@@ -287,6 +287,9 @@ public struct Timeline: Equatable, Sendable {
         return parts.joined(separator: "\n\n") + "\n"
     }
 
+    /// Cuota mensual usada de los proveedores que la tienen (el servicio Alfalfa).
+    public var quotas: [Quota] = []
+
     public var pendingPermissions: [PermissionRequest] {
         items.compactMap { if case let .permission(_, request, .pending) = $0 { return request } else { return nil } }
     }
@@ -352,7 +355,8 @@ public struct Timeline: Equatable, Sendable {
             steps.append(event)
             if steps.count > Self.subagentStepLimit { steps.removeFirst(steps.count - Self.subagentStepLimit) }
             subagentSteps[agent] = steps
-        case .sessions, .models, .update, .sessionChanged, .history, .ollamaChats:
+        case let .quota(rows): quotas = rows
+        case .sessions, .models, .providers, .update, .sessionChanged, .history, .ollamaChats:
             break
         }
     }

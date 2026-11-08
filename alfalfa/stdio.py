@@ -571,7 +571,7 @@ def turns(ident):
 
 
 MAX_HISTORIAL = 600
-_RUIDO = ('Ollama transporte: intento',)
+_RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
 
 
 def history(ident):

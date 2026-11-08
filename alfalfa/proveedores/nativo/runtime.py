@@ -665,7 +665,7 @@ class NativeRuntime:
                              'añade su clave o su código en Proveedores.')
         self._proveedor = proveedor
         self.task['provider'] = proveedor.id
-        return proveedor, model, proveedor.cliente(timeout)
+        return proveedor, model, proveedor.cliente(timeout, tarea=self.task)
 
     @staticmethod
     def _texto_de_error(value):
@@ -714,12 +714,13 @@ class NativeRuntime:
 
     def _provider_failure(self, clas, error_text=None, intentos=None):
         """Error clasificado que deja su información estructurada en la tarea."""
-        exc = _ollama_failure(clas, error_text, intentos)
+        proveedor = self._proveedor_actual()
+        if proveedor.id != 'ollama' and clas.get('cause') == 'access_denied':
+            # La acción por defecto habla de iniciar sesión en Ollama.
+            clas = dict(clas, action='falta de acceso; revisa la clave o el código de ' + proveedor.nombre
+                        + ' en Proveedores; no se reintenta.')
+        exc = _ollama_failure(clas, error_text, intentos, proveedor.nombre)
         details = exc.as_dict()
-        proveedor = getattr(self, '_proveedor', None)
-        if proveedor is None:
-            from ..ollama import Ollama
-            proveedor = Ollama()
         if proveedor.id != 'ollama':
             details['provider'] = proveedor.id
         try:
@@ -730,6 +731,13 @@ class NativeRuntime:
             details['endpoint_scope'] = alcance
         self.task['runtime_provider_error'] = details
         return exc
+
+    def _proveedor_actual(self):
+        proveedor = getattr(self, '_proveedor', None)
+        if proveedor is None:
+            from ..ollama import Ollama
+            proveedor = Ollama()
+        return proveedor
 
     def _retry_clock(self):
         return time.monotonic()
@@ -765,16 +773,16 @@ class NativeRuntime:
         log.append(entry)
         del log[:-MAX_TRANSPORT_ATTEMPTS]
         self.manager.event(self.task, 'system',
-                           'Ollama transporte: intento ' + str(attempt) + '/'
+                           self._proveedor_actual().nombre + ' transporte: intento ' + str(attempt) + '/'
                            + str(MAX_TRANSPORT_ATTEMPTS) + '.')
 
     def _log_transport_exhausted(self, attempts, reason):
         self.task['runtime_transport_retry_exhausted'] = True
         self.task['runtime_transport_retry_exhaustion'] = reason
         if reason == 'attempt_limit':
-            texto = 'Ollama transporte: agotados ' + str(attempts) + ' intentos; sesión no completada.'
+            texto = self._proveedor_actual().nombre + ' transporte: agotados ' + str(attempts) + ' intentos; sesión no completada.'
         else:
-            texto = ('Ollama transporte: plazo de sesión agotado tras ' + str(attempts)
+            texto = (self._proveedor_actual().nombre + ' transporte: plazo de sesión agotado tras ' + str(attempts)
                      + ' intentos; no se completó la sesión.')
         self.manager.event(self.task, 'system', texto)
 

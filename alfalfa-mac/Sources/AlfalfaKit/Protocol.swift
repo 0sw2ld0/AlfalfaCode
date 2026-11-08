@@ -468,8 +468,50 @@ public struct OllamaChat: Equatable, Identifiable, Sendable {
 }
 
 public struct ModelInfo: Equatable, Identifiable, Sendable {
+    /// El que guarda la sesión: `glm-5.3-flash:cloud`, `openai/gpt-6-luna`.
     public var name: String
+    /// El visible en el selector («GPT-6 Luna - Alfalfa»).
+    public var label: String
+    /// `ollama`, `openai` o `alfalfa`.
+    public var provider: String
     public var id: String { name }
+
+    public init(name: String, label: String? = nil, provider: String = "ollama") {
+        self.name = name
+        self.label = label ?? name
+        self.provider = provider
+    }
+}
+
+/// Un proveedor tal como lo cuenta `alfalfa --proveedores --json`, sin secretos.
+public struct ProviderStatus: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    public var configured: Bool
+    public var url: String?
+    public var hasKey: Bool
+
+    public init(id: String, name: String, configured: Bool, url: String? = nil, hasKey: Bool = false) {
+        self.id = id
+        self.name = name
+        self.configured = configured
+        self.url = url
+        self.hasKey = hasKey
+    }
+}
+
+/// Cuota mensual de un proveedor con límite (el servicio Alfalfa).
+public struct Quota: Equatable, Identifiable, Sendable {
+    public var provider: String
+    public var usedPercent: Double
+    public var renews: String?
+    public var id: String { provider }
+
+    public init(provider: String, usedPercent: Double, renews: String? = nil) {
+        self.provider = provider
+        self.usedPercent = usedPercent
+        self.renews = renews
+    }
 }
 
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
@@ -489,6 +531,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `alfalfa --historial ID --json`: la conversación guardada y el cierre de su último turno.
     case history(id: String, events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0)
     case models([ModelInfo])
+    /// `--proveedores --json` y las órdenes que los cambian: el proveedor por defecto y el estado de cada uno.
+    case providers(defaultProvider: String, providers: [ProviderStatus])
+    /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
+    case quota([Quota])
     case ollamaChats([OllamaChat])
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
@@ -566,7 +612,25 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .sessions(rows.compactMap(summary))
         case "modelos":
             guard let rows = object["modelos"] as? [[String: Any]] else { return nil }
-            return .models(rows.compactMap { ($0["name"] as? String).map(ModelInfo.init(name:)) })
+            return .models(rows.compactMap { row in
+                guard let name = row["name"] as? String else { return nil }
+                return ModelInfo(name: name, label: text(row["nombre"]) ?? name,
+                                 provider: text(row["proveedor"]) ?? "ollama")
+            })
+        case "proveedores":
+            guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }
+            return .providers(defaultProvider: text(object["por_defecto"]) ?? "ollama", providers: rows.compactMap { row in
+                guard let id = text(row["id"]) else { return nil }
+                return ProviderStatus(id: id, name: text(row["nombre"]) ?? id,
+                                      configured: row["configurado"] as? Bool ?? false,
+                                      url: text(row["url"]), hasKey: row["clave"] as? Bool ?? false)
+            })
+        case "cuota":
+            guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
+            return .quota(rows.compactMap { row in
+                guard let provider = text(row["proveedor"]), let used = number(row["usado_pct"]) else { return nil }
+                return Quota(provider: provider, usedPercent: used, renews: text(row["renueva"]))
+            })
         case "chats_ollama":
             guard let rows = object["chats"] as? [[String: Any]] else { return nil }
             return .ollamaChats(rows.compactMap { row in
