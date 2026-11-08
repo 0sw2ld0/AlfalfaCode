@@ -1,12 +1,17 @@
 import Foundation
 
-public enum AlfalfaError: Error, LocalizedError {
+public enum AlfalfaError: Error {
     case launcherNotFound
     case failed(String)
+}
 
+// MARK: - LocalizedError
+
+extension AlfalfaError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .launcherNotFound: return "No se encontró scripts/alfalfa. Define ALFALFA_REPO con la carpeta del repositorio."
+        case .launcherNotFound:
+            return "No se encontró scripts/alfalfa. Define ALFALFA_REPO con la carpeta del repositorio."
         case let .failed(text): return text
         }
     }
@@ -42,8 +47,13 @@ public enum Launcher {
     /// que empiece por «-» no se lea como opción.
     public static func stdioArguments(task: String?, resume: String?, model: String?,
                                       effort: String?, readOnly: Bool, images: [String] = [],
-                                      mode: String? = nil, wait: Bool = false) -> [String] {
+                                      mode: String? = nil, wait: Bool = false, parent: String? = nil,
+                                      title: String? = nil) -> [String] {
         var arguments = ["--stdio"]
+        // La sesión que la propuso: sólo al crearla, se guarda con ella.
+        if let parent, resume == nil { arguments += ["--padre", parent] }
+        // El título de la propuesta, para que la barra lateral no enseñe el principio del encargo.
+        if let title, !title.isEmpty, resume == nil { arguments += ["--titulo", title] }
         if let mode, !mode.isEmpty { arguments += ["--modo", mode] }
         for image in images { arguments += ["--imagen", image] }
         if let resume { arguments += ["--reanudar", resume] }
@@ -159,6 +169,14 @@ public final class AlfalfaProcess: @unchecked Sendable {
         }
     }
 
+    /// Escribe una línea suelta por stdin (por ejemplo una clave para `--guardar-clave`).
+    public func write(line: String) {
+        queue.async {
+            guard !self.inputClosed else { return }
+            try? self.input.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
+        }
+    }
+
     /// Cierra stdin (EOF): el proceso termina la sesión.
     public func closeInput() {
         queue.async { self.closeInputNow() }
@@ -180,7 +198,9 @@ public final class AlfalfaProcess: @unchecked Sendable {
     }
 
     /// Consulta de una sola pasada (`--sesiones --json`, `--modelos --json`).
-    public static func query(launcher: URL, arguments: [String], directory: URL) async throws -> [AlfalfaMessage] {
+    /// `input` va por la entrada estándar (una clave para `--guardar-clave`), nunca en los argumentos.
+    public static func query(launcher: URL, arguments: [String], directory: URL,
+                             input: String? = nil) async throws -> [AlfalfaMessage] {
         try await withCheckedThrowingContinuation { continuation in
             let process = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: directory)
             let box = MessageBox()
@@ -196,6 +216,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
             }
             do {
                 try process.start()
+                if let input { process.write(line: input) }
                 process.closeInput()
             } catch {
                 continuation.resume(throwing: error)

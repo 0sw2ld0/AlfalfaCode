@@ -75,3 +75,34 @@ def test_la_web_usa_la_url_la_clave_y_el_aviso_del_integrador(monkeypatch):
     assert asyncio.run(web.buscar('alfalfa')) == {'query': 'alfalfa', 'results': []}
     assert vistas == [('http://buscador.prueba/v1/search', 'clave-de-prueba')]
     assert avisos == ['http://buscador.prueba']
+
+
+def test_el_integrador_pone_sus_nombres_en_el_manual_y_los_motivos(m, monkeypatch):
+    from alfalfa.proveedores.nativo.runtime import manual_del_harness
+    assert 'runtime nativo de AlfalfaCode' in manual_del_harness('glm') and '{runtime}' not in manual_del_harness('glm')
+    assert 'las concede el arnés solo' in manual_del_harness('glm')
+    assert ordenes.safe_command('git merge otra', str(m.task['cwd']))[1].endswith('lo decide el usuario, no el agente')
+    monkeypatch.setattr(ajustes, 'nombres', lambda: {'runtime': 'MiApp', 'concede': 'MiApp sola', 'decide': 'MiApp',
+                                                     'integrador': 'miapp'})
+    assert 'runtime nativo de MiApp' in manual_del_harness('glm') \
+        and 'las concede MiApp sola' in manual_del_harness('glm')
+    assert 'runtime nativo de MiApp.' in NativeRuntime.default_engine_text('low')
+    assert 'lo decide MiApp' in ordenes.safe_command('git merge otra', str(m.task['cwd']))[1]
+
+
+def test_el_integrador_añade_ramas_de_avance_y_ordenes_propias(tmp_path, monkeypatch):
+    espacio = str(tmp_path)
+    assert not ordenes.safe_command('git merge --ff-only app/integracion', espacio)[0]
+    assert not ordenes.safe_command('miherramienta --auditar salida', espacio)[0]
+    monkeypatch.setattr(ajustes, 'ramas_de_avance', lambda: ('app/integracion',))
+
+    def propia(programa, argumentos, espacio):
+        if programa == 'miherramienta' and argumentos[:1] == ['--auditar'] \
+                and not ordenes.fuera_del_espacio(argumentos[1], espacio):
+            return 'auditoría propia del integrador'
+        return None
+    monkeypatch.setattr(ajustes, 'orden_permitida', propia)
+    assert ordenes.safe_command('git merge --ff-only app/integracion', espacio)[0]
+    assert not ordenes.safe_command('git merge app/integracion', espacio)[0]
+    assert ordenes.safe_command('miherramienta --auditar salida', espacio)[0]
+    assert not ordenes.safe_command('miherramienta --auditar /etc/x', espacio)[0]

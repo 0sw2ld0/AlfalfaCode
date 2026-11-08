@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 func fixtureLines(_ name: String) throws -> [String] {
     let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "jsonl", subdirectory: "Fixtures"))
@@ -25,6 +25,47 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(rows[1].state, "corrupta")
         XCTAssertNil(rows[1].cwd)
         XCTAssertEqual(decoded[9], .models([ModelInfo(name: "deepseek-v4.1-flash:cloud"), ModelInfo(name: "llama3.2:3b")]))
+    }
+
+    func testDecodesTheDailyLimitOfAQuota() {
+        let quota = #"{"version":2,"tipo":"cuota","servicio":"alfalfa","cuotas":[{"proveedor":"ollama","#
+            + #""nombre":"Modelos de Ollama","usado_pct":15,"renueva":"2026-12-01","#
+            + #""dia":{"usado_pct":90,"renueva":"2026-11-09T00:00:00+00:00"}}]}"#
+        let daily = QuotaWindow(usedPercent: 90, renews: "2026-11-09T00:00:00+00:00")
+        let expected = Quota(provider: "ollama", label: "Modelos de Ollama", usedPercent: 15, renews: "2026-12-01",
+                             daily: daily)
+        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([expected]))
+        XCTAssertEqual(expected.tightestPercent, 90)
+        XCTAssertNil(Quota(provider: "openai", usedPercent: 3).daily)
+    }
+
+    func testDecodesProvidersModelsAndQuota() {
+        let models = #"{"version":2,"tipo":"modelos","modelos":[{"name":"glm-5.3-flash:cloud","proveedor":"ollama","nombre":"glm-5.3-flash:cloud"},{"name":"alfalfa/gpt-6-luna","proveedor":"alfalfa","nombre":"GPT-6 Luna - Alfalfa"}],"fallos":{"openai":"No se pudo consultar OpenAI."}}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: models), .models([
+            ModelInfo(name: "glm-5.3-flash:cloud"),
+            ModelInfo(name: "alfalfa/gpt-6-luna", label: "GPT-6 Luna - Alfalfa", provider: "alfalfa")
+        ]))
+        let providers = #"{"version":2,"tipo":"proveedores","por_defecto":"openai","proveedores":[{"id":"ollama","nombre":"Ollama","configurado":true,"url":"http://127.0.0.1:11434","clave":false},{"id":"openai","nombre":"OpenAI","configurado":true,"clave":true}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: providers), .providers(defaultProvider: "openai", providers: [
+            ProviderStatus(id: "ollama", name: "Ollama", configured: true, url: "http://127.0.0.1:11434"),
+            ProviderStatus(id: "openai", name: "OpenAI", configured: true, hasKey: true)
+        ]))
+        let quota = #"{"version":2,"tipo":"cuota","servicio":"alfalfa","cuotas":[{"proveedor":"openai","nombre":"GPT-6 Luna","usado_pct":42.5,"renueva":"2026-12-01"}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([Quota(provider: "openai", label: "GPT-6 Luna",
+                                                                         usedPercent: 42.5, renews: "2026-12-01")]))
+        let activated = #"{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","modelos":["gpt-6-luna"],"cuotas":[]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: activated), .activated(name: "Ana", quotas: []))
+        let sent = #"{"version":2,"tipo":"reporte","enviado":true,"id":7,"soporte":"ayuda@example.com"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: sent),
+                       .reported(ReportResult(sent: true, id: 7, support: "ayuda@example.com")))
+        let notSent = #"{"version":2,"tipo":"reporte","enviado":false,"soporte":"","#
+            + #""motivo":"No hay servicio Alfalfa configurado."}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: notSent),
+                       .reported(ReportResult(sent: false, reason: "No hay servicio Alfalfa configurado.")))
+        XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"reporte"}"#))
+        var timeline = Timeline()
+        timeline.apply(.quota([Quota(provider: "ollama", usedPercent: 10)]))
+        XCTAssertEqual(timeline.quotas.first?.usedPercent, 10)
     }
 
     func testDecodesOllamaChats() {
@@ -113,5 +154,8 @@ final class ProtocolTests: XCTestCase {
         let env = ["OLLAMA_API_KEY": "sk-secreto"]
         XCTAssertEqual(Redactor.clean("clave sk-secreto fin", environment: env), "clave [REDACTADO] fin")
         XCTAssertEqual(Redactor.clean("sin clave", environment: [:]), "sin clave")
+        let both = ["OLLAMA_API_KEY": "ollama-secreto", "OPENAI_API_KEY": "sk-openai-secreto"]
+        XCTAssertEqual(Redactor.clean("a ollama-secreto b sk-openai-secreto", environment: both),
+                       "a [REDACTADO] b [REDACTADO]")
     }
 }

@@ -27,9 +27,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 import re
 import time
+from pathlib import Path
 
 MAX_VIVOS = 6           # agent_max_threads de Codex
 MAX_ESPERA = 600        # lo que wait_agent puede esperar de una vez
@@ -37,7 +37,7 @@ ESPERA_POR_DEFECTO = 120
 MAX_INFORME = 12000     # caracteres del informe que vuelven al principal
 MAX_MENSAJE = 20000
 MAX_TIPOS = 50
-RUIDO = ('Ollama transporte: intento',)
+RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
 NOTA_REDIRIGIDO = ('El usuario te escribió y pidió que lo leas ya: su mensaje está en la conversación. El subagente '
                    'sigue trabajando; recoge su informe después con wait_agent.')
 
@@ -71,7 +71,8 @@ EQUIVALENCIAS = {
 }
 SIEMPRE = ('update_plan',)
 # Lo que un subagente nunca recibe: no lanza otros ni cierra el turno del usuario.
-HERRAMIENTAS_DEL_PRINCIPAL = ('spawn_agent', 'send_input', 'wait_agent', 'close_agent', 'list_agents', 'wrap_up')
+HERRAMIENTAS_DEL_PRINCIPAL = ('spawn_agent', 'send_input', 'wait_agent', 'close_agent', 'list_agents', 'wrap_up',
+                              'propose_session')
 MODELOS_DE_CLAUDE = ('inherit', 'sonnet', 'opus', 'haiku', 'fable')
 
 
@@ -348,11 +349,11 @@ class Subagentes:
         return sub.resultado()
 
     def _runtime(self, sub, tipo):
-        from .proveedores.nativo.runtime import NativeRuntime
-        from .permisos.bajo_demanda import OnRequestPolicy
-        from .permisos import modos
-        from .seatbelt import SeatbeltSandbox
         from . import terminal
+        from .permisos import modos
+        from .permisos.bajo_demanda import OnRequestPolicy
+        from .proveedores.nativo.runtime import NativeRuntime
+        from .seatbelt import SeatbeltSandbox
         gestor = self.gestor
         hijo = _GestorDeSubagente(gestor, sub, self.avisar)
         solo_lee = (tipo['solo_lectura'] or gestor.read_only

@@ -7,8 +7,6 @@ import sys
 
 import pytest
 
-from alfalfa.permisos import modos
-from alfalfa.proveedores.nativo import herramientas
 from alfalfa.seatbelt import SANDBOX_EXEC
 from alfalfa.stdio import Transport
 from alfalfa.terminal import ESCRITURA, TerminalManager
@@ -86,7 +84,8 @@ def test_las_que_solo_leen_no_preguntan(sesion, modo):
 def test_ediciones_segun_el_modo(sesion, modo, pregunta):
     m, root, call = sesion
     recorder = Recorder()
-    call(modo, recorder, 'apply_patch', input='*** Begin Patch\n*** Update File: nota.txt\n@@\n-hola\n+adiós\n*** End Patch')
+    call(modo, recorder, 'apply_patch',
+         input='*** Begin Patch\n*** Update File: nota.txt\n@@\n-hola\n+adiós\n*** End Patch')
     assert (root / 'nota.txt').read_text() == 'adiós\n'
     assert bool(recorder.calls) is pregunta
     if pregunta:
@@ -118,7 +117,8 @@ def test_omitir_aprueba_y_lo_anota(sesion):
     m.task['modo'] = 'omitir'
     asyncio.run(m.approval({'argv': ['rm', '-rf', 'algo'], 'purpose': 'x'}))
     assert interior.calls == []
-    eventos = [json.loads(l)['text'] for l in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
+    eventos = [json.loads(linea)['text']
+               for linea in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
     assert any('Omitir permisos' in e and 'rm -rf algo' in e for e in eventos)
     m.task['modo'] = 'auto'
     with pytest.raises(ValueError):

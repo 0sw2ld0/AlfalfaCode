@@ -6,15 +6,17 @@ import posixpath
 import re
 import shlex
 
-from ..proveedores.nativo.herramientas import digest, atomic_json
+from ..proveedores.nativo.herramientas import atomic_json, digest
 from ..reintentos.fallos import _sin_credenciales
+from .lectura import clasificacion as _clasificacion
+from .lectura import comprobacion_suficiente as _comprobacion_suficiente
+from .lectura import comprobacion_sustantiva as _comprobacion_sustantiva
+from .lectura import comprobacion_vigente as _comprobacion_vigente
+
 # Con guion bajo: RunEvidence tiene métodos públicos con estos mismos nombres.
 from .lectura import dentro_del_espacio as _dentro_del_espacio
-from .lectura import (clasificacion as _clasificacion, comprobacion_sustantiva as _comprobacion_sustantiva,
-                      comprobacion_suficiente as _comprobacion_suficiente,
-                      comprobacion_vigente as _comprobacion_vigente, salida_incompleta as _salida_incompleta)
+from .lectura import salida_incompleta as _salida_incompleta
 from .operaciones import classify_operation, operation_record_key
-
 
 _MAX_MESSAGE = 800
 _MAX_PENDING_DETAILS = 10
@@ -334,9 +336,9 @@ class RunEvidence:
     def _pytest_signature(self, argv, base=''):
         """Qué pruebas corre una orden de pytest, sin lo que sólo cambia el informe.
 
-        Kimi lanzó pytest desde la raíz con `server/tests/…` (código 4: sin el
+        Un agente lanzó pytest desde la raíz con `server/tests/…` (código 4: sin el
         paquete `app`) y lo repitió en verde con `bash -c 'cd server && … tests/…'`;
-        eran las mismas pruebas y el ticket quedó bloqueado (d0ef9839f8, 01/11).
+        eran las mismas pruebas y el ticket quedó bloqueado.
         """
         if not isinstance(argv, list) or not argv:
             return None
@@ -387,7 +389,7 @@ class RunEvidence:
     def _equivalence(self, finding, check):
         # El propósito no entra: un modelo lo redacta distinto en cada intento
         # («Validar de nuevo el esquema…», «Volver a validar…») y la misma orden,
-        # ya en verde, nunca contaba como arreglo (GLM, a167417260, 31/10).
+        # ya en verde, nunca contaba como arreglo.
         raiz = str(self.runtime.tools.root.resolve())
         if (finding.get('session_id') != check.get('session_id')
                 or finding.get('project') != check.get('project')
@@ -417,7 +419,7 @@ class RunEvidence:
             revision=self.runtime.state.get('workspace_revision', 0),
             huella=self.fingerprint, desajustes=lambda: self.integrity()['mismatches'])
 
-    # Lectura pública para quien está fuera del registro (el estudio, por ejemplo):
+    # Lectura pública para quien está fuera del registro (un integrador, por ejemplo):
     # los privados siguen siendo la implementación y se respetan si se parchean.
     def comprobacion_vigente(self, check):
         return self._check_is_current(check)
@@ -491,9 +493,9 @@ class RunEvidence:
                 and finding.get('fingerprint') == current_fingerprint):
             return 'pending'
         # La misma orden ya pasó en verde después del fallo: que el workspace
-        # cambie luego no lo vuelve a abrir. Kimi copió su validador a la carpeta
-        # final y borró el temporal; la orden original ya no podía repetirse y el
-        # ticket quedó bloqueado (d0ef9839f8, 01/11). Si lo último rompió algo,
+        # cambie luego no lo vuelve a abrir. Un agente copió su validador a la
+        # carpeta final y borró el temporal; la orden original ya no podía
+        # repetirse y el ticket quedó bloqueado. Si lo último rompió algo,
         # lo dice la verificación vigente, que exige comprobar tras cada cambio.
         return 'resolved' if resuelta_antes else 'obsolete'
 
@@ -563,11 +565,10 @@ class RunEvidence:
         """¿El agente ya verificó de otra forma el estado actual tras un fallo sin repetir?
 
         Un `node --test demo/test/` mal lanzado seguido de las mismas pruebas por
-        archivo, en verde, dejaba el ticket bloqueado hasta que alguien lo habilitara
-        (879dacfd5e, 03/11). Sólo cuenta tras el aviso, para que antes intente repetir
-        la orden, y con una comprobación posterior, vigente y sustantiva. No se da por
+        archivo, en verde, dejaba el ticket bloqueado hasta que alguien lo habilitara.
+        Sólo cuenta tras el aviso, para que antes intente repetir la orden, y con una comprobación posterior, vigente y sustantiva. No se da por
         resuelta: el revisor recibe la lista y decide si esconde un fallo real.
-        """
+        """  # noqa: E501
         if finding.get('status') == 'resolved' or finding.get('source') != 'check' \
                 or not self.runtime.state.get('unresolved_nudged'):
             return False
@@ -620,8 +621,7 @@ class RunEvidence:
         incident_records = self._refresh_incidents()
         all_incidents = list(incident_records.values())
         # Las mismas que frenan al agente: una edición o una orden obsoletas ya no
-        # dicen nada del estado actual y bloqueaban con las pruebas en verde
-        # (22f5d29c33, 03/11).
+        # dicen nada del estado actual y bloqueaban con las pruebas en verde.
         superadas = [finding for finding in all_incidents if self._superada(finding)]
         open_incidents = [finding for finding in all_incidents
                           if self._blocks(finding) and finding not in superadas]
@@ -1008,7 +1008,6 @@ class RunEvidence:
     def handoff(self):
         rt = self.runtime
         report = self.report()
-        revision = rt.state.get('workspace_revision', 0)
         checks = rt.state.get('checks', [])
         checks = checks if isinstance(checks, list) else []
         modified = list(self.fingerprint())
@@ -1050,8 +1049,10 @@ class RunEvidence:
             'verification': report,
             'checks': checks[-20:],
             'checks_total': len(checks),
-            'operations': (rt.state.get('operations', []) if isinstance(rt.state.get('operations'), list) else [])[-20:],
-            'operations_total': len(rt.state.get('operations', [])) if isinstance(rt.state.get('operations'), list) else 0,
+            'operations': (rt.state.get('operations', []) if isinstance(rt.state.get('operations'), list)
+                           else [])[-20:],
+            'operations_total': (len(rt.state.get('operations', [])) if isinstance(rt.state.get('operations'), list)
+                                 else 0),
             'blockers': rt.state.get('unresolved', {}),
             'unresolved_records': rt.state.get('unresolved_records', {}),
             'resolution_records': rt.state.get('resolution_records', []),

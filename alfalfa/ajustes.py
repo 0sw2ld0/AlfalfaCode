@@ -16,19 +16,79 @@ import shutil
 instrucciones_por_defecto = None
 
 
+# Cómo se nombran el arnés y el integrador en los textos que leen los agentes y
+# en los informes. Un integrador devuelve sólo las claves que cambia.
+NOMBRES = {
+    'runtime': 'AlfalfaCode',      # «runtime nativo de …» en el manual y el contrato
+    'concede': 'el arnés solo',    # «Algunas órdenes las concede …»
+    'decide': 'el usuario',        # «traer otra rama … lo decide …»
+    'integrador': 'integrador',    # `kind` del modelo sin cuota en la energía
+}
+
+
+def nombres():
+    """Las claves de `NOMBRES` que el integrador cambia (por defecto, ninguna)."""
+    return {}
+
+
+def nombre(clave):
+    valor = (nombres() or {}).get(clave)
+    return valor if isinstance(valor, str) and valor else NOMBRES[clave]
+
+
+def ramas_de_avance():
+    """Ramas, además de main y origin/main, a las que un agente puede avanzar con `git merge --ff-only`."""
+    return ()
+
+
+def orden_permitida(programa, argumentos, espacio):
+    """El motivo si el integrador da por segura esta orden simple (`programa` y sus argumentos), o None.
+
+    Para órdenes propias de su proyecto que el arnés no conoce. Sólo puede
+    añadir permisos a los runtimes sin política de aprobación, nunca quitarlos;
+    `alfalfa.permisos.ordenes.fuera_del_espacio(ruta, espacio)` ayuda a
+    comprobar que una salida queda dentro del worktree.
+    """
+    return None
+
+
 def ejecutable(nombre):
     """Ruta del programa `nombre` (por ejemplo `codex`), o None si no está."""
     return shutil.which(nombre)
 
 
 def ollama_url():
-    """URL base de Ollama: `ALFALFA_OLLAMA_URL`, o la local de siempre."""
-    return os.getenv('ALFALFA_OLLAMA_URL') or 'http://127.0.0.1:11434'
+    """URL base de Ollama: `ALFALFA_OLLAMA_URL`, la de `proveedores.json` o la local de siempre."""
+    from .proveedores import configuracion
+    return (os.getenv('ALFALFA_OLLAMA_URL') or configuracion.de('ollama').get('url')
+            or 'http://127.0.0.1:11434')
 
 
 def ollama_clave():
-    """Clave de Ollama Cloud: la estándar `OLLAMA_API_KEY`."""
-    return os.getenv('OLLAMA_API_KEY') or None
+    """Clave de Ollama Cloud: la estándar `OLLAMA_API_KEY` o la guardada en el Llavero."""
+    from .proveedores import llavero
+    return os.getenv('OLLAMA_API_KEY') or llavero.leer('ollama')
+
+
+def openai_clave():
+    """Clave de la API de OpenAI: la estándar `OPENAI_API_KEY` o la guardada en el Llavero."""
+    from .proveedores import llavero
+    return os.getenv('OPENAI_API_KEY') or llavero.leer('openai')
+
+
+def alfalfa_codigo():
+    """Código de cortesía del servicio Alfalfa: `ALFALFA_CODIGO` o el guardado al activarlo."""
+    from .proveedores import llavero
+    return os.getenv('ALFALFA_CODIGO') or llavero.leer('alfalfa')
+
+
+def alfalfa_servicio_url():
+    """URL base del servicio Alfalfa: `ALFALFA_SERVICIO_URL` o la de `proveedores.json`.
+
+    El repositorio es público y no trae ninguna: sin URL el proveedor no aparece.
+    """
+    from .proveedores import configuracion
+    return os.getenv('ALFALFA_SERVICIO_URL') or configuracion.de('alfalfa').get('url') or None
 
 
 def cuysearch_url():

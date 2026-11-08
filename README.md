@@ -1,6 +1,7 @@
 # AlfalfaCode
 
-Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud).
+Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud),
+de OpenAI con tu propia clave o de un servicio Alfalfa.
 Recibe un encargo, trabaja en la carpeta actual y pregunta antes de ejecutar lo
 que no sea una lectura. La orden es `alfalfa`.
 
@@ -18,9 +19,51 @@ python3.11 -m venv .venv
 Después `alfalfa` queda en `.venv/bin/`. También se puede lanzar con
 `scripts/alfalfa`, que admite un enlace simbólico desde cualquier carpeta del `PATH`.
 
-Ollama se configura con `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`)
-y la clave estándar `OLLAMA_API_KEY`, si el servicio la pide. Las sesiones, reglas, complementos y hooks del usuario
-viven en `$ALFALFA_HOME` (por defecto `~/.alfalfa`).
+Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
+(por defecto `~/.alfalfa`).
+
+## Proveedores
+
+El modelo dice con quién se habla:
+
+| Modelo | Proveedor |
+|---|---|
+| `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
+| `openai/gpt-6-luna` | OpenAI, con tu clave de la API (Responses API) |
+| `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
+
+```bash
+alfalfa --proveedores                         # estado, sin secretos
+alfalfa --guardar-clave openai                # pide la clave sin enseñarla
+alfalfa --fijar-url ollama https://ollama.com
+alfalfa --proveedor-por-defecto openai
+```
+
+Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.
+También valen las variables estándar `OLLAMA_API_KEY` y `OPENAI_API_KEY`, y
+`ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
+secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
+La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
+también abre «Proveedores…» en el selector de modelo.
+
+Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección del
+servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
+
+```bash
+alfalfa --activar-codigo     # pide el CUY-…@servicio y lo ata a este Mac
+alfalfa --cuota              # % usado este mes
+```
+
+El repositorio no trae la dirección de ningún servicio: llega con el código. Al
+servicio sólo se le manda la parte `CUY-…`, y la dirección queda guardada en
+`proveedores.json` cuando el servicio acepta el código. Sin esquema se usa HTTPS
+(HTTP sólo en este mismo equipo, como `@127.0.0.1:8090`). Un código suelto, sin
+arroba, vale si la dirección ya está guardada o se fija a mano con
+`alfalfa --fijar-url alfalfa https://…`.
+
+El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
+ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
+enseña una barra con el % de la cuota del mes.
 
 ## Usar
 
@@ -64,11 +107,40 @@ una tarjeta, y cada botón manda su texto como el siguiente mensaje; el primero
 también responde con ⌘↩. En la terminal sale como «Siguiente paso». Sólo lo
 ofrece el catálogo de AlfalfaCode; los agentes del integrador no lo ven.
 
+Como las tarjetas «Nueva sesión» de Claude Code, el agente puede proponer una
+tarea aparte con `propose_session` (`title` y `prompt`, el encargo completo,
+porque la sesión nueva no ve la conversación). Sirve para algo fuera del
+encargo o para el siguiente paso que recomienda y no va a hacer ahora. Puede
+proponer hasta tres por turno, y no ejecuta nada: viaja en el mismo `cierre`, como
+`sesiones: [{titulo, encargo}]`, y se guarda con el turno. La app enseña una
+tarjeta por propuesta. «Nueva sesión» empieza el encargo aparte, en la misma
+carpeta y con el mismo modelo, esfuerzo y modo, sin cambiar de pantalla: la
+sesión sale en la barra lateral. «Hacerlo aquí» se lo pide a la sesión actual. En
+la terminal se imprime el encargo para abrir otra sesión a mano.
+
+La sesión que nace así es hija de la que la propuso: se crea con `--padre ID`, que
+queda guardado en ella y sale como `padre` en `--sesiones --json`, y con `--titulo`
+y el título de la propuesta, que la barra lateral enseña en vez del principio del
+encargo. Si el padre vuelve a abrirse, su tarjeta ya no ofrece «Nueva sesión». En la barra
+lateral va debajo de su padre, con sangría. Cada vez que la hija termina un turno, la
+app le manda al padre una nota con los primeros 400 caracteres de su informe: el
+resumen de `wrap_up` o, si no lo hay, su última respuesta. Si el padre está
+trabajando, la nota entra al acabar su turno. Si está dormido o cerrado, se despierta
+sin cambiarte de pantalla. Un turno que corta el usuario no manda nota.
+
 ## Sesiones desde la app
 
 `--marcar ID titulo|fijada|archivada VALOR`, `--eliminar-sesion ID` (a la Papelera
 de macOS) y `--solo-bifurcar ID` responden una línea JSON. Son lo que usa el menú de
-clic derecho de la barra lateral.
+clic derecho de la barra lateral. En ese menú, «Mostrar en Finder» abre la carpeta del
+proyecto y «Mostrar historial en Finder», la de la sesión en `$ALFALFA_HOME/sesiones`.
+El botón de carpeta de la cabecera de una sesión también abre la del proyecto.
+
+La ventana de Ajustes (⌘,) guarda el nombre del pie de la barra lateral, la carpeta,
+el modelo, el esfuerzo y el modo de permisos de los encargos nuevos, los proveedores y
+la búsqueda de actualizaciones. Para revisarla sin clics, `ALFALFA_ABRIR_AJUSTES=modelo`
+la abre en esa parte al arrancar (`general`, `proveedores`, `modelo` o
+`actualizaciones`).
 
 Al abrir una sesión guardada, la app carga su conversación (`alfalfa --historial ID
 --json`) y la deja lista para seguir, como un hilo de Codex: el siguiente mensaje
@@ -375,8 +447,8 @@ alfalfa --actualizar
 En un clon, `--actualizar` avanza la rama hasta la etiqueta nueva (sólo si no hay
 cambios sin guardar ni commits propios) y reinstala el paquete; instalado con pip,
 lo reinstala desde GitHub en esa etiqueta. La app de Mac tiene el mismo botón en
-la barra lateral (flecha hacia abajo) y en el menú AlfalfaCode → «Buscar
-actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
+la barra lateral (flecha hacia abajo, o el menú del nombre), en Ajustes ▸
+Actualizaciones y en el menú AlfalfaCode → «Buscar actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
 compilarla con `swift build`.
 
 Al publicar una versión, sube `__version__` en `alfalfa/__init__.py` y crea la
@@ -398,7 +470,12 @@ versión en sus dependencias.
 
 El arnés no importa nada de quien lo integra. Lo que esa aplicación necesita
 cambiar está en `alfalfa/ajustes.py`: instrucciones por defecto, dónde buscar los
-binarios, cómo llegar al buscador web y qué repositorio da por propio. La
+binarios, cómo llegar al buscador web, qué repositorio da por propio y las URL
+y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`,
+`alfalfa_servicio_url`).
+También cómo se nombran el runtime y el integrador en los textos (`nombres`), a
+qué ramas puede avanzar un agente con `git merge --ff-only` (`ramas_de_avance`) y
+qué órdenes propias de su proyecto da por seguras (`orden_permitida`). La
 aplicación los registra al cargarse.
 
 ## Pruebas
@@ -407,6 +484,10 @@ aplicación los registra al cargarse.
 .venv/bin/python -m pytest -q
 cd alfalfa-mac && swift test
 ```
+
+El estilo se comprueba con `ruff check .` en el motor y con `swiftlint` dentro de
+`alfalfa-mac/`. Las reglas, la deuda que queda y cómo partir los archivos grandes están
+en [docs/ESTILO.md](docs/ESTILO.md).
 
 ## Procedencia
 

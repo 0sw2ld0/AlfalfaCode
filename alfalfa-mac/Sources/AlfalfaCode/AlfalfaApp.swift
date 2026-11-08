@@ -1,20 +1,8 @@
 import AppKit
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject {
     var model: AppModel?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.applicationIconImage = Self.icon()
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-
-    @MainActor func applicationWillTerminate(_ notification: Notification) {
-        model?.shutdown()
-    }
 
     /// Carga el icono empaquetado y conserva el dibujo como respaldo.
     @MainActor private static func icon() -> NSImage? {
@@ -39,6 +27,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let renderer = ImageRenderer(content: view)
         renderer.scale = 1
         return renderer.nsImage
+    }
+}
+
+// MARK: - NSApplicationDelegate
+
+extension AppDelegate: NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.applicationIconImage = Self.icon()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    @MainActor func applicationWillTerminate(_ notification: Notification) {
+        model?.shutdown()
     }
 }
 
@@ -80,5 +84,10 @@ struct AlfalfaApp: App {
             }
         }
         .defaultSize(width: 1280, height: 800)
+
+        // AlfalfaCode ▸ Ajustes… (⌘,): el sistema pone el título en español gracias al Info.plist.
+        Settings {
+            SettingsView().environmentObject(model)
+        }
     }
 }

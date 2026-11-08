@@ -19,8 +19,8 @@ import argparse
 import asyncio
 import json
 import os
-from pathlib import Path
 import socket
+from pathlib import Path
 
 import mcp.types as types
 from mcp.server.lowlevel import Server
@@ -126,10 +126,11 @@ async def stdio(app):
 
 def http(app, archivo_puerto, archivo_cabeceras):
     import contextlib
+
     import uvicorn
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
     from starlette.applications import Starlette
     from starlette.routing import Mount
-    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
     gestor = StreamableHTTPSessionManager(app=app, json_response=True, stateless=True)
 

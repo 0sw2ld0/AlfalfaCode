@@ -8,7 +8,6 @@ import re
 
 from .fallos import patron_de_agotamiento
 
-
 LOCAL_SERVICE_UNAVAILABLE = 'local_service_unavailable'
 QUOTA_SATURATION = 'quota_saturation'
 TRANSIENT = 'transient'
@@ -240,7 +239,7 @@ def classify_retry_failure(task=None, ticket_error='', operation_failures=None):
     # Lo que el proveedor dijo de forma estructurada manda sobre el texto: su
     # propio mensaje («no respondió a tiempo (timed out)») volvía a sumar
     # «transitorio» a un timeout ya clasificado como servicio local, y con dos
-    # clases el fallo quedaba «desconocido» y nunca se reintentaba (GLM, 31/10).
+    # clases el fallo quedaba «desconocido» y nunca se reintentaba.
     del_proveedor = set(candidates)
 
     operation_classes = set()

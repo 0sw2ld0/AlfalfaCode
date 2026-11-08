@@ -2,18 +2,19 @@
 import base64
 import io
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from alfalfa import imagenes
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport, sessions
 from alfalfa.terminal import TerminalManager, main
-from alfalfa.proveedores.nativo.runtime import NativeRuntime
 
 # PNG de 1×1.
-PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5E'
+                       'rkJggg==')
 
 
 @pytest.fixture
@@ -101,10 +102,11 @@ def test_marcar_renombra_fija_y_archiva(tmp_path, monkeypatch, capsys):
     assert main(['--marcar', 'abc', 'fijada', 'sí']) == 0
     assert main(['--marcar', 'abc', 'archivada', 'si']) == 0
     assert main(['--marcar', 'abc', 'archivada', 'no']) == 0
-    salida = [json.loads(l) for l in capsys.readouterr().out.splitlines()]
+    salida = [json.loads(linea) for linea in capsys.readouterr().out.splitlines()]
     assert salida[-1]['tipo'] == 'sesion_cambiada'
     fila = sessions()[0]
-    assert (fila['encargo'], fila['titulo'], fila['fijada'], fila.get('archivada')) == ('Arreglar', 'Mi título', True, None)
+    assert (fila['encargo'], fila['titulo'], fila['fijada'], fila.get('archivada')) \
+        == ('Arreglar', 'Mi título', True, None)
     assert main(['--marcar', 'abc', 'color', 'rojo']) == 1
     assert main(['--marcar', '../abc', 'titulo', 'x']) == 1
 
@@ -119,7 +121,8 @@ def test_eliminar_la_mueve_a_la_papelera(tmp_path, monkeypatch, capsys):
 
 
 def test_no_elimina_una_sesion_en_ejecucion(tmp_path, monkeypatch, capsys):
-    import fcntl, os
+    import fcntl
+    import os
     monkeypatch.setenv('ALFALFA_HOME', str(tmp_path))
     d = _sesion(tmp_path, 'abc')
     fd = os.open(d / 'lock', os.O_CREAT | os.O_RDWR)

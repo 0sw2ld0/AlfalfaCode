@@ -4,7 +4,7 @@ import asyncio
 import pytest
 
 from alfalfa import sesiones as registro
-from alfalfa.proveedores.nativo.herramientas import (ON_REQUEST_TOOLS, TOOLS, cierre_de_turno)
+from alfalfa.proveedores.nativo.herramientas import ON_REQUEST_TOOLS, TOOLS, cierre_de_turno
 from alfalfa.terminal import MANUAL, TerminalManager, texto_del_cierre
 
 
@@ -70,6 +70,7 @@ def test_texto_para_la_terminal():
 
 def test_historial_de_una_sesion_guardada(tmp_path, monkeypatch):
     import json
+
     from alfalfa.stdio import history
     monkeypatch.setenv('ALFALFA_HOME', str(tmp_path))
     carpeta = tmp_path / 'sesiones' / 'abc'
@@ -97,6 +98,7 @@ def test_historial_de_una_sesion_guardada(tmp_path, monkeypatch):
 
 def test_ajustes_para_el_proximo_turno():
     import io
+
     from alfalfa.stdio import Transport
     out = io.StringIO()
     t = Transport(out)

@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import re
 
-
 _CREDENCIALES = re.compile(
     r'(?i)(authorization[^\n]*|bearer\s+\S+|x-api-key[^\n]*'
     r'|api[_-]?key["\']?\s*[:=]\s*["\']?[^\s,"\']+["\']?'
     r'|token["\']?\s*[:=]\s*["\']?[^\s,"\']+["\']?'
     r'|[?&](?:api_)?key=[^\s&"]+'
     r'|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)')
+
+
+# Claves con forma de OpenAI («sk-…», «sk-proj-…»), también enmascaradas a medias.
+_CLAVE_SUELTA = re.compile(r'\bsk-[A-Za-z0-9_*-]{8,}')
 
 
 def _sin_credenciales(texto):
@@ -36,7 +39,17 @@ def _sin_credenciales(texto):
     mensaje ni en runtime_provider_error, y las formas JSON con la clave
     entre comillas («"api_key": "…"») también se cubren.
     """
-    return _CREDENCIALES.sub('[credencial eliminada]', str(texto or ''))
+    texto = _CREDENCIALES.sub('[credencial eliminada]', str(texto or ''))
+    # Las claves de los proveedores configurados, aunque el error las repita
+    # sin cabecera («Incorrect API key provided: sk-…»).
+    try:
+        from ..proveedores import secretos
+        conocidas = secretos()
+    except Exception:
+        conocidas = []
+    for clave in conocidas:
+        texto = texto.replace(clave, '[credencial eliminada]')
+    return _CLAVE_SUELTA.sub('[credencial eliminada]', texto)
 
 
 # ── Clasificación de fallos de Ollama ────────────────────────────────────────
@@ -156,12 +169,14 @@ _ACCIONES = {
     'timeout': 'no respondió a tiempo (timed out); espera y reintenta.',
     'network': 'fallo de conexión; revisa la red o el servicio de Ollama y reintenta.',
     'invalid_request': 'solicitud inválida; revisa los parámetros y el cuerpo que envía el arnés; no se reintenta.',
-    'model_not_found': 'modelo inexistente o no descargado; selecciona otro modelo o descárgalo (ollama pull); no se reintenta.',
+    'model_not_found': 'modelo inexistente o no descargado; selecciona otro modelo o descárgalo (ollama pull); no se '
+                       'reintenta.',
     'access_denied': 'falta de acceso; inicia sesión en Ollama por el mecanismo oficial (Ajustes → Ollama) '
                      'o revisa la credencial configurada; no se reintenta.',
     'tls_error': 'el certificado TLS del servidor no valida (caducado o de otra autoridad); revisa el '
                  'certificado o su configuración; no se reintenta y no se desactiva la verificación.',
-    'unknown': 'causa desconocida; no se reintenta automáticamente ni se asume una causa; revisa el estado del proveedor.',
+    'unknown': 'causa desconocida; no se reintenta automáticamente ni se asume una causa; revisa el estado del '
+               'proveedor.',
 }
 
 
@@ -275,15 +290,15 @@ def _recorte(texto, limite=_LIMITE_DETALLE):
     return texto[:mitad] + '…' + texto[-mitad:]
 
 
-def _mensaje_ollama(clas, error_text=None, intentos=None):
+def _mensaje_ollama(clas, error_text=None, intentos=None, nombre='Ollama'):
     """Mensaje comprensible a partir de la clasificación, con detalle acotado."""
     estado = clas.get('status_code')
     if estado is not None and estado >= 400:
-        prefijo = 'Ollama HTTP ' + str(estado) + ': '
+        prefijo = nombre + ' HTTP ' + str(estado) + ': '
     elif estado is not None:
-        prefijo = 'Ollama respondió con error (HTTP ' + str(estado) + '): '
+        prefijo = nombre + ' respondió con error (HTTP ' + str(estado) + '): '
     else:
-        prefijo = 'Ollama: '
+        prefijo = nombre + ': '
     partes = [prefijo + clas['action']]
     if error_text:
         partes.append('Detalle del proveedor: ' + _recorte(_sin_credenciales(error_text)))
@@ -292,9 +307,9 @@ def _mensaje_ollama(clas, error_text=None, intentos=None):
     return ' '.join(partes)
 
 
-def _ollama_failure(clas, error_text=None, intentos=None):
+def _ollama_failure(clas, error_text=None, intentos=None, nombre='Ollama'):
     """Excepción clasificada con mensaje comprensible y detalle acotado."""
     detalle = _recorte(_sin_credenciales(error_text)) or None if error_text else None
-    return OllamaError(_mensaje_ollama(clas, detalle, intentos), kind=clas['kind'],
+    return OllamaError(_mensaje_ollama(clas, detalle, intentos, nombre), kind=clas['kind'],
                        cause=clas['cause'], status_code=clas.get('status_code'),
                        retry=clas['retry'], action=clas['action'], detail=detalle)

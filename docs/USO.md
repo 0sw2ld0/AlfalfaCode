@@ -20,7 +20,14 @@ van a stderr. Cada salida incluye `version: 2` y `tipo`. Ejemplos:
 ```
 
 `contexto` se emite tras cada inferencia con los tokens del prompt y el límite de
-contexto del modelo. Los clientes deben ignorar los `tipo` que no conozcan.
+contexto del modelo. Con el servicio Alfalfa se emite además `cuota` cuando cambia
+el % usado del mes:
+
+```jsonl
+{"version":2,"tipo":"cuota","servicio":"alfalfa","cuotas":[{"proveedor":"openai","nombre":"GPT-6 Luna","usado_pct":12.5,"renueva":"2026-12-01"}]}
+```
+
+Los clientes deben ignorar los `tipo` y los campos que no conozcan.
 `--solo-lectura` no ofrece al modelo `write_file`, `edit_file`, `run_command` ni
 `run_checks` (el motor también las rechaza).
 
@@ -79,23 +86,41 @@ alfalfa --modelos --json
 
 ```jsonl
 {"version":2,"tipo":"sesiones","sesiones":[{"id":"abc","encargo":"Corregir","cwd":"/repo","estado":"interrupted","modelo":"deepseek-v4.1-flash:cloud","esfuerzo":"medium","fecha":1793900000.0,"tokens":100}]}
-{"version":2,"tipo":"modelos","modelos":[{"name":"deepseek-v4.1-flash:cloud"}]}
+{"version":2,"tipo":"modelos","modelos":[{"name":"deepseek-v4.1-flash:cloud","proveedor":"ollama","nombre":"deepseek-v4.1-flash:cloud"},{"name":"alfalfa/gpt-6-luna","proveedor":"alfalfa","nombre":"GPT-6 Luna - Alfalfa"}]}
 {"version":2,"tipo":"error","texto":"No se pudo consultar Ollama o las sesiones de AlfalfaCode."}
 ```
+
+`modelos` junta los de cada proveedor configurado: `name` es el que se guarda en la
+sesión (con prefijo `openai/` o `alfalfa/` fuera de Ollama) y `nombre` el visible.
+Si un proveedor no responde, los demás se listan igual y su fallo va en `fallos`.
+
+Proveedores (las claves y el código se leen por la entrada estándar, nunca en los
+argumentos):
+
+```sh
+alfalfa --proveedores --json
+printf '%s\n' "$CLAVE" | alfalfa --guardar-clave openai --json
+alfalfa --fijar-url alfalfa https://servicio.example.com --json
+printf '%s\n' CUY-XXXX-XXXX-XXXX | alfalfa --activar-codigo --json
+alfalfa --cuota --json
+```
+
+```jsonl
+{"version":2,"tipo":"proveedores","por_defecto":"ollama","proveedores":[{"id":"ollama","nombre":"Ollama","configurado":true,"url":"http://127.0.0.1:11434","clave":false},{"id":"openai","nombre":"OpenAI","configurado":false,"clave":false},{"id":"alfalfa","nombre":"Alfalfa","configurado":false,"url":null,"clave":false}]}
+{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","caduca":null,"modelos":["gpt-6-luna"],"cuotas":[]}
+```
+
+El código de cortesía queda atado a este Mac: `--activar-codigo` crea una clave en
+el Secure Enclave (`alfalfa/proveedores/firmante.swift`, compilado con `swiftc` la
+primera vez) y cada petición al servicio va firmada con ella.
 
 Las sesiones se ordenan por fecha descendente; una sesión ilegible se identifica
 con `estado: "corrupta"` y campos desconocidos nulos. Ollama inaccesible produce
 error JSON y código 1. Estas consultas no emiten `fin` (no ejecutan sesiones).
 
-La frontera está censada en `server/tests/censo_frontera_arnes.json`:
-`app/arnes/stdio.py` mantiene cero imports externos a app.arnes y cero accesos
-al estudio. `server/tests/test_alfalfa_stdio.py` cubre mensajes, permisos, las
-cuatro rutas de interrupción (orden/espera × cancelar/EOF) y, en v2, mensajes
-durante una orden en curso, tras terminar un turno, vacíos y de más de 20 000
-caracteres. La coordinación
-concurrente del lector, futuros de permiso y motor con procesos compartidos
-justifica la ejecución por Senior Sol 6.1. El componente es el servidor Python,
-por terminal.py y permisos/terminal.py; macos, mobile y la interfaz se excluyen.
+`tests/test_alfalfa_stdio.py` cubre mensajes, permisos, las cuatro rutas de
+interrupción (orden/espera × cancelar/EOF) y, en v2, mensajes durante una orden
+en curso, tras terminar un turno, vacíos y de más de 20 000 caracteres.
 
 Desde una carpeta de trabajo:
 
@@ -111,7 +136,7 @@ y Ollama iniciado con un modelo que declare herramientas y contexto de al menos
 8192 tokens. Los modelos Cloud requieren iniciar sesión con el flujo oficial de
 Ollama y disponer de acceso. No instala componentes. Lee `ALFALFA_OLLAMA_URL`
 (por defecto `http://127.0.0.1:11434`) y `OLLAMA_API_KEY`, si el servicio la
-requiere; no guarda la clave. Con un modelo con visión, `inspect_image`
+requiere, o la clave guardada en el Llavero con `--guardar-clave ollama`. Con un modelo con visión, `inspect_image`
 mira las imágenes con el mismo modelo. La búsqueda web está deshabilitada en esta
 fase; las tareas locales no necesitan CuySearch.
 

@@ -7,10 +7,16 @@ Apache-2.0; ver alfalfa/seatbelt/NOTICE y PROCEDENCIA.md). Los marcados
 """
 import pytest
 
-from alfalfa.permisos.peligrosos import (FORCED_RM, MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH, OTHER, SUDO,
-                                           dangerous_command_match, extract_shell_script,
-                                           parse_literal_commands, rm_args_include_force_option)
-
+from alfalfa.permisos.peligrosos import (
+    FORCED_RM,
+    MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH,
+    OTHER,
+    SUDO,
+    dangerous_command_match,
+    extract_shell_script,
+    parse_literal_commands,
+    rm_args_include_force_option,
+)
 
 # ---------------------------------------------------------------- Codex
 
@@ -94,7 +100,7 @@ def test_normal_commands_are_not_dangerous(command):
     assert dangerous_command_match(command) is None
 
 
-# ---------------------------------------------------------------- sudo (CA-4)
+# ---------------------------------------------------------------- sudo
 
 @pytest.mark.parametrize('command', [
     ['sudo', 'ls'], ['/usr/bin/sudo', 'true'], ['sudo', '-n', 'whoami'], ['sudo'],
@@ -176,7 +182,7 @@ def test_literal_parser_keeps_dynamic_words_in_place_and_skips_assignments():
     assert commands[1][2].splits and not commands[2][1].splits
 
 
-# H-001: la cabecera `function NOMBRE` no se lleva la primera orden del cuerpo.
+# La cabecera `function NOMBRE` no se lleva la primera orden del cuerpo.
 @pytest.mark.parametrize('script,expected', [
     ('function f { sudo ls; }; f', SUDO), ('function f { rm -rf basura; }; f', FORCED_RM),
     ('function f() { sudo ls; }; f', SUDO), ('function f\n{\nrm -rf basura\n}', FORCED_RM),
@@ -187,7 +193,7 @@ def test_function_header_keeps_the_body(script, expected):
     assert dangerous_command_match(['bash', '-c', script]) == expected
 
 
-# H-002: las palabras dinámicas no desplazan las posiciones que interpreta env.
+# Las palabras dinámicas no desplazan las posiciones que interpreta env.
 @pytest.mark.parametrize('script,expected', [
     ('name=HOME; env -u "$name" sudo ls', SUDO),
     ('name=HOME; env -u "$name" rm -rf basura', FORCED_RM),
@@ -208,7 +214,7 @@ def test_dynamic_words_keep_their_position(script, expected):
     ('\\rm -rf basura', FORCED_RM), ('\\sudo ls', SUDO), ('r\\m -rf basura', FORCED_RM),
     ('rm \\-rf basura', FORCED_RM), ('rm -- \\-rf', None), ('su\\\ndo ls', SUDO),
     ('echo "\\$(rm -rf x)"', None), ('"\\sudo" ls', None),
-    # H-004: la continuación de línea no crea una palabra vacía delante de la orden.
+    # La continuación de línea no crea una palabra vacía delante de la orden.
     ('\\\n sudo ls', SUDO), ('\\\nsudo ls', SUDO), ('\\\n\trm -rf x', FORCED_RM),
     ('ls; \\\n sudo ls', SUDO), ('echo a \\\n | sudo tee f', SUDO),
     ('env \\\n sudo ls', SUDO), ('rm \\\n -rf x', FORCED_RM), ('ls \\', None),

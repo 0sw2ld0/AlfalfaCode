@@ -17,9 +17,9 @@ public struct AgentEvent: Equatable, Sendable {
     public var text: String
     public var time: Double
     /// Turno al que pertenece (`turno`); nil en motores anteriores o eventos sin turno.
-    public var turn: String? = nil
+    public var turn: String?
     /// Datos de una compactación (`compactacion`): la conversación pinta su marca.
-    public var compaction: Compaction? = nil
+    public var compaction: Compaction?
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -399,41 +399,9 @@ public struct Outcome: Equatable, Sendable {
     public var exitCode: Int
     public var tokens: Int
     /// Cierre del turno (herramienta `wrap_up`); nil si el agente no lo dio.
-    public var wrapUp: WrapUp? = nil
+    public var wrapUp: WrapUp?
     /// Id del turno que terminó (`turno`).
-    public var turn: String? = nil
-}
-
-/// Caja «siguiente paso» al final de un turno: resumen y, si el usuario decide, pregunta y botones.
-public struct WrapUp: Equatable, Sendable {
-    public var recap: String
-    public var ask: String?
-    public var options: [String]
-
-    public init(recap: String, ask: String? = nil, options: [String] = []) {
-        self.recap = recap
-        self.ask = ask
-        self.options = options
-    }
-}
-
-public struct SessionSummary: Equatable, Identifiable, Sendable {
-    public var id: String
-    public var task: String?
-    public var cwd: String?
-    public var state: String
-    public var model: String?
-    public var effort: String?
-    public var date: Double
-    public var tokens: Int
-    /// Marcas de la app (`--marcar`): título propio, fijada y archivada.
-    public var title: String? = nil
-    public var pinned: Bool = false
-    public var archived: Bool = false
-    public var mode: String? = nil
-
-    /// El título propio si lo hay; si no, el encargo.
-    public var displayTitle: String? { title ?? task }
+    public var turn: String?
 }
 
 /// Respuesta de `alfalfa --buscar-actualizacion --json` y `--actualizar --json`.
@@ -468,8 +436,36 @@ public struct OllamaChat: Equatable, Identifiable, Sendable {
 }
 
 public struct ModelInfo: Equatable, Identifiable, Sendable {
+    /// El que guarda la sesión: `glm-5.3-flash:cloud`, `openai/gpt-6-luna`.
     public var name: String
+    /// El visible en el selector («GPT-6 Luna - Alfalfa»).
+    public var label: String
+    /// `ollama`, `openai` o `alfalfa`.
+    public var provider: String
     public var id: String { name }
+
+    public init(name: String, label: String? = nil, provider: String = "ollama") {
+        self.name = name
+        self.label = label ?? name
+        self.provider = provider
+    }
+}
+
+/// Un proveedor tal como lo cuenta `alfalfa --proveedores --json`, sin secretos.
+public struct ProviderStatus: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    public var configured: Bool
+    public var url: String?
+    public var hasKey: Bool
+
+    public init(id: String, name: String, configured: Bool, url: String? = nil, hasKey: Bool = false) {
+        self.id = id
+        self.name = name
+        self.configured = configured
+        self.url = url
+        self.hasKey = hasKey
+    }
 }
 
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
@@ -489,6 +485,14 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `alfalfa --historial ID --json`: la conversación guardada y el cierre de su último turno.
     case history(id: String, events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0)
     case models([ModelInfo])
+    /// `--proveedores --json` y las órdenes que los cambian: el proveedor por defecto y el estado de cada uno.
+    case providers(defaultProvider: String, providers: [ProviderStatus])
+    /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
+    case quota([Quota])
+    /// `--activar-codigo`: el código quedó atado a este Mac.
+    case activated(name: String?, quotas: [Quota])
+    /// `--reportar`: el reporte de error se envió, o por qué no.
+    case reported(ReportResult)
     case ollamaChats([OllamaChat])
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
@@ -566,7 +570,24 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .sessions(rows.compactMap(summary))
         case "modelos":
             guard let rows = object["modelos"] as? [[String: Any]] else { return nil }
-            return .models(rows.compactMap { ($0["name"] as? String).map(ModelInfo.init(name:)) })
+            return .models(rows.compactMap { row in
+                guard let name = row["name"] as? String else { return nil }
+                return ModelInfo(name: name, label: text(row["nombre"]) ?? name,
+                                 provider: text(row["proveedor"]) ?? "ollama")
+            })
+        case "proveedores":
+            guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }
+            return .providers(defaultProvider: text(object["por_defecto"]) ?? "ollama", providers: rows.compactMap { row in
+                guard let id = text(row["id"]) else { return nil }
+                return ProviderStatus(id: id, name: text(row["nombre"]) ?? id,
+                                      configured: row["configurado"] as? Bool ?? false,
+                                      url: text(row["url"]), hasKey: row["clave"] as? Bool ?? false)
+            })
+        case "cuota":
+            guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
+            return .quota(quotas(rows))
+        case "activado":
+            return .activated(name: text(object["nombre"]), quotas: quotas(object["cuotas"] as? [[String: Any]] ?? []))
         case "chats_ollama":
             guard let rows = object["chats"] as? [[String: Any]] else { return nil }
             return .ollamaChats(rows.compactMap { row in
@@ -615,7 +636,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                       macAppChanged: bool(object["app_mac_cambio"]) ?? false,
                                       text: object["texto"] as? String ?? ""))
         default:
-            return nil
+            return ReportResult(kind: kind, object: object).map(Self.reported)
         }
     }
 
@@ -626,6 +647,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
     }
 
     private static func number(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
+
+    private static func quotas(_ rows: [[String: Any]]) -> [Quota] {
+        rows.compactMap(Quota.init(row:))
+    }
 
     /// Texto opcional no vacío; cualquier otro tipo se ignora.
     private static func text(_ value: Any?) -> String? {
@@ -717,12 +742,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                 mcpInstructions: part("instrucciones_mcp"), plugins: part("complementos"))
     }
 
-    private static func wrapUp(_ value: Any?) -> WrapUp? {
-        guard let object = value as? [String: Any], let recap = text(object["resumen"]) else { return nil }
-        let ask = text(object["pregunta"])
-        let options = ask == nil ? [] : (object["opciones"] as? [Any] ?? []).compactMap { text($0) }.prefix(2)
-        return WrapUp(recap: recap, ask: ask, options: Array(options))
-    }
+    private static func wrapUp(_ value: Any?) -> WrapUp? { WrapUp(cierre: value) }
 
     private static func summary(_ row: [String: Any]) -> SessionSummary? {
         guard let id = row["id"] as? String, let state = row["estado"] as? String else { return nil }
@@ -730,7 +750,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                               model: row["modelo"] as? String, effort: row["esfuerzo"] as? String,
                               date: number(row["fecha"]) ?? 0, tokens: row["tokens"] as? Int ?? 0,
                               title: text(row["titulo"]), pinned: bool(row["fijada"]) ?? false,
-                              archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]))
+                              archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]),
+                              parent: text(row["padre"]))
     }
 }
 

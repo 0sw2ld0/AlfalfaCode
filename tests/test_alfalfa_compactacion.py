@@ -13,8 +13,16 @@ from unittest.mock import patch
 import pytest
 
 from alfalfa import compactacion
-from alfalfa.compactacion import (MAX_TOKENS_USUARIO, PREFIJO, PROMPT, es_resumen, limite, recortar_medio,
-                                    seleccionar_usuario, tokens_aprox)
+from alfalfa.compactacion import (
+    MAX_TOKENS_USUARIO,
+    PREFIJO,
+    PROMPT,
+    es_resumen,
+    limite,
+    recortar_medio,
+    seleccionar_usuario,
+    tokens_aprox,
+)
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager, main
@@ -140,7 +148,7 @@ class Sesion:
         return json.loads((self.m.directory / 'native' / self.m.task['id'] / 'session.json').read_text())
 
     def filas(self, tipo):
-        return [json.loads(l) for l in self.salida.getvalue().splitlines() if json.loads(l)['tipo'] == tipo]
+        return [json.loads(linea) for linea in self.salida.getvalue().splitlines() if json.loads(linea)['tipo'] == tipo]
 
 
 def test_se_compacta_al_90_por_ciento_y_sigue_con_el_contexto_nuevo(tmp_path, monkeypatch):

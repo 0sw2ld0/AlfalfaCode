@@ -11,8 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from alfalfa.compactacion import HISTORIA, PREFIJO, historial_compactado
-from alfalfa.proveedores.nativo.runtime import (ARCHIVOS_PROPIOS, ESTADO_PREFIJO, MAX_ESTADO,
-                                                 NativeRuntime)
+from alfalfa.proveedores.nativo.runtime import ARCHIVOS_PROPIOS, ESTADO_PREFIJO, MAX_ESTADO, NativeRuntime
 from tests.test_alfalfa_compactacion import VENTANA, Modelo, Sesion, leer, llamada
 
 SISTEMA = {'role': 'system', 'content': 'Instrucciones'}

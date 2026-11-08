@@ -3,16 +3,16 @@
 Git is queried in a worker thread. The saved watch also permits synchronous
 evidence readers to invalidate a check without launching a process.
 """
-import asyncio
 import ast
+import asyncio
 import hashlib
 import os
-from pathlib import Path
 import re
+import select
 import shlex
 import subprocess
-import select
 import sys
+from pathlib import Path
 
 
 class MutationWatch:
@@ -29,8 +29,8 @@ class MutationWatch:
         self.files = []
         # ctime de cada ruta vigilada: macOS avisa con NOTE_ATTRIB también cuando
         # sólo cambia la fecha de acceso (git la mueve al leer .git/index), y eso
-        # invalidaba toda comprobación de git aunque nadie escribiera nada (GLM,
-        # 31/10). Un acceso no mueve el ctime; un chmod, chown o escritura sí.
+        # invalidaba toda comprobación de git aunque nadie escribiera nada. Un
+        # acceso no mueve el ctime; un chmod, chown o escritura sí.
         self.ctimes = {}
         self.sucio = False
         paths = set()
@@ -116,12 +116,12 @@ def functional_command(argv):
         return _shell_funcional(str(argv[2]))
     if program == 'node':
         # Sin esto, ningún proyecto de JavaScript podía dejar evidencia y toda
-        # aprobación se bloqueaba (eca1005ad1 y bf24390e68, 03/11).
+        # aprobación se bloqueaba.
         valores = [str(v) for v in argv[1:]]
         return '--test' in valores or any(
             not v.startswith('-') and v.endswith(('.js', '.mjs', '.cjs', '.ts')) for v in valores[:1])
     if program.startswith(('python', 'pypy')):
-        # `python3 -B verificar.py` es el mismo script (1ca2cb4d92, 03/11).
+        # `python3 -B verificar.py` es el mismo script.
         while len(argv) > 1 and argv[1] in ('-B', '-u', '-E', '-s', '-I'):
             argv = argv[:1] + argv[2:]
         if argv[1:2] == ['-m']:
@@ -154,9 +154,17 @@ def _shell_funcional(texto):
 
 
 TEMPORALES = ('.tmp-alfalfa/',)
+# Como en los permisos (PREFIJOS_DE_CACHE): cualquier `.tmp-…/` o `.temp-…/` de
+# primer nivel es de temporales, así un integrador puede usar el suyo (.tmp-<app>/).
+PREFIJOS_TEMPORALES = ('.tmp-', '.temp-')
+
+
+def temporal(name):
+    """¿`name` (relativo a la raíz) cae en una carpeta de temporales de primer nivel?"""
+    return str(name).partition('/')[0].startswith(PREFIJOS_TEMPORALES)
 
 # Los revisores nombran su carpeta de capturas a su manera: independent-review,
-# revision-sol, review-sol-current-1848… (4.199, 4.200).
+# revision-qa, review-current-1848…
 CARPETAS_DEL_REVISOR = ('independent-review',)
 PREFIJOS_DEL_REVISOR = ('revision', 'review', 'independent-review')
 
@@ -184,7 +192,7 @@ def _file(path):
         data = os.readlink(path).encode()
     elif path.is_dir():
         # Un submódulo registrado (gitlink) es una carpeta: leerla como archivo
-        # tumbaba la huella con «Is a directory» (GLTFKit2, 4.176).
+        # tumbaba la huella con «Is a directory» (pasó con GLTFKit2).
         data = ('dir:' + '\0'.join(sorted(os.listdir(path)))).encode()
     else:
         data = path.read_bytes()
@@ -194,10 +202,9 @@ def _file(path):
 
 def _entries(path, ignored, root=None):
     # Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
-    # caducaba la evidencia al terminar cada revisión («La evidencia caducó»,
-    # 4caa9e2269 y c1b500aa9a, 4.201).
+    # caducaba la evidencia al terminar cada revisión («La evidencia caducó»).
     return sorted(p.name for p in path.iterdir()
-                  if p.name != '.git' and p.name + '/' not in TEMPORALES and str(p) not in ignored
+                  if p.name != '.git' and not temporal(p.name) and str(p) not in ignored
                   and not (root and _del_revisor(p, root)))
 
 
@@ -207,7 +214,7 @@ def _shared(path, refs):
     `.git/config` y `packed-refs` los comparten todos los worktrees del repo.
     Cada `git push -u` de otro ticket reescribe config con su `[branch "…"]`,
     y comparar fecha e inodo caducaba la evidencia de todas las revisiones en
-    curso («La evidencia caducó», CuyWorld 2026-10-12, 4.192). Se compara el
+    curso («La evidencia caducó»). Se compara el
     contenido sin las secciones de ramas, y de packed-refs sólo las refs
     propias.
     """
@@ -315,7 +322,7 @@ def _same_file(path, expected):
         return True
     # La limpieza comparte los archivos repetidos con un clon: mismo contenido y
     # fecha, pero otro inodo y otro ctime. Comparar sólo metadatos caducaba la
-    # evidencia de los tickets en revisión (GLM, a167417260, 31/10). Si el modo
+    # evidencia de los tickets en revisión. Si el modo
     # y la fecha siguen iguales, decide el contenido.
     if [stat.st_mode, stat.st_mtime_ns] != [expected[1], expected[3]]:
         return False
@@ -380,12 +387,12 @@ def _capture(root):
         names = {str(p.relative_to(root)) for p in root.rglob('*')
                  if p.is_file() or p.is_symlink()}
         context = None
-    # .tmp-alfalfa/ son temporales de los agentes (cachés de Go, builds de Swift):
+    # .tmp-alfalfa/ (o el .tmp-… de un integrador) son temporales de los agentes (cachés de Go, builds de Swift):
     # nunca son parte del trabajo, y si una rama los llegó a versionar, miles de
     # artefactos de compilación entraban en cada huella. Git sigue informando de
     # ellos en `status` si cambian.
     names = {name for name in names
-             if not name.startswith(TEMPORALES) and not escrito_por_el_revisor(name)}
+             if not temporal(name) and not escrito_por_el_revisor(name)}
     paths = [root / name for name in sorted(names)]
     directories = {root}
     for path in paths:
@@ -405,7 +412,7 @@ def _capture(root):
         if any(watch['files'][name] != value for name, value in git_before.items()):
             raise ValueError('Git cambió mientras se tomaba su huella.')
         final_names = {name for name in git('ls-files', '-co', '--exclude-standard', '-z').split('\0')
-                       if name and not name.startswith(TEMPORALES) and not escrito_por_el_revisor(name)}
+                       if name and not temporal(name) and not escrito_por_el_revisor(name)}
         if final_names != names or _status(git('status', '--porcelain')) != context['status']:
             raise ValueError('El workspace cambió mientras se tomaba su huella.')
         if not matches(result):

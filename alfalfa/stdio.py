@@ -1,16 +1,14 @@
 """Transporte JSONL v2. Un lector atiende permisos, mensajes y cancelación concurrentemente."""
 import asyncio
-from contextlib import redirect_stdout
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import sys
 import time
+from contextlib import redirect_stdout
+from pathlib import Path
 from uuid import uuid4
-
-import httpx
 
 from .permisos.terminal import solo_lectura
 
@@ -59,12 +57,11 @@ class Transport:
         self.pending_settings = {}
 
     def clean(self, value):
-        from . import ajustes
-        secret = ajustes.ollama_clave()
+        from . import proveedores
         if isinstance(value, str):
-            for other in sorted(self.secretos, key=len, reverse=True):
+            for other in sorted(set(self.secretos) | set(proveedores.secretos()), key=len, reverse=True):
                 value = value.replace(other, '[REDACTADO]')
-            return value.replace(secret, '[REDACTADO]') if secret else value
+            return value
         if isinstance(value, dict):
             return {k: self.clean(v) for k, v in value.items()}
         if isinstance(value, list):
@@ -292,7 +289,10 @@ async def run(args, transport):
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                                  wait=esperar)
+                                  wait=esperar, parent=getattr(args, 'padre', None))
+        if getattr(args, 'titulo', None) and not args.reanudar:
+            manager.save()
+            marcar(manager.task['id'], 'titulo', args.titulo)
         if esperar:
             code = 0  # Abrir y cerrar sin turno no es un fallo.
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
@@ -443,6 +443,8 @@ def sessions():
                            turnos=len(task.get('turnos') or []))
                 if task.get('bifurcada_de'):
                     row['bifurcada_de'] = task['bifurcada_de']
+                if task.get('padre'):
+                    row['padre'] = task['padre']
                 if task['id'] != directory.name or not isinstance(row['fecha'], (int, float)):
                     raise ValueError()
                 row.update(_marcas(directory))
@@ -573,7 +575,7 @@ def turns(ident):
 
 
 MAX_HISTORIAL = 600
-_RUIDO = ('Ollama transporte: intento',)
+_RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
 
 
 def history(ident):
@@ -608,7 +610,8 @@ def history(ident):
     eventos += sueltos
     for turno in turnos:
         propios = por_turno.get(turno['id'], [])
-        if not (propios and propios[0]['rol'] == 'user' and propios[0]['texto'] == turno.get('mensaje')):
+        # El turno sólo guarda el principio del mensaje: si la transcripción lo tiene entero, vale ese.
+        if not (propios and propios[0]['rol'] == 'user'):
             eventos.append(dict(rol='user', texto=turno.get('mensaje', ''), hora=turno.get('inicio', 0),
                                 turno=turno['id']))
         eventos += propios
@@ -671,12 +674,12 @@ def entry(args):
             if args.sesiones:
                 transport.emit('sesiones', sesiones=sessions())
             else:
-                from .proveedores.nativo.runtime import NativeRuntime
-                endpoint = NativeRuntime.endpoint(None)
-                with httpx.Client(timeout=10) as client:
-                    response = client.get(endpoint + '/api/tags')
-                    response.raise_for_status()
-                    transport.emit('modelos', modelos=response.json()['models'])
+                from . import proveedores
+                modelos, fallos = proveedores.listar_modelos()
+                if not modelos and fallos:
+                    raise proveedores.ErrorDeProveedor(' '.join(fallos.values()))
+                # `fallos` sólo aparece si un proveedor no respondió: los que sí, se listan.
+                transport.emit('modelos', modelos=modelos, **({'fallos': fallos} if fallos else {}))
             return 0
         except Exception:
             transport.emit('error', texto='No se pudo consultar Ollama o las sesiones de AlfalfaCode.')

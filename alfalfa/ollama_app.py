@@ -5,19 +5,18 @@ copia en una sesión nueva, con los mensajes de usuario y asistente, y el
 siguiente mensaje la continúa con ese contexto ya cargado.
 
 La app de Ollama guarda los chats en `~/Library/Application Support/Ollama/db.sqlite`
-(tablas `chats` y `messages`). Se lee igual que `OllamaAppChatReader` de
-OllamaCloudChat: conexión de solo lectura, `query_only`, una transacción de
-lectura que se deshace y validación del esquema antes de consultar. Nunca se
-escribe, migra ni hace checkpoint en la base de Ollama. Las imágenes adjuntas,
+(tablas `chats` y `messages`). Se lee con cuidado: conexión de solo lectura,
+`query_only`, una transacción de lectura que se deshace y validación del esquema
+antes de consultar. Nunca se escribe, migra ni hace checkpoint en la base de Ollama. Las imágenes adjuntas,
 las herramientas y los mensajes en curso no se traen.
 """
 from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sqlite3
 import time
+from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -68,9 +67,11 @@ def _leer(base, operacion):
                     continue
                 raise ErrorDeOllama('La base de Ollama sigue ocupada; espera a que termine la respuesta y '
                                     'vuelve a intentarlo.') from None
-            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede leerla.') from None
+            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede '
+                                'leerla.') from None
         except sqlite3.DatabaseError:
-            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede leerla.') from None
+            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede '
+                                'leerla.') from None
         finally:
             conexion.close()
     raise ErrorDeOllama('La base de Ollama sigue ocupada.')

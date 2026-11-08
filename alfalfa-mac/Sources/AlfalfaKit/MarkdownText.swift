@@ -112,7 +112,7 @@ public enum MarkdownText {
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
-    // MARK: Piezas
+    // MARK: - Piezas
 
     private static func fenceMarker(_ line: String) -> String? {
         for marker in ["```", "~~~"] where line.hasPrefix(marker) { return marker }

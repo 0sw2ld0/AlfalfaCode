@@ -17,10 +17,10 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -68,9 +68,14 @@ def git_info(cwd):
     return {k: v for k, v in info.items() if v}
 
 
+def _proveedor(modelo):
+    from ..proveedores import separar
+    return separar(modelo)[0]
+
+
 def metadatos(ident, cwd, modelo, esfuerzo):
     meta = dict(id=ident, fecha=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), cwd=cwd, modelo=modelo,
-                esfuerzo=esfuerzo, proveedor='ollama', originador=ORIGINADOR)
+                esfuerzo=esfuerzo, proveedor=_proveedor(modelo), originador=ORIGINADOR)
     git = git_info(cwd)
     if git:
         meta['git'] = git
@@ -166,7 +171,7 @@ def bifurcar(sesiones, ident, turno=None):
                 fila = json.loads(linea)
                 if fila.get('turno') in ids or ('turno' not in fila and fila.get('time', 0) <= fin):
                     filas.append(linea)
-        _escribir(destino / (nuevo + '.jsonl'), ''.join(l + '\n' for l in filas))
+        _escribir(destino / (nuevo + '.jsonl'), ''.join(fila + '\n' for fila in filas))
         # Las aprobaciones «en esta sesión» no pasan a la bifurcada: es otra sesión.
         for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group', 'aprobadas_en_sesion'):
             task.pop(clave, None)

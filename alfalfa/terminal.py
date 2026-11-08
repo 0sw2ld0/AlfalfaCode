@@ -6,26 +6,26 @@ import asyncio
 import fcntl
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import sys
 import time
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
 
-from . import __version__, agents_md, procesos
+from . import __version__, agents_md, procesos, proveedores
+from . import reglas as reglas_usuario
 from . import sesiones as registro
 from .hooks import HooksDeSesion, motor_de_sesion
-from . import reglas as reglas_usuario
 from .mcp_cliente import BUSCAR, McpManager
-from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos import modos
+from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos.terminal import TerminalApproval
-from .seatbelt import SeatbeltSandbox
-from .proveedores.nativo.runtime import NativeRuntime, SIN_EFECTOS
 from .proveedores.nativo.herramientas import atomic_json
+from .proveedores.nativo.runtime import SIN_EFECTOS, NativeRuntime
+from .seatbelt import SeatbeltSandbox
 
 INSTRUCTIONS = '''Eres AlfalfaCode, un agente de programación de terminal. Trabaja en la carpeta
 indicada y conserva los cambios ajenos. No modifiques archivos fuera de la carpeta
@@ -93,7 +93,12 @@ Si en el turno cambiaste archivos, ejecutaste órdenes o hiciste varios pasos,
 llama a wrap_up justo antes de tu respuesta final: un resumen corto de cómo
 queda (qué cambió y qué falta o no verificaste) y, sólo si lo siguiente lo
 decide el usuario, una pregunta con una o dos respuestas cortas, la que
-recomiendas primero. Después escribe tu respuesta completa como siempre.'''
+recomiendas primero. Después escribe tu respuesta completa como siempre.
+Si ves una tarea aparte (algo fuera del encargo, o el siguiente paso que
+recomiendas y no vas a hacer ahora), propónla con propose_session: un título
+corto y el encargo completo, porque la sesión nueva no ve esta conversación.
+Sale como tarjeta y decide el usuario. No la uses para lo que vas a hacer tú
+ni para una pieza que necesitas para responder (para eso, spawn_agent).'''
 SUBAGENTES_MANUAL = '''
 Subagentes (spawn_agent), como Codex y Claude Code: un agente aparte con su propia
 conversación para una tarea acotada. Úsalos cuando el usuario pida subagentes o
@@ -121,6 +126,23 @@ def engine_text(effort):
     return '\nMotor NativeRuntime de AlfalfaCode. Esfuerzo solicitado: ' + effort
 
 
+MODELO_POR_DEFECTO = 'deepseek-v4.1-flash:cloud'
+
+
+def modelo_por_defecto():
+    """El modelo de una sesión nueva sin `--modelo`: el del proveedor por defecto."""
+    from .proveedores import configuracion
+    ident = configuracion.por_defecto()
+    if ident != 'ollama':
+        try:
+            proveedor = proveedores.obtener(ident)
+        except proveedores.ErrorDeProveedor:
+            return MODELO_POR_DEFECTO
+        if proveedor.configurado() and getattr(proveedor, 'modelo_por_defecto', None):
+            return proveedores.con_prefijo(ident, proveedor.modelo_por_defecto)
+    return MODELO_POR_DEFECTO
+
+
 def home_dir(home=None):
     return Path(home or os.environ.get('ALFALFA_HOME') or Path.home() / '.alfalfa').expanduser().absolute()
 
@@ -137,7 +159,7 @@ class TerminalManager:
     TERMINADAS = {'completed', 'failed', 'interrupted', 'blocked'}
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
-                 read_only=False, compact_limit=None, mode=None, wait=False):
+                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None):
         self.transport = transport
         self.read_only = read_only
         # La app contesta los permisos: como en Codex, el de salir del sandbox no caduca.
@@ -155,6 +177,9 @@ class TerminalManager:
         ident = resume or uuid4().hex[:16]
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', ident):
             raise ValueError('Identificador de sesión inválido.')
+        # Antes de crear la carpeta: una sesión que no llega a nacer no deja rastro.
+        if parent is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', str(parent)):
+            raise ValueError('Sesión padre inválida.')
         self.directory = sessions / ident
         if resume and not self.directory.is_dir():
             raise ValueError('No existe esa sesión en el hogar de AlfalfaCode.')
@@ -179,12 +204,17 @@ class TerminalManager:
                 if Path(self.task['cwd']).resolve() != Path.cwd().resolve():
                     raise ValueError('Reanuda desde la carpeta original: ' + self.task['cwd'])
             else:
+                model = model or modelo_por_defecto()
                 self.task = dict(id=ident, cwd=str(Path.cwd().resolve()), objective=objective,
-                                 status='created', provider='ollama', runner='native',
-                                 model=model or 'deepseek-v4.1-flash:cloud', effort=effort or 'medium')
+                                 status='created', provider=proveedores.separar(model)[0], runner='native',
+                                 model=model, effort=effort or 'medium')
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
                 self.task['meta'] = registro.metadatos(ident, self.task['cwd'], self.task['model'],
                                                        self.task['effort'])
+                # La sesión que la propuso con propose_session: la app pone esta debajo y le
+                # manda una nota al terminar cada turno.
+                if parent is not None:
+                    self.task['padre'] = parent
             if model:
                 self.task['model'] = model
             if effort:
@@ -215,7 +245,7 @@ class TerminalManager:
             from .complementos import CargadorComplementos
             self.complementos = CargadorComplementos(base, self.task['cwd']).cargar()
             self.mcp = None if read_only else McpManager.desde_hogar(self, base, self.task['cwd'])
-            # CA-11/H-002: los identificadores del usuario tienen precedencia; el
+            # Los identificadores del usuario tienen precedencia; el
             # complemento no sustituye en silencio un servidor ya configurado.
             anteriores = [] if self.mcp is None else list(self.mcp.servidores.values())
             servidores_plugin = [] if read_only else self.complementos.servidores_mcp(anteriores)
@@ -251,7 +281,8 @@ class TerminalManager:
         self.task['updated_at'] = time.time()
         atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
 
-    def event(self, task, role, text):
+    def event(self, task, role, text, emitir=True):
+        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó."""
         if self.transport:
             text = self.transport.clean(text)
         if getattr(self, 'mcp', None) is not None:
@@ -263,6 +294,8 @@ class TerminalManager:
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
+        if not emitir:
+            return
         if self.transport:
             self.transport.emit('evento', rol=role, texto=text, hora=row['time'],
                                 **({'turno': row['turno']} if 'turno' in row else {}))
@@ -311,6 +344,13 @@ class TerminalManager:
             if campos != getattr(self, '_ultimo_contexto', None):
                 self._ultimo_contexto = campos
                 self.transport.emit('contexto', **campos)
+
+    def cuota(self, task, proveedor, filas):
+        """La cuota mensual de un proveedor con límite, para la barra de la app."""
+        task['cuotas'] = {'servicio': proveedor, 'cuotas': filas}
+        if self.transport and filas != getattr(self, '_ultima_cuota', None):
+            self._ultima_cuota = filas
+            self.transport.emit('cuota', servicio=proveedor, cuotas=filas)
 
     def _mcp_medicion(self):
         return self.mcp.medicion() if getattr(self, 'mcp', None) is not None else {}
@@ -368,7 +408,8 @@ class TerminalManager:
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else ''),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
-                             excluded_tools=EXCLUIDAS + (ESCRITURA if self.read_only or modos.solo_lee(modos.modo_de(self.task))
+                             excluded_tools=EXCLUIDAS + (ESCRITURA
+                                                         if self.read_only or modos.solo_lee(modos.modo_de(self.task))
                                                          else ()),
                              working_text='AlfalfaCode está trabajando…',
                              # Sin bytecode: `python3 uso.py` en run_checks creaba __pycache__ en un
@@ -485,8 +526,9 @@ class TerminalManager:
         # El cierre (wrap_up) es de cada turno: el del anterior ya no vale.
         self.task.pop('cierre', None)
         turno = registro.abrir_turno(self.task, prompt, len(rt.state.get('messages', [])))
-        if eco:
-            self.event(self.task, 'user', prompt)
+        # Entero en la transcripción: el turno sólo guarda el principio y el historial que se
+        # reabre tiene que enseñarlo como se mandó. A la app sólo vuelve si no lo pintó ella.
+        self.event(self.task, 'user', prompt, emitir=eco)
         # Sin evento propio (el contrato v2 no cambia): el id viaja en cada
         # `evento` y en `turno_terminado`.
         self.save()
@@ -547,7 +589,8 @@ def desglose_de(task):
     memoria = task.get('context_memoria')
     if isinstance(memoria, list):
         extra['memoria'] = [dict(ruta=f['ruta'], tokens=f['tokens']) for f in memoria[:50]
-                            if isinstance(f, dict) and isinstance(f.get('ruta'), str) and isinstance(f.get('tokens'), int)]
+                            if isinstance(f, dict) and isinstance(f.get('ruta'), str)
+                            and isinstance(f.get('tokens'), int)]
     return extra
 
 
@@ -586,11 +629,16 @@ def ollama_orden(args):
 
 def texto_del_cierre(cierre):
     """El cierre del turno para la terminal: resumen, pregunta y respuestas posibles."""
-    lineas = ['', '── Siguiente paso ──', cierre['resumen']]
+    lineas = ['', '── Siguiente paso ──'] + ([cierre['resumen']] if cierre.get('resumen') else [])
     if cierre.get('pregunta'):
         lineas.append(cierre['pregunta'])
     if cierre.get('opciones'):
         lineas.append('Responde: ' + ' · '.join('«' + o + '»' for o in cierre['opciones']))
+    for propuesta in cierre.get('sesiones') or []:
+        # En la terminal no hay tarjeta: el encargo queda a mano para abrir otra sesión.
+        lineas += ['', 'Sesión propuesta: ' + propuesta['titulo'],
+                   '  Para empezarla aparte: alfalfa "<encargo>". Encargo:'] + [
+            '  ' + linea for linea in propuesta['encargo'].splitlines()]
     return '\n'.join(lineas)
 
 
@@ -610,13 +658,15 @@ async def execute(args):
     resolve_fork(args)
     manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
-                              compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None))
+                              compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
+                              parent=getattr(args, 'padre', None))
     loop = asyncio.get_running_loop()
     current = asyncio.current_task()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
-        return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas antes de actuar.')
+        return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas '
+                                                 'antes de actuar.')
     finally:
         # Como Codex al cerrar: los procesos en segundo plano terminan con la sesión.
         await manager.fondo.detener_todos()
@@ -627,19 +677,25 @@ async def execute(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime y Ollama')
+    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o '
+                                                                 'Alfalfa')
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)
     parser.add_argument('--modo', choices=modos.MODOS, help='Permisos: auto, manual, ediciones, plan u omitir')
     parser.add_argument('--auto', action='store_true', help='Aprobar automáticamente sólo lecturas permitidas')
-    parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de ejecución')
+    parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de '
+                                                                    'ejecución')
     parser.add_argument('--reanudar', metavar='ID')
     parser.add_argument('--esperar', action='store_true',
                         help='Con --stdio y --reanudar: abrir la sesión sin turno y esperar un mensaje o «compactar»')
     parser.add_argument('--compactar-en', type=int, metavar='TOKENS',
                         help='Compactar el contexto al llegar a estos tokens (como mucho, el 90 %% de la ventana)')
     parser.add_argument('--bifurcar', metavar='ID', help='Seguir en una sesión nueva desde el final de un turno')
+    parser.add_argument('--padre', metavar='ID', help='Sesión que propuso esta (propose_session): sale debajo de '
+                                                      'ella y le llega una nota al terminar cada turno')
+    parser.add_argument('--titulo', metavar='TEXTO', help='Título de una sesión nueva en la barra lateral de la app '
+                                                          '(el de la propuesta de propose_session)')
     parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado)')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')
@@ -666,7 +722,11 @@ def main(argv=None):
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
     listing.add_argument('--solo-bifurcar', metavar='ID',
                          help='Crear la sesión bifurcada sin lanzarla y decir su id (JSON)')
+    from .proveedores import orden as orden_de_proveedores
+    orden_de_proveedores.argumentos(listing)
     args = parser.parse_args(argv)
+    if orden_de_proveedores.pedida(args):
+        return orden_de_proveedores.orden(args)
     if args.marcar or args.eliminar_sesion or args.solo_bifurcar:
         from .stdio import gestionar
         return gestionar(args)

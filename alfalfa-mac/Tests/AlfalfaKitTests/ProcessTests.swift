@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 final class Collected: @unchecked Sendable {
     private let lock = NSLock()
@@ -54,7 +54,7 @@ final class ProcessTests: XCTestCase {
         XCTAssertEqual(collected.exit?.0, 130)
         let kinds = collected.snapshot
         XCTAssertEqual(kinds.count, 5)
-        guard case let .session(info) = kinds[0] else { return XCTFail() }
+        guard case let .session(info) = kinds[0] else { return XCTFail("sesión") }
         XCTAssertEqual(URL(fileURLWithPath: info.cwd).resolvingSymlinksInPath().path, dir.resolvingSymlinksInPath().path)
         XCTAssertEqual(kinds[2], .permissionResolved(id: "p1", approved: true, reason: "Respuesta del cliente"))
         XCTAssertEqual(kinds[3], .event(AgentEvent(role: "user", text: "recibido", time: 1)))

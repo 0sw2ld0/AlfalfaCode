@@ -16,7 +16,8 @@ def test_no_match_and_empty_old_are_rejected():
 
 
 def test_unicode_replacement_does_not_normalise_surrounding_bytes():
-    before = b'prefix \xe2\x80\x94 untouched\r\nlet value = \xe2\x80\x9cold\xe2\x80\x9d;\r\nsuffix \xe2\x80\x98keep\xe2\x80\x99\r\n'
+    before = (b'prefix \xe2\x80\x94 untouched\r\nlet value = \xe2\x80\x9cold\xe2\x80\x9d;\r\n'
+              b'suffix \xe2\x80\x98keep\xe2\x80\x99\r\n')
     text = before.decode()
     result = tolerant_edit(text, 'let value = "old";', 'let value = "new";').encode()
     assert result == (b'prefix \xe2\x80\x94 untouched\r\nlet value = "new";\r\n'

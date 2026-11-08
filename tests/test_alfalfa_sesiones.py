@@ -4,8 +4,8 @@ import fcntl
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +13,7 @@ import pytest
 from alfalfa import sesiones as registro
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.sesiones import bifurcar, url_sin_credenciales
-from alfalfa.stdio import Transport, entry, sessions
+from alfalfa.stdio import Transport, sessions
 from alfalfa.terminal import TerminalManager, main
 
 
@@ -84,7 +84,8 @@ def test_metadatos_de_la_sesion(proyecto, tmp_path):
     m = TerminalManager('x')
     try:
         meta = json.loads((m.directory / 'task.json').read_text())['meta']
-        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=proyecto, capture_output=True, text=True).stdout.strip()
+        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=proyecto, capture_output=True,
+                                text=True).stdout.strip()
         assert meta['id'] == m.task['id'] and meta['cwd'] == str(proyecto.resolve())
         assert meta['modelo'] == 'deepseek-v4.1-flash:cloud' and meta['proveedor'] == 'ollama'
         assert meta['originador'] == 'alfalfa' and meta['fecha'].endswith('Z')
@@ -110,14 +111,15 @@ def test_cada_turno_tiene_id_tramo_y_estado(proyecto):
         turno(m, 'Segundo.', 'Dos.')
         t1, t2 = m.task['turnos']
         assert t1['id'] != t2['id'] and len(t1['id']) == 16
-        assert (t1['mensaje'], t1['estado'], t2['mensaje'], t2['estado']) == ('Primero.', 'completed', 'Segundo.', 'completed')
+        assert (t1['mensaje'], t1['estado'], t2['mensaje'], t2['estado']) \
+            == ('Primero.', 'completed', 'Segundo.', 'completed')
         mensajes = json.loads((m.directory / 'native' / m.task['id'] / 'session.json').read_text())['messages']
         assert t1['desde'] == 0 and t1['hasta'] == t2['desde'] and t2['hasta'] == len(mensajes)
         assert mensajes[t2['desde']] == {'role': 'user', 'content': 'Segundo.'}
         assert 'turno_actual' not in m.task
-        filas = [json.loads(l) for l in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
+        filas = [json.loads(linea) for linea in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
         assert {f['turno'] for f in filas if f['text'] in ('Uno.', 'Dos.')} == {t1['id'], t2['id']}
-        eventos = [json.loads(l) for l in salida.getvalue().splitlines()]
+        eventos = [json.loads(linea) for linea in salida.getvalue().splitlines()]
         assert {e['turno'] for e in eventos if e['tipo'] == 'evento' and e['rol'] == 'agent'} == {t1['id'], t2['id']}
     finally:
         m.close()
@@ -161,7 +163,7 @@ def test_bifurcar_desde_un_turno_y_seguir(proyecto):
     assert [t['id'] for t in task['turnos']] == [t1] and task['meta']['id'] == nuevo
     estado = json.loads((base / nuevo / 'native' / nuevo / 'session.json').read_text())
     assert [m['content'] for m in estado['messages'] if m['role'] != 'system'] == ['Primero.', 'Respuesta uno.']
-    filas = [json.loads(l) for l in (base / nuevo / (nuevo + '.jsonl')).read_text().splitlines()]
+    filas = [json.loads(linea) for linea in (base / nuevo / (nuevo + '.jsonl')).read_text().splitlines()]
     assert filas and all(f.get('turno') == t1 for f in filas if 'turno' in f)
     assert not any('Respuesta dos.' in f['text'] for f in filas)
     for path in [base / nuevo, *(base / nuevo).rglob('*')]:

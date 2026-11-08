@@ -7,10 +7,10 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import select
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -69,12 +69,12 @@ class Cliente:
     def cerrar(self):
         self.proc.stdin.close()
         self.proc.wait(timeout=15)
-        self.filas.extend(json.loads(l) for l in self.proc.stdout.read().splitlines())
+        self.filas.extend(json.loads(linea) for linea in self.proc.stdout.read().splitlines())
         return self.proc.stderr.read()
 
     def peticiones(self):
         ruta = self.cwd / 'requests.jsonl'
-        return [json.loads(l) for l in ruta.read_text().splitlines()] if ruta.exists() else []
+        return [json.loads(linea) for linea in ruta.read_text().splitlines()] if ruta.exists() else []
 
     def matar(self):
         if self.proc.poll() is None:
@@ -190,6 +190,7 @@ def test_el_desglose_separa_memoria_mcp_y_complementos():
 
 def test_los_archivos_de_memoria_llegan_al_panel(tmp_path, monkeypatch):
     from unittest.mock import patch
+
     from alfalfa.proveedores.nativo.runtime import NativeRuntime
     from alfalfa.terminal import TerminalManager
     raiz = tmp_path / 'proyecto'
@@ -209,7 +210,8 @@ def test_los_archivos_de_memoria_llegan_al_panel(tmp_path, monkeypatch):
             assert asyncio.run(m.run('Hola')) == 0
     finally:
         m.close()
-    contexto = [json.loads(l) for l in salida.getvalue().splitlines() if json.loads(l)['tipo'] == 'contexto'][-1]
+    contexto = [json.loads(linea) for linea in salida.getvalue().splitlines()
+                if json.loads(linea)['tipo'] == 'contexto'][-1]
     archivo, = contexto['memoria']
     assert Path(archivo['ruta']).resolve() == (raiz / 'AGENTS.md').resolve() and archivo['tokens'] > 250
     assert contexto['desglose']['memoria'] > 0
@@ -218,9 +220,11 @@ def test_los_archivos_de_memoria_llegan_al_panel(tmp_path, monkeypatch):
 def test_execvp_sin_archivo_no_es_bloqueo_del_sandbox():
     falta = "sandbox-exec: execvp() of './\"Abrir laboratorio 3D.command\"' failed: No such file or directory"
     assert not is_likely_sandbox_denied('seatbelt', 71, aggregated=falta)
-    assert not is_likely_sandbox_denied('seatbelt', 71, aggregated="sandbox-exec: execvp() of 'x' failed: Not a directory")
+    assert not is_likely_sandbox_denied('seatbelt', 71,
+                                        aggregated="sandbox-exec: execvp() of 'x' failed: Not a directory")
     # Un execvp que el sandbox sí bloquea, o su propio sandbox anidado, siguen contando.
-    assert is_likely_sandbox_denied('seatbelt', 71, aggregated="sandbox-exec: execvp() of 'x' failed: Operation not permitted")
+    assert is_likely_sandbox_denied('seatbelt', 71,
+                                    aggregated="sandbox-exec: execvp() of 'x' failed: Operation not permitted")
     assert is_likely_sandbox_denied('seatbelt', 1, aggregated='sandbox-exec: sandbox_apply: Operation not permitted')
     assert is_likely_sandbox_denied('seatbelt', 1, aggregated=falta + '\nerror: Permission denied')
 
@@ -241,6 +245,7 @@ def test_argv_con_comillas_de_shell(tmp_path, escrito, esperado):
 
 def test_run_command_con_comillas_no_pide_permiso_y_dice_el_argv_bueno(tmp_path, monkeypatch):
     from unittest.mock import patch
+
     from alfalfa.proveedores.nativo.runtime import NativeRuntime
     from alfalfa.terminal import TerminalManager
     raiz = tmp_path / 'proyecto'
@@ -268,6 +273,6 @@ def test_run_command_con_comillas_no_pide_permiso_y_dice_el_argv_bueno(tmp_path,
             asyncio.run(m.run('Ábrelo'))
     finally:
         m.close()
-    assert not [l for l in salida.getvalue().splitlines() if json.loads(l)['tipo'] == 'permiso']
+    assert not [linea for linea in salida.getvalue().splitlines() if json.loads(linea)['tipo'] == 'permiso']
     assert respuestas and 'argv es literal' in respuestas[0]
     assert './Abrir laboratorio 3D.command' in respuestas[0] and 'No se ejecutó' in respuestas[0]

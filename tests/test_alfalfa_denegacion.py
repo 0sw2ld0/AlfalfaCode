@@ -5,8 +5,12 @@ alfalfa/seatbelt/NOTICE y PROCEDENCIA.md).
 """
 import pytest
 
-from alfalfa.permisos.denegacion import (QUICK_REJECT_EXIT_CODES, SANDBOX_DENIED_KEYWORDS,
-                                           is_likely_executor_managed_sandbox_denied, is_likely_sandbox_denied)
+from alfalfa.permisos.denegacion import (
+    QUICK_REJECT_EXIT_CODES,
+    SANDBOX_DENIED_KEYWORDS,
+    is_likely_executor_managed_sandbox_denied,
+    is_likely_sandbox_denied,
+)
 
 
 def test_keywords_and_quick_reject_codes_match_codex():

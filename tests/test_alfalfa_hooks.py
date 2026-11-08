@@ -8,19 +8,19 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import shlex
 import socket
 import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from alfalfa.hooks import motor as motor_hooks, nombres
-from alfalfa.hooks.motor import (Ejecucion, Filtro, Manejador, MotorHooks, Resultado, interpretar,
-                                   leer_fuente)
+from alfalfa.hooks import motor as motor_hooks
+from alfalfa.hooks import nombres
+from alfalfa.hooks.motor import Ejecucion, Filtro, Manejador, MotorHooks, Resultado, interpretar, leer_fuente
 from alfalfa.proveedores.nativo.herramientas import COMPLEMENTOS_TOOLS, ON_REQUEST_TOOLS, TOOLS
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
@@ -136,7 +136,7 @@ def herramienta(payload, indice=-1):
     return json.loads(mensajes[indice]['content'])
 
 
-# ---------------------------------------------------------------- equivalencias (CA-5, CA-6)
+# ---------------------------------------------------------------- equivalencias
 
 def test_tabla_de_equivalencias_e_inventario_completo():
     assert nombres.EQUIVALENCIAS['run_command'] == 'Bash'
@@ -209,7 +209,7 @@ def test_conversiones_no_representables_se_rechazan(tmp_path, nativo, nueva):
         nombres.desde_claude(nativo, {'path': 'a', 'argv': ['true'], 'purpose': 'p'}, nueva, tmp_path / 'p')
 
 
-# ---------------------------------------------------------------- configuración (CA-2, CA-4)
+# ---------------------------------------------------------------- configuración
 
 def test_filtros_exacto_lista_regex_y_todo():
     assert Filtro('').coincide(['x']) and Filtro('*').coincide(['x'])
@@ -233,7 +233,8 @@ def test_lectura_de_hooks_json_y_diagnosticos(tmp_path):
     }}).replace('async_', 'async'))
     manejadores, diagnosticos = leer_fuente(archivo, 'usuario')
     assert [(m.evento, m.comando, m.tiempo) for m in manejadores] == [
-        ('PreToolUse', 'echo a', 5), ('PreToolUse', 'echo c', 600), ('PreToolUse', 'echo d', 60), ('Stop', 'echo e', 60)]
+        ('PreToolUse', 'echo a', 5), ('PreToolUse', 'echo c', 600), ('PreToolUse', 'echo d', 60),
+        ('Stop', 'echo e', 60)]
     codigos = [d.codigo for d in diagnosticos]
     for codigo in ('HOOK-CAMPO', 'HOOK-FILTRO', 'HOOK-TIPO', 'HOOK-PLAZO', 'HOOK-SIN-EQUIVALENTE', 'HOOK-EVENTO',
                    'HOOK-FORMATO'):
@@ -276,7 +277,7 @@ def test_solo_lectura_y_agentes_del_integrador_no_tienen_hooks(tmp_path, monkeyp
         m.close()
 
 
-# ---------------------------------------------------------------- interpretación (CA-3, CA-4, CA-13)
+# ---------------------------------------------------------------- interpretación
 
 def ejecucion(evento, codigo=0, stdout='', stderr='', error=None):
     return Ejecucion(Manejador(evento, Filtro(''), 'x', 60, 'usuario', 'hooks.json'), codigo, stdout, stderr, error)
@@ -352,7 +353,7 @@ def test_otros_eventos_codigos_y_salidas():
     assert any('updatedMCPToolOutput' in a for a in r.avisos)
 
 
-# ---------------------------------------------------------------- sesiones reales (CA-2, CA-3, CA-7)
+# ---------------------------------------------------------------- sesiones reales
 
 @macos
 def test_pre_tool_use_bash_bloquea_run_command_sin_efectos(tmp_path, monkeypatch):
@@ -403,7 +404,8 @@ def test_orden_frecuencia_y_correlacion_de_los_cinco_eventos(tmp_path, monkeypat
     assert filas_[0]['source'] == 'startup' and filas_[1]['prompt'] == 'Prueba de hooks.'
     assert len({f['session_id'] for f in filas_}) == 1 and len({f['turn_id'] for f in filas_}) == 1
     assert [f['tool_use_id'] for f in filas_[2:6]] == ['call-r', 'call-r', 'call-b', 'call-b']
-    assert filas_[2]['tool_name'] == 'Read' and filas_[2]['tool_input'] == {'file_path': str(s.root.resolve() / 'leeme.txt')}
+    assert filas_[2]['tool_name'] == 'Read' \
+        and filas_[2]['tool_input'] == {'file_path': str(s.root.resolve() / 'leeme.txt')}
     assert filas_[3]['tool_response']['text'] == 'hola\n' and filas_[5]['tool_response']['exit_code'] == 0
     assert filas_[6]['stop_hook_active'] is False and filas_[6]['last_assistant_message'] == 'Hecho.'
     # Segundo turno de la misma sesión: sin SessionStart y con otro turn_id.
@@ -478,7 +480,7 @@ def test_stop_pide_seguir_con_proteccion_contra_bucles(tmp_path, monkeypatch):
     assert any('para no entrar en bucle' in t for t in s.textos())
 
 
-# ---------------------------------------------------------------- reescritura y permisos (CA-9, CA-10)
+# ---------------------------------------------------------------- reescritura y permisos
 
 def reescribir(comando):
     return json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'allow',
@@ -553,10 +555,10 @@ def test_allow_de_un_hook_no_sustituye_el_permiso_mcp(tmp_path, monkeypatch, res
     assert any('no concede permisos' in t for t in s.textos())
 
 
-# ---------------------------------------------------------------- entorno y sandbox (CA-11, CA-12)
+# ---------------------------------------------------------------- entorno y sandbox
 
-CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA-5e4d', 'OTRO_SECRETO': 'CENTINELA-OTRO-8c7b',
-              'OLLAMA_API_KEY': 'CENTINELA-OLLAMA2-3a2f'}
+# Antes había otra 'OLLAMA_API_KEY' con 'CENTINELA-OLLAMA-5e4d'; la segunda la pisaba.
+CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA2-3a2f', 'OTRO_SECRETO': 'CENTINELA-OTRO-8c7b'}
 
 
 @macos
@@ -584,9 +586,11 @@ def test_variables_del_complemento(tmp_path):
     raiz.mkdir()
     volcado = tmp_path / 'entorno.json'
     complemento = tmp_path / 'complemento'
-    motor = MotorHooks.desde_fuentes([dict(origen='complemento:demo', archivo='hooks.json', raiz_complemento=complemento,
+    motor = MotorHooks.desde_fuentes([dict(origen='complemento:demo', archivo='hooks.json',
+                                           raiz_complemento=complemento,
                                            datos_complemento=tmp_path / 'datos',
-                                           datos={'hooks': {'Stop': [grupo(orden(tmp_path / 'r', 'entorno', str(volcado)))]}})],
+                                           datos={'hooks': {'Stop': [grupo(orden(tmp_path / 'r', 'entorno',
+                                                                                 str(volcado)))]}})],
                                      raiz=raiz)
     asyncio.run(motor.disparar('Stop', {}))
     entorno = json.loads(volcado.read_text())
@@ -622,7 +626,7 @@ def test_sandbox_impide_escribir_fuera_proteger_git_y_usar_la_red(tmp_path, monk
                for t in s.textos())
 
 
-# ---------------------------------------------------------------- límites (CA-13)
+# ---------------------------------------------------------------- límites
 
 def motor_de(tmp_path, evento, comando, **extra):
     raiz = tmp_path / 'proyecto'
@@ -688,7 +692,7 @@ def test_sin_sandbox_disponible_el_hook_no_se_lanza(tmp_path):
     assert r.bloquear and 'sandbox' in r.motivo and not registro.exists()
 
 
-# ---------------------------------------------------------------- complementos (CA-1)
+# ---------------------------------------------------------------- complementos
 
 def complemento(raiz, nombre='demo-hooks', hooks=None, inline=None):
     (raiz / '.claude-plugin').mkdir(parents=True)

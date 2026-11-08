@@ -5,23 +5,28 @@ macOS. Cada orden tiene plazo y su grupo de procesos se comprueba muerto.
 """
 import asyncio
 import os
-from pathlib import Path
 import re
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
 from alfalfa import seatbelt
-from alfalfa.seatbelt import (SANDBOX_EXEC, SandboxUnavailable, SeatbeltSandbox,
-                                protected_metadata_name_regex, regex_escape)
 from alfalfa.permisos.terminal import TerminalApproval
 from alfalfa.procesos import grupo_vivo
 from alfalfa.proveedores.nativo import herramientas
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.seatbelt import (
+    SANDBOX_EXEC,
+    SandboxUnavailable,
+    SeatbeltSandbox,
+    protected_metadata_name_regex,
+    regex_escape,
+)
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
 
@@ -231,7 +236,7 @@ def sealed(policy, params):
 
 @pytest.mark.skipif(os.geteuid() == 0, reason='root lee directorios sin permisos')
 def test_unreadable_directory_seals_its_whole_subtree(tmp_path):
-    # H-001: un directorio ilegible puede ocultar un .git a cualquier profundidad.
+    # Un directorio ilegible puede ocultar un .git a cualquier profundidad.
     ws = tmp_path / 'ws'
     (ws / 'hidden' / 'child' / '.git' / 'hooks').mkdir(parents=True)
     (ws / 'hidden' / 'inner').mkdir()
@@ -489,7 +494,7 @@ def test_real_git_metadata_stays_read_only(tmp_path, request, where):
 
 @real
 def test_real_nested_git_cannot_escape_by_renaming_its_ancestors(tmp_path):
-    # H-001: mover sub/ a /private/tmp sacaba su .git de la expresión protegida.
+    # Mover sub/ a /private/tmp sacaba su .git de la expresión protegida.
     root = tmp_path / RARO
     nested = root / 'sub' / 'deep'
     nested.mkdir(parents=True)
@@ -523,7 +528,7 @@ def test_real_nested_git_cannot_escape_by_renaming_its_ancestors(tmp_path):
 @real
 @pytest.mark.skipif(os.geteuid() == 0, reason='root lee directorios sin permisos')
 def test_real_unreadable_directory_cannot_hide_a_git_from_renaming(tmp_path):
-    # H-001: chmod dentro del sandbox volvía legible hidden/ y su hijo se movía
+    # `chmod` dentro del sandbox volvía legible hidden/ y su hijo se movía
     # con su .git a /private/tmp, donde los hooks ya eran escribibles.
     root = tmp_path / RARO
     hooks = root / 'hidden' / 'child' / '.git' / 'hooks'

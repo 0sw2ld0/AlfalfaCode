@@ -151,7 +151,7 @@ def test_avisos_del_tope_llegan_una_vez(repo, tmp_path, monkeypatch):
     try:
         turno(m)
         turno(m, 'Otra.')
-        avisos = [json.loads(l) for l in salida.getvalue().splitlines()]
+        avisos = [json.loads(linea) for linea in salida.getvalue().splitlines()]
         avisos = [a for a in avisos if a['tipo'] == 'evento' and a['texto'].startswith('AGENTS.md · ')]
         assert len(avisos) == 1 and 'Sólo se cargaron' in avisos[0]['texto']
     finally:

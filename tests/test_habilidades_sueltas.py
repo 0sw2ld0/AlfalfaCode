@@ -24,7 +24,7 @@ def entorno(tmp_path, monkeypatch):
 def test_lee_las_del_usuario_y_las_del_proyecto(entorno):
     casa, hogar, proyecto = entorno
     skill(casa / '.claude' / 'skills' / 'revisar', 'revisar', 'Revisa un cambio.')
-    skill(casa / '.codex' / 'skills' / 'arte', 'cuycards-art', 'Genera arte de CuyCards.')
+    skill(casa / '.codex' / 'skills' / 'arte', 'cartas-arte', 'Genera arte de cartas.')
     skill(casa / '.codex' / 'skills' / '.system' / 'imagegen', 'imagegen', 'Herramienta de Codex.')
     skill(hogar / 'skills' / 'notas', 'notas', 'Toma notas.')
     skill(proyecto / '.agents' / 'skills' / 'publicar', 'publicar', 'Publica la app.')
@@ -32,9 +32,9 @@ def test_lee_las_del_usuario_y_las_del_proyecto(entorno):
     c = CargadorComplementos(hogar, proyecto / 'sub').cargar()
     ids = sorted(h for p in c.complementos for h in p.habilidades)
     assert ids == ['proyecto-agents:publicar', 'proyecto-claude-sub:local', 'usuario-alfalfa:notas',
-                   'usuario-claude:revisar', 'usuario-codex:cuycards-art']  # .system no entra
+                   'usuario-claude:revisar', 'usuario-codex:cartas-arte']  # .system no entra
     texto = c.instrucciones()
-    assert '- Habilidad usuario-codex:cuycards-art: cuycards-art — Genera arte de CuyCards.' in texto
+    assert '- Habilidad usuario-codex:cartas-arte: cartas-arte — Genera arte de cartas.' in texto
     assert 'ábrela antes de empezar y sigue sus pasos' in texto
     abierta = c.abrir_habilidad('usuario-claude:revisar')
     assert abierta['contenido'].endswith('Pasos.')

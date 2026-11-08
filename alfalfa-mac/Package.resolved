@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "cuyterm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/0sw2ld0/CuyTerm.git",
+      "state" : {
+        "revision" : "91bc0188392d53b370782f2e1a4883c2a8954af8",
+        "version" : "1.99.2-cuy.1"
+      }
+    }
+  ],
+  "version" : 2
+}

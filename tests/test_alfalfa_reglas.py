@@ -6,9 +6,9 @@ registrador que responde por motivo, como en test_alfalfa_bajo_demanda.py.
 import asyncio
 import json
 import os
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 import pytest
 

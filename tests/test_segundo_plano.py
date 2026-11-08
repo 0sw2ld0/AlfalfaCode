@@ -45,7 +45,7 @@ def motor(tmp_path, monkeypatch):
 
 
 def filas(salida, tipo):
-    return [json.loads(l) for l in salida.getvalue().splitlines() if json.loads(l)['tipo'] == tipo]
+    return [json.loads(linea) for linea in salida.getvalue().splitlines() if json.loads(linea)['tipo'] == tipo]
 
 
 def test_un_programa_que_sigue_abierto_vuelve_con_su_id_y_no_bloquea(motor):

@@ -9,8 +9,8 @@ struct SidePanel: View {
     let ollama: Bool?
     let timeline: Timeline?
     var canCompact = false
-    var onCompact: (() -> Void)? = nil
-    var onStopProcess: ((String) -> Void)? = nil
+    var onCompact: (() -> Void)?
+    var onStopProcess: ((String) -> Void)?
 
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
     @AppStorage("panel.entorno.abierto") private var environmentOpen = true
@@ -54,7 +54,7 @@ struct SidePanel: View {
         Divider().overlay(Theme.border).padding(.vertical, 12)
     }
 
-    // MARK: Contexto
+    // MARK: - Contexto
 
     /// Como el panel de Claude Code: % usado, la barra por partes, cada parte con sus tokens,
     /// lo que no ocupa contexto (herramientas diferidas), las listas plegables y, al pie,
@@ -180,7 +180,7 @@ struct SidePanel: View {
 
     private func compact(_ value: Int) -> String { ContextFormat.tokens(value) }
 
-    // MARK: Subagentes
+    // MARK: - Subagentes
 
     @ViewBuilder private func subagentCount(_ timeline: Timeline) -> some View {
         let working = timeline.workingSubagents.count
@@ -248,7 +248,7 @@ struct SidePanel: View {
         }
     }
 
-    // MARK: Procesos
+    // MARK: - Procesos
 
     @ViewBuilder private func processCount(_ timeline: Timeline) -> some View {
         let live = timeline.liveProcesses.count
@@ -303,7 +303,7 @@ struct SidePanel: View {
         return item.id + " · " + state + (item.unsandboxed ? " · sin sandbox" : "")
     }
 
-    // MARK: Entorno
+    // MARK: - Entorno
 
     private var environment: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -331,7 +331,7 @@ struct SidePanel: View {
         return "\(branch) · " + (count == 0 ? "sin cambios" : "\(count) archivo\(count == 1 ? "" : "s") modificado\(count == 1 ? "" : "s")")
     }
 
-    // MARK: Cambios
+    // MARK: - Cambios
 
     @ViewBuilder private var changeTotals: some View {
         if let snapshot, !snapshot.files.isEmpty {
@@ -401,7 +401,7 @@ struct ContextParts {
         let name: String
         let tokens: Int
         let color: Color
-        var help: String? = nil
+        var help: String?
         var id: String { name }
     }
 
@@ -430,7 +430,7 @@ struct ContextParts {
                 Row(name: "Instrucciones MCP", tokens: parts.mcpInstructions, color: Color(hex: 0xC98A6B),
                     help: "El resumen de una línea de cada servidor MCP."),
                 Row(name: "Archivos de memoria", tokens: parts.memory, color: Color(hex: 0x8FA3B8),
-                    help: "AGENTS.md del usuario y del proyecto."),
+                    help: "AGENTS.md del usuario y del proyecto.")
             ].filter { $0.tokens > 0 }
             estimated = true
         } else {

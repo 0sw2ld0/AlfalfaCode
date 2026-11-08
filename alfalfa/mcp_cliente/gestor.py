@@ -31,8 +31,8 @@ import re
 from uuid import uuid4
 
 from . import configuracion, nombres
-from .validacion import validador as _validador
 from .conexion import Conexion, ConexionCerrada
+from .validacion import validador as _validador
 
 BUSCAR = 'buscar_herramientas'
 MOTIVO = 'mcp'
@@ -210,7 +210,8 @@ class McpManager:
                 self._diagnostico('MCP-ESQUEMA-INVALIDO', 'Esquema de ' + original + ' inválido ('
                                   + type(exc).__name__ + '); no se carga ni se ejecuta.', servidor.id)
                 continue
-            descripcion = self.limpiar(herramienta.description or '') if isinstance(herramienta.description, str) else ''
+            descripcion = (self.limpiar(herramienta.description or '') if isinstance(herramienta.description, str)
+                           else '')
             self.catalogo[expuesto] = Entrada(servidor.id, original, expuesto, descripcion, esquema, validador)
         for directa in servidor.directas:
             if directa not in por_nombre:
@@ -354,7 +355,8 @@ class McpManager:
                     '(tamaño o formato); no se carga ni se ejecuta.')
         candidatos = self._candidatos(pedido)
         if len(candidatos) > 1:
-            return 'Nombre ambiguo: ' + pedido + ' existe en varios servidores; usa uno de ' + ', '.join(candidatos[:8]) + '.'
+            return ('Nombre ambiguo: ' + pedido + ' existe en varios servidores; usa uno de '
+                    + ', '.join(candidatos[:8]) + '.')
         if candidatos:
             return 'Usa el nombre completo con prefijo de servidor: ' + candidatos[0] + '.'
         return 'Herramienta MCP desconocida o deshabilitada: ' + pedido[:120] + '.'
@@ -503,7 +505,8 @@ class McpManager:
         estructurado = resultado.structuredContent
         if isinstance(estructurado, dict):
             serializado = compacto(estructurado)
-            salida['estructurado'] = estructurado if len(serializado) <= MAX_ESTRUCTURADO else serializado[:MAX_ESTRUCTURADO]
+            salida['estructurado'] = (estructurado if len(serializado) <= MAX_ESTRUCTURADO
+                                      else serializado[:MAX_ESTRUCTURADO])
         if resultado.isError:
             salida['error'] = (texto[:2000] or 'La herramienta MCP devolvió un error.')
         return salida

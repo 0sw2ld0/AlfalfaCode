@@ -1,10 +1,10 @@
 """Control de apps del Mac (app_list, app_state, app_action), como Computer Use de Codex."""
 import asyncio
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -151,7 +151,7 @@ def test_el_numero_de_elemento_va_con_su_ruta_y_su_rol():
         correr(c.accion({'app': 'Contador Demo', 'action': 'click', 'element': 1}))
     correr(c.estado({'app': 'Contador Demo'}))
     resultado = correr(c.accion({'app': 'Contador Demo', 'action': 'click', 'element': '1'}))
-    orden, argumentos = [l for l in c.ayudante.llamadas if l[0] == 'accion'][-1]
+    orden, argumentos = [llamada for llamada in c.ayudante.llamadas if llamada[0] == 'accion'][-1]
     assert argumentos == {'pid': 4242, 'ventana': 0, 'tipo': 'clic', 'ruta': '1', 'rol': 'AXButton'}
     assert resultado['hecho'] is True and resultado['como'] == 'AXPress' and resultado['arbol']
     assert any('App Contador Demo: hacer clic · elemento 1' in e for e in rt.manager.eventos)
@@ -176,7 +176,7 @@ def test_las_acciones_piden_lo_que_necesitan():
 def test_objetivo_por_texto_lee_la_ventana_al_momento():
     c, rt = control('sesion')
     resultado = correr(c.accion({'app': 'Contador Demo', 'action': 'click', 'target': 'sumar uno'}))
-    _, argumentos = [l for l in c.ayudante.llamadas if l[0] == 'accion'][-1]
+    _, argumentos = [llamada for llamada in c.ayudante.llamadas if llamada[0] == 'accion'][-1]
     # «Sumar uno» exacto es el botón; el texto «Sumar uno o dos» sólo lo contiene.
     assert argumentos['ruta'] == '1' and argumentos['rol'] == 'AXButton' and resultado['hecho'] is True
     with pytest.raises(ValueError, match='No hay ningún elemento con el texto «Volar»'):
@@ -242,11 +242,11 @@ def test_raton_propio_por_defecto_y_real_mouse_bajo_pedido(monkeypatch):
     c, rt = control('sesion')
     correr(c.estado({'app': 'Contador Demo'}))
     correr(c.accion({'app': 'Contador Demo', 'action': 'click', 'x': 10, 'y': 20}))
-    _, argumentos = [l for l in c.ayudante.llamadas if l[0] == 'accion'][-1]
+    _, argumentos = [llamada for llamada in c.ayudante.llamadas if llamada[0] == 'accion'][-1]
     assert 'raton' not in argumentos and 'sin-cursor' not in argumentos
     monkeypatch.setenv('ALFALFA_SIN_CURSOR', '1')
     correr(c.accion({'app': 'Contador Demo', 'action': 'click', 'x': 10, 'y': 20, 'real_mouse': True}))
-    _, argumentos = [l for l in c.ayudante.llamadas if l[0] == 'accion'][-1]
+    _, argumentos = [llamada for llamada in c.ayudante.llamadas if llamada[0] == 'accion'][-1]
     assert argumentos['raton'] is True and argumentos['sin-cursor'] is True
 
 
@@ -311,7 +311,7 @@ let d = D()
 a.delegate = d
 a.setActivationPolicy(.regular)
 a.run()
-''')
+''')  # noqa: E501
     binario = tmp_path / 'PruebaAlfalfa'
     subprocess.run(['swiftc', '-O', str(fuente), '-o', str(binario)], check=True)
     proc = subprocess.Popen([str(binario)])
@@ -326,11 +326,13 @@ a.run()
                 break
             time.sleep(0.3)
         estado = correr(c.estado({'app': str(proc.pid)}))
-        boton = next(int(l.split(']')[0].strip(' [')) for l in estado['arbol'].splitlines() if 'Sumar uno' in l)
+        boton = next(int(linea.split(']')[0].strip(' [')) for linea in estado['arbol'].splitlines()
+                     if 'Sumar uno' in linea)
         assert Path(estado['captura']).is_file()
         despues = correr(c.accion({'app': str(proc.pid), 'action': 'click', 'element': boton}))
         assert 'Pulsado 1 veces' in despues['arbol']
-        campo = next(int(l.split(']')[0].strip(' [')) for l in despues['arbol'].splitlines() if 'TextField' in l)
+        campo = next(int(linea.split(']')[0].strip(' [')) for linea in despues['arbol'].splitlines()
+                     if 'TextField' in linea)
         despues = correr(c.accion({'app': str(proc.pid), 'action': 'type', 'element': campo, 'text': 'Señal ñ'}))
         assert 'Señal ñ' in despues['arbol']
         # Ratón propio: un lienzo que no acepta el primer clic, sin traer la app ni mover el ratón.
@@ -347,10 +349,11 @@ a.run()
             {'action': 'click', 'target': 'Sumar uno'}]}))
         assert 'Pulsado 3 veces' in despues['arbol'], despues
         assert [h['como'] for h in despues['hechos']] == ['menu', 'AXPress']
-        assert 'StaticText valor="Pulsado 3 veces"' in [l.split('(')[0].strip() for l in despues['cambios']['aparece']]
+        assert 'StaticText valor="Pulsado 3 veces"' in [linea.split('(')[0].strip()
+                                                        for linea in despues['cambios']['aparece']]
         # Desplegable por coordenadas: un clic en fondo no abre su menú; se abre por accesibilidad.
         def centro(arbol, texto):
-            linea = next(l for l in arbol.splitlines() if texto in l)
+            linea = next(renglon for renglon in arbol.splitlines() if texto in renglon)
             x, y, w, h = map(int, re.search(r'\((-?\d+),(-?\d+) (\d+)×(\d+)\)', linea).groups())
             return x + w // 2, y + h // 2
         x, y = centro(despues['arbol'], 'PopUpButton valor="Cuy Café"')
@@ -362,3 +365,18 @@ a.run()
     finally:
         proc.terminate()
         proc.wait(5)
+
+
+def test_respuesta_invalida_del_ayudante_cuenta_lo_que_dijo(tmp_path):
+    """Si el ayudante no devuelve JSON, el error lleva su stderr (antes: NameError)."""
+    guion = tmp_path / 'ayudante'
+    guion.write_text('#!/bin/sh\necho "se rompió el ayudante" >&2\n')
+    guion.chmod(0o700)
+    ayudante = apps.Ayudante(tmp_path)
+
+    async def asegurar():
+        return guion
+
+    ayudante.asegurar = asegurar
+    with pytest.raises(ValueError, match='se rompió el ayudante'):
+        asyncio.run(ayudante.llamar('lista'))

@@ -16,8 +16,8 @@ struct SidebarRow: Identifiable {
     let route: Route
     let date: Double
     /// Id de la sesión guardada (las vivas lo tienen en cuanto alfalfa lo anuncia).
-    var sessionID: String? = nil
-    var folder: String? = nil
+    var sessionID: String?
+    var folder: String?
     var pinned = false
     var archived = false
     /// Una sesión con turno en marcha no se puede eliminar ni bifurcar.
@@ -29,51 +29,9 @@ struct SidebarRow: Identifiable {
 struct SidebarGroup: Identifiable {
     let folder: String
     let rows: [SidebarRow]
-    var title: String? = nil
+    var title: String?
     var id: String { title ?? folder }
     var name: String { title ?? URL(fileURLWithPath: folder).lastPathComponent }
-}
-
-enum Presentation {
-    static let efforts: [(value: String, label: String)] = [
-        ("low", "Bajo"), ("medium", "Medio"), ("high", "Alto"), ("xhigh", "Muy alto"), ("max", "Máximo"),
-    ]
-    static let defaultModel = "deepseek-v4.1-flash:cloud"
-
-    static func effortLabel(_ value: String) -> String { efforts.first { $0.value == value }?.label ?? value }
-
-    static func shortModel(_ name: String) -> String {
-        name.hasSuffix(":cloud") ? String(name.dropLast(6)) : name
-    }
-
-    static func abbreviate(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
-    }
-
-    /// Estado guardado en disco de una sesión que esta app no tiene abierta.
-    static func stored(_ state: String) -> (label: String, tone: SidebarRow.Tone) {
-        switch state {
-        case "completed": return ("completada", .done)
-        case "failed": return ("fallida", .problem)
-        case "blocked": return ("bloqueada", .problem)
-        case "corrupta": return ("ilegible", .problem)
-        // Una bifurcación recién hecha: espera su primer mensaje.
-        case "created": return ("lista", .done)
-        default: return ("Interrumpida · se puede reanudar", .attention)
-        }
-    }
-
-    /// Se puede reanudar sin mensaje: sólo lo que se quedó a medias.
-    static func resumable(_ state: String) -> Bool { !["completed", "corrupta", "created"].contains(state) }
-}
-
-/// Lo que enseña el aviso de «Buscar actualización».
-enum UpdateCheck: Equatable {
-    case checking
-    case available(UpdateInfo)
-    case updating
-    case message(title: String, text: String)
 }
 
 @MainActor
@@ -90,6 +48,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
     @Published private(set) var models: [ModelInfo] = []
+    /// Ollama, OpenAI y Alfalfa, como los cuenta `alfalfa --proveedores --json`.
+    @Published private(set) var providers: [ProviderStatus] = []
+    @Published private(set) var defaultProvider = "ollama"
+    @Published var providersError: String?
+    /// Cuota del mes del servicio Alfalfa (GPT-6 Luna y los Flash), si hay código activado.
+    @Published private(set) var alfalfaQuotas: [Quota] = []
     @Published private(set) var loadError: String?
     @Published var model = Presentation.defaultModel
     @Published var effort = "medium"
@@ -116,7 +80,7 @@ final class AppModel: ObservableObject {
     init() {
         launcher = Launcher.locate()
         recents = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
-        folder = recents.first
+        applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
         // ⌘V con una imagen en el portapapeles la adjunta al compositor visible, como en Codex.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -137,7 +101,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Carga
+    // MARK: - Carga
 
     func reload() async {
         guard let launcher else { return }
@@ -161,8 +125,125 @@ final class AppModel: ObservableObject {
             models = []
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
         }
+        await reloadProviders()
+        await loadAlfalfaQuota()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
+    }
+
+    /// El nombre visible de un modelo («GPT-6 Luna - Alfalfa»), o el corto si no está en la lista.
+    func label(for name: String) -> String {
+        models.first { $0.name == name }?.label ?? Presentation.shortModel(name)
+    }
+
+    /// Los modelos del selector agrupados por proveedor, en el orden de la lista.
+    var modelGroups: [(provider: String, names: [String])] {
+        let names = modelChoices
+        var order: [String] = []
+        var groups: [String: [String]] = [:]
+        for name in names {
+            let provider = ModelProvider.id(of: name, in: models)
+            if groups[provider] == nil { order.append(provider) }
+            groups[provider, default: []].append(name)
+        }
+        return order.map { ($0, groups[$0] ?? []) }
+    }
+
+    func providerName(_ id: String) -> String {
+        ModelProvider.name(of: id, listed: providers)
+    }
+
+    // MARK: - Proveedores
+
+    func reloadProviders() async {
+        _ = await providerCommand(["--proveedores", "--json"])
+    }
+
+    /// Guarda una clave en el Llavero a través de `alfalfa`: va por stdin, nunca en los argumentos.
+    func saveKey(_ secret: String, for provider: String) async -> Bool {
+        let clean = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        let ok = await providerCommand(["--guardar-clave", provider, "--json"], input: clean)
+        if ok { await reload() }
+        return ok
+    }
+
+    func deleteKey(for provider: String) async {
+        if await providerCommand(["--borrar-clave", provider, "--json"]) { await reload() }
+    }
+
+    func setURL(_ url: String, for provider: String) async -> Bool {
+        let value = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ok = await providerCommand(["--fijar-url", provider, value.isEmpty ? "-" : value, "--json"])
+        if ok { await reload() }
+        return ok
+    }
+
+    /// Ata el código de cortesía a este Mac (clave en el Secure Enclave) y lo guarda en el Llavero.
+    func activate(code: String, url: String) async -> Bool {
+        let clean = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let launcher else { return false }
+        if !url.isEmpty, url != providers.first(where: { $0.id == "alfalfa" })?.url {
+            guard await setURL(url, for: "alfalfa") else { return false }
+        }
+        do {
+            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--activar-codigo", "--json"],
+                                                          directory: home, input: clean)
+            for message in messages {
+                if case let .error(text) = message { providersError = text; return false }
+                if case let .activated(_, quotas) = message {
+                    alfalfaQuotas = quotas
+                    providersError = nil
+                    await reload()
+                    return true
+                }
+            }
+            providersError = "El servicio Alfalfa no confirmó la activación."
+        } catch {
+            providersError = error.localizedDescription
+        }
+        return false
+    }
+
+    func loadAlfalfaQuota() async {
+        guard let launcher, providers.first(where: { $0.id == "alfalfa" })?.configured == true else {
+            alfalfaQuotas = []
+            return
+        }
+        if let messages = try? await AlfalfaProcess.query(launcher: launcher, arguments: ["--cuota", "--json"],
+                                                          directory: home) {
+            for case let .quota(rows) in messages { alfalfaQuotas = rows }
+        }
+    }
+
+    func setDefaultProvider(_ provider: String) async {
+        _ = await providerCommand(["--proveedor-por-defecto", provider, "--json"])
+    }
+
+    @discardableResult
+    private func providerCommand(_ arguments: [String], input: String? = nil) async -> Bool {
+        guard let launcher else { return false }
+        do {
+            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: arguments,
+                                                          directory: home, input: input)
+            for message in messages {
+                switch message {
+                case let .providers(defaultProvider, rows):
+                    self.defaultProvider = defaultProvider
+                    providers = rows
+                    providersError = nil
+                    return true
+                case let .error(text):
+                    providersError = text
+                    return false
+                default: continue
+                }
+            }
+            return false
+        } catch {
+            providersError = error.localizedDescription
+            return false
+        }
     }
 
     var modelChoices: [String] {
@@ -192,7 +273,7 @@ final class AppModel: ObservableObject {
             .sorted { $0.date > $1.date }.prefix(3).map { $0 }
     }
 
-    // MARK: Actualización
+    // MARK: - Actualización
 
     /// Compara la versión instalada con la última etiqueta del repositorio de AlfalfaCode.
     func checkForUpdate() {
@@ -237,7 +318,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Carpeta
+    // MARK: - Carpeta
 
     func chooseFolder() {
         let panel = NSOpenPanel()
@@ -264,7 +345,7 @@ final class AppModel: ObservableObject {
         newOllama = await reachable
     }
 
-    // MARK: Sesiones
+    // MARK: - Sesiones
 
     func startTask() {
         var task = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -293,6 +374,7 @@ final class AppModel: ObservableObject {
 
     private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = []) {
         session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
         live.insert(session, at: 0)
         route = .live(session.id)
         session.start(launcher: launcher, task: task, images: images)
@@ -317,12 +399,14 @@ final class AppModel: ObservableObject {
                                   effort: summary.effort ?? effort, readOnly: readOnly,
                                   mode: summary.mode ?? PermissionMode.auto.rawValue)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
         session.onWake = { [weak self, weak session] in
             guard let self, let session else { return }
             self.dormant[summary.id] = nil
             // Una sesión que ya despertó antes vuelve a despertar al cerrarse su proceso: no se duplica.
             if !self.live.contains(where: { $0 === session }) { self.live.insert(session, at: 0) }
-            self.route = .live(session.id)
+            // Sólo si la estás mirando: la nota de una sesión hija la despierta sin moverte.
+            if self.route == .past(summary.id) { self.route = .live(session.id) }
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 await self.reload()
@@ -337,7 +421,7 @@ final class AppModel: ObservableObject {
     private func loadHistory(_ id: String, into session: LiveSession, launcher: URL, resumable: Bool) async {
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
-                                                         directory: home)
+                                                          directory: home)
             for case let .history(_, events, wrapUp, context, tokens) in messages {
                 session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens),
                                 launcher: launcher, resumable: resumable)
@@ -361,7 +445,7 @@ final class AppModel: ObservableObject {
         if case let .live(id) = old { session(id)?.leave() }
     }
 
-    // MARK: Acciones sobre una sesión (clic derecho)
+    // MARK: - Acciones sobre una sesión (clic derecho)
 
     /// `alfalfa --marcar ID CAMPO VALOR` y recarga la barra lateral.
     func mark(_ row: SidebarRow, _ field: String, _ value: String) {
@@ -421,14 +505,14 @@ final class AppModel: ObservableObject {
         return groups.flatMap(\.rows).first { $0.sessionID == id }
     }
 
-    // MARK: Chats de la app de Ollama
+    // MARK: - Chats de la app de Ollama
 
     /// Títulos y recuentos de los chats de Ollama; el contenido sólo se lee al cargar uno.
     func ollamaChats() async -> (chats: [OllamaChat], error: String?) {
         guard let launcher else { return ([], "No se encuentra la orden alfalfa.") }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--chats-ollama", "--json"],
-                                                         directory: home)
+                                                          directory: home)
             for case let .ollamaChats(rows) in messages { return (rows, nil) }
             for case let .error(text) in messages { return ([], text) }
             return ([], "Ollama no devolvió la lista de chats.")
@@ -463,21 +547,6 @@ final class AppModel: ObservableObject {
         route = .new
     }
 
-    func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
-
-    func resumeCommand(_ row: SidebarRow) -> String {
-        "cd \(CodeActionsShell.quote(row.folder ?? "~")) && alfalfa --reanudar \(row.sessionID ?? "")"
-    }
-
-    /// Carpeta de la sesión en `$ALFALFA_HOME/sesiones`.
-    func sessionFolder(_ row: SidebarRow) -> URL? {
-        guard let id = row.sessionID else { return nil }
-        return Attachments.directory().deletingLastPathComponent().appendingPathComponent("sesiones/\(id)")
-    }
-
     @discardableResult
     private func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
         guard let launcher else { return nil }
@@ -492,7 +561,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Barra lateral
+    // MARK: - Barra lateral
 
     var groups: [SidebarGroup] {
         var rows: [String: [SidebarRow]] = [:]
@@ -543,4 +612,29 @@ final class AppModel: ObservableObject {
 
 enum CodeActionsShell {
     static func quote(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+}
+
+// MARK: - Sesiones propuestas
+
+extension AppModel {
+    /// «Nueva sesión» de una tarjeta de `propose_session`, como en Claude Code: empieza el encargo en
+    /// la misma carpeta, con el modelo, el esfuerzo y el modo de la sesión que la propuso. No cambia
+    /// de pantalla: la sesión nueva sale en la barra lateral y, si pide permiso, espera a que vayas.
+    /// Va aquí porque `live` sólo se cambia desde este archivo.
+    @discardableResult
+    func startProposed(_ proposal: SessionProposal, from parent: LiveSession) -> Bool {
+        guard let launcher else { return false }
+        let session = LiveSession(cwd: parent.cwd, title: proposal.title, resumeID: nil, model: parent.model,
+                                  effort: parent.effort, readOnly: parent.readOnly, mode: parent.mode)
+        session.parentSessionID = parent.sessionID
+        session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
+        live.insert(session, at: 0)
+        session.start(launcher: launcher, task: proposal.task)
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            await reload()
+        }
+        return true
+    }
 }

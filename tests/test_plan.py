@@ -48,7 +48,8 @@ def test_planes_invalidos(plan):
 
 
 def test_texto_del_plan():
-    assert texto_del_plan(PASOS, 'Por qué') == 'Por qué\n[x] Leer el código\n[>] Arreglar la suma\n[ ] Pasar las pruebas'
+    assert texto_del_plan(PASOS, 'Por qué') == ('Por qué\n[x] Leer el código\n[>] Arreglar la suma\n'
+                                                '[ ] Pasar las pruebas')
 
 
 def test_el_plan_de_un_subagente_no_sustituye_al_principal():

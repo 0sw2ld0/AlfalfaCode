@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 /// Motivos de la política on-request en el evento `permiso` de `alfalfa --stdio`.
 final class PermissionReasonTests: XCTestCase {
@@ -73,7 +73,7 @@ final class PermissionReasonTests: XCTestCase {
             [.network, .dangerous]: "red abierta",
             [.leaveSandbox, .dangerous]: "sin sandbox",
             [.leaveSandbox, .network, .dangerous]: "sin sandbox",
-            [.retry, .dangerous]: "sin sandbox",
+            [.retry, .dangerous]: "sin sandbox"
         ]
         for (reasons, expected) in combined {
             let scope = try XCTUnwrap(PermissionRequest(id: "x", argv: ["rm", "-rf", "x"], purpose: "",

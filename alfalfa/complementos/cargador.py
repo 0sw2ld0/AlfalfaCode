@@ -35,15 +35,15 @@ herramientas directas ni herencia de secretos. Un complemento se registra
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 
-from . import configuracion as configuracion_complementos
 from ..mcp_cliente import configuracion as configuracion_mcp
+from . import configuracion as configuracion_complementos
 
 SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 PREFIJO_ESQUEMA = 'https://agent-plugins.org/schemas/'
@@ -73,7 +73,7 @@ LEGADO = {'skills', 'commands', 'mcpServers', 'mcp', 'hooks', 'agents', 'interfa
           'displayName', 'category', 'brandColor', 'logo', 'screenshots', 'composerIcon', 'logoDark'}
 COMUNES = AGENT_PLUGINS | LEGADO
 # Campos conocidos que no producen ninguna capacidad en AlfalfaCode: se
-# enumeran como ignorados y avisados, nunca se finge soporte (H-008).
+# enumeran como ignorados y avisados, nunca se finge soporte.
 SIN_CAPACIDAD = {'interface', 'agents', 'apps', 'documentationUrl', 'supportUrl', 'privacyPolicyUrl',
                  'termsOfServiceUrl', 'icon', 'displayName', 'category', 'brandColor', 'logo',
                  'screenshots', 'composerIcon', 'logoDark'}
@@ -129,7 +129,7 @@ class Comando:
         except ValueError as exc:
             raise ErrorComplemento('COMP-ARGUMENTOS', 'Argumentos con comillas incompletas: ' + str(exc)) from None
 
-        # H-007: una sola pasada sobre la plantilla original. Sustituir por
+        # Una sola pasada sobre la plantilla original. Sustituir por
         # tandas reprocesaba lo ya insertado ($ARGUMENTS="$1" devolvía
         # «literal literal»); aquí el texto del usuario nunca se reinterpreta.
         def sustituir(marcador):
@@ -234,7 +234,7 @@ def _exigir_relativa(valor):
     Una ruta declarada en el manifiesto empieza por `./`, no puede ser la raíz
     `./`, no puede contener un componente `..` y debe seguir siendo relativa.
     Sin esta comprobación `./skills/../skills` y `./` llegaban hasta la
-    resolución final y sólo entonces, o nunca, se rechazaban (H-003).
+    resolución final y sólo entonces, o nunca, se rechazaban.
     """
     if not valor.startswith('./'):
         raise ErrorComplemento('COMP-RUTA', 'Una ruta declarada en el manifiesto debe empezar por ./')
@@ -406,7 +406,7 @@ class CargadorComplementos:
         for codigo, texto in diagnosticos:
             self.diagnosticos.append(Diagnostico(codigo, texto))
         for configurada in sorted(raices, key=lambda p: str(p)):
-            # H-001: el listado siempre termina. Un fallo inesperado en una raíz
+            # El listado siempre termina. Un fallo inesperado en una raíz
             # se diagnostica y no impide informar del resto ni emitir el JSON.
             try:
                 self._raiz(configurada)
@@ -491,7 +491,8 @@ class CargadorComplementos:
             if not root.is_dir():
                 raise ErrorComplemento('COMP-RAIZ', 'La raíz autorizada no es una carpeta.')
             if root in self._raices_vistas:
-                raise ErrorComplemento('COMP-RAIZ-DUPLICADA', 'La misma raíz autorizada aparece dos veces; no se recarga.')
+                raise ErrorComplemento('COMP-RAIZ-DUPLICADA', 'La misma raíz autorizada aparece dos veces; no se '
+                                                              'recarga.')
             self._raices_vistas.add(root)
             if root == self.cwd or root in self.cwd.parents:
                 raise ErrorComplemento('COMP-CWD-NO-AUTORIZADO',
@@ -520,7 +521,7 @@ class CargadorComplementos:
                 ruta = root / relativa
                 if not (ruta.exists() or ruta.is_symlink()):
                     continue
-                # H-001: el enlace puede estar en la carpeta (.codex-plugin), no
+                # El enlace puede estar en la carpeta (.codex-plugin), no
                 # en el archivo; se comprueba la ruta real antes de leerla.
                 real = _manifiesto_contenido(root, ruta, relativa)
                 datos = _json_regular(real)
@@ -533,7 +534,7 @@ class CargadorComplementos:
         if elegido is None:
             raise ErrorComplemento('COMP-SIN-MANIFIESTO', 'La raíz autorizada no contiene un manifiesto reconocido.')
         formato, relativa, ruta, datos = elegido
-        # H-002: los campos fuera del contrato Agent Plugins 1.0.0 no invalidan la
+        # Los campos fuera del contrato Agent Plugins 1.0.0 no invalidan la
         # carga; se avisan como ignorados y sólo se leen los que producen
         # capacidad, igual que agent_plugin_manifest.rs (que filtra
         # AGENT_PLUGIN_FIELDS y avisa del resto).
@@ -544,27 +545,28 @@ class CargadorComplementos:
         if not identidad:
             raise ErrorComplemento('COMP-MANIFIESTO', 'name no produce un identificador utilizable.')
         if identidad in self._ids:
-            raise ErrorComplemento('COMP-ID-DUPLICADO', 'Identidad duplicada; la segunda raíz no sustituye a la primera: '
+            raise ErrorComplemento('COMP-ID-DUPLICADO', 'Identidad duplicada; la segunda raíz no sustituye a la '
+                                                        'primera: '
                                    + identidad)
         plugin = Complemento(identidad, nombre, datos.get('version'), root, formato, relativa,
                              _texto(datos, 'description'))
         # El manifiesto de cliente puede traer campos de su propio ecosistema;
-        # sólo los desconocidos se avisan, nunca invalidan la carga (CA-4).
+        # sólo los desconocidos se avisan, nunca invalidan la carga.
         permitidos = AGENT_PLUGINS if formato == 'agent-plugins' else COMUNES
         for campo in sorted(set(declarado) - permitidos):
             plugin.aviso('COMP-CAMPO-DESCONOCIDO', 'Campo opcional desconocido ignorado: ' + campo, campo, False)
-        # H-008: un campo conocido sin capacidad equivalente tampoco se calla:
+        # Un campo conocido sin capacidad equivalente tampoco se calla:
         # aparece en `ignoradas` y con diagnóstico, sin fingir soporte.
         for campo in sorted(set(declarado) & SIN_CAPACIDAD):
             plugin.ignoradas.append(campo)
             plugin.aviso('COMP-CAMPO-NO-SOPORTADO',
                          'Campo conocido sin capacidad compatible en AlfalfaCode; se ignora: ' + campo,
                          campo, False)
-        # Se enumera, nunca se interpreta: .app.json no se abre (CA-12). Los
+        # Se enumera, nunca se interpreta: .app.json no se abre. Los
         # hooks se leen aquí y sólo los ejecuta arnes/hooks, en el sandbox.
         if (root / '.app.json').exists() or (root / '.app.json').is_symlink():
             plugin.ignoradas.append('.app.json')
-        # H-004: se valida el complemento entero antes de registrarlo. Antes se
+        # Se valida el complemento entero antes de registrarlo. Antes se
         # añadía a `self.complementos` al principio: con un rechazo estructural
         # (p. ej. COMP-LIMITE por 257 rutas en commands) quedaban visibles el
         # complemento y sus habilidades, y abrir_habilidad seguía funcionando
@@ -594,7 +596,7 @@ class CargadorComplementos:
         if formato == 'agent-plugins':
             if datos.get('$schema') != SCHEMA:
                 raise ErrorComplemento('COMP-SCHEMA', 'Falta el identificador exacto del esquema 1.0.0.')
-            # H-002: agent_plugin_manifest.rs avisa y descarta los campos fuera de
+            # agent_plugin_manifest.rs avisa y descarta los campos fuera de
             # AGENT_PLUGIN_FIELDS en lugar de invalidar todo el manifiesto. Aquí
             # se conserva la carga con las capacidades compatibles y los campos
             # fuera del contrato se enumeran como ignorados en el informe.
@@ -617,7 +619,7 @@ class CargadorComplementos:
         if 'version' in datos and (not isinstance(version, str) or not version or len(version) > 128):
             raise ErrorComplemento('COMP-MANIFIESTO', 'version debe ser texto no vacío de hasta 128 caracteres.')
         autor = datos.get('author')
-        # `author: null` tampoco es un campo ausente (H-002).
+        # `author: null` tampoco es un campo ausente.
         if 'author' in datos:
             if not isinstance(autor, dict):
                 raise ErrorComplemento('COMP-MANIFIESTO', 'author debe ser un objeto.')
@@ -694,7 +696,7 @@ class CargadorComplementos:
                     ident = plugin.identidad + ':' + _normalizar_id(nombre)
                     if ident in plugin.habilidades:
                         raise ErrorComplemento('COMP-DUPLICADO', 'Habilidad duplicada: ' + ident)
-                    # Sólo metadatos y hash: el cuerpo se lee al abrirla (CA-7).
+                    # Sólo metadatos y hash: el cuerpo se lee al abrirla.
                     plugin.habilidades[ident] = Habilidad(
                         ident, nombre, descripcion, str(candidata.relative_to(plugin.raiz)),
                         hashlib.sha256(texto.encode('utf-8')).hexdigest())
@@ -762,7 +764,7 @@ class CargadorComplementos:
         declarada = datos.get('mcpServers', datos.get('mcp'))
         if isinstance(declarada, dict):
             # Claude admite el mapa inline; se acepta envuelto en mcpServers o
-            # como mapa simple {servidor: entrada} (H-005).
+            # como mapa simple {servidor: entrada}.
             self._mcp_datos(plugin, declarada, '<manifiesto:mcpServers>')
             return
         rutas = []
@@ -773,7 +775,7 @@ class CargadorComplementos:
             plugin.aviso('COMP-MCP', 'mcpServers/mcp debe ser una ruta u objeto; se ignora.', 'mcp')
             return
         else:
-            # H-004: el predeterminado sólo cuenta si el manifiesto no declara
+            # El predeterminado sólo cuenta si el manifiesto no declara
             # ruta. Con ruta declarada se lee únicamente esa, como Codex
             # (loader.rs: DEFAULT_MCP_CONFIG_FILE = «.mcp.json» es el respaldo).
             predeterminados = (('mcp.json',) if plugin.formato == 'agent-plugins'
@@ -785,7 +787,7 @@ class CargadorComplementos:
                     break  # una única configuración por complemento
         for ruta in rutas:
             try:
-                # H-003: una ruta declarada en mcpServers/mcp sigue el contrato de
+                # Una ruta declarada en mcpServers/mcp sigue el contrato de
                 # manifest.rs (`./`, sin `..`, raíz explícita); el predeterminado
                 # del formato es un nombre relativo, no una declaración.
                 _, real = _segura(plugin.raiz, ruta, obligar_relativa=declarada_por_manifiesto)
@@ -798,7 +800,7 @@ class CargadorComplementos:
 
     @staticmethod
     def _servidores_de(datos):
-        """Mapa de servidores MCP: envuelto en mcpServers o simple (H-005).
+        """Mapa de servidores MCP: envuelto en mcpServers o simple.
 
         Codex acepta ambas formas y Claude admite el mapa inline. Un envoltorio
         con claves adicionales se rechaza: no se adivina qué es cada cosa.
@@ -838,7 +840,7 @@ class CargadorComplementos:
                 for _, texto in avisos:
                     plugin.aviso('COMP-POLITICA-MCP', texto, original, False)
                 normalizada.update(politica)
-                # H-003: activo es una decisión del usuario («activo» admite
+                # `activo` es una decisión del usuario («activo» admite
                 # true/false). Un servidor desactivado no llega al gestor MCP.
                 activo = normalizada.pop('activo', True)
                 if not isinstance(activo, bool):
@@ -858,7 +860,7 @@ class CargadorComplementos:
                     raise ErrorComplemento('COMP-DUPLICADO', 'Servidor duplicado; no se sobrescribe: ' + original)
                 plugin.servidores[ident] = dict(original=original, servidor=servidor, procedencia=procedencia)
                 self._ids_servidor.add(ident)
-                # H-001 (Sol, 06/11): los avisos del cliente MCP son otro tipo de
+                # Los avisos del cliente MCP son otro tipo de
                 # Diagnostico (sin capacidad): mezclados tal cual, diagnosticos_mcp()
                 # lanzaba AttributeError y TerminalManager no arrancaba.
                 for aviso in configuracion_mcp.avisos(servidor):
@@ -913,7 +915,7 @@ class CargadorComplementos:
             normalizada = dict(orden=comando, argumentos=[expandir(a) for a in argumentos],
                                entorno={k: expandir(v) for k, v in entorno.items()})
             cwd = entrada.get('cwd', str(plugin.raiz))
-            # H-001: un cwd no textual (7, {}, []) reventaba en expandir() con
+            # Un cwd no textual (7, {}, []) reventaba en expandir() con
             # TypeError y se llevaba por delante el resto del informe. Se valida
             # antes de expandirlo: el servidor se diagnostica y los demás siguen.
             if not isinstance(cwd, str) or not cwd or '\0' in cwd or len(cwd) > 4096:
@@ -954,7 +956,8 @@ class CargadorComplementos:
                 if all(h['procedencia'] != procedencia for h in plugin.hooks):
                     plugin.hooks.append(dict(procedencia=procedencia, datos=_json_regular(real)))
             except FileNotFoundError:
-                plugin.aviso('COMP-RUTA-AUSENTE', 'La ruta declarada en hooks no existe; no aporta hooks.', 'hooks', False)
+                plugin.aviso('COMP-RUTA-AUSENTE', 'La ruta declarada en hooks no existe; no aporta hooks.', 'hooks',
+                             False)
             except (OSError, ErrorComplemento) as exc:
                 plugin.aviso(getattr(exc, 'codigo', 'COMP-HOOKS'),
                              getattr(exc, 'texto', 'Archivo de hooks ilegible; se ignora.'), 'hooks')
@@ -978,11 +981,11 @@ class CargadorComplementos:
         return fuentes
 
     def servidores_mcp(self, reservados=()):
-        """Objetos Servidor ya validados para el McpManager de b0febc5207-01.
+        """Objetos Servidor ya validados para el McpManager.
 
         `reservados` son los identificadores que ya ocupa la configuración del
-        usuario en `mcp.json`. CA-11: el usuario tiene precedencia y el
-        complemento no sustituye su servidor en silencio (H-002); el
+        usuario en `mcp.json`. El usuario tiene precedencia y el
+        complemento no sustituye su servidor en silencio; el
         identificador repetido se diagnostica y no se registra.
         """
         reservados = frozenset(r if isinstance(r, str) else getattr(r, 'id', '') for r in reservados)

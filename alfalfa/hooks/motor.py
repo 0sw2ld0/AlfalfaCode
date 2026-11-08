@@ -24,12 +24,12 @@ Diferencias deliberadas con Codex y con Claude Code:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import json
 import os
-from pathlib import Path
 import re
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..procesos import terminar_grupo
 
@@ -166,7 +166,8 @@ def leer_fuente(archivo, origen, entorno=None, datos=None):
             raise ValueError('debe ser un objeto con la clave «hooks»')
         sobran = sorted(set(datos) - {'hooks', 'description'})
         if sobran:
-            diagnosticos.append(Diagnostico('HOOK-CAMPO', 'Campos desconocidos ignorados: ' + ', '.join(sobran) + '.', origen))
+            diagnosticos.append(Diagnostico('HOOK-CAMPO', 'Campos desconocidos ignorados: ' + ', '.join(sobran)
+                                            + '.', origen))
     except (OSError, ValueError, UnicodeError) as exc:
         motivo = str(exc)[:200] if type(exc) is ValueError else type(exc).__name__
         return [], [Diagnostico('HOOK-ARCHIVO', nombre + ' inválido: ' + motivo + '; no se carga ningún hook.', origen)]
@@ -176,14 +177,17 @@ def leer_fuente(archivo, origen, entorno=None, datos=None):
                                             'sus hooks no se ejecutan.', origen))
             continue
         if evento not in EVENTOS:
-            diagnosticos.append(Diagnostico('HOOK-EVENTO', 'Evento desconocido ' + str(evento)[:80] + '; se ignora.', origen))
+            diagnosticos.append(Diagnostico('HOOK-EVENTO', 'Evento desconocido ' + str(evento)[:80]
+                                            + '; se ignora.', origen))
             continue
         if not isinstance(grupos, list):
-            diagnosticos.append(Diagnostico('HOOK-FORMATO', evento + ' debe ser una lista de grupos; se ignora.', origen))
+            diagnosticos.append(Diagnostico('HOOK-FORMATO', evento + ' debe ser una lista de grupos; se ignora.',
+                                            origen))
             continue
         for grupo in grupos:
             if not isinstance(grupo, dict) or not isinstance(grupo.get('hooks'), list):
-                diagnosticos.append(Diagnostico('HOOK-FORMATO', 'Cada grupo de ' + evento + ' necesita una lista «hooks»; se ignora.', origen))
+                diagnosticos.append(Diagnostico('HOOK-FORMATO', 'Cada grupo de ' + evento
+                                                + ' necesita una lista «hooks»; se ignora.', origen))
                 continue
             sobran = sorted(set(grupo) - CAMPOS_GRUPO)
             if sobran:
@@ -191,7 +195,8 @@ def leer_fuente(archivo, origen, entorno=None, datos=None):
                                                 + ': ' + ', '.join(sobran) + '.', origen))
             patron = grupo.get('matcher', '')
             if not isinstance(patron, str):
-                diagnosticos.append(Diagnostico('HOOK-FILTRO', 'El matcher de ' + evento + ' debe ser texto; grupo ignorado.', origen))
+                diagnosticos.append(Diagnostico('HOOK-FILTRO', 'El matcher de ' + evento
+                                                + ' debe ser texto; grupo ignorado.', origen))
                 continue
             if patron not in ('', '*') and evento not in CON_FILTRO:
                 diagnosticos.append(Diagnostico('HOOK-FILTRO', evento + ' no filtra: se ignora el matcher «'
@@ -205,21 +210,25 @@ def leer_fuente(archivo, origen, entorno=None, datos=None):
                 continue
             for definicion in grupo['hooks']:
                 if not isinstance(definicion, dict):
-                    diagnosticos.append(Diagnostico('HOOK-FORMATO', 'Hook no válido en ' + evento + '; se ignora.', origen))
+                    diagnosticos.append(Diagnostico('HOOK-FORMATO', 'Hook no válido en ' + evento + '; se ignora.',
+                                                    origen))
                     continue
                 tipo = definicion.get('type', 'command')
                 if tipo != 'command':
-                    diagnosticos.append(Diagnostico('HOOK-TIPO', 'Hooks de tipo «' + str(tipo)[:40] + '» sin equivalente '
-                                                    'en AlfalfaCode (sólo command); no se ejecuta.', origen))
+                    diagnosticos.append(Diagnostico('HOOK-TIPO', 'Hooks de tipo «' + str(tipo)[:40]
+                                                    + '» sin equivalente '
+                                                      'en AlfalfaCode (sólo command); no se ejecuta.', origen))
                     continue
                 sobran = sorted(set(definicion) - CAMPOS_MANEJADOR)
                 if sobran:
-                    diagnosticos.append(Diagnostico('HOOK-CAMPO', 'Campos sin equivalente ignorados en un hook de ' + evento
-                                                    + ': ' + ', '.join(sobran) + ('; async corre en serie' if 'async' in sobran else '')
+                    diagnosticos.append(Diagnostico('HOOK-CAMPO', 'Campos sin equivalente ignorados en un hook de '
+                                                    + evento + ': ' + ', '.join(sobran)
+                                                    + ('; async corre en serie' if 'async' in sobran else '')
                                                     + '.', origen))
                 comando = definicion.get('command')
                 if not isinstance(comando, str) or not comando.strip() or len(comando) > 8000 or '\0' in comando:
-                    diagnosticos.append(Diagnostico('HOOK-ORDEN', 'Hook de ' + evento + ' sin orden válida; se ignora.', origen))
+                    diagnosticos.append(Diagnostico('HOOK-ORDEN', 'Hook de ' + evento + ' sin orden válida; se ignora.',
+                                                    origen))
                     continue
                 tiempo = definicion.get('timeout', TIEMPO_DEFECTO)
                 if not (_entero(tiempo) or (isinstance(tiempo, float) and tiempo.is_integer())) or tiempo < 1:
@@ -434,7 +443,8 @@ def _validar(evento, valor, avisos):
                         ('systemMessage', str), ('reason', str)):
         if campo in valor and not isinstance(valor[campo], tipo):
             raise SalidaInvalida(campo + ' tiene un tipo inválido')
-    if 'decision' in valor and valor['decision'] not in (('approve', 'block') if evento == 'PreToolUse' else ('block',)):
+    if 'decision' in valor and valor['decision'] not in (('approve', 'block') if evento == 'PreToolUse'
+                                                         else ('block',)):
         raise SalidaInvalida('decision inválida: ' + str(valor['decision'])[:40])
     especifico = valor.get('hookSpecificOutput')
     if especifico is None:
@@ -443,7 +453,8 @@ def _validar(evento, valor, avisos):
         raise SalidaInvalida('hookSpecificOutput debe ser un objeto con hookEventName «' + evento + '»')
     sobran = sorted(set(especifico) - ESPECIFICOS[evento] - {'hookEventName'})
     if sobran:
-        avisos.append(_pide(evento, 'campos de hookSpecificOutput sin equivalente ignorados: ' + ', '.join(sobran) + '.'))
+        avisos.append(_pide(evento, 'campos de hookSpecificOutput sin equivalente ignorados: ' + ', '.join(sobran)
+                            + '.'))
     if 'additionalContext' in especifico and not isinstance(especifico['additionalContext'], str):
         raise SalidaInvalida('additionalContext debe ser texto')
     return especifico

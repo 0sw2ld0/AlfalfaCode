@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 final class TitleBarTests: XCTestCase {
     func testFollowsTheSystemSetting() {

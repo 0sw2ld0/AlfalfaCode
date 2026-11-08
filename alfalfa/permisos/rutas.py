@@ -13,7 +13,6 @@ import os
 import re
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Nombres que nunca se tocan
 #
@@ -137,8 +136,7 @@ def lecturas_concedibles(carpetas):
 # Entorno de los agentes
 
 # Variables que parecen secretos: el agente no las necesita y heredarlas le
-# daba los tokens del usuario: su forja git, Ollama Cloud y el buscador web
-# (revisión del 2026-10-16).
+# daba los tokens del usuario: su forja git, Ollama Cloud y el buscador web.
 RE_SECRETO = re.compile(r'TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL', re.I)
 # Lo único de ese tipo que cada agente sí usa: su propia autenticación, si el
 # usuario la tiene en el entorno (si no, la toma de su llavero o su auth.json).
@@ -161,7 +159,7 @@ def entorno_de_agente(provider, env=None):
 
 # Cuántos vetos admite un nivel antes de agruparlos. Cada veto viaja dos veces
 # (Edit y Write) en la orden de Claude: con miles de carpetas hermanas la orden
-# pasaría de ARG_MAX, como ya pasó con los archivos el 01/11.
+# pasaría de ARG_MAX, como ya pasó con los archivos.
 TOPE_DE_VETOS_POR_NIVEL = 64
 # Claude sólo entiende `*` y `**` en sus reglas: los corchetes los toma como
 # letras (probado con `[!m]*` y `[^m]*`: no vetaban «abc» y sí la carpeta propia).
@@ -201,9 +199,9 @@ def _agrupar(nivel, parte, hijos):
 def vetos_de_escritura(carpetas, propia=None):
     """Rutas (patrón de Claude) donde no se puede escribir.
 
-    El médico trabaja en data/agents/studio-workspaces/medico-* y lee
+    Un agente trabaja en data/agents/studio-workspaces/medico-* y lee
     data/agents: vetar `data/agents/**` le vetaba su propio worktree y cada
-    arreglo acababa en «Claude necesita aprobación» (4.211). Si la carpeta propia cae
+    arreglo acababa en «Claude necesita aprobación». Si la carpeta propia cae
     dentro de una de sólo lectura, se veta cada hermana del camino hacia ella
     (y los archivos sueltos de cada nivel), nunca el camino mismo. Si un nivel
     pasa de TOPE_DE_VETOS_POR_NIVEL, sus hermanas se agrupan por prefijo.
@@ -238,8 +236,8 @@ def vetos_de_escritura(carpetas, propia=None):
                     hermanas.append((hijo.name, True))
                 elif not (vetado_con_punto and '.' in hijo.name):
                     # Los que tienen punto ya los cubre `*.*`: data/agents guarda
-                    # casi 7.000 .jsonl y uno por uno el médico no arrancaba
-                    # («Argument list too long», 01/11).
+                    # casi 7.000 .jsonl y uno por uno el agente no arrancaba
+                    # («Argument list too long»).
                     hermanas.append((hijo.name, False))
             if len(del_nivel) + len(hermanas) > TOPE_DE_VETOS_POR_NIVEL and not CARACTERES_DE_PATRON & set(parte):
                 del_nivel += _agrupar(nivel, parte, hermanas)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Va dentro del ejecutable (Package.swift lo incrusta en la sección __info_plist). Sin él, macOS
+  no sabe que la app está en español y pone en inglés lo que dibuja el sistema: «About», «Settings…»,
+  «Hide», «Quit».
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>AlfalfaCode</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>es</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>es</string>
+    </array>
+</dict>
+</plist>

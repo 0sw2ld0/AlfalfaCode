@@ -46,10 +46,10 @@ import asyncio
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import time
+from pathlib import Path
 
 FUENTE = Path(__file__).with_name('ayudante.swift')
 MAX_SALIDA = 24000
@@ -227,12 +227,13 @@ class Ayudante:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise ValueError('La app no respondió a tiempo (' + str(ORDEN_SEGUNDOS) + ' s); puede estar colgada.') from None
+            raise ValueError('La app no respondió a tiempo (' + str(ORDEN_SEGUNDOS)
+                             + ' s); puede estar colgada.') from None
         try:
             datos = json.loads(salida.decode(errors='replace').strip().splitlines()[-1])
         except (IndexError, ValueError):
             raise ValueError('Respuesta inválida del ayudante de apps: '
-                             + (errors or salida).decode(errors='replace')[-300:]) from None
+                             + (errores or salida).decode(errors='replace')[-300:]) from None
         if isinstance(datos, dict) and datos.get('error'):
             raise ValueError(str(datos['error']))
         return datos
@@ -295,7 +296,8 @@ class ControlDeApps:
                              'con run_command background: true o con open) y mira app_list.')
         if len(parecidas) > 1:
             raise ValueError('Hay varias apps que encajan con «' + texto + '»: '
-                             + ', '.join(str(a.get('nombre')) + ' (pid ' + str(a.get('pid')) + ')' for a in parecidas[:8])
+                             + ', '.join(str(a.get('nombre')) + ' (pid ' + str(a.get('pid')) + ')'
+                                         for a in parecidas[:8])
                              + '. Usa su bundle id o su pid.')
         app = parecidas[0]
         grado, motivo = nivel(app)
@@ -539,7 +541,8 @@ class ControlDeApps:
             return despues
         # Como mejora sobre Codex: la ventana ya cambiada, para comprobar el efecto sin otra llamada.
         try:
-            despues = await self._leer(app, ventana, captura=args.get('screenshot') is True or bool(args.get('question')))
+            despues = await self._leer(app, ventana,
+                                       captura=args.get('screenshot') is True or bool(args.get('question')))
         except ValueError as exc:
             despues = {'aviso': 'Hecho, pero no se pudo volver a leer la ventana: ' + str(exc)}
         await self._mirar(despues, args.get('question'))
@@ -557,7 +560,7 @@ class ControlDeApps:
 def cambios(antes, despues, maximo=40):
     """Qué líneas del árbol aparecen y desaparecen, sin contar los números [i], que se mueven."""
     def lineas(arbol):
-        return [re.sub(r'^\s*\[\d+\]\s*', '', l) for l in arbol.splitlines() if l.strip()]
+        return [re.sub(r'^\s*\[\d+\]\s*', '', linea) for linea in arbol.splitlines() if linea.strip()]
     previas, nuevas = lineas(antes), lineas(despues)
     quedan = list(previas)
     aparece = []

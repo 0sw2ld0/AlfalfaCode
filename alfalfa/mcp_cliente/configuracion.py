@@ -29,12 +29,12 @@ demás siguen. Nada de este módulo lanza procesos ni abre conexiones.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import ipaddress
 import json
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlparse
 
 ARCHIVO = 'mcp.json'
@@ -42,7 +42,7 @@ ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9-]{0,23}')
 VARIABLE = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,127}')
 CABECERA = re.compile(r'[A-Za-z0-9-]{1,64}')
 # Nunca llegan a un servidor MCP aunque se declaren.
-VARIABLES_PROHIBIDAS = frozenset({'OLLAMA_API_KEY'})
+VARIABLES_PROHIBIDAS = frozenset({'OLLAMA_API_KEY', 'OPENAI_API_KEY', 'ALFALFA_CODIGO'})
 CABECERAS_PROHIBIDAS = frozenset({'host', 'content-length', 'transfer-encoding', 'connection',
                                   'mcp-session-id', 'mcp-protocol-version'})
 # Su valor es «<esquema> <credencial>»; secretos() redacta también la credencial sola.
@@ -148,6 +148,16 @@ def _heredada(nombre, campo, ambiente):
     _variable(nombre, campo)
     if nombre not in ambiente:
         raise _Invalido('MCP-CONFIG-ENTORNO', campo + ': la variable ' + nombre + ' no está definida.')
+    # Tampoco con otro nombre: un integrador guarda su clave de proveedor en su
+    # propia variable (p. ej. <APP>_OLLAMA_API_KEY) y la registra en `ajustes`.
+    try:
+        from ..proveedores import secretos
+        conocidas = set(secretos())
+    except Exception:
+        conocidas = set()
+    if ambiente[nombre] in conocidas:
+        raise _Invalido('MCP-CONFIG-ENTORNO', campo + ': ' + nombre + ' lleva una clave de proveedor y no se '
+                        'entrega a servidores MCP.')
     return ambiente[nombre]
 
 

@@ -148,6 +148,7 @@ class OnRequestPolicy:
         if not reasons and ruled != 'permitida' and modos.pide_ordenes(modos.modo_de(runtime.task)):
             # Manual y Aceptar ediciones: cada orden que no sólo lee espera al usuario.
             from pathlib import Path
+
             from .terminal import solo_lectura
             carpeta = tools.command_cwd(args)
             raiz = Path(tools.root)
@@ -247,7 +248,8 @@ class OnRequestPolicy:
             if policy is not None and isinstance(getattr(policy, 'denied', None), int):
                 policy.denied += 1
             raise ValueError('Sin respuesta a tiempo al permiso para ejecutar sin sandbox (el usuario no contestó); '
-                             'la orden no se ejecutó. No es un rechazo de la orden: vuelve a pedirla si hace falta.') from None
+                             'la orden no se ejecutó. No es un rechazo de la orden: vuelve a pedirla si hace '
+                             'falta.') from None
         if para_sesion and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
         return respuesta

@@ -1,20 +1,18 @@
 """S1: contratos reales del runtime; sólo se sustituye inferencia en unitarias."""
 import asyncio
 import io
-import json
 import os
-from pathlib import Path
-import signal
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from alfalfa.terminal import TerminalManager, engine_text, main
-from alfalfa.permisos.terminal import TerminalApproval, solo_lectura
-from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.permisos.terminal import TerminalApproval
 from alfalfa.proveedores.nativo.herramientas import digest
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.terminal import TerminalManager, main
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -114,7 +112,8 @@ async def local_inference(self, client, endpoint, payload, **kwargs):
     elif turns == 1:
         function = dict(name='edit_file', arguments=dict(path='value.txt', old='bad', new='good',
                                                        expected_sha256=digest(b'bad')))
-    return dict(message=dict(role='assistant', content='' if function else 'Corregido value.txt; pruebas no ejecutadas.',
+    return dict(message=dict(role='assistant',
+                             content='' if function else 'Corregido value.txt; pruebas no ejecutadas.',
                              tool_calls=[dict(function=function)] if function else []),
                 done=True, done_reason='stop', prompt_eval_count=10, eval_count=2)
 

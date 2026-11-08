@@ -13,7 +13,8 @@ from alfalfa.proveedores.nativo import herramientas
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.terminal import TerminalManager
 
-PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5E'
+                       'rkJggg==')
 
 
 @pytest.fixture

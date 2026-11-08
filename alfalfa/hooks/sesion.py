@@ -77,7 +77,8 @@ class HooksDeSesion:
 
     async def antes(self, nativo, args, ident):
         entrada = dict(self.comunes('PreToolUse'), tool_use_id=ident, **self._herramienta(nativo, args))
-        if nativo in ('run_command', 'run_checks') and isinstance(args, dict) and args.get('cwd') not in (None, '', '.'):
+        if nativo in ('run_command', 'run_checks') and isinstance(args, dict) \
+                and args.get('cwd') not in (None, '', '.'):
             # Como Codex (tool_cwd): la carpeta real de la orden.
             entrada['cwd'] = str((Path(self.motor.raiz) / str(args['cwd'])).resolve())
         resultado = await self.motor.disparar('PreToolUse', entrada, nombres.entradas_de_filtro(nativo))

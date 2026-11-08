@@ -8,22 +8,20 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import signal
 import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 import mcp.types as types
+import pytest
 
 from alfalfa.mcp_cliente import configuracion, nombres
 from alfalfa.mcp_cliente.conexion import BASE_ENTORNO
-from alfalfa.mcp_cliente.gestor import (BUSCAR, ESPEC_BUSCAR, METODO, McpManager, bytes_utf8,
-                                          tokens_estimados)
+from alfalfa.mcp_cliente.gestor import BUSCAR, ESPEC_BUSCAR, METODO, McpManager, bytes_utf8, tokens_estimados
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
@@ -108,7 +106,7 @@ def correr(coro):
     return asyncio.run(asyncio.wait_for(coro, 120))
 
 
-# ---------------------------------------------------------------- configuración (CA-4)
+# ---------------------------------------------------------------- configuración
 
 def test_configuracion_valida_con_todos_los_campos(tmp_path):
     configurar(tmp_path, {
@@ -121,11 +119,14 @@ def test_configuracion_valida_con_todos_los_campos(tmp_path):
         'apagado': dict(orden='/bin/no', activo=False)})
     servidores, diagnosticos = configuracion.cargar(tmp_path, {'MI_TOKEN': 'tok-1234567', 'MI_CLAVE': 'clave-123456'})
     local, remoto = servidores
-    assert (local.id, local.transporte, local.orden, local.argumentos, local.red) == ('local', 'stdio', '/bin/srv', ['--x'], True)
+    assert (local.id, local.transporte, local.orden, local.argumentos, local.red) \
+        == ('local', 'stdio', '/bin/srv', ['--x'], True)
     assert local.entorno == {'NIVEL': 'info', 'MI_TOKEN': 'tok-1234567'}
-    assert (local.tiempo_inicio, local.tiempo_herramienta, local.tiempo_permiso, local.max_bytes_esquema) == (5, 7, 9, 2048)
+    assert (local.tiempo_inicio, local.tiempo_herramienta, local.tiempo_permiso, local.max_bytes_esquema) \
+        == (5, 7, 9, 2048)
     assert local.habilitada('a') and not local.habilitada('b') and not local.habilitada('c')
-    assert remoto.cabeceras == {'X-Cliente': 'alfalfa', 'X-Api-Key': 'clave-123456', 'Authorization': 'Bearer tok-1234567'}
+    assert remoto.cabeceras == {'X-Cliente': 'alfalfa', 'X-Api-Key': 'clave-123456',
+                                'Authorization': 'Bearer tok-1234567'}
     assert remoto.secretos() == {'clave-123456', 'Bearer tok-1234567', 'tok-1234567'}
     # El conflicto habilitadas/deshabilitadas no invalida: se avisa y gana deshabilitadas.
     assert [(d.codigo, d.servidor, d.grave) for d in diagnosticos] == [('MCP-CONFLICTO', 'local', False)]
@@ -133,7 +134,7 @@ def test_configuracion_valida_con_todos_los_campos(tmp_path):
 
 
 def test_token_entorno_se_redacta_tambien_sin_bearer(tmp_path):
-    """H-001: el servidor puede devolver el token suelto, sin el «Bearer » de la cabecera."""
+    """El servidor puede devolver el token suelto, sin el «Bearer » de la cabecera."""
     token = 'CENTINELA-TOKEN-5e6f7a'
     configurar(tmp_path, {'h': dict(url='https://mcp.example.com/mcp', token_entorno='MI_TOKEN',
                                     cabeceras={'Proxy-Authorization': 'Basic CENTINELA-BASIC-0b1c'})})
@@ -186,7 +187,7 @@ def test_entrada_invalida_da_diagnostico_y_no_impide_las_demas(tmp_path, ident, 
     dict(token_entorno='BLANCA'),
 ])
 def test_cabecera_en_blanco_da_diagnostico_sin_abortar_el_gestor(tmp_path, entrada):
-    """H-003: una credencial vacía o en blanco no puede tumbar a los demás servidores."""
+    """Una credencial vacía o en blanco no puede tumbar a los demás servidores."""
     configurar(tmp_path, {'blanco': dict(url='https://a.example/mcp', **entrada),
                           'bueno': dict(url='https://b.example/mcp', token_entorno='BUENO')})
     ambiente = {'VACIA': '', 'BLANCA': '   ', 'BUENO': 'CENTINELA-BUENO-7d8e'}
@@ -198,7 +199,7 @@ def test_cabecera_en_blanco_da_diagnostico_sin_abortar_el_gestor(tmp_path, entra
 
 
 def test_secretos_tolera_cabeceras_de_credencial_en_blanco():
-    """H-003: aunque llegue sin validar, «   » no rompe secretos() ni el gestor."""
+    """Aunque llegue sin validar, «   » no rompe secretos() ni el gestor."""
     servidor = configuracion.Servidor(id='s', transporte='http', url='https://a.example/mcp',
                                       cabeceras={'Authorization': '   ', 'Proxy-Authorization': '',
                                                  'X-Api-Key': 'CENTINELA-LLAVE-1a2b'})
@@ -258,7 +259,7 @@ def test_servidor_invalido_no_se_lanza(tmp_path, monkeypatch):
     assert any('MCP-CONFIG-CAMPO [malo]' in t for t in textos)
 
 
-# ---------------------------------------------------------------- nombres (CA-12)
+# ---------------------------------------------------------------- nombres
 
 def test_nombres_con_prefijo_normalizados_unicos_y_reversibles():
     originales = ['a.b', 'a_b', 'a b', 'x' * 80, 'x' * 80 + 'y', 'ñandú', 'ok']
@@ -303,7 +304,7 @@ def test_colisiones_reales_y_seleccion_ambigua(tmp_path, monkeypatch):
     correr(run())
 
 
-# ---------------------------------------------------------------- habilitación (CA-11)
+# ---------------------------------------------------------------- habilitación
 
 @macos
 def test_deshabilitada_no_se_busca_carga_expone_ni_ejecuta(tmp_path, monkeypatch):
@@ -329,7 +330,7 @@ def test_deshabilitada_no_se_busca_carga_expone_ni_ejecuta(tmp_path, monkeypatch
     assert any('MCP-CONFLICTO' in r['texto'] for r in s.eventos('evento'))
 
 
-# ---------------------------------------------------------------- tamaño de esquema (CA-9, CA-10)
+# ---------------------------------------------------------------- tamaño de esquema
 
 class _ConexionFalsa:
     def __init__(self, servidor, herramientas):
@@ -383,7 +384,7 @@ REF_EXTERNO = {'type': 'object', 'properties': {'a': {'$ref': 'https://esquemas.
 
 
 def test_ref_externo_del_esquema_de_entrada_no_se_descarga(monkeypatch):
-    """H-002: validar argumentos no descarga $ref externos; sin validar no se pide permiso ni se envía."""
+    """Validar argumentos no descarga $ref externos; sin validar no se pide permiso ni se envía."""
     vigilado = _UrlopenVigilado()
     monkeypatch.setattr('urllib.request.urlopen', vigilado)
     servidor = configuracion.Servidor(id='s', transporte='stdio', red=False)
@@ -407,7 +408,7 @@ def test_ref_externo_del_esquema_de_entrada_no_se_descarga(monkeypatch):
 
 
 def test_ref_externo_del_esquema_de_salida_no_se_descarga(monkeypatch):
-    """H-002: el outputSchema no se valida con jsonschema.validate del SDK, que descargaría el $ref."""
+    """El outputSchema no se valida con jsonschema.validate del SDK, que descargaría el $ref."""
     from alfalfa.mcp_cliente.conexion import Conexion
     vigilado = _UrlopenVigilado()
     monkeypatch.setattr('urllib.request.urlopen', vigilado)
@@ -453,7 +454,7 @@ def test_esquema_grande_real_se_rechaza_aunque_sea_directa(tmp_path, monkeypatch
     assert any('MCP-ESQUEMA-GRANDE [prueba]' in r['texto'] for r in s.eventos('evento'))
 
 
-# ---------------------------------------------------------------- permisos con contador (CA-13, CA-14)
+# ---------------------------------------------------------------- permisos con contador
 
 async def _matar(sesion):
     pid = int((sesion.root / 'servidor.pid').read_text())
@@ -582,7 +583,7 @@ def test_argumentos_invalidos_y_esquema_no_cargado_no_ejecutan(tmp_path, monkeyp
     assert contador(s.root) == 0
 
 
-# ---------------------------------------------------------------- ciclo de vida y concurrencia (CA-3, CA-23)
+# ---------------------------------------------------------------- ciclo de vida y concurrencia
 
 @macos
 def test_caida_a_mitad_de_llamada_queda_incierta_sin_reintento(tmp_path, monkeypatch):
@@ -688,7 +689,7 @@ def test_inicio_fallido_o_lento_da_diagnostico(tmp_path, monkeypatch):
     assert any('MCP-INICIO [mudo]' in t and 'No respondió' in t for t in textos)
 
 
-# ---------------------------------------------------------------- medición de contexto (CA-16, CA-17)
+# ---------------------------------------------------------------- medición de contexto
 
 @macos
 def test_medicion_al_cargar_retirar_y_reconstruir(tmp_path, monkeypatch):
@@ -740,7 +741,7 @@ def test_medicion_al_cargar_retirar_y_reconstruir(tmp_path, monkeypatch):
     assert [(c['herramientas_mcp'], c['tokens'], c['limite']) for c in rehecho] == [(medidas['ambas'], 1200, 131072)]
 
 
-# ---------------------------------------------------------------- payload real y 300 herramientas (CA-5..8, CA-18, CA-19)
+# ---------------------------------------------------------------- payload real y 300 herramientas
 
 class Modelo:
     """Inferencia sustituida: guion de respuestas y registro del payload real de cada /api/chat."""
@@ -840,10 +841,11 @@ def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
     permiso, = s.eventos('permiso')
     assert permiso['mcp']['nombre'] == 'mcp__prueba__contar' and final['llamada'] == permiso['mcp']['llamada']
 
-    # CA-18: misma sesión sin MCP frente a la exposición diferida predeterminada.
+    # misma sesión sin MCP frente a la exposición diferida predeterminada.
     sin, _ = primer_payload(tmp_path, monkeypatch, False)
     con, _ = primer_payload(tmp_path, monkeypatch, True)
-    compacto = lambda p: len(json.dumps(p, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+    def compacto(p):
+        return len(json.dumps(p, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
     aumento = compacto(con) - compacto(sin)
     declaradas = compacto(con['tools']) - compacto(sin['tools'])
     sistema = len(con['messages'][0]['content'].encode()) - len(sin['messages'][0]['content'].encode())
@@ -864,7 +866,7 @@ def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
             esquemas_fuera_del_payload=len(otras)), ensure_ascii=False, indent=2) + '\n')
 
 
-# ---------------------------------------------------------------- entorno, secretos y HTTP (CA-3, CA-20, CA-21)
+# ---------------------------------------------------------------- entorno, secretos y HTTP
 
 CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA-9f8e7d', 'OTRO_SECRETO': 'CENTINELA-OTRO-1a2b3c',
               'SECRETO_A': 'CENTINELA-A-4d5e6f', 'TOKEN_H': 'CENTINELA-H-7a8b9c'}
@@ -925,7 +927,8 @@ def test_entorno_minimo_secretos_redactados_y_http_con_sus_cabeceras(tmp_path, m
         proc.stderr.close()
     env_a = json.loads((s.root / 'env-a.json').read_text())
     env_b = json.loads((s.root / 'env-b.json').read_text())
-    assert set(env_a) <= set(BASE_ENTORNO) | DEL_SISTEMA | {'SECRETO_A'} and env_a['SECRETO_A'] == CENTINELAS['SECRETO_A']
+    assert set(env_a) <= set(BASE_ENTORNO) | DEL_SISTEMA | {'SECRETO_A'} \
+        and env_a['SECRETO_A'] == CENTINELAS['SECRETO_A']
     assert set(env_b) <= set(BASE_ENTORNO) | DEL_SISTEMA
     for env in (env_a, env_b):
         assert CENTINELAS['OLLAMA_API_KEY'] not in json.dumps(env) and CENTINELAS['OTRO_SECRETO'] not in json.dumps(env)
@@ -950,7 +953,7 @@ def test_entorno_minimo_secretos_redactados_y_http_con_sus_cabeceras(tmp_path, m
         assert valor not in volcado
 
 
-# ---------------------------------------------------------------- sandbox (CA-22)
+# ---------------------------------------------------------------- sandbox
 
 @macos
 def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
@@ -969,7 +972,8 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
             try:
                 await s.cargar('mcp__cerrado__escribir', 'mcp__cerrado__conectar', 'mcp__abierto__conectar')
                 # Aprobada por el usuario, pero el sandbox sigue igual.
-                assert (await s.llamar('mcp__cerrado__escribir', {'ruta': '.git/hooks-x'}))['texto'].startswith('denegado')
+                assert (await s.llamar('mcp__cerrado__escribir',
+                                       {'ruta': '.git/hooks-x'}))['texto'].startswith('denegado')
                 assert (await s.llamar('mcp__cerrado__escribir', {'ruta': 'permitido.txt'}))['texto'] == 'escrito'
                 # Confiable tampoco abre la red; sólo red: true en la configuración lo hace.
                 assert (await s.llamar('mcp__cerrado__conectar', {'puerto': puerto}))['texto'].startswith('denegado')
@@ -1005,7 +1009,7 @@ def test_sin_sandbox_el_servidor_stdio_no_arranca(tmp_path, monkeypatch):
     assert any('Sandbox Seatbelt no disponible' in r['texto'] for r in s.eventos('evento'))
 
 
-# ---------------------------------------------------------------- --stdio con proceso real (CA-15, CA-16)
+# ---------------------------------------------------------------- --stdio con proceso real
 
 @macos
 def test_stdio_real_tarjeta_mcp_contexto_y_cierre(tmp_path):
@@ -1078,7 +1082,7 @@ with patch.object(NativeRuntime, 'request', request):
         os.kill(pid, 0)
 
 
-# ---------------------------------------------------------------- contrato con alfalfa-mac (CA-15, CA-17)
+# ---------------------------------------------------------------- contrato con alfalfa-mac
 
 def test_fixture_swift_sigue_el_contrato_real_del_motor():
     fixture = SERVER / 'alfalfa-mac/Tests/AlfalfaKitTests/Fixtures/mcp.jsonl'
