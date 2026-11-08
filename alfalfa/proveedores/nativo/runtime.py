@@ -17,18 +17,25 @@ import time
 from datetime import timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from uuid import uuid4
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import httpx
 
-from .herramientas import (WorkspaceTools, TOOLS, ON_REQUEST_TOOLS, COMPLEMENTOS_TOOLS, atomic_json, digest,
-                           IMAGE_EXTENSIONS)
+from ...admision.despacho import check_task, inference_stream, resolved_model_aliases
 from ...evidencia.registro import RunEvidence
+
 # Vive en el arnés para que la evidencia no tenga que importar el runtime.
 from ...reintentos.fallos import _CREDENCIALES, _sin_credenciales  # noqa: F401
-from ...admision.despacho import inference_stream, check_task, resolved_model_aliases
-
+from .herramientas import (
+    COMPLEMENTOS_TOOLS,
+    IMAGE_EXTENSIONS,
+    ON_REQUEST_TOOLS,
+    TOOLS,
+    WorkspaceTools,
+    atomic_json,
+    digest,
+)
 
 
 def is_cloud(model, info=None):
@@ -131,11 +138,24 @@ def limite_num_predict(model, presupuesto=None, reintento=False):
 
 # La clasificación de fallos de Ollama vive en el arnés (reintentos/fallos.py); se
 # reimporta con los mismos nombres para quien la busque en este módulo.
-from ...reintentos.fallos import (  # noqa: F401
-    TRANSITORIO, DEFINITIVO, DESCONOCIDO, _SENALES_MODELO_INEXISTENTE, _SENALES_FALTA_DE_ACCESO,
-    _SENALES_SATURACION, _SENALES_SOLICITUD_INVALIDA, _ACCIONES, _es_modelo_inexistente,
-    _senales_del_texto, classify_ollama_error, OllamaError, _LIMITE_DETALLE, _recorte,
-    _mensaje_ollama, _ollama_failure)
+from ...reintentos.fallos import (  # noqa: E402, F401
+    _ACCIONES,
+    _LIMITE_DETALLE,
+    _SENALES_FALTA_DE_ACCESO,
+    _SENALES_MODELO_INEXISTENTE,
+    _SENALES_SATURACION,
+    _SENALES_SOLICITUD_INVALIDA,
+    DEFINITIVO,
+    DESCONOCIDO,
+    TRANSITORIO,
+    OllamaError,
+    _es_modelo_inexistente,
+    _mensaje_ollama,
+    _ollama_failure,
+    _recorte,
+    _senales_del_texto,
+    classify_ollama_error,
+)
 
 
 def _cadena_de_fallo(exc):
@@ -332,7 +352,8 @@ class NativeRuntime:
             if ajustes.instrucciones_por_defecto is not None:
                 instructions, tono = ajustes.instrucciones_por_defecto()
             else:
-                from ...terminal import INSTRUCTIONS as instructions, AGENT_TONE as tono
+                from ...terminal import AGENT_TONE as tono
+                from ...terminal import INSTRUCTIONS as instructions
             if agent_tone is None:
                 agent_tone = tono
         self.instructions = (agent_tone or '') + instructions
@@ -1253,7 +1274,8 @@ class NativeRuntime:
         older = json.loads(json.dumps(log[start:through]))
         for item in older:
             item.pop('thinking', None)
-            if item['role']=='tool': item['content']=item.get('content','')[:700]
+            if item['role']=='tool':
+                item['content']=item.get('content','')[:700]
         content = json.dumps({'previous':previous.get('text',''), 'history':older,
                               'plan':self.state.get('plan','')},ensure_ascii=False)
         if len(content) > self.context_chars:
@@ -1284,7 +1306,8 @@ class NativeRuntime:
         if not isinstance(summary,dict) or not {'objective','decisions','completed','pending','blockers'} <= summary.keys():
             raise ValueError('Checkpoint inválido; historial original conservado.')
         text = json.dumps(summary,ensure_ascii=False)
-        if len(text)>8000: raise ValueError('Checkpoint demasiado grande.')
+        if len(text)>8000:
+            raise ValueError('Checkpoint demasiado grande.')
         self.state['checkpoint']={'through':through,'text':text}
         self.task['runtime_compactions']=self.task.get('runtime_compactions',0)+1
         self.save()
@@ -1304,8 +1327,7 @@ class NativeRuntime:
 
         `instructions` (o las que trajo /compactar) se añaden al PROMPT, como en
         `/compact` de Claude Code."""
-        from ...compactacion import (MAX_RESUMEN, prompt_de, recortar_medio, seleccionar_usuario,
-                                     tokens_aprox)
+        from ...compactacion import MAX_RESUMEN, prompt_de, recortar_medio, seleccionar_usuario, tokens_aprox
         if instructions is None:
             instructions = self._compact_instructions
         self._compact_instructions = None
@@ -2211,7 +2233,8 @@ class NativeRuntime:
                     raise
                 self._record_response_usage(response, payload, 0)
                 self.save()
-                cortada = lambda r: r.get("done_reason") == "length"
+                def cortada(r):
+                    return r.get("done_reason") == "length"
                 if cortada(response):
                     # Discard the entire partial response, including text, thinking
                     # and tool calls. Only the last complete journal is model context.

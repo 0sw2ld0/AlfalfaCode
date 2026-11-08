@@ -8,7 +8,6 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import select
 import shutil
 import socket
@@ -16,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from pathlib import Path
 
 import pytest
 

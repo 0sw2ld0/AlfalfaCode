@@ -5,7 +5,6 @@ TerminalManager y Transport reales; sólo se sustituye la inferencia
 subagente, según la tarea del runtime que pregunta."""
 import asyncio
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 from alfalfa import subagentes

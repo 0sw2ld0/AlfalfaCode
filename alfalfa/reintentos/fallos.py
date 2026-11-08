@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import re
 
-
 _CREDENCIALES = re.compile(
     r'(?i)(authorization[^\n]*|bearer\s+\S+|x-api-key[^\n]*'
     r'|api[_-]?key["\']?\s*[:=]\s*["\']?[^\s,"\']+["\']?'

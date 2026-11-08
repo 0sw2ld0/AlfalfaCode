@@ -23,13 +23,13 @@ con sólo las cabeceras de ese servidor.
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import AsyncExitStack
 from datetime import timedelta
-import os
 
 import httpx
 
-from ..seatbelt import SeatbeltSandbox, SandboxUnavailable
+from ..seatbelt import SandboxUnavailable, SeatbeltSandbox
 from .validacion import validador
 
 BASE_ENTORNO = ('HOME', 'LOGNAME', 'PATH', 'SHELL', 'TERM', 'USER', 'TMPDIR', 'LANG')

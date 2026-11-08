@@ -15,8 +15,8 @@ es un argv literal y se rechaza sin ejecutar ninguna interpretación aproximada.
 from __future__ import annotations
 
 import math
-from pathlib import Path
 import shlex
+from pathlib import Path
 
 # Herramienta nativa → nombre de Claude Code. run_checks también lanza procesos:
 # un hook que vigila Bash no debe poder esquivarse cambiando de herramienta.

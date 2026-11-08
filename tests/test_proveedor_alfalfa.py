@@ -178,8 +178,8 @@ def test_un_turno_firma_cada_peticion_y_emite_la_cuota(servicio, tmp_path, monke
         assert asyncio.run(asyncio.wait_for(m.run('Hola'), 60)) == 0, m.task.get('summary')
         chats = [v for v in servicio.vistas if v[1] == '/api/chat']
         assert chats and chats[0][2]['model'] == 'gpt-6-luna' and chats[0][2]['esfuerzo'] == 'xhigh'
-        lineas = [json.loads(l) for l in salida.getvalue().splitlines()]
-        cuota = [l for l in lineas if l['tipo'] == 'cuota']
+        lineas = [json.loads(linea) for linea in salida.getvalue().splitlines()]
+        cuota = [fila for fila in lineas if fila['tipo'] == 'cuota']
         assert cuota and cuota[0]['servicio'] == 'alfalfa' and cuota[0]['cuotas'][0]['usado_pct'] == 12.5
         assert m.task['provider'] == 'alfalfa'
         assert CODIGO not in salida.getvalue()

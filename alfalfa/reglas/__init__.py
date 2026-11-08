@@ -25,11 +25,11 @@ forbidden), justification, match y not_match.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import re
 import shlex
 import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
 
 ARCHIVO = 'reglas.toml'
 PERMITIDA, PREGUNTAR, PROHIBIDA = 'permitida', 'preguntar', 'prohibida'

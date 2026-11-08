@@ -9,10 +9,10 @@ lleva sus bytes en base64 en el campo `images` de `/api/chat`.
 """
 import base64
 import hashlib
-from pathlib import Path
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 MAX_DIMENSION = 2048
 MAX_BYTES = 20 * 1024 * 1024

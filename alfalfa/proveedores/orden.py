@@ -14,7 +14,7 @@ import getpass
 import json
 import sys
 
-from . import PREFIJOS, disponibles, llavero, configuracion
+from . import PREFIJOS, configuracion, disponibles, llavero
 from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.

@@ -6,27 +6,26 @@ import asyncio
 import fcntl
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import sys
 import time
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
 
-from . import __version__, agents_md, procesos
+from . import __version__, agents_md, procesos, proveedores
+from . import reglas as reglas_usuario
 from . import sesiones as registro
 from .hooks import HooksDeSesion, motor_de_sesion
-from . import reglas as reglas_usuario
 from .mcp_cliente import BUSCAR, McpManager
-from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos import modos
+from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos.terminal import TerminalApproval
-from .seatbelt import SeatbeltSandbox
-from . import proveedores
-from .proveedores.nativo.runtime import NativeRuntime, SIN_EFECTOS
 from .proveedores.nativo.herramientas import atomic_json
+from .proveedores.nativo.runtime import SIN_EFECTOS, NativeRuntime
+from .seatbelt import SeatbeltSandbox
 
 INSTRUCTIONS = '''Eres AlfalfaCode, un agente de programación de terminal. Trabaja en la carpeta
 indicada y conserva los cambios ajenos. No modifiques archivos fuera de la carpeta

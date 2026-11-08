@@ -8,22 +8,20 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import signal
 import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 import mcp.types as types
+import pytest
 
 from alfalfa.mcp_cliente import configuracion, nombres
 from alfalfa.mcp_cliente.conexion import BASE_ENTORNO
-from alfalfa.mcp_cliente.gestor import (BUSCAR, ESPEC_BUSCAR, METODO, McpManager, bytes_utf8,
-                                          tokens_estimados)
+from alfalfa.mcp_cliente.gestor import BUSCAR, ESPEC_BUSCAR, METODO, McpManager, bytes_utf8, tokens_estimados
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
@@ -843,7 +841,8 @@ def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
     # misma sesión sin MCP frente a la exposición diferida predeterminada.
     sin, _ = primer_payload(tmp_path, monkeypatch, False)
     con, _ = primer_payload(tmp_path, monkeypatch, True)
-    compacto = lambda p: len(json.dumps(p, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+    def compacto(p):
+        return len(json.dumps(p, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
     aumento = compacto(con) - compacto(sin)
     declaradas = compacto(con['tools']) - compacto(sin['tools'])
     sistema = len(con['messages'][0]['content'].encode()) - len(sin['messages'][0]['content'].encode())

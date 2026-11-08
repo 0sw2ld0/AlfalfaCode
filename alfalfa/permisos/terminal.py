@@ -3,10 +3,10 @@
 No reutiliza safe_command: éste presupone un worktree desechable.
 """
 import json
-from pathlib import Path
 import shlex
 import shutil
 import sys
+from pathlib import Path
 
 
 def solo_lectura(argv, root, folder=None):

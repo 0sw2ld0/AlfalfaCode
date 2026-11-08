@@ -15,15 +15,23 @@ import ast
 import glob
 import os
 import re
-import shutil
 import shlex
+import shutil
 import subprocess
 from itertools import dropwhile
 from pathlib import Path
 
-from .rutas import (ALMACENES_WEB, CONTENEDORES_DE_APPS, SENSIBLES, VOLUMEN_DE_DATOS,  # noqa: F401
-                    _alcanza_por_inodo, _expone_por_nombre, _sin_volumen_de_datos, expone_sesiones,
-                    sensible)
+from .rutas import (  # noqa: F401
+    ALMACENES_WEB,
+    CONTENEDORES_DE_APPS,
+    SENSIBLES,
+    VOLUMEN_DE_DATOS,
+    _alcanza_por_inodo,
+    _expone_por_nombre,
+    _sin_volumen_de_datos,
+    expone_sesiones,
+    sensible,
+)
 
 # Cualquiera de estos encadena, redirige o sustituye: si aparece, no se analiza
 # la orden, se pregunta.
@@ -224,7 +232,9 @@ def _sed_que_solo_imprime(argumentos):
     while i < len(argumentos):
         a = argumentos[i]
         if a == '-e' and i + 1 < len(argumentos):
-            guiones.append(argumentos[i + 1]); i += 2; continue
+            guiones.append(argumentos[i + 1])
+            i += 2
+            continue
         if a.startswith('-') and a not in ('-n', '-E', '-r'):
             return False  # -i, -f, -w… pueden escribir o leer guiones ajenos
         i += 1
@@ -1286,7 +1296,7 @@ def _directorio_de(pid):
                                 capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
         return None
-    return next((l[1:] for l in salida.splitlines() if l.startswith('n')), None)
+    return next((linea[1:] for linea in salida.splitlines() if linea.startswith('n')), None)
 
 
 def _ejecutable_de(pid):
@@ -1344,22 +1354,30 @@ def _vm_de_ensayo(argumentos):
     while i < len(argumentos):
         a = argumentos[i]
         if a in ('--profile', '-p') and i + 1 < len(argumentos):
-            perfil = argumentos[i + 1]; i += 2; continue
+            perfil = argumentos[i + 1]
+            i += 2
+            continue
         if a.startswith('--profile='):
-            perfil = a.split('=', 1)[1]; i += 1; continue
+            perfil = a.split('=', 1)[1]
+            i += 1
+            continue
         if not a.startswith('-') and perfil is None:
-            perfil = a; i += 1; continue  # `colima start vm-de-ensayo`
+            perfil = a  # `colima start vm-de-ensayo`
+            i += 1
+            continue
         nombre, _, valor = a.partition('=')
         clave = a if a in COLIMA_OPCIONES else nombre
         if clave not in COLIMA_OPCIONES:
             return False
         esperado = COLIMA_OPCIONES[clave]
         if esperado is None:
-            i += 1; continue
+            i += 1
+            continue
         if not valor:
             if i + 1 >= len(argumentos):
                 return False
-            valor = argumentos[i + 1]; i += 2
+            valor = argumentos[i + 1]
+            i += 2
         else:
             i += 1
         # Un número es un tope: una VM de ensayo no debe comerse el Mac.

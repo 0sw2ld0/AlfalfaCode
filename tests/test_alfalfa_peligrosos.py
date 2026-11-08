@@ -7,10 +7,16 @@ Apache-2.0; ver alfalfa/seatbelt/NOTICE y PROCEDENCIA.md). Los marcados
 """
 import pytest
 
-from alfalfa.permisos.peligrosos import (FORCED_RM, MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH, OTHER, SUDO,
-                                           dangerous_command_match, extract_shell_script,
-                                           parse_literal_commands, rm_args_include_force_option)
-
+from alfalfa.permisos.peligrosos import (
+    FORCED_RM,
+    MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH,
+    OTHER,
+    SUDO,
+    dangerous_command_match,
+    extract_shell_script,
+    parse_literal_commands,
+    rm_args_include_force_option,
+)
 
 # ---------------------------------------------------------------- Codex
 

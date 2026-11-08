@@ -46,10 +46,10 @@ import asyncio
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import time
+from pathlib import Path
 
 FUENTE = Path(__file__).with_name('ayudante.swift')
 MAX_SALIDA = 24000
@@ -557,7 +557,7 @@ class ControlDeApps:
 def cambios(antes, despues, maximo=40):
     """Qué líneas del árbol aparecen y desaparecen, sin contar los números [i], que se mueven."""
     def lineas(arbol):
-        return [re.sub(r'^\s*\[\d+\]\s*', '', l) for l in arbol.splitlines() if l.strip()]
+        return [re.sub(r'^\s*\[\d+\]\s*', '', linea) for linea in arbol.splitlines() if linea.strip()]
     previas, nuevas = lineas(antes), lineas(despues)
     quedan = list(previas)
     aparece = []

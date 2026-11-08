@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -16,13 +17,11 @@ import tempfile
 import time
 from contextlib import ExitStack
 from pathlib import Path
-import shlex
+
+from ...evidencia.operaciones import classify_operation, is_forbidden_merge_heads_recipe
 from ...permisos.rutas import PRIVADOS_DEL_ESPACIO, privado_del_espacio
 from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
-from ...evidencia.operaciones import classify_operation, is_forbidden_merge_heads_recipe
-from ...reintentos.politica import (expensive_operation_identity, expensive_operation_needs_cause,
-                                     retry_guard_key)
-
+from ...reintentos.politica import expensive_operation_identity, expensive_operation_needs_cause, retry_guard_key
 
 MAX_FILE = 1024 * 1024
 COMMAND_TIMEOUT_SECONDS = 120.0
@@ -71,8 +70,8 @@ def plan_valido(args):
     if isinstance(plan, str):
         if len(plan) > 8000:
             raise ValueError('Plan demasiado largo.')
-        lineas = [l.strip(' -*\t') for l in plan.splitlines() if l.strip(' -*\t')]
-        plan = [{'step': l, 'status': 'pending'} for l in lineas[:MAX_PASOS_DE_PLAN]]
+        lineas = [linea.strip(' -*\t') for linea in plan.splitlines() if linea.strip(' -*\t')]
+        plan = [{'step': paso, 'status': 'pending'} for paso in lineas[:MAX_PASOS_DE_PLAN]]
     if not isinstance(plan, list) or not 1 <= len(plan) <= MAX_PASOS_DE_PLAN:
         raise ValueError('Argumentos de update_plan inválidos. Campo «plan»: se esperaba una lista de 1 a '
                          + str(MAX_PASOS_DE_PLAN) + ' pasos {"step": texto, "status": pending|in_progress|'
@@ -1082,7 +1081,7 @@ class WorkspaceTools:
             raise ValueError('argv es literal: no hay shell que quite comillas ni barras, así que el nombre '
                              'llevaría esos caracteres y no existe. Repite la orden con argv = '
                              + json.dumps(corregido, ensure_ascii=False) + '. No se ejecutó.')
-        purpose = str(args['purpose'])
+        str(args['purpose'])  # sin propósito, KeyError como antes; aquí no se usa
         revision = self.runtime.state.get('workspace_revision', 0)
         guard_identity = expensive_operation_identity(argv)
         guard_key = None
@@ -1129,7 +1128,7 @@ class WorkspaceTools:
             self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0)+1
         revision = self.runtime.state.get('workspace_revision', 0)
         self.runtime.save()
-        from ...evidencia.espacio import capture, matches, for_mutation_watch, MutationWatch
+        from ...evidencia.espacio import MutationWatch, capture, for_mutation_watch, matches
         if verification and argv and Path(str(argv[0])).name == 'git':
             # `git diff` reescribe el índice al refrescar sus datos de stat, aun
             # con GIT_OPTIONAL_LOCKS=0, y esa escritura invalidaba la propia
@@ -1443,7 +1442,7 @@ class WorkspaceTools:
     def _record_command_result(self, args, result, revision, verification, cwd, *,
                                prohibited=False, exception=False, timed_out=False, context=None, guard=None):
         if context is not None:
-            from ...evidencia.espacio import matches, for_mutation_watch
+            from ...evidencia.espacio import for_mutation_watch, matches
             result['workspace_context'] = context
             try:
                 result['workspace_stable'] = (matches(for_mutation_watch(context)) and guard is not None

@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-from pathlib import Path
 import shlex
 import signal
 import time
+from pathlib import Path
 
 from .procesos import grupo_vivo, grupos_descendientes, leer_con_gracia, senal_arbol
 

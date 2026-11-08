@@ -41,9 +41,9 @@ Diferencias intencionales con Codex (más conservadoras: sólo añaden preguntas
 """
 from __future__ import annotations
 
-from pathlib import PurePosixPath
 import re
 import shlex
+from pathlib import PurePosixPath
 
 FORCED_RM = 'rm_forzado'
 SUDO = 'sudo'

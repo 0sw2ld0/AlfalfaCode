@@ -6,15 +6,17 @@ import posixpath
 import re
 import shlex
 
-from ..proveedores.nativo.herramientas import digest, atomic_json
+from ..proveedores.nativo.herramientas import atomic_json, digest
 from ..reintentos.fallos import _sin_credenciales
+from .lectura import clasificacion as _clasificacion
+from .lectura import comprobacion_suficiente as _comprobacion_suficiente
+from .lectura import comprobacion_sustantiva as _comprobacion_sustantiva
+from .lectura import comprobacion_vigente as _comprobacion_vigente
+
 # Con guion bajo: RunEvidence tiene métodos públicos con estos mismos nombres.
 from .lectura import dentro_del_espacio as _dentro_del_espacio
-from .lectura import (clasificacion as _clasificacion, comprobacion_sustantiva as _comprobacion_sustantiva,
-                      comprobacion_suficiente as _comprobacion_suficiente,
-                      comprobacion_vigente as _comprobacion_vigente, salida_incompleta as _salida_incompleta)
+from .lectura import salida_incompleta as _salida_incompleta
 from .operaciones import classify_operation, operation_record_key
-
 
 _MAX_MESSAGE = 800
 _MAX_PENDING_DETAILS = 10
@@ -1006,7 +1008,6 @@ class RunEvidence:
     def handoff(self):
         rt = self.runtime
         report = self.report()
-        revision = rt.state.get('workspace_revision', 0)
         checks = rt.state.get('checks', [])
         checks = checks if isinstance(checks, list) else []
         modified = list(self.fingerprint())

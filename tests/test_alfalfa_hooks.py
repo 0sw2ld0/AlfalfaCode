@@ -8,19 +8,19 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import shlex
 import socket
 import sys
 import time
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from alfalfa.hooks import motor as motor_hooks, nombres
-from alfalfa.hooks.motor import (Ejecucion, Filtro, Manejador, MotorHooks, Resultado, interpretar,
-                                   leer_fuente)
+from alfalfa.hooks import motor as motor_hooks
+from alfalfa.hooks import nombres
+from alfalfa.hooks.motor import Ejecucion, Filtro, Manejador, MotorHooks, Resultado, interpretar, leer_fuente
 from alfalfa.proveedores.nativo.herramientas import COMPLEMENTOS_TOOLS, ON_REQUEST_TOOLS, TOOLS
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
@@ -555,8 +555,8 @@ def test_allow_de_un_hook_no_sustituye_el_permiso_mcp(tmp_path, monkeypatch, res
 
 # ---------------------------------------------------------------- entorno y sandbox
 
-CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA-5e4d', 'OTRO_SECRETO': 'CENTINELA-OTRO-8c7b',
-              'OLLAMA_API_KEY': 'CENTINELA-OLLAMA2-3a2f'}
+# Antes había otra 'OLLAMA_API_KEY' con 'CENTINELA-OLLAMA-5e4d'; la segunda la pisaba.
+CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA2-3a2f', 'OTRO_SECRETO': 'CENTINELA-OTRO-8c7b'}
 
 
 @macos

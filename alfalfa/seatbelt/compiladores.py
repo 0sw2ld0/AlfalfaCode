@@ -26,10 +26,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import tempfile
+from pathlib import Path
 
 SUBORDENES_SWIFT = ('build', 'run', 'test', 'package')
 BINARIOS_SWIFT = ('swift-build', 'swift-run', 'swift-test', 'swift-package')

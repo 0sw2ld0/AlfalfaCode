@@ -1,20 +1,18 @@
 """S1: contratos reales del runtime; sólo se sustituye inferencia en unitarias."""
 import asyncio
 import io
-import json
 import os
-from pathlib import Path
-import signal
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from alfalfa.terminal import TerminalManager, engine_text, main
-from alfalfa.permisos.terminal import TerminalApproval, solo_lectura
-from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.permisos.terminal import TerminalApproval
 from alfalfa.proveedores.nativo.herramientas import digest
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.terminal import TerminalManager, main
 
 REPO = Path(__file__).resolve().parents[1]
 

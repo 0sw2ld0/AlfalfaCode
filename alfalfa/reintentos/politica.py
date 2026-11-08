@@ -8,7 +8,6 @@ import re
 
 from .fallos import patron_de_agotamiento
 
-
 LOCAL_SERVICE_UNAVAILABLE = 'local_service_unavailable'
 QUOTA_SATURATION = 'quota_saturation'
 TRANSIENT = 'transient'

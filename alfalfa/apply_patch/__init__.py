@@ -84,7 +84,7 @@ def _reemplazos(originales, ruta, trozos):
 def derivar(original, trozos, ruta):
     """derive_new_contents_from_chunks: el texto nuevo conservando los finales de línea."""
     lineas, preferido = _lineas(original)
-    reemplazos = _reemplazos([l[0] for l in lineas], ruta, trozos)
+    reemplazos = _reemplazos([linea[0] for linea in lineas], ruta, trozos)
     nuevas, fuente = [], 0
     for inicio, cuantas, segmento in reemplazos:
         nuevas.extend(lineas[fuente:inicio])

@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "pytest-asyncio>=0.24"]
+dev = ["pytest>=8,<9", "pytest-asyncio>=0.24", "ruff>=0.12"]
 
 [project.scripts]
 alfalfa = "alfalfa.terminal:main"
@@ -32,3 +32,14 @@ include = ["alfalfa*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Estilo del código Python: `ruff check .` desde la raíz del repositorio.
+# E (pycodestyle), F (pyflakes) e I (orden de los import), con líneas de 120 columnas
+# como la app de Mac.
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

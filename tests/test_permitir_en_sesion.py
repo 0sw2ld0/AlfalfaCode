@@ -3,9 +3,9 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -201,18 +201,18 @@ def test_el_transporte_solo_concede_la_sesion_si_se_ofrecio():
         async def pedir(**extra):
             tarea = asyncio.create_task(aprobacion(dict(argv=['make'], purpose='Compilar', motivo='red', **extra)))
             await asyncio.sleep(0)
-            fila = [json.loads(l) for l in salida.getvalue().splitlines() if json.loads(l)['tipo'] == 'permiso'][-1]
+            fila = [json.loads(linea) for linea in salida.getvalue().splitlines() if json.loads(linea)['tipo'] == 'permiso'][-1]
             t.receive(json.dumps({'tipo': 'permiso', 'id': fila['id'], 'aprobado': True, 'sesion': True}))
             return fila, await tarea
 
         fila, respuesta = await pedir(para_sesion=True)
         assert fila['para_sesion'] is True and respuesta == sesion.SESION
-        resuelto = [json.loads(l) for l in salida.getvalue().splitlines()][-1]
+        resuelto = [json.loads(linea) for linea in salida.getvalue().splitlines()][-1]
         assert resuelto['tipo'] == 'permiso_resuelto' and resuelto['sesion'] is True
         # Sin para_sesion, «sesion» del cliente no amplía nada: es un sí normal.
         fila, respuesta = await pedir()
         assert 'para_sesion' not in fila and respuesta is None
-        assert 'sesion' not in [json.loads(l) for l in salida.getvalue().splitlines()][-1]
+        assert 'sesion' not in [json.loads(linea) for linea in salida.getvalue().splitlines()][-1]
     asyncio.run(ejercicio())
 
 
@@ -240,8 +240,9 @@ def test_un_reintento_sin_sandbox_que_funciona_no_deja_el_turno_bloqueado(motor)
 
 
 def test_con_la_app_el_permiso_sin_sandbox_no_caduca_y_una_espera_cancelada_lo_dice():
-    from alfalfa.proveedores.nativo.herramientas import UNSANDBOXED_APPROVAL_SECONDS
     import tempfile
+
+    from alfalfa.proveedores.nativo.herramientas import UNSANDBOXED_APPROVAL_SECONDS
     salida = io.StringIO()
     m = TerminalManager('x', home=tempfile.mkdtemp(), transport=Transport(salida))
     try:
@@ -256,6 +257,6 @@ def test_con_la_app_el_permiso_sin_sandbox_no_caduca_y_una_espera_cancelada_lo_d
         await asyncio.sleep(0)
         tarea.cancel()
         await asyncio.gather(tarea, return_exceptions=True)
-        resuelto = [json.loads(l) for l in salida.getvalue().splitlines()][-1]
+        resuelto = [json.loads(linea) for linea in salida.getvalue().splitlines()][-1]
         assert resuelto['tipo'] == 'permiso_resuelto' and resuelto['motivo'] == 'Sin respuesta a tiempo'
     asyncio.run(ejercicio())

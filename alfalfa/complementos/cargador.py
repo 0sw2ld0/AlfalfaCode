@@ -35,15 +35,15 @@ herramientas directas ni herencia de secretos. Un complemento se registra
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 
-from . import configuracion as configuracion_complementos
 from ..mcp_cliente import configuracion as configuracion_mcp
+from . import configuracion as configuracion_complementos
 
 SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 PREFIJO_ESQUEMA = 'https://agent-plugins.org/schemas/'

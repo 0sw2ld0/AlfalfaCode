@@ -31,8 +31,8 @@ import re
 from uuid import uuid4
 
 from . import configuracion, nombres
-from .validacion import validador as _validador
 from .conexion import Conexion, ConexionCerrada
+from .validacion import validador as _validador
 
 BUSCAR = 'buscar_herramientas'
 MOTIVO = 'mcp'

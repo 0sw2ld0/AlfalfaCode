@@ -148,6 +148,7 @@ class OnRequestPolicy:
         if not reasons and ruled != 'permitida' and modos.pide_ordenes(modos.modo_de(runtime.task)):
             # Manual y Aceptar ediciones: cada orden que no sólo lee espera al usuario.
             from pathlib import Path
+
             from .terminal import solo_lectura
             carpeta = tools.command_cwd(args)
             raiz = Path(tools.root)

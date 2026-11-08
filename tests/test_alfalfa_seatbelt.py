@@ -5,23 +5,28 @@ macOS. Cada orden tiene plazo y su grupo de procesos se comprueba muerto.
 """
 import asyncio
 import os
-from pathlib import Path
 import re
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
 from alfalfa import seatbelt
-from alfalfa.seatbelt import (SANDBOX_EXEC, SandboxUnavailable, SeatbeltSandbox,
-                                protected_metadata_name_regex, regex_escape)
 from alfalfa.permisos.terminal import TerminalApproval
 from alfalfa.procesos import grupo_vivo
 from alfalfa.proveedores.nativo import herramientas
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.seatbelt import (
+    SANDBOX_EXEC,
+    SandboxUnavailable,
+    SeatbeltSandbox,
+    protected_metadata_name_regex,
+    regex_escape,
+)
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
 

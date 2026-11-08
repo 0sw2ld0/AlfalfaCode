@@ -7,10 +7,9 @@ motor sobre un TerminalManager real.
 """
 import asyncio
 import json
-import os
-from pathlib import Path
 import re
 import shutil
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest

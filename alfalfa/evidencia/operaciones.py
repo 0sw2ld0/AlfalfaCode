@@ -10,7 +10,6 @@ import re
 import unicodedata
 from pathlib import PurePath
 
-
 _DIAGNOSTICOS_PYTEST = [
     'Comprueba la invocación de pytest y sus argumentos.',
     'Revisa errores de colección e importación.',

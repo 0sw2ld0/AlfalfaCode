@@ -9,19 +9,14 @@ y que el fixture quede intacto.
 Los fixtures viven en `tests/fixtures/complementos/`; las pruebas que los
 modifican trabajan sobre una copia en `tmp_path`.
 """
-import hashlib
 import json
-import os
-from pathlib import Path
 import shutil
-import sys
+from pathlib import Path
 
 import pytest
 
-from alfalfa import complementos
-from alfalfa.complementos import CargadorComplementos, SCHEMA
-from alfalfa.complementos.cargador import (Diagnostico, ErrorComplemento, _cuerpo, _estado_esquema,
-                                             _front_matter)
+from alfalfa.complementos import SCHEMA, CargadorComplementos
+from alfalfa.complementos.cargador import ErrorComplemento, _cuerpo, _estado_esquema, _front_matter
 
 FIXTURES = Path(__file__).with_name('fixtures') / 'complementos'
 REPO = Path(__file__).resolve().parents[1]
@@ -649,8 +644,9 @@ def test_app_json_ilegible_no_rompe_ni_produce_conectores(tmp_path):
 # ---------------------------------------------------------------- CLI JSON
 
 def test_cli_complementos_json_es_valido_y_determinista(tmp_path, monkeypatch, capsys):
-    from alfalfa.stdio import entry
     from types import SimpleNamespace
+
+    from alfalfa.stdio import entry
     raiz = copiar(tmp_path, 'codex')
     home = configurar(tmp_path / 'alfalfa', [raiz])
     monkeypatch.setenv('ALFALFA_HOME', str(home))
@@ -674,8 +670,9 @@ def test_cli_complementos_json_es_valido_y_determinista(tmp_path, monkeypatch, c
 
 
 def test_cli_complementos_no_revela_secretos(tmp_path, monkeypatch, capsys):
-    from alfalfa.stdio import entry
     from types import SimpleNamespace
+
+    from alfalfa.stdio import entry
     raiz = copiar(tmp_path, 'claude')
     (raiz / '.mcp.json').write_text(json.dumps({'mcpServers': {'revision': {
         'type': 'http', 'url': 'https://a.example.invalid/mcp',
@@ -807,6 +804,7 @@ def test_catalogo_mcp_grande_no_entra_al_contexto_y_se_descubre(tmp_path):
     """
     import asyncio
     from types import SimpleNamespace
+
     from alfalfa.mcp_cliente.gestor import BUSCAR, McpManager
 
     # complemento → cargador → servidor normalizado del cliente MCP (sin ejecutar nada)
@@ -962,6 +960,7 @@ def test_h005_mapa_inline_envuelto_sigue_funcionando(tmp_path):
 def test_h006_herramientas_de_sesion_resuelven_habilidad_y_comando(tmp_path, monkeypatch):
     """abrir_habilidad e invocar_comando son invocables desde el runtime."""
     import asyncio
+
     from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
     raiz = copiar(tmp_path, 'codex')
@@ -1073,8 +1072,9 @@ def test_h001_cwd_no_textual_no_rompe_el_resto_de_complementos(tmp_path, cwd):
 
 def test_h001_el_listado_termina_con_json_aunque_el_cwd_sea_invalido(tmp_path, monkeypatch, capsys):
     """`entry()` emitía nada porque el TypeError abortaba el listado."""
-    from alfalfa.stdio import entry
     from types import SimpleNamespace
+
+    from alfalfa.stdio import entry
     raiz = copiar(tmp_path, 'claude')
     (raiz / '.mcp.json').write_text(json.dumps({'mcpServers': {'roto': {
         'type': 'stdio', 'command': 'python', 'cwd': 7}}}))

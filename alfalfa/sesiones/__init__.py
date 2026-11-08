@@ -17,10 +17,10 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -171,7 +171,7 @@ def bifurcar(sesiones, ident, turno=None):
                 fila = json.loads(linea)
                 if fila.get('turno') in ids or ('turno' not in fila and fila.get('time', 0) <= fin):
                     filas.append(linea)
-        _escribir(destino / (nuevo + '.jsonl'), ''.join(l + '\n' for l in filas))
+        _escribir(destino / (nuevo + '.jsonl'), ''.join(fila + '\n' for fila in filas))
         # Las aprobaciones «en esta sesión» no pasan a la bifurcada: es otra sesión.
         for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group', 'aprobadas_en_sesion'):
             task.pop(clave, None)

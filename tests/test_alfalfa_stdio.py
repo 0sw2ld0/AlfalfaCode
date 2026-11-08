@@ -3,10 +3,10 @@ import asyncio
 import io
 import json
 import os
-from pathlib import Path
 import select
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -134,8 +134,8 @@ def test_models_json(failed, capsys):
 
 
 def test_event_failure_and_saved_evidence_redacted(tmp_path, monkeypatch):
-    from alfalfa.terminal import TerminalManager
     from alfalfa.proveedores.nativo.runtime import NativeRuntime
+    from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('OLLAMA_API_KEY', 'DECOY-SECRET')
     (tmp_path / '.env').write_text('PRIVATE-CONTENT-DECOY')

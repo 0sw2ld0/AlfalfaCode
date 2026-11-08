@@ -3,16 +3,16 @@
 Git is queried in a worker thread. The saved watch also permits synchronous
 evidence readers to invalidate a check without launching a process.
 """
-import asyncio
 import ast
+import asyncio
 import hashlib
 import os
-from pathlib import Path
 import re
+import select
 import shlex
 import subprocess
-import select
 import sys
+from pathlib import Path
 
 
 class MutationWatch:

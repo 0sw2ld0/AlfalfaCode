@@ -6,7 +6,7 @@ for _nombre in [n for n in os.environ if n.startswith(('ALFALFA_', 'OLLAMA_', 'O
     del os.environ[_nombre]
 
 
-import pytest
+import pytest  # noqa: E402  (después de limpiar el entorno)
 
 
 @pytest.fixture(autouse=True)

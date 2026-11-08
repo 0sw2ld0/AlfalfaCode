@@ -29,12 +29,12 @@ demás siguen. Nada de este módulo lanza procesos ni abre conexiones.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import ipaddress
 import json
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlparse
 
 ARCHIVO = 'mcp.json'

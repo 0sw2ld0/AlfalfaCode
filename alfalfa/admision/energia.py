@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import math
+import os
 import re
+import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
-
 
 FRESHNESS_SECONDS = 300
 _ACCOUNT_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -229,14 +233,6 @@ class CodexEnergyStore:
 Sólo traduce la lectura del puente statusLine (agent_usage.py) a un snapshot
 v1; la autoridad de admisión y pausa llega con las historias posteriores.
 """
-import hashlib
-import json
-import math
-import os
-import tempfile
-import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 FRESHNESS_SECONDS = 300
 LOCATOR = 'import_claude_usage/agent_usage.py'
@@ -393,8 +389,10 @@ class ClaudeEnergy:
                 os.replace(name, self.directory / 'energy-claude.json')
             except BaseException:
                 # Con el disco lleno cada lectura dejaba un .energy- suelto.
-                try: os.unlink(name)
-                except OSError: pass
+                try:
+                    os.unlink(name)
+                except OSError:
+                    pass
                 raise
         except OSError:
             pass

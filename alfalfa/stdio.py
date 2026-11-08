@@ -1,15 +1,14 @@
 """Transporte JSONL v2. Un lector atiende permisos, mensajes y cancelación concurrentemente."""
 import asyncio
-from contextlib import redirect_stdout
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import sys
 import time
+from contextlib import redirect_stdout
+from pathlib import Path
 from uuid import uuid4
-
 
 from .permisos.terminal import solo_lectura
 

@@ -7,8 +7,6 @@ import sys
 
 import pytest
 
-from alfalfa.permisos import modos
-from alfalfa.proveedores.nativo import herramientas
 from alfalfa.seatbelt import SANDBOX_EXEC
 from alfalfa.stdio import Transport
 from alfalfa.terminal import ESCRITURA, TerminalManager
@@ -118,7 +116,7 @@ def test_omitir_aprueba_y_lo_anota(sesion):
     m.task['modo'] = 'omitir'
     asyncio.run(m.approval({'argv': ['rm', '-rf', 'algo'], 'purpose': 'x'}))
     assert interior.calls == []
-    eventos = [json.loads(l)['text'] for l in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
+    eventos = [json.loads(linea)['text'] for linea in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
     assert any('Omitir permisos' in e and 'rm -rf algo' in e for e in eventos)
     m.task['modo'] = 'auto'
     with pytest.raises(ValueError):

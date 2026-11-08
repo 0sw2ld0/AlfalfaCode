@@ -10,10 +10,10 @@ instalado y cada una se actualiza a su manera:
   nueva, en el mismo Python que está ejecutando la orden.
 """
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 from . import __version__
 
