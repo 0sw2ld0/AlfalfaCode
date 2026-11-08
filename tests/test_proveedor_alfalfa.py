@@ -62,10 +62,25 @@ class Servicio:
         self.publica = None
         self.vistas = []
         self.respuestas = list(respuestas or [])
+        self.reportes = []
+        self.limite_reportes = 5
+
+    def reportar(self, request, cuerpo):
+        """Como el de verdad: vale con firma o sin ella, y corta con 429 cuando hay demasiados."""
+        firmado = 'x-alfalfa-firma' in request.headers
+        if firmado and not verificar(self.publica, request, cuerpo):
+            firmado = False  # una firma que no vale cuenta como anónimo
+        if len(self.reportes) >= self.limite_reportes:
+            return httpx.Response(429, json={'error': 'Ya llegaron muchos reportes. Prueba más tarde o escribe a '
+                                                      'ayuda@alfalfa.example.com.'})
+        self.reportes.append({'firmado': firmado, **json.loads(cuerpo)})
+        return httpx.Response(200, json={'ok': True, 'id': len(self.reportes), 'soporte': 'ayuda@alfalfa.example.com'})
 
     def __call__(self, request):
         cuerpo = request.content
         self.vistas.append((request.method, request.url.path, json.loads(cuerpo) if cuerpo else None))
+        if request.url.path == '/reportar':
+            return self.reportar(request, cuerpo)
         assert request.headers['x-alfalfa-codigo'] == CODIGO
         assert abs(int(request.headers['x-alfalfa-marca']) - time.time()) < 60
         if request.url.path == '/activar':
@@ -262,3 +277,75 @@ def test_el_ayudante_firma_con_el_secure_enclave(tmp_path):
     clave = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), base64.b64decode(publica))
     clave.verify(firma, datos, ec.ECDSA(hashes.SHA256()))
     assert asyncio.run(firmante.firmar_async(datos))
+
+
+# -- reportes de error --------------------------------------------------------
+
+def test_reportar_con_codigo_va_firmado(servicio):
+    proveedores.obtener('alfalfa').activar(CODIGO)
+    hecho = proveedores.obtener('alfalfa').reportar('La barra de cuota se queda en blanco.', 'ana@example.com',
+                                                    'último error: 502')
+    assert hecho == {'enviado': True, 'id': 1, 'soporte': 'ayuda@alfalfa.example.com', 'motivo': None}
+    rep = servicio.reportes[0]
+    assert rep['firmado'] and rep['contacto'] == 'ana@example.com' and rep['registro'] == 'último error: 502'
+    assert rep['version'] and rep['sistema'] and 'codigo' not in rep
+
+
+def test_reportar_sin_codigo_va_sin_firma(servicio):
+    hecho = proveedores.obtener('alfalfa').reportar('No encuentro dónde pegar el código.')
+    assert hecho['enviado'] and not servicio.reportes[0]['firmado']
+    assert 'contacto' not in servicio.reportes[0] and 'registro' not in servicio.reportes[0]
+
+
+def test_el_reporte_no_lleva_claves(servicio, monkeypatch):
+    monkeypatch.setattr(proveedores, 'secretos', lambda: ['clave-secreta-de-ollama'], raising=False)
+    proveedores.obtener('alfalfa').reportar('Falla con sk-proj-abcdefghijklmnop',
+                                            registro='Authorization: Bearer clave-secreta-de-ollama\n' + 'x' * 70_000)
+    rep = servicio.reportes[0]
+    assert 'sk-proj' not in rep['texto'] and 'clave-secreta' not in rep['registro']
+    assert len(rep['registro']) == alfalfa.MAX_REGISTRO
+
+
+def test_con_429_se_ofrece_el_correo_que_dice_el_servicio(servicio):
+    servicio.limite_reportes = 0
+    hecho = proveedores.obtener('alfalfa').reportar('Algo falla.')
+    assert not hecho['enviado'] and 'muchos reportes' in hecho['motivo']
+    assert hecho['soporte'] == alfalfa.SOPORTE  # el 429 no trae `soporte`: se usa el de siempre
+
+
+def test_sin_servicio_se_ofrece_el_correo_de_soporte(servicio):
+    configuracion.cambiar('alfalfa', 'url', None)
+    hecho = proveedores.obtener('alfalfa').reportar('Algo falla.')
+    assert hecho == {'enviado': False, 'id': None, 'soporte': 'soporte@cuycoders.dev',
+                     'motivo': 'No hay servicio Alfalfa configurado.'}
+    assert servicio.vistas == []
+
+
+def test_si_el_servicio_no_responde_se_ofrece_el_correo(servicio, monkeypatch):
+    def caido(request):
+        raise httpx.ConnectError('sin red')
+    monkeypatch.setattr(alfalfa, 'cliente_de_lista', lambda: httpx.Client(transport=httpx.MockTransport(caido)))
+    hecho = proveedores.obtener('alfalfa').reportar('Algo falla.')
+    assert not hecho['enviado'] and hecho['soporte'] == 'soporte@cuycoders.dev' and 'hablar' in hecho['motivo']
+
+
+def test_un_reporte_vacio_no_se_envia(servicio):
+    with pytest.raises(alfalfa.ErrorDeAlfalfa, match='qué pasó'):
+        proveedores.obtener('alfalfa').reportar('   ')
+    assert servicio.vistas == []
+
+
+def test_la_orden_reportar_lee_json_y_anade_el_diagnostico(servicio, capsys):
+    from alfalfa.proveedores import orden
+
+    class Args:
+        reportar, json = True, True
+    entrada = io.StringIO(json.dumps({'texto': 'Se cuelga.', 'contacto': 'ana@example.com',
+                                      'registro': 'último error: 502', 'diagnostico': True}) + '\n')
+    assert orden.orden(Args(), entrada) == 0
+    salida = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert salida == {'version': 2, 'tipo': 'reporte', 'enviado': True, 'id': 1,
+                      'soporte': 'ayuda@alfalfa.example.com', 'motivo': None}
+    registro = servicio.reportes[0]['registro']
+    assert registro.startswith('AlfalfaCode ') and 'Proveedor por defecto' in registro
+    assert registro.endswith('último error: 502') and URL not in registro

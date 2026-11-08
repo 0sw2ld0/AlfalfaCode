@@ -10,6 +10,7 @@ struct SidebarFooter: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
     @AppStorage(Preferences.Key.displayName) private var savedName = ""
+    @State private var reporting = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -24,6 +25,7 @@ struct SidebarFooter: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .overlay(alignment: .top) { Divider().overlay(Theme.border) }
+        .sheet(isPresented: $reporting) { ReportView().environmentObject(model) }
     }
 
     // MARK: - Propiedades privadas
@@ -47,6 +49,8 @@ struct SidebarFooter: View {
             Button { Task { await model.reload() } } label: {
                 Label("Actualizar sesiones y modelos", systemImage: "arrow.clockwise")
             }
+            Divider()
+            Button { reporting = true } label: { Label("Reportar un error…", systemImage: "exclamationmark.bubble") }
         } label: {
             label
         }

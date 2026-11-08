@@ -43,6 +43,14 @@ final class ProtocolTests: XCTestCase {
                                                                          usedPercent: 42.5, renews: "2026-12-01")]))
         let activated = #"{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","modelos":["gpt-6-luna"],"cuotas":[]}"#
         XCTAssertEqual(AlfalfaMessage.decode(line: activated), .activated(name: "Ana", quotas: []))
+        let sent = #"{"version":2,"tipo":"reporte","enviado":true,"id":7,"soporte":"ayuda@example.com"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: sent),
+                       .reported(ReportResult(sent: true, id: 7, support: "ayuda@example.com")))
+        let notSent = #"{"version":2,"tipo":"reporte","enviado":false,"soporte":"","#
+            + #""motivo":"No hay servicio Alfalfa configurado."}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: notSent),
+                       .reported(ReportResult(sent: false, reason: "No hay servicio Alfalfa configurado.")))
+        XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"reporte"}"#))
         var timeline = Timeline()
         timeline.apply(.quota([Quota(provider: "ollama", usedPercent: 10)]))
         XCTAssertEqual(timeline.quotas.first?.usedPercent, 10)

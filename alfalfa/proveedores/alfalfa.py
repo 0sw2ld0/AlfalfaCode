@@ -39,6 +39,10 @@ COMPILAR_SEGUNDOS = 240
 FIRMAR_SEGUNDOS = 15
 NOMBRES = {'gpt-6-luna': 'GPT-6 Luna', 'glm-5.3-flash': 'GLM 5.3 Flash', 'deepseek-v4.1-flash': 'DeepSeek v4.1 Flash'}
 SUFIJO = ' - Alfalfa'
+# Adonde va un reporte de error cuando no hay servicio Alfalfa o el servicio no lo acepta.
+SOPORTE = 'soporte@cuycoders.dev'
+MAX_TEXTO = 8_000
+MAX_REGISTRO = 60_000
 
 
 class ErrorDeAlfalfa(ValueError):
@@ -325,6 +329,63 @@ class Alfalfa(Proveedor):
     def estado(self):
         from .. import ajustes
         return dict(super().estado(), url=ajustes.alfalfa_servicio_url(), clave=bool(self.codigo()))
+
+    def reportar(self, texto, contacto=None, registro=None):
+        """Manda un reporte de error al servicio Alfalfa, firmado si este Mac tiene un código activado.
+
+        Devuelve `{enviado, id, soporte, motivo}`. Si no hay servicio, o no lo acepta (por ejemplo,
+        429 por demasiados reportes), `enviado` es False y quien llama ofrece escribir a `soporte`.
+        El registro pasa antes por el mismo borrado de credenciales que los errores de los proveedores.
+        """
+        from .. import __version__, ajustes
+        from ..reintentos.fallos import _sin_credenciales
+        texto = str(texto or '').strip()
+        if not texto:
+            raise ErrorDeAlfalfa('Cuenta qué pasó.')
+
+        def fallo(motivo, soporte=SOPORTE):
+            return {'enviado': False, 'id': None, 'soporte': soporte, 'motivo': motivo}
+
+        try:
+            url = ajustes.alfalfa_servicio_url()
+            url = validar_url(url, 'ALFALFA_SERVICIO_URL', 'El servicio Alfalfa') if url else None
+        except ValueError as exc:
+            return fallo(str(exc))
+        if not url:
+            return fallo('No hay servicio Alfalfa configurado.')
+        cuerpo = {'texto': _sin_credenciales(texto)[:MAX_TEXTO], 'version': __version__, 'sistema': _sistema()}
+        if contacto and str(contacto).strip():
+            cuerpo['contacto'] = str(contacto).strip()[:200]
+        if registro and str(registro).strip():
+            cuerpo['registro'] = _sin_credenciales(registro)[-MAX_REGISTRO:]
+        datos = json.dumps(cuerpo, ensure_ascii=False).encode()
+        encabezados = {'Content-Type': 'application/json'}
+        codigo = self.codigo()
+        if codigo and self.firmante.tiene_clave():
+            try:
+                encabezados.update(cabeceras(codigo, self.firmante.firmar, 'POST', '/reportar', datos))
+            except (ErrorDeAlfalfa, OSError, subprocess.SubprocessError):
+                pass  # Sin firma también vale: el servicio lo acepta como anónimo.
+        try:
+            with cliente_de_lista() as cliente:
+                respuesta = cliente.post(url + '/reportar', content=datos, headers=encabezados)
+        except httpx.HTTPError:
+            return fallo('No se pudo hablar con el servicio Alfalfa.')
+        try:
+            valor = respuesta.json()
+        except ValueError:
+            valor = {}
+        valor = valor if isinstance(valor, dict) else {}
+        soporte = valor.get('soporte') if '@' in str(valor.get('soporte') or '') else SOPORTE
+        if respuesta.status_code != 200 or not valor.get('ok'):
+            return fallo(str(valor.get('error') or 'El servicio Alfalfa respondió ' + str(respuesta.status_code) + '.'),
+                         soporte)
+        return {'enviado': True, 'id': valor.get('id'), 'soporte': soporte, 'motivo': None}
+
+
+def _sistema():
+    version = platform.mac_ver()[0]
+    return ('macOS ' + version) if version else platform.platform(terse=True)[:120]
 
 
 def _equipo():

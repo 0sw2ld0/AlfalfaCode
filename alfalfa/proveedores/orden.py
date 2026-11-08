@@ -7,6 +7,9 @@
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
     alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
     alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
+    alfalfa --reportar [--json]               manda un reporte de error; lee por la entrada una línea
+                                              JSON {texto, contacto?, registro?, diagnostico?} o, en la
+                                              terminal, pregunta qué pasó
 """
 from __future__ import annotations
 
@@ -68,6 +71,18 @@ def orden(args, entrada=None):
                     '\n'.join(f"{f['nombre']}: {f['usado_pct']:g} % usado (se renueva el {f['renueva']})"
                               for f in filas) or 'Sin cuota.')
             return 0
+        if getattr(args, 'reportar', False):
+            from .alfalfa import Alfalfa
+            pedido = _leer_reporte(entrada)
+            registro = pedido.get('registro') or ''
+            if pedido.get('diagnostico'):
+                registro = _diagnostico() + ('\n\n' + registro if registro else '')
+            hecho = Alfalfa().reportar(pedido.get('texto'), pedido.get('contacto'), registro)
+            _salida({'tipo': 'reporte', **hecho}, como_json,
+                    'Reporte enviado' + (f" (#{hecho['id']})" if hecho.get('id') else '') + '. Gracias.'
+                    if hecho['enviado'] else
+                    'No se pudo enviar: ' + hecho['motivo'] + ' Escríbenos a ' + hecho['soporte'] + '.')
+            return 0
         if args.guardar_clave:
             proveedor = args.guardar_clave
             if proveedor not in CON_CLAVE:
@@ -107,6 +122,35 @@ def orden(args, entrada=None):
         return 1
 
 
+def _leer_reporte(entrada):
+    """{texto, contacto?, registro?, diagnostico?}: una línea JSON, o preguntando en la terminal."""
+    if entrada.isatty():
+        return {'texto': input('¿Qué pasó? '), 'contacto': input('Tu correo, si quieres respuesta (opcional): '),
+                'diagnostico': True}
+    linea = entrada.readline().strip()
+    try:
+        pedido = json.loads(linea)
+    except ValueError:
+        return {'texto': linea}
+    if not isinstance(pedido, dict):
+        raise ValueError('El reporte tiene que ser un objeto JSON.')
+    return pedido
+
+
+def _diagnostico():
+    """Versión, sistema y estado de los proveedores, sin secretos. Nunca conversaciones."""
+    import platform
+
+    from .. import __version__
+    lineas = ['AlfalfaCode ' + __version__ + ' · Python ' + platform.python_version()]
+    datos = estado()
+    lineas.append('Proveedor por defecto: ' + str(datos['por_defecto']))
+    for fila in datos['proveedores']:
+        lineas.append(('✓ ' if fila.get('configurado') else '· ') + str(fila.get('nombre'))
+                      + (' · error ' + fila['error'] if fila.get('error') else ''))
+    return '\n'.join(lineas)
+
+
 def argumentos(grupo):
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
     grupo.add_argument('--guardar-clave', choices=CON_CLAVE, metavar='PROVEEDOR',
@@ -119,8 +163,11 @@ def argumentos(grupo):
     grupo.add_argument('--activar-codigo', action='store_true',
                        help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
+    grupo.add_argument('--reportar', action='store_true',
+                       help='Mandar un reporte de error (al servicio Alfalfa o, si no se puede, por correo)')
 
 
 def pedida(args):
     return bool(args.proveedores or args.guardar_clave or args.borrar_clave
-                or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota)
+                or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
+                or getattr(args, 'reportar', False))

@@ -508,6 +508,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case quota([Quota])
     /// `--activar-codigo`: el código quedó atado a este Mac.
     case activated(name: String?, quotas: [Quota])
+    /// `--reportar`: el reporte de error se envió, o por qué no.
+    case reported(ReportResult)
     case ollamaChats([OllamaChat])
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
@@ -651,7 +653,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                       macAppChanged: bool(object["app_mac_cambio"]) ?? false,
                                       text: object["texto"] as? String ?? ""))
         default:
-            return nil
+            return ReportResult(kind: kind, object: object).map(Self.reported)
         }
     }
 
