@@ -154,6 +154,14 @@ def _shell_funcional(texto):
 
 
 TEMPORALES = ('.tmp-alfalfa/',)
+# Como en los permisos (PREFIJOS_DE_CACHE): cualquier `.tmp-…/` o `.temp-…/` de
+# primer nivel es de temporales, así un integrador puede usar el suyo (.tmp-<app>/).
+PREFIJOS_TEMPORALES = ('.tmp-', '.temp-')
+
+
+def temporal(name):
+    """¿`name` (relativo a la raíz) cae en una carpeta de temporales de primer nivel?"""
+    return str(name).partition('/')[0].startswith(PREFIJOS_TEMPORALES)
 
 # Los revisores nombran su carpeta de capturas a su manera: independent-review,
 # revision-qa, review-current-1848…
@@ -196,7 +204,7 @@ def _entries(path, ignored, root=None):
     # Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
     # caducaba la evidencia al terminar cada revisión («La evidencia caducó»).
     return sorted(p.name for p in path.iterdir()
-                  if p.name != '.git' and p.name + '/' not in TEMPORALES and str(p) not in ignored
+                  if p.name != '.git' and not temporal(p.name) and str(p) not in ignored
                   and not (root and _del_revisor(p, root)))
 
 
@@ -379,12 +387,12 @@ def _capture(root):
         names = {str(p.relative_to(root)) for p in root.rglob('*')
                  if p.is_file() or p.is_symlink()}
         context = None
-    # .tmp-alfalfa/ son temporales de los agentes (cachés de Go, builds de Swift):
+    # .tmp-alfalfa/ (o el .tmp-… de un integrador) son temporales de los agentes (cachés de Go, builds de Swift):
     # nunca son parte del trabajo, y si una rama los llegó a versionar, miles de
     # artefactos de compilación entraban en cada huella. Git sigue informando de
     # ellos en `status` si cambian.
     names = {name for name in names
-             if not name.startswith(TEMPORALES) and not escrito_por_el_revisor(name)}
+             if not temporal(name) and not escrito_por_el_revisor(name)}
     paths = [root / name for name in sorted(names)]
     directories = {root}
     for path in paths:
@@ -404,7 +412,7 @@ def _capture(root):
         if any(watch['files'][name] != value for name, value in git_before.items()):
             raise ValueError('Git cambió mientras se tomaba su huella.')
         final_names = {name for name in git('ls-files', '-co', '--exclude-standard', '-z').split('\0')
-                       if name and not name.startswith(TEMPORALES) and not escrito_por_el_revisor(name)}
+                       if name and not temporal(name) and not escrito_por_el_revisor(name)}
         if final_names != names or _status(git('status', '--porcelain')) != context['status']:
             raise ValueError('El workspace cambió mientras se tomaba su huella.')
         if not matches(result):

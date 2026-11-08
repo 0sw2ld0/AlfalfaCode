@@ -233,3 +233,9 @@ def test_leer_el_llavero_desde_una_orden_siempre_pregunta():
 def test_la_clave_de_openai_nunca_llega_a_un_servidor_mcp():
     from alfalfa.mcp_cliente.configuracion import VARIABLES_PROHIBIDAS
     assert {'OLLAMA_API_KEY', 'OPENAI_API_KEY'} <= VARIABLES_PROHIBIDAS
+
+
+def test_cualquier_carpeta_tmp_de_primer_nivel_es_de_temporales():
+    from alfalfa.evidencia.espacio import temporal
+    assert temporal('.tmp-alfalfa/x.log') and temporal('.tmp-chiyo/dd/a') and temporal('.temp-app')
+    assert not temporal('src/.tmp-x/a') and not temporal('tmp/a') and not temporal('.tmpx/a')
