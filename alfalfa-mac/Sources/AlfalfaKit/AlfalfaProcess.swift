@@ -47,8 +47,10 @@ public enum Launcher {
     /// que empiece por «-» no se lea como opción.
     public static func stdioArguments(task: String?, resume: String?, model: String?,
                                       effort: String?, readOnly: Bool, images: [String] = [],
-                                      mode: String? = nil, wait: Bool = false) -> [String] {
+                                      mode: String? = nil, wait: Bool = false, parent: String? = nil) -> [String] {
         var arguments = ["--stdio"]
+        // La sesión que la propuso: sólo al crearla, se guarda con ella.
+        if let parent, resume == nil { arguments += ["--padre", parent] }
         if let mode, !mode.isEmpty { arguments += ["--modo", mode] }
         for image in images { arguments += ["--imagen", image] }
         if let resume { arguments += ["--reanudar", resume] }

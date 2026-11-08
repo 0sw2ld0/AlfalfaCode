@@ -404,25 +404,6 @@ public struct Outcome: Equatable, Sendable {
     public var turn: String?
 }
 
-public struct SessionSummary: Equatable, Identifiable, Sendable {
-    public var id: String
-    public var task: String?
-    public var cwd: String?
-    public var state: String
-    public var model: String?
-    public var effort: String?
-    public var date: Double
-    public var tokens: Int
-    /// Marcas de la app (`--marcar`): título propio, fijada y archivada.
-    public var title: String?
-    public var pinned: Bool = false
-    public var archived: Bool = false
-    public var mode: String?
-
-    /// El título propio si lo hay; si no, el encargo.
-    public var displayTitle: String? { title ?? task }
-}
-
 /// Respuesta de `alfalfa --buscar-actualizacion --json` y `--actualizar --json`.
 public struct UpdateInfo: Equatable, Sendable {
     public var installed: String
@@ -787,7 +768,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                               model: row["modelo"] as? String, effort: row["esfuerzo"] as? String,
                               date: number(row["fecha"]) ?? 0, tokens: row["tokens"] as? Int ?? 0,
                               title: text(row["titulo"]), pinned: bool(row["fijada"]) ?? false,
-                              archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]))
+                              archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]),
+                              parent: text(row["padre"]))
     }
 }
 

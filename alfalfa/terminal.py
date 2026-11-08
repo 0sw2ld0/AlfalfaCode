@@ -159,7 +159,7 @@ class TerminalManager:
     TERMINADAS = {'completed', 'failed', 'interrupted', 'blocked'}
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
-                 read_only=False, compact_limit=None, mode=None, wait=False):
+                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None):
         self.transport = transport
         self.read_only = read_only
         # La app contesta los permisos: como en Codex, el de salir del sandbox no caduca.
@@ -177,6 +177,9 @@ class TerminalManager:
         ident = resume or uuid4().hex[:16]
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', ident):
             raise ValueError('Identificador de sesión inválido.')
+        # Antes de crear la carpeta: una sesión que no llega a nacer no deja rastro.
+        if parent is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', str(parent)):
+            raise ValueError('Sesión padre inválida.')
         self.directory = sessions / ident
         if resume and not self.directory.is_dir():
             raise ValueError('No existe esa sesión en el hogar de AlfalfaCode.')
@@ -208,6 +211,10 @@ class TerminalManager:
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
                 self.task['meta'] = registro.metadatos(ident, self.task['cwd'], self.task['model'],
                                                        self.task['effort'])
+                # La sesión que la propuso con propose_session: la app pone esta debajo y le
+                # manda una nota al terminar cada turno.
+                if parent is not None:
+                    self.task['padre'] = parent
             if model:
                 self.task['model'] = model
             if effort:
@@ -647,7 +654,8 @@ async def execute(args):
     resolve_fork(args)
     manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
-                              compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None))
+                              compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
+                              parent=getattr(args, 'padre', None))
     loop = asyncio.get_running_loop()
     current = asyncio.current_task()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -680,6 +688,8 @@ def main(argv=None):
     parser.add_argument('--compactar-en', type=int, metavar='TOKENS',
                         help='Compactar el contexto al llegar a estos tokens (como mucho, el 90 %% de la ventana)')
     parser.add_argument('--bifurcar', metavar='ID', help='Seguir en una sesión nueva desde el final de un turno')
+    parser.add_argument('--padre', metavar='ID', help='Sesión que propuso esta (propose_session): sale debajo de '
+                                                      'ella y le llega una nota al terminar cada turno')
     parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado)')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')

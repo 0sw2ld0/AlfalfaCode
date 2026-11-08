@@ -37,6 +37,10 @@ final class LiveSession: ObservableObject, Identifiable {
     private var dormantLauncher: URL?
     /// Se llama al despertar una sesión dormida para pasarla a las sesiones vivas.
     var onWake: (() -> Void)?
+    /// La sesión que propuso esta (`propose_session`), para la barra lateral y sus notas.
+    var parentSessionID: String?
+    /// Al terminar cada turno: la app manda la nota a la sesión padre.
+    var onTurnFinished: ((Outcome) -> Void)?
     var isDormant: Bool { dormantLauncher != nil }
     /// Se puede escribir: hay proceso abierto o la sesión duerme hasta el siguiente mensaje.
     var canSend: Bool { timeline.status.isActive || isDormant }
@@ -90,7 +94,8 @@ final class LiveSession: ObservableObject, Identifiable {
         let arguments = Launcher.stdioArguments(task: task, resume: resumeID,
                                                 model: resumeID == nil || settingsChanged ? model : nil,
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
-                                                images: images.map(\.path), mode: mode, wait: wait)
+                                                images: images.map(\.path), mode: mode, wait: wait,
+                                                parent: parentSessionID)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -112,6 +117,7 @@ final class LiveSession: ObservableObject, Identifiable {
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
         onChange?()
+        if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
         if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
@@ -305,5 +311,29 @@ final class LiveSession: ObservableObject, Identifiable {
     /// Hay un proceso vivo esperando órdenes, sin turno ni permiso en curso.
     var isParked: Bool {
         process != nil && ReleasePolicy.isParked(timeline.status)
+    }
+}
+
+// MARK: - Sesiones hijas
+
+extension LiveSession {
+    /// La última respuesta del agente, para la nota que recibe la sesión padre.
+    var lastAnswer: String? {
+        for item in timeline.items.reversed() {
+            if case let .agent(_, text) = item { return text }
+        }
+        return nil
+    }
+
+    /// La nota de una sesión hija. Sin tocar el cuadro de texto ni sus imágenes: si la sesión
+    /// duerme, la despierta; si trabaja, entra después del turno en marcha.
+    func deliver(_ note: String) {
+        if isDormant {
+            wake(with: note)
+            return
+        }
+        guard process != nil else { return }
+        timeline.addUser(note, queued: true)
+        process?.send(.message(note))
     }
 }

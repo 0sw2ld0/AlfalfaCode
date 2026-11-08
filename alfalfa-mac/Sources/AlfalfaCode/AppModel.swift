@@ -374,6 +374,7 @@ final class AppModel: ObservableObject {
 
     private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = []) {
         session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
         live.insert(session, at: 0)
         route = .live(session.id)
         session.start(launcher: launcher, task: task, images: images)
@@ -398,12 +399,14 @@ final class AppModel: ObservableObject {
                                   effort: summary.effort ?? effort, readOnly: readOnly,
                                   mode: summary.mode ?? PermissionMode.auto.rawValue)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
         session.onWake = { [weak self, weak session] in
             guard let self, let session else { return }
             self.dormant[summary.id] = nil
             // Una sesión que ya despertó antes vuelve a despertar al cerrarse su proceso: no se duplica.
             if !self.live.contains(where: { $0 === session }) { self.live.insert(session, at: 0) }
-            self.route = .live(session.id)
+            // Sólo si la estás mirando: la nota de una sesión hija la despierta sin moverte.
+            if self.route == .past(summary.id) { self.route = .live(session.id) }
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 await self.reload()
@@ -544,21 +547,6 @@ final class AppModel: ObservableObject {
         route = .new
     }
 
-    func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
-
-    func resumeCommand(_ row: SidebarRow) -> String {
-        "cd \(CodeActionsShell.quote(row.folder ?? "~")) && alfalfa --reanudar \(row.sessionID ?? "")"
-    }
-
-    /// Carpeta de la sesión en `$ALFALFA_HOME/sesiones`.
-    func sessionFolder(_ row: SidebarRow) -> URL? {
-        guard let id = row.sessionID else { return nil }
-        return Attachments.directory().deletingLastPathComponent().appendingPathComponent("sesiones/\(id)")
-    }
-
     @discardableResult
     private func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
         guard let launcher else { return nil }
@@ -638,7 +626,9 @@ extension AppModel {
         guard let launcher else { return false }
         let session = LiveSession(cwd: parent.cwd, title: proposal.title, resumeID: nil, model: parent.model,
                                   effort: parent.effort, readOnly: parent.readOnly, mode: parent.mode)
+        session.parentSessionID = parent.sessionID
         session.onChange = { [weak self] in self?.objectWillChange.send() }
+        watchFamily(session)
         live.insert(session, at: 0)
         session.start(launcher: launcher, task: proposal.task)
         Task {

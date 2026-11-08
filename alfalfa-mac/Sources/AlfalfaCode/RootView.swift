@@ -84,7 +84,12 @@ struct SidebarView: View {
                         .buttonStyle(.plain)
                         .help(group.folder)
                         if !collapsed.contains(group.folder) {
-                            ForEach(group.rows) { row in sessionRow(row).contextMenu { menu(for: row) } }
+                            // Las sesiones hijas (propose_session) van debajo de su padre, con sangría.
+                            ForEach(nested(group.rows), id: \.row.id) { item in
+                                sessionRow(item.row).contextMenu { menu(for: item.row) }
+                                    .padding(.leading, CGFloat(item.depth) * 14)
+                                    .overlay(alignment: .leading) { childMark(item.depth) }
+                            }
                         }
                     }
                 }
@@ -191,6 +196,23 @@ struct SidebarView: View {
         case .done: return Theme.alfalfa.opacity(0.55)
         case .problem: return Theme.danger
         case .idle: return Theme.muted
+        }
+    }
+}
+
+// MARK: - Sesiones hijas
+
+extension SidebarView {
+    private func nested(_ rows: [SidebarRow]) -> [(row: SidebarRow, depth: Int)] {
+        SessionFamily.nest(rows, id: \.sessionID, parent: model.parentID(of:))
+    }
+
+    /// Una raya fina a la izquierda de cada hija, como la de las sesiones de Claude.
+    @ViewBuilder private func childMark(_ depth: Int) -> some View {
+        if depth > 0 {
+            Rectangle().fill(Theme.border).frame(width: 1)
+                .padding(.leading, CGFloat(depth) * 14 - 6).padding(.vertical, 6)
+                .accessibilityHidden(true)
         }
     }
 }

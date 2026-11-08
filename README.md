@@ -118,6 +118,14 @@ carpeta y con el mismo modelo, esfuerzo y modo, sin cambiar de pantalla: la
 sesión sale en la barra lateral. «Hacerlo aquí» se lo pide a la sesión actual. En
 la terminal se imprime el encargo para abrir otra sesión a mano.
 
+La sesión que nace así es hija de la que la propuso: se crea con `--padre ID`, que
+queda guardado en ella y sale como `padre` en `--sesiones --json`. En la barra
+lateral va debajo de su padre, con sangría. Cada vez que la hija termina un turno, la
+app le manda al padre una nota con los primeros 400 caracteres de su informe: el
+resumen de `wrap_up` o, si no lo hay, su última respuesta. Si el padre está
+trabajando, la nota entra al acabar su turno. Si está dormido o cerrado, se despierta
+sin cambiarte de pantalla. Un turno que corta el usuario no manda nota.
+
 ## Sesiones desde la app
 
 `--marcar ID titulo|fijada|archivada VALOR`, `--eliminar-sesion ID` (a la Papelera

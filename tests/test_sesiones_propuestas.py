@@ -78,3 +78,30 @@ def test_en_la_terminal_queda_el_encargo_a_mano():
     assert texto.splitlines()[1:] == ['── Siguiente paso ──', '', 'Sesión propuesta: Quitar el aviso',
                                       '  Para empezarla aparte: alfalfa "<encargo>". Encargo:',
                                       '  Línea uno', '  Línea dos']
+
+
+def test_una_sesion_hija_guarda_su_padre_y_sale_en_el_listado(tmp_path, monkeypatch):
+    from alfalfa.stdio import sessions
+    (tmp_path / 'project').mkdir()
+    monkeypatch.chdir(tmp_path / 'project')
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path / 'alfalfa'))
+    padre = TerminalManager('Encargo del padre.')
+    padre.save()
+    padre.close()
+    hija = TerminalManager('Encargo de la hija.', parent=padre.task['id'])
+    hija.save()
+    hija.close()
+    assert hija.task['padre'] == padre.task['id']
+    filas = {fila['id']: fila for fila in sessions()}
+    assert filas[hija.task['id']]['padre'] == padre.task['id']
+    assert 'padre' not in filas[padre.task['id']]
+
+
+@pytest.mark.parametrize('malo', ['../fuera', 'con espacio', ''])
+def test_un_padre_invalido_no_se_guarda(tmp_path, monkeypatch, malo):
+    (tmp_path / 'project').mkdir()
+    monkeypatch.chdir(tmp_path / 'project')
+    with pytest.raises(ValueError, match='padre'):
+        TerminalManager('Encargo.', home=tmp_path / 'alfalfa', parent=malo)
+    # No queda una carpeta a medias que la barra lateral enseñaría como sesión ilegible.
+    assert not list((tmp_path / 'alfalfa' / 'sesiones').glob('*'))

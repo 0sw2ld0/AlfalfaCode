@@ -289,7 +289,7 @@ async def run(args, transport):
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                                  wait=esperar)
+                                  wait=esperar, parent=getattr(args, 'padre', None))
         if esperar:
             code = 0  # Abrir y cerrar sin turno no es un fallo.
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
@@ -440,6 +440,8 @@ def sessions():
                            turnos=len(task.get('turnos') or []))
                 if task.get('bifurcada_de'):
                     row['bifurcada_de'] = task['bifurcada_de']
+                if task.get('padre'):
+                    row['padre'] = task['padre']
                 if task['id'] != directory.name or not isinstance(row['fecha'], (int, float)):
                     raise ValueError()
                 row.update(_marcas(directory))
