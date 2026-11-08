@@ -14,6 +14,8 @@ dependencies = [
     "httpx>=0.28,<1",
     "mcp>=1.29,<2",
     "jsonschema>=4.18,<5",
+    # Búsqueda y lectura web de los agentes, desde la conexión del usuario.
+    "cuysearch @ git+https://github.com/0sw2ld0/CuySearch@v0.1.0",
 ]
 
 [project.optional-dependencies]

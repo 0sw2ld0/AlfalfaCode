@@ -42,8 +42,8 @@ def test_identity_parameters_and_session_permissions(tmp_path, monkeypatch):
         assert (m.directory / 'task.json').stat().st_mode & 0o777 == 0o600
         with pytest.raises(ValueError, match='ya está en ejecución'):
             TerminalManager(resume=m.task['id'], home=tmp_path / 'chosen')
-        with pytest.raises(ValueError, match='deshabilitada'):
-            asyncio.run(rt.tools.call('web_search', dict(query='local task')))
+        with pytest.raises(ValueError, match='No se pudo leer'):
+            asyncio.run(rt.tools.call('read_web', dict(url='http://localhost:9/')))
         with pytest.raises(ValueError):
             asyncio.run(rt.tools.call('write_file', dict(path='../outside', content='x', expected_sha256='NEW')))
         override = NativeRuntime(m, m.task, instructions='RULES', agent_tone='TONE',
@@ -104,7 +104,7 @@ async def local_inference(self, client, endpoint, payload, **kwargs):
     if endpoint == '/api/show':
         return {'capabilities': ['tools']}
     names = [t['function']['name'] for t in payload['tools']]
-    assert not {'web_search', 'read_web', 'inspect_image'} & set(names)
+    assert {'web_search', 'read_web'} <= set(names) and 'inspect_image' not in names
     turns = sum(msg.get('role') == 'assistant' for msg in self.state['messages'])
     function = None
     if turns == 0:

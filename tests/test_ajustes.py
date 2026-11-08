@@ -49,9 +49,10 @@ def test_el_repo_del_integrador_da_su_venv_y_sus_referencias(tmp_path, monkeypat
     assert ordenes.carpetas_de_referencia() == [os.path.realpath(repo.parent / 'referencias')]
 
 
-def test_la_web_sin_cuysearch_configurado_se_explica(monkeypatch):
+def test_la_web_sin_servicio_remoto_usa_la_libreria_y_explica_si_no_hay_red(monkeypatch):
     monkeypatch.delenv('ALFALFA_CUYSEARCH_URL', raising=False)
-    with pytest.raises(ValueError, match='no hay URL de CuySearch'):
+    # La suite corta la red: todos los motores fallan y el agente recibe por qué.
+    with pytest.raises(ValueError, match='sin red en las pruebas.*marca como «sin verificar»'):
         asyncio.run(web.buscar('alfalfa'))
 
 

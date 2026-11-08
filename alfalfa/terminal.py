@@ -116,9 +116,17 @@ entrada o añadir contexto. Respeta su motivo y no esquives un bloqueo con otra
 herramienta ni otra forma de la misma orden.'''
 
 
-# El modelo no recibe estas herramientas y el motor las rechaza. inspect_image
-# sí: el runtime la ofrece cuando el modelo de la sesión tiene visión.
-EXCLUIDAS = ('web_search', 'read_web')
+# Herramientas web: el modelo no las recibe (y el motor las rechaza) si el
+# buscador está apagado en Ajustes o falta la librería cuysearch. La búsqueda la
+# hace este proceso, no el sandbox, que sigue sin red. inspect_image la ofrece
+# el runtime cuando el modelo de la sesión tiene visión.
+WEB = ('web_search', 'read_web')
+
+
+def excluidas():
+    from .proveedores.nativo import web
+    return () if web.disponible() else WEB
+
 ESCRITURA = ('write_file', 'edit_file', 'run_command', 'run_checks', 'apply_patch', 'app_action')
 
 
@@ -408,7 +416,7 @@ class TerminalManager:
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else ''),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
-                             excluded_tools=EXCLUIDAS + (ESCRITURA
+                             excluded_tools=excluidas() + (ESCRITURA
                                                          if self.read_only or modos.solo_lee(modos.modo_de(self.task))
                                                          else ()),
                              working_text='AlfalfaCode está trabajando…',

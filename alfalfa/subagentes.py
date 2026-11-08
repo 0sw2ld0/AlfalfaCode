@@ -358,7 +358,7 @@ class Subagentes:
         hijo = _GestorDeSubagente(gestor, sub, self.avisar)
         solo_lee = (tipo['solo_lectura'] or gestor.read_only
                     or modos.solo_lee(modos.modo_de(gestor.task)))
-        excluidas = list(terminal.EXCLUIDAS) + list(HERRAMIENTAS_DEL_PRINCIPAL)
+        excluidas = list(terminal.excluidas()) + list(HERRAMIENTAS_DEL_PRINCIPAL)
         if solo_lee:
             excluidas += list(terminal.ESCRITURA)
         if tipo.get('herramientas'):

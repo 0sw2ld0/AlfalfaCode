@@ -39,8 +39,8 @@ SIN_EQUIVALENTE = {
     'update_plan': 'TodoWrite recibe todos con content y activeForm; update_plan, plan con step y status (los mismos '
                    'estados).',
     'inspect_image': 'Read de Claude también abre imágenes, pero aquí analiza otro modelo.',
-    'web_search': 'WebSearch existe, pero AlfalfaCode no ofrece web en la terminal.',
-    'read_web': 'WebFetch existe, pero AlfalfaCode no ofrece web en la terminal.',
+    'web_search': 'WebSearch de Claude recibe query y allowed_domains; aquí query y domains.',
+    'read_web': 'WebFetch de Claude recibe url y prompt y resume la página; read_web devuelve su texto.',
     'buscar_herramientas': 'Buscar o cargar un esquema MCP no ejecuta ninguna herramienta MCP.',
     'abrir_habilidad': 'Skill de Claude carga una habilidad por nombre; aquí se abre por referencia autorizada.',
     'invocar_comando': 'Los comandos de Claude son prompts del usuario; aquí sólo se compone su plantilla.',
@@ -57,7 +57,9 @@ SIN_EQUIVALENTE = {
 
 # Alias que sólo sirven para elegir hooks (hook_names.rs: apply_patch con Write y
 # Edit): el hook recibe el nombre nativo y su entrada nativa.
-ALIAS_FILTRO = {'apply_patch': ['Edit', 'Write'], 'spawn_agent': ['Agent', 'Task']}
+# Un hook que vigila WebSearch o WebFetch también vigila la web de AlfalfaCode.
+ALIAS_FILTRO = {'apply_patch': ['Edit', 'Write'], 'spawn_agent': ['Agent', 'Task'],
+                'web_search': ['WebSearch'], 'read_web': ['WebFetch']}
 
 # Campos de entrada de Claude Code que se saben traducir, por herramienta.
 CAMPOS_CLAUDE = {
