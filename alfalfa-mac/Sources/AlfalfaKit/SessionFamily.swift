@@ -25,6 +25,18 @@ public enum SessionFamily {
             + "ella; si no queda nada, díselo al usuario en una línea."
     }
 
+    /// Si una propuesta ya tiene su hija: una sesión de ese padre con el mismo encargo o el mismo
+    /// título. Así la tarjeta no vuelve a ofrecer «Nueva sesión» cuando se reabre el padre.
+    public static func isStarted(_ proposal: SessionProposal, parent: String?,
+                                 children: [(parent: String?, title: String?, task: String?)]) -> Bool {
+        guard let parent else { return false }
+        let task = proposal.task.trimmingCharacters(in: .whitespacesAndNewlines)
+        return children.contains { child in
+            child.parent == parent && (child.title == proposal.title
+                || child.task?.trimmingCharacters(in: .whitespacesAndNewlines) == task)
+        }
+    }
+
     /// Ordena las filas de un grupo para la barra lateral: cada hija va justo debajo de su padre,
     /// con una sangría más. Una hija cuyo padre no está en el grupo se queda donde estaba.
     public static func nest<Row>(_ rows: [Row], id: (Row) -> String?,

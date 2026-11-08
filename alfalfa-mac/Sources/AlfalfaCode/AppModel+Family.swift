@@ -13,6 +13,13 @@ extension AppModel {
         return live.first { $0.sessionID == id }?.parentSessionID ?? summaries.first { $0.id == id }?.parent
     }
 
+    /// Si la propuesta de esta sesión ya se empezó aparte, mirando las hijas abiertas y las guardadas.
+    func hasChild(for proposal: SessionProposal, of session: LiveSession) -> Bool {
+        let opened = live.map { (parent: $0.parentSessionID, title: Optional($0.title), task: String?.none) }
+        let saved = summaries.map { (parent: $0.parent, title: $0.title, task: $0.task) }
+        return SessionFamily.isStarted(proposal, parent: session.sessionID, children: opened + saved)
+    }
+
     /// Engancha la nota al padre. Vale para las hijas recién empezadas y para las que se reabren.
     func watchFamily(_ session: LiveSession) {
         session.onTurnFinished = { [weak self, weak session] outcome in

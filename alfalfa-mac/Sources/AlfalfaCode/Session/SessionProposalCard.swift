@@ -27,7 +27,7 @@ struct SessionProposalCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .onTapGesture { expanded.toggle() }
                 .help(expanded ? "Pulsa para recoger el encargo" : "Pulsa para ver el encargo entero")
-            if started {
+            if started || model.hasChild(for: proposal, of: session) {
                 Label("Empezada en otra sesión", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 12.5)).foregroundStyle(Theme.alfalfa)
             } else {

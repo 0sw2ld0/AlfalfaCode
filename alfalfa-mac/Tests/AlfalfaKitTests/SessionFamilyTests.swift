@@ -48,4 +48,18 @@ final class SessionFamilyTests: XCTestCase {
         let anonymous = SessionFamily.nest([Row(id: "", parent: nil)], id: { _ in nil }, parent: { $0.parent })
         XCTAssertEqual(anonymous.count, 1)
     }
+
+    func testAProposalIsStartedOnceItsParentHasThatChild() {
+        let proposal = SessionProposal(title: "Quitar el aviso", task: "Cambia app= por transport= en los tests.")
+        XCTAssertTrue(SessionFamily.isStarted(proposal, parent: "padre",
+                                              children: [(parent: "padre", title: nil, task: " \(proposal.task)\n")]))
+        XCTAssertTrue(SessionFamily.isStarted(proposal, parent: "padre",
+                                              children: [(parent: "padre", title: "Quitar el aviso", task: nil)]))
+        XCTAssertFalse(SessionFamily.isStarted(proposal, parent: "padre",
+                                               children: [(parent: "otro", title: "Quitar el aviso", task: nil)]))
+        XCTAssertFalse(SessionFamily.isStarted(proposal, parent: "padre",
+                                               children: [(parent: "padre", title: "Otra", task: "Otra cosa.")]))
+        XCTAssertFalse(SessionFamily.isStarted(proposal, parent: nil,
+                                               children: [(parent: nil, title: "Quitar el aviso", task: nil)]))
+    }
 }
