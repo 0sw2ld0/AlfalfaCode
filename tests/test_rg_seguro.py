@@ -1,9 +1,9 @@
 """rg nunca ejecuta otros programas sin permiso, y lee referencias/ sin preguntar.
 
 `rg --pre ./guion patrón .` se concedía como «rg de sólo lectura dentro del
-worktree» y ejecutaba el guion sin permiso. Y DeepSeek esperó un permiso por un
-`rg -n … referencias/codex/…/manifest.rs` que el ticket le mandaba contrastar
-(94b43a3a4d, 06/11), porque rg no estaba entre las lecturas de referencia.
+worktree» y ejecutaba el guion sin permiso. Y un agente esperó un permiso por un
+`rg -n … referencias/codex/…/manifest.rs` que su encargo le mandaba contrastar,
+porque rg no estaba entre las lecturas de referencia.
 """
 import shlex
 

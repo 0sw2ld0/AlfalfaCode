@@ -213,7 +213,7 @@ def test_claude_plugin_root_se_resuelve_como_plugin_root(tmp_path):
                                          ('homepage', 7), ('repository', None), ('license', ['MIT']),
                                          ('description', 3)])
 def test_agent_plugins_con_tipos_imposibles_no_carga_ni_registra_servidores(tmp_path, campo, valor):
-    """Revisión de Sol (06/11): version null, keywords [7] u homepage 7 se aceptaban sin
+    """`version` null, keywords [7] u homepage 7 se aceptaban sin
     diagnóstico y el servidor MCP del complemento quedaba registrado (CA-4)."""
     raiz = copiar(tmp_path, 'agent-plugins')
     manifiesto = json.loads((raiz / 'plugin.json').read_text())
@@ -239,7 +239,7 @@ def test_campos_opcionales_desconocidos_no_impiden_la_carga(tmp_path):
 
 
 def test_manifiesto_portable_ignora_campos_fuera_del_esquema(tmp_path):
-    """H-002: un campo opcional desconocido no invalida Agent Plugins 1.0.0.
+    """Un campo opcional desconocido no invalida Agent Plugins 1.0.0.
 
     `agent_plugin_manifest.rs` avisa e ignora los campos fuera de
     AGENT_PLUGIN_FIELDS; aquí se conserva la carga y las capacidades compatibles,
@@ -593,7 +593,7 @@ def test_conflicto_entre_usuario_y_complemento_es_restrictivo(tmp_path):
 
 
 def test_conflicto_de_politica_no_impide_arrancar_la_sesion(tmp_path, monkeypatch):
-    """H-001 (Sol, 06/11): los avisos MCP-CONFLICTO se mezclaban como otro tipo de
+    """Los avisos MCP-CONFLICTO se mezclaban como otro tipo de
     diagnóstico y diagnosticos_mcp() lanzaba AttributeError: TerminalManager no arrancaba."""
     from alfalfa.terminal import TerminalManager
     raiz = copiar(tmp_path, 'claude')
@@ -615,7 +615,7 @@ def test_conflicto_de_politica_no_impide_arrancar_la_sesion(tmp_path, monkeypatc
 
 @pytest.mark.parametrize('fixture,ruta', [('agent-plugins', 'plugin.json'), ('claude', '.claude-plugin/plugin.json')])
 def test_author_null_es_un_manifiesto_invalido(tmp_path, fixture, ruta):
-    """H-002 (Sol, 06/11): `author: null` se aceptaba como si faltara."""
+    """`author: null` se aceptaba como si faltara."""
     raiz = copiar(tmp_path, fixture)
     manifiesto = json.loads((raiz / ruta).read_text())
     manifiesto['author'] = None
@@ -862,7 +862,7 @@ def test_catalogo_mcp_grande_no_entra_al_contexto_y_se_descubre(tmp_path):
 # ---------------------------------------------------------------- regresiones de la revisión
 
 def test_h001_enlace_de_carpeta_del_manifiesto_no_autoriza(tmp_path):
-    """H-001: .codex-plugin enlazado a una carpeta externa no aporta manifiesto."""
+    """.codex-plugin enlazado a una carpeta externa no aporta manifiesto."""
     externo = tmp_path / 'externo' / '.codex-plugin'
     externo.mkdir(parents=True)
     (externo / 'plugin.json').write_text(json.dumps({'name': 'ajeno', 'version': '1.0.0'}))
@@ -879,7 +879,7 @@ def test_h001_enlace_de_carpeta_del_manifiesto_no_autoriza(tmp_path):
 
 
 def test_h002_servidor_del_usuario_no_se_sustituye_por_el_del_complemento(tmp_path, monkeypatch):
-    """H-002: el identificador repetido conserva el servidor y el filtro del usuario."""
+    """El identificador repetido conserva el servidor y el filtro del usuario."""
     from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
     raiz = copiar(tmp_path, 'claude')
@@ -901,7 +901,7 @@ def test_h002_servidor_del_usuario_no_se_sustituye_por_el_del_complemento(tmp_pa
 
 
 def test_h003_servidor_desactivado_por_el_usuario_no_se_registra(tmp_path):
-    """H-003: activo:false de la política impide que el servidor llegue al gestor."""
+    """`activo: false` de la política impide que el servidor llegue al gestor."""
     raiz = copiar(tmp_path, 'claude')
     politicas = {'demo-claude': {'mcp': {'revision': {'activo': False}}}}
     cargador = cargar(tmp_path, [raiz], politicas=politicas)
@@ -920,7 +920,7 @@ def test_h003_activo_no_booleano_no_registra_el_servidor(tmp_path):
 
 
 def test_h004_ruta_declarada_no_suma_la_predeterminada(tmp_path):
-    """H-004: con ruta declarada sólo se lee esa; el predeterminado no se añade."""
+    """Con ruta declarada sólo se lee esa; el predeterminado no se añade."""
     raiz = copiar(tmp_path, 'claude')
     # El manifiesto declara ./mcp-extra.json y el directorio también tiene .mcp.json.
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
@@ -936,7 +936,7 @@ def test_h004_ruta_declarada_no_suma_la_predeterminada(tmp_path):
 
 
 def test_h005_mapa_inline_simple_produce_servidores(tmp_path):
-    """H-005: {servidor: entrada} se acepta igual que {mcpServers: {...}}."""
+    """{servidor: entrada} se acepta igual que {mcpServers: {...}}."""
     raiz = copiar(tmp_path, 'claude')
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto['mcpServers'] = {'docs': {'type': 'http', 'url': 'https://docs.example.invalid/mcp'}}
@@ -960,7 +960,7 @@ def test_h005_mapa_inline_envuelto_sigue_funcionando(tmp_path):
 
 
 def test_h006_herramientas_de_sesion_resuelven_habilidad_y_comando(tmp_path, monkeypatch):
-    """H-006: abrir_habilidad e invocar_comando son invocables desde el runtime."""
+    """abrir_habilidad e invocar_comando son invocables desde el runtime."""
     import asyncio
     from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
@@ -998,7 +998,7 @@ def test_h006_los_agentes_del_integrador_no_tienen_las_herramientas_de_complemen
 
 
 def test_h007_la_sustitucion_no_reprocesa_los_argumentos_insertados(tmp_path):
-    """H-007: $ARGUMENTS con un literal «$1» no se sustituye otra vez."""
+    """$ARGUMENTS con un literal «$1» no se sustituye otra vez."""
     raiz = copiar(tmp_path, 'codex')
     (raiz / 'commands' / 'plantilla.md').write_text(
         '---\ndescription: plantilla\n---\nCuerpo: $ARGUMENTS y luego $1.\n')
@@ -1013,7 +1013,7 @@ def test_h007_la_sustitucion_no_reprocesa_los_argumentos_insertados(tmp_path):
 
 
 def test_h008_campos_conocidos_sin_capacidad_se_informan_como_ignorados(tmp_path):
-    """H-008: interface y agents no se callan; aparecen como ignorados con aviso."""
+    """`interface` y `agents` no se callan; aparecen como ignorados con aviso."""
     raiz = copiar(tmp_path, 'runpod-1.7.4/claude')
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto.update({'interface': {'displayName': 'Runpod'}, 'agents': './agents/'})
@@ -1058,7 +1058,7 @@ def test_ruta_declarada_ausente_dentro_de_la_raiz_no_es_grave(tmp_path):
 
 @pytest.mark.parametrize('cwd', [7, {}, [], True])
 def test_h001_cwd_no_textual_no_rompe_el_resto_de_complementos(tmp_path, cwd):
-    """H-001: un cwd no textual se diagnostica; los demás servidores siguen."""
+    """Un cwd no textual se diagnostica; los demás servidores siguen."""
     raiz = copiar(tmp_path, 'claude')
     (raiz / '.mcp.json').write_text(json.dumps({'mcpServers': {
         'roto': {'type': 'stdio', 'command': 'python', 'cwd': cwd},
@@ -1072,7 +1072,7 @@ def test_h001_cwd_no_textual_no_rompe_el_resto_de_complementos(tmp_path, cwd):
 
 
 def test_h001_el_listado_termina_con_json_aunque_el_cwd_sea_invalido(tmp_path, monkeypatch, capsys):
-    """H-001: `entry()` emitía nada porque el TypeError abortaba el listado."""
+    """`entry()` emitía nada porque el TypeError abortaba el listado."""
     from alfalfa.stdio import entry
     from types import SimpleNamespace
     raiz = copiar(tmp_path, 'claude')
@@ -1092,7 +1092,7 @@ def test_h001_el_listado_termina_con_json_aunque_el_cwd_sea_invalido(tmp_path, m
 
 @pytest.mark.parametrize('valor', ['./skills/../skills', './', './.', '././', './skills/..'])
 def test_h003_raiz_y_punto_punto_se_rechazan_como_en_codex(tmp_path, valor):
-    """H-003: `./skills/../skills` y `./` no son rutas declaradas válidas."""
+    """`./skills/../skills` y `./` no son rutas declaradas válidas."""
     raiz = copiar(tmp_path, 'claude')
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto['skills'] = valor
@@ -1105,7 +1105,7 @@ def test_h003_raiz_y_punto_punto_se_rechazan_como_en_codex(tmp_path, valor):
 
 @pytest.mark.parametrize('valor', ['mcp.json', './mcp.json'])
 def test_h003_ruta_mcp_declarada_exige_prefijo(tmp_path, valor):
-    """H-003: la ruta MCP declarada también sigue `resolve_manifest_path`."""
+    """La ruta MCP declarada también sigue `resolve_manifest_path`."""
     raiz = copiar(tmp_path, 'claude')
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto['mcpServers'] = valor
@@ -1124,7 +1124,7 @@ def test_h003_ruta_mcp_declarada_exige_prefijo(tmp_path, valor):
 
 
 def test_h004_un_rechazo_estructural_no_deja_capacidades_visibles(tmp_path):
-    """H-004: con COMP-LIMITE no quedan el complemento ni sus habilidades."""
+    """Con COMP-LIMITE no quedan el complemento ni sus habilidades."""
     raiz = copiar(tmp_path, 'claude')
     manifiesto = json.loads((raiz / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto['commands'] = ['./commands'] * 257
@@ -1139,7 +1139,7 @@ def test_h004_un_rechazo_estructural_no_deja_capacidades_visibles(tmp_path):
 
 
 def test_h004_un_rechazo_estructural_no_reserva_identidad_ni_servidor(tmp_path):
-    """H-004: el complemento rechazado no bloquea una segunda raíz válida."""
+    """El complemento rechazado no bloquea una segunda raíz válida."""
     rota = copiar(tmp_path, 'claude', destino='rota')
     manifiesto = json.loads((rota / '.claude-plugin' / 'plugin.json').read_text())
     manifiesto['skills'] = ['./skills'] * 257

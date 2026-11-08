@@ -275,7 +275,7 @@ def classify_operation(argv, purpose, cwd, output, exit_code, *, timed_out=False
         return _classification('failed', 'failure', 'rg_no_matches_unexpected',
                                'rg no encontró coincidencias y el propósito no confirma que la ausencia sea esperada.')
 
-    # grep, como rg, sale con 1 cuando no encuentra nada: GLM buscó whitespace
+    # grep, como rg, sale con 1 cuando no encuentra nada: un agente buscó whitespace
     # colgante esperando cero líneas y el ticket se bloqueó por ese «fallo».
     if program in _GREP_PROGRAMS and exit_code == 1:
         if (not raw_output.strip() and _rg_purpose_is_absence(purpose)

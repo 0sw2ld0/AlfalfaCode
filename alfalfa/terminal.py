@@ -234,7 +234,7 @@ class TerminalManager:
             from .complementos import CargadorComplementos
             self.complementos = CargadorComplementos(base, self.task['cwd']).cargar()
             self.mcp = None if read_only else McpManager.desde_hogar(self, base, self.task['cwd'])
-            # CA-11/H-002: los identificadores del usuario tienen precedencia; el
+            # Los identificadores del usuario tienen precedencia; el
             # complemento no sustituye en silencio un servidor ya configurado.
             anteriores = [] if self.mcp is None else list(self.mcp.servidores.values())
             servidores_plugin = [] if read_only else self.complementos.servidores_mcp(anteriores)

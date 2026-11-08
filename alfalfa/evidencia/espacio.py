@@ -29,8 +29,8 @@ class MutationWatch:
         self.files = []
         # ctime de cada ruta vigilada: macOS avisa con NOTE_ATTRIB también cuando
         # sólo cambia la fecha de acceso (git la mueve al leer .git/index), y eso
-        # invalidaba toda comprobación de git aunque nadie escribiera nada (GLM,
-        # 31/10). Un acceso no mueve el ctime; un chmod, chown o escritura sí.
+        # invalidaba toda comprobación de git aunque nadie escribiera nada. Un
+        # acceso no mueve el ctime; un chmod, chown o escritura sí.
         self.ctimes = {}
         self.sucio = False
         paths = set()
@@ -116,12 +116,12 @@ def functional_command(argv):
         return _shell_funcional(str(argv[2]))
     if program == 'node':
         # Sin esto, ningún proyecto de JavaScript podía dejar evidencia y toda
-        # aprobación se bloqueaba (eca1005ad1 y bf24390e68, 03/11).
+        # aprobación se bloqueaba.
         valores = [str(v) for v in argv[1:]]
         return '--test' in valores or any(
             not v.startswith('-') and v.endswith(('.js', '.mjs', '.cjs', '.ts')) for v in valores[:1])
     if program.startswith(('python', 'pypy')):
-        # `python3 -B verificar.py` es el mismo script (1ca2cb4d92, 03/11).
+        # `python3 -B verificar.py` es el mismo script.
         while len(argv) > 1 and argv[1] in ('-B', '-u', '-E', '-s', '-I'):
             argv = argv[:1] + argv[2:]
         if argv[1:2] == ['-m']:
@@ -156,7 +156,7 @@ def _shell_funcional(texto):
 TEMPORALES = ('.tmp-alfalfa/',)
 
 # Los revisores nombran su carpeta de capturas a su manera: independent-review,
-# revision-sol, review-sol-current-1848… (4.199, 4.200).
+# revision-qa, review-current-1848…
 CARPETAS_DEL_REVISOR = ('independent-review',)
 PREFIJOS_DEL_REVISOR = ('revision', 'review', 'independent-review')
 
@@ -184,7 +184,7 @@ def _file(path):
         data = os.readlink(path).encode()
     elif path.is_dir():
         # Un submódulo registrado (gitlink) es una carpeta: leerla como archivo
-        # tumbaba la huella con «Is a directory» (GLTFKit2, 4.176).
+        # tumbaba la huella con «Is a directory» (pasó con GLTFKit2).
         data = ('dir:' + '\0'.join(sorted(os.listdir(path)))).encode()
     else:
         data = path.read_bytes()
@@ -194,8 +194,7 @@ def _file(path):
 
 def _entries(path, ignored, root=None):
     # Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
-    # caducaba la evidencia al terminar cada revisión («La evidencia caducó»,
-    # 4caa9e2269 y c1b500aa9a, 4.201).
+    # caducaba la evidencia al terminar cada revisión («La evidencia caducó»).
     return sorted(p.name for p in path.iterdir()
                   if p.name != '.git' and p.name + '/' not in TEMPORALES and str(p) not in ignored
                   and not (root and _del_revisor(p, root)))
@@ -207,7 +206,7 @@ def _shared(path, refs):
     `.git/config` y `packed-refs` los comparten todos los worktrees del repo.
     Cada `git push -u` de otro ticket reescribe config con su `[branch "…"]`,
     y comparar fecha e inodo caducaba la evidencia de todas las revisiones en
-    curso («La evidencia caducó», CuyWorld 2026-10-12, 4.192). Se compara el
+    curso («La evidencia caducó»). Se compara el
     contenido sin las secciones de ramas, y de packed-refs sólo las refs
     propias.
     """
@@ -315,7 +314,7 @@ def _same_file(path, expected):
         return True
     # La limpieza comparte los archivos repetidos con un clon: mismo contenido y
     # fecha, pero otro inodo y otro ctime. Comparar sólo metadatos caducaba la
-    # evidencia de los tickets en revisión (GLM, a167417260, 31/10). Si el modo
+    # evidencia de los tickets en revisión. Si el modo
     # y la fecha siguen iguales, decide el contenido.
     if [stat.st_mode, stat.st_mtime_ns] != [expected[1], expected[3]]:
         return False

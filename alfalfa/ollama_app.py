@@ -5,10 +5,9 @@ copia en una sesión nueva, con los mensajes de usuario y asistente, y el
 siguiente mensaje la continúa con ese contexto ya cargado.
 
 La app de Ollama guarda los chats en `~/Library/Application Support/Ollama/db.sqlite`
-(tablas `chats` y `messages`). Se lee igual que `OllamaAppChatReader` de
-OllamaCloudChat: conexión de solo lectura, `query_only`, una transacción de
-lectura que se deshace y validación del esquema antes de consultar. Nunca se
-escribe, migra ni hace checkpoint en la base de Ollama. Las imágenes adjuntas,
+(tablas `chats` y `messages`). Se lee con cuidado: conexión de solo lectura,
+`query_only`, una transacción de lectura que se deshace y validación del esquema
+antes de consultar. Nunca se escribe, migra ni hace checkpoint en la base de Ollama. Las imágenes adjuntas,
 las herramientas y los mensajes en curso no se traen.
 """
 from __future__ import annotations

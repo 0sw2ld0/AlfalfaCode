@@ -87,15 +87,9 @@ Las sesiones se ordenan por fecha descendente; una sesión ilegible se identific
 con `estado: "corrupta"` y campos desconocidos nulos. Ollama inaccesible produce
 error JSON y código 1. Estas consultas no emiten `fin` (no ejecutan sesiones).
 
-La frontera está censada en `server/tests/censo_frontera_arnes.json`:
-`app/arnes/stdio.py` mantiene cero imports externos a app.arnes y cero accesos
-al estudio. `server/tests/test_alfalfa_stdio.py` cubre mensajes, permisos, las
-cuatro rutas de interrupción (orden/espera × cancelar/EOF) y, en v2, mensajes
-durante una orden en curso, tras terminar un turno, vacíos y de más de 20 000
-caracteres. La coordinación
-concurrente del lector, futuros de permiso y motor con procesos compartidos
-justifica la ejecución por Senior Sol 6.1. El componente es el servidor Python,
-por terminal.py y permisos/terminal.py; macos, mobile y la interfaz se excluyen.
+`tests/test_alfalfa_stdio.py` cubre mensajes, permisos, las cuatro rutas de
+interrupción (orden/espera × cancelar/EOF) y, en v2, mensajes durante una orden
+en curso, tras terminar un turno, vacíos y de más de 20 000 caracteres.
 
 Desde una carpeta de trabajo:
 

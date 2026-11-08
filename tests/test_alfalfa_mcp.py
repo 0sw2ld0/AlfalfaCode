@@ -133,7 +133,7 @@ def test_configuracion_valida_con_todos_los_campos(tmp_path):
 
 
 def test_token_entorno_se_redacta_tambien_sin_bearer(tmp_path):
-    """H-001: el servidor puede devolver el token suelto, sin el «Bearer » de la cabecera."""
+    """El servidor puede devolver el token suelto, sin el «Bearer » de la cabecera."""
     token = 'CENTINELA-TOKEN-5e6f7a'
     configurar(tmp_path, {'h': dict(url='https://mcp.example.com/mcp', token_entorno='MI_TOKEN',
                                     cabeceras={'Proxy-Authorization': 'Basic CENTINELA-BASIC-0b1c'})})
@@ -186,7 +186,7 @@ def test_entrada_invalida_da_diagnostico_y_no_impide_las_demas(tmp_path, ident, 
     dict(token_entorno='BLANCA'),
 ])
 def test_cabecera_en_blanco_da_diagnostico_sin_abortar_el_gestor(tmp_path, entrada):
-    """H-003: una credencial vacía o en blanco no puede tumbar a los demás servidores."""
+    """Una credencial vacía o en blanco no puede tumbar a los demás servidores."""
     configurar(tmp_path, {'blanco': dict(url='https://a.example/mcp', **entrada),
                           'bueno': dict(url='https://b.example/mcp', token_entorno='BUENO')})
     ambiente = {'VACIA': '', 'BLANCA': '   ', 'BUENO': 'CENTINELA-BUENO-7d8e'}
@@ -198,7 +198,7 @@ def test_cabecera_en_blanco_da_diagnostico_sin_abortar_el_gestor(tmp_path, entra
 
 
 def test_secretos_tolera_cabeceras_de_credencial_en_blanco():
-    """H-003: aunque llegue sin validar, «   » no rompe secretos() ni el gestor."""
+    """Aunque llegue sin validar, «   » no rompe secretos() ni el gestor."""
     servidor = configuracion.Servidor(id='s', transporte='http', url='https://a.example/mcp',
                                       cabeceras={'Authorization': '   ', 'Proxy-Authorization': '',
                                                  'X-Api-Key': 'CENTINELA-LLAVE-1a2b'})
@@ -383,7 +383,7 @@ REF_EXTERNO = {'type': 'object', 'properties': {'a': {'$ref': 'https://esquemas.
 
 
 def test_ref_externo_del_esquema_de_entrada_no_se_descarga(monkeypatch):
-    """H-002: validar argumentos no descarga $ref externos; sin validar no se pide permiso ni se envía."""
+    """Validar argumentos no descarga $ref externos; sin validar no se pide permiso ni se envía."""
     vigilado = _UrlopenVigilado()
     monkeypatch.setattr('urllib.request.urlopen', vigilado)
     servidor = configuracion.Servidor(id='s', transporte='stdio', red=False)
@@ -407,7 +407,7 @@ def test_ref_externo_del_esquema_de_entrada_no_se_descarga(monkeypatch):
 
 
 def test_ref_externo_del_esquema_de_salida_no_se_descarga(monkeypatch):
-    """H-002: el outputSchema no se valida con jsonschema.validate del SDK, que descargaría el $ref."""
+    """El outputSchema no se valida con jsonschema.validate del SDK, que descargaría el $ref."""
     from alfalfa.mcp_cliente.conexion import Conexion
     vigilado = _UrlopenVigilado()
     monkeypatch.setattr('urllib.request.urlopen', vigilado)

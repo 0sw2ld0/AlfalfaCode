@@ -41,8 +41,8 @@ LECTURA = {
     'uniq', 'diff', 'cmp', 'tree', 'du', 'cut', 'tr', 'nl', 'realpath', 'md5', 'shasum',
     # Saber si una compilación sigue viva (`pgrep -fl xcodebuild`): sólo lista procesos.
     'pgrep',
-    # Validar un JSON contra su esquema: lee los dos y sólo informa (GLM pidió
-    # permiso para revalidar un ejemplo de su propuesta, 31/10).
+    # Validar un JSON contra su esquema: lee los dos y sólo informa (un agente
+    # pidió permiso para revalidar un ejemplo de su propuesta).
     'jsonschema',
 }
 
@@ -52,7 +52,7 @@ SUBCOMANDOS = {
     # o reescriben historia: los decide el usuario.
     'git': {'status', 'diff', 'log', 'show', 'branch', 'rev-parse', 'ls-files',
             'describe', 'blame', 'shortlog', 'tag', 'cat-file', 'grep',
-            # DeepSeek esperó permiso por ls-tree y merge-base --is-ancestor (04/11).
+            # Un agente esperó permiso por ls-tree y merge-base --is-ancestor.
             'ls-tree', 'merge-base', 'rev-list', 'check-ignore'},
     # El registro unificado de macOS, sólo para leer (log show); nunca config ni erase.
     'log': {'show'},
@@ -80,7 +80,7 @@ BANDERAS_PROHIBIDAS = {
 # Segundo escalón: las herramientas del propio proyecto. Esto NO es de sólo
 # lectura y no se finge que lo sea: `npm ci` ejecuta los postinstall que vengan
 # en las dependencias, es decir código de terceros bajado de la red. Se concede
-# porque sin ello un agente no puede compilar nada y el tablero se para cada
+# porque sin ello un agente no puede compilar nada y el trabajo se para cada
 # pocos minutos, y porque el daño queda acotado al worktree del ticket, que es
 # desechable y pasa por revisión y pull request antes de tocar `main`.
 HERRAMIENTAS = {
@@ -103,7 +103,7 @@ HERRAMIENTAS = {
     'make': None,
     'cargo': {'build', 'test', 'check', 'clippy'},
     'go': {'build', 'test', 'vet'},
-    # Genera el .xcodeproj desde project.yml del propio worktree (Luna esperó permiso por esto).
+    # Genera el .xcodeproj desde project.yml del propio worktree (un agente esperó permiso por esto).
     'xcodegen': {'generate'},
     # Analizadores de Python: el verificador de la línea los pide siempre.
     'mypy': None,
@@ -181,8 +181,8 @@ def _es_evidencia(ruta, espacio):
     """Capturas o informes de evidencia de un ticket, dentro del worktree.
 
     Rehacerlas empieza por borrar las viejas; están en git, así que se
-    recuperan. Opus se paró a pedir permiso para regenerar las suyas en mitad de
-    la primera carrera de Compara. Nunca la carpeta de evidencia entera.
+    recuperan. Un agente se paró a pedir permiso para regenerar las suyas en
+    mitad de una carrera. Nunca la carpeta de evidencia entera.
     """
     if any(c in ruta for c in '*?$`'):
         return False
@@ -242,7 +242,7 @@ DERIVED_DATA = Path.home() / 'Library' / 'Developer' / 'Xcode' / 'DerivedData'
 def _resultados_de_xcode(argumentos):
     """`xcresulttool get … --path` sobre los resultados que Xcode guarda en DerivedData.
 
-    Sólo lee: Luna se paró a pedir permiso para leer el resultado de sus
+    Sólo lee: un agente se paró a pedir permiso para leer el resultado de sus
     propias pruebas, que xcodebuild deja ahí si no se le da otra carpeta.
     """
     if 'xcresulttool' not in argumentos or '--path' not in argumentos:
@@ -289,7 +289,7 @@ def _xcode(programa, argumentos, escritura, espacio=None):
     if herramienta in ('--find', 'swift', 'swiftc'):
         return True, 'herramienta de Xcode'
     # Sólo lista los dispositivos que ve Xcode (iPhone por cable o por red): el
-    # revisor de seguridad de CuyScale esperó permiso por `xcrun xcdevice list`.
+    # revisor de seguridad de una app esperó permiso por `xcrun xcdevice list`.
     if herramienta == 'xcdevice' and [a for a in resto if not a.startswith('-')][:1] == ['list'] \
             and set(a for a in resto if a.startswith('-')) <= {'--timeout', '--both'}:
         return True, 'lista los dispositivos que ve Xcode'
@@ -305,8 +305,8 @@ def _xcode(programa, argumentos, escritura, espacio=None):
 def _temporal_del_ticket(ruta, espacio):
     """¿Es /tmp/<algo con el ID de este ticket>? Su carpeta temporal, regenerable.
 
-    Sonnet esperó permiso por `rm -rf /tmp/agente-b5e7e16bde` al terminar el
-    modo administrador de Ciudad: era su propia carpeta de pruebas.
+    Un agente esperó permiso por `rm -rf /tmp/agente-b5e7e16bde` al terminar
+    su tarea: era su propia carpeta de pruebas.
     """
     ticket = Path(espacio).name.removesuffix('-rival') if espacio else ''
     destino = Path(ruta)
@@ -438,11 +438,11 @@ def _herramienta_del_proyecto(programa, argumentos):
         argumentos = argumentos[:posicion] + argumentos[posicion + 2:]
     sub = next((a for a in argumentos if not a.startswith('-')), '')
     if argumentos in (['--version'], ['-version'], ['version']):
-        # `swift --version && swift build …`: el revisor de CuyScale esperó permiso por esto.
+        # `swift --version && swift build …`: un revisor esperó permiso por esto.
         return True, programa + ' sólo dice su versión'
     if programa == 'go' and sub == 'run':
-        # Un paquete del propio worktree corre como sus pruebas: el revisor de
-        # CuyScale esperó permiso por `go -C server run ./cmd/natlab`. Nada
+        # Un paquete del propio worktree corre como sus pruebas: un revisor de
+        # un proyecto Go esperó permiso por `go -C server run ./cmd/labred`. Nada
         # descargado (@versión) ni fuera de la carpeta.
         resto = argumentos[argumentos.index('run') + 1:]
         paquete = next((a for a in resto if not a.startswith('-')), '')
@@ -459,8 +459,8 @@ def _herramienta_del_proyecto(programa, argumentos):
 
 
 # -clonedSourcePackagesDirPath y -packageCachePath: descargas de paquetes,
-# regenerables. Luna esperó permiso por `xcodebuild … -clonedSourcePackagesDirPath
-# /private/tmp/541545c60a-packages … test` en OllamaCloudChat.
+# regenerables. Un agente esperó permiso por `xcodebuild … -clonedSourcePackagesDirPath
+# /private/tmp/541545c60a-packages … test` en una app de Mac.
 SALIDA_DE_COMPILACION = {'--scratch-path', '--build-path', '-derivedDataPath', '-resultBundlePath',
                          '-clonedSourcePackagesDirPath', '-packageCachePath'}
 
@@ -495,7 +495,7 @@ def _salida_de_compilacion_temporal(programa, argumentos, espacio=''):
 def _sdk_de_xcode(programa, argumentos):
     """El SDK que trae Xcode (`swift build --sdk …/iPhoneSimulator26.5.sdk`) sólo se lee.
 
-    El revisor de CuyWorld esperó permiso por compilar el paquete para el
+    Un revisor esperó permiso por compilar el paquete de un juego para el
     simulador de iPhone: el SDK está fuera del worktree, pero dentro de Xcode.
     """
     if programa != 'swift':
@@ -507,7 +507,7 @@ def _sdk_de_xcode(programa, argumentos):
 
 
 # Mirar si un programa está instalado no toca nada personal: el agente esperó diez
-# minutos por `ls /opt/homebrew/lib/node_modules` varias veces (879dacfd5e, 03/11).
+# minutos por `ls /opt/homebrew/lib/node_modules` varias veces.
 # Sólo datos del archivo, no su contenido; el resto del disco sigue preguntando,
 # incluidos el repo principal y las carpetas de otros tickets.
 SOLO_METADATOS = {'ls', 'stat', 'file', 'realpath', 'which'}
@@ -526,7 +526,7 @@ def _fuera_del_espacio(argumento, espacio):
     if argumento and argumento.startswith('-'):
         # El valor pegado a una opción también es una ruta: `git diff
         # --output=/Users/…/.zshrc` escribía fuera porque toda opción se daba
-        # por buena, y `sort -o/ruta` igual. (Revisión del 2026-10-16.)
+        # por buena, y `sort -o/ruta` igual.
         if '=' in argumento and argumento.startswith('--'):
             return _fuera_del_espacio(argumento.split('=', 1)[1], espacio)
         if re.match(r'-[A-Za-z][/~]', argumento):
@@ -551,7 +551,7 @@ INTERPRETES = {'sh', 'bash', 'zsh', 'dash'}
 
 # Carpetas donde viven los programas instalados en el Mac. La lista blanca juzga
 # por el nombre (`git`, `cat`, `pytest`), así que `/tmp/x/git status` pasaba por
-# el git del sistema aunque fuera cualquier otro programa llamado igual (4.210).
+# el git del sistema aunque fuera cualquier otro programa llamado igual.
 # Un programa escrito con ruta sólo cuenta como el conocido si está aquí o
 # dentro del worktree del ticket (.venv/bin/pytest, node_modules/.bin/vitest).
 CARPETAS_DE_PROGRAMAS = (
@@ -627,9 +627,9 @@ def carpetas_de_referencia():
     """Carpetas de sólo lectura que cualquier agente puede consultar sin preguntar.
 
     `referencias/` junto al repositorio del integrador (copias de proyectos de
-    referencia), más las de ALFALFA_REFERENCIAS (separadas por «:»). DeepSeek
+    referencia), más las de ALFALFA_REFERENCIAS (separadas por «:»). Un agente
     esperó y perdió diez permisos de `grep`/`sed -n` sobre referencias/codex, que
-    el propio ticket le mandaba contrastar (94b43a3a4d, 06/11).
+    su propio encargo le mandaba contrastar.
     """
     candidatas = [c for c in os.environ.get('ALFALFA_REFERENCIAS', '').split(os.pathsep) if c]
     repo = _repo_del_integrador()
@@ -679,8 +679,8 @@ def programa_de_confianza(programa, espacio=None):
 
     El `.venv` del integrador es el Python que él mismo manda usar para su suite
     (`cd server && <repo>/.venv/bin/python -m pytest -q`) y ningún agente puede
-    escribir en él. Sin reconocerlo, cada revisión de una automejora pedía permiso
-    para ejecutar las pruebas: 96 avisos en una semana (30/10), que caducaban sin
+    escribir en él. Sin reconocerlo, cada revisión de un cambio al integrador pedía permiso
+    para ejecutar las pruebas: 96 avisos en una semana, que caducaban sin
     respuesta y dejaban la revisión «sin verificar».
     """
     if '/' not in programa:
@@ -728,7 +728,7 @@ FILTROS = {'tail', 'head', 'grep', 'egrep', 'wc', 'sort', 'uniq', 'cut', 'xxd', 
 # Ver los bytes de lo que llega por la tubería (`tail -c 1 f | xxd`: ¿acaba en
 # salto de línea?). xxd escribe en su segundo suelto y `-r` reconstruye bytes,
 # así que sólo se admiten sus banderas y los números que siguen a las que llevan
-# valor. GLM esperó permiso por eso el 31/10.
+# valor. Un agente esperó permiso por eso.
 XXD_CON_VALOR = {'-c', '-cols', '-g', '-groupsize', '-l', '-len', '-n', '-name', '-o', '-s', '-seek'}
 
 
@@ -815,7 +815,7 @@ def _sustitucion_real(command):
 def _salida_a_evidencia(absoluto, espacio):
     """Un archivo (no la carpeta) bajo evidence/ o evidencia/ del worktree.
 
-    Guardar ahí la salida de las pruebas es dejar constancia: Sol esperó
+    Guardar ahí la salida de las pruebas es dejar constancia: un agente esperó
     permiso por `make check > evidence/1767b922cd-check-final.txt 2>&1`.
     """
     if any(c in absoluto for c in '*?$`'):
@@ -868,7 +868,7 @@ def partir_en_y(command, espacio=None, directorio=None, escritura=True):
         return None
     piezas = ['&&' if p == ';' else p for p in piezas]
     # `> registro.log` o `>> registro.log` hacia una carpeta temporal del
-    # worktree sólo guarda la salida: Opus esperó permiso por
+    # worktree sólo guarda la salida: un agente esperó permiso por
     # `xcodebuild … > ../.tmp-alfalfa/run5.log 2>&1`. Cualquier otro destino sigue
     # sin analizarse.
     if espacio:
@@ -978,7 +978,7 @@ def safe_command(command, espacio, escritura=True, directorio=None, merge_base=N
             # Tras `cd sub`, las rutas relativas son de `sub`, no de la raíz.
             # Las variables del principio (`TMPDIR=… GIT_CEILING_DIRECTORIES=… python …`)
             # no son rutas: reescrita, la segunda pasaba por un programa compilado
-            # y el revisor de 63b065fadd dio 35 vueltas sin poder correr pytest.
+            # y un revisor dio 35 vueltas sin poder correr pytest.
             inicio = 0
             while inicio < len(partes) - 1 and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', partes[inicio]):
                 inicio += 1
@@ -988,7 +988,7 @@ def safe_command(command, espacio, escritura=True, directorio=None, merge_base=N
                 programa = os.path.normpath(str(base / programa))
             # El subcomando de una herramienta no es una ruta: con una carpeta
             # demo/test, `cd demo && npm test` se convertía en `npm /…/demo/test` y
-            # esperó permiso diez minutos en cada intento (879dacfd5e, 03/11).
+            # esperó permiso diez minutos en cada intento.
             subcomando = next((n for n, a in enumerate(partes[inicio + 1:], inicio + 1)
                                if not a.startswith('-')), None) \
                 if Path(programa).name in HERRAMIENTAS else None
@@ -1021,7 +1021,7 @@ def _bajo_cache(argumento, espacio):
 def _copia_de_referencia(programa, argumentos, espacio, escritura):
     """`git archive HEAD` y `tar -x` hacia .tmp-alfalfa: una copia del «antes».
 
-    El rediseño de una app de iPhone (Sol) compila la versión anterior en
+    El rediseño de una app de iPhone compila la versión anterior en
     .tmp-alfalfa/baseline para sacar las capturas de «antes» y esperó permiso.
     """
     if programa == 'git' and argumentos[:1] == ['archive']:
@@ -1029,7 +1029,7 @@ def _copia_de_referencia(programa, argumentos, espacio, escritura):
         if salida is None and '-o' in argumentos and argumentos.index('-o') + 1 < len(argumentos):
             salida = argumentos[argumentos.index('-o') + 1]
         # También un revisor: arma en .tmp-alfalfa la versión «antes» para comparar
-        # y eso no toca la rama que juzga (el de la automejora esperó por esto).
+        # y eso no toca la rama que juzga (uno esperó por esto).
         if salida and _bajo_cache(salida, espacio):
             return True, 'copia el commit actual a una carpeta temporal del worktree'
         return False, 'git archive sólo hacia una carpeta temporal del worktree'
@@ -1053,7 +1053,7 @@ def _extraccion_a_cache(programa, argumentos, espacio):
     Un revisor sacaba el último fotograma de la traza de Playwright a
     test-results como evidencia, y cada vez quedaba esperando a una persona.
     Listar (-l) o volcar (-p) no escribe; extraer sólo se admite hacia una
-    caché dentro del worktree, que el tablero no cuenta como cambio.
+    caché dentro del worktree, que no cuenta como cambio.
     """
     if programa != 'unzip':
         return None
@@ -1156,7 +1156,7 @@ OPCIONES_DE_SALIDA = ('--screenshot=', '--print-to-pdf=', '--user-data-dir=')
 def _captura_sin_ventana(programa, argumentos, espacio, escritura=True):
     """Chrome sin ventana haciendo una captura de una página del propio proyecto.
 
-    Un revisor de la web de CuyDescuentos quiso mirar cómo se veía el diseño y
+    Un revisor de una web quiso mirar cómo se veía el diseño y
     se quedó esperando a una persona. Se concede sólo lo que no sale del
     worktree: la página es un archivo del proyecto o un servidor local, y la
     captura (y el perfil, si lo pide) van a una carpeta temporal. Un perfil
@@ -1172,8 +1172,8 @@ def _captura_sin_ventana(programa, argumentos, espacio, escritura=True):
             continue
         if a.startswith(OPCIONES_DE_SALIDA):
             valor = a.split('=', 1)[1] if '=' in a else ''
-            # La captura misma puede ir a la carpeta de diseño del proyecto: Sol
-            # guardaba design/maquetas/…/captura-1440.png y esperaba permiso.
+            # La captura misma puede ir a la carpeta de diseño del proyecto: un
+            # agente guardaba design/maquetas/…/captura-1440.png y esperaba permiso.
             # Un revisor no escribe en la rama que juzga: él, sólo a temporales.
             if escritura and a.startswith(('--screenshot', '--print-to-pdf')) and valor \
                     and Path(valor).suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp', '.pdf') \
@@ -1232,11 +1232,11 @@ OPCIONES_DE_BLENDER = {'--factory-startup', '-noaudio', '--disable-autoexec', '-
 def _blender_sin_ventana(partes, espacio):
     """Blender sin ventana ejecutando un script del propio worktree.
 
-    Los escenarios 3D de CuyWorld se generan con `Blender -b -P
+    Los escenarios 3D de un juego se generan con `Blender -b -P
     tools/escenarios3d/generar.py -- manifiesto`. Dentro del sandbox de Codex
     Blender se cae (código 139) y el permiso para salir caducaba sin respuesta:
-    Sol 6.1 no pudo renderizar la Forja en tres rondas y el revisor tampoco
-    comprobarla (25a4f2dbfe, 2026-10-11, 4.189). Es el código del proyecto,
+    un agente no pudo renderizar un escenario en tres rondas y el revisor tampoco
+    comprobarlo. Es el código del proyecto,
     igual que correr sus pruebas: sólo se concede con -b, un único script
     dentro del worktree y argumentos que no salen de él. Un .blend ajeno,
     otro script u otra opción siguen preguntándose.
@@ -1300,9 +1300,9 @@ def _ejecutable_de(pid):
     return salida or None
 
 
-# Diagnóstico de memoria y CPU sobre la app que el propio agente compiló: QA Sol
-# esperó permiso por `heap --forkCorpse -s <pid>` y por `sample` mientras
-# buscaba los 6,5 GB de OllamaCloudChat. Sólo leen el proceso; las opciones que
+# Diagnóstico de memoria y CPU sobre la app que el propio agente compiló: un
+# agente de QA esperó permiso por `heap --forkCorpse -s <pid>` y por `sample`
+# mientras buscaba los 6,5 GB de una app de Mac. Sólo leen el proceso; las opciones que
 # escriben archivos (-file, -o) no se conceden por aquí.
 DIAGNOSTICO = {'heap', 'vmmap', 'sample', 'leaks', 'footprint'}
 DIAGNOSTICO_ESCRIBE = {'-file', '-f', '-o', '--outputGraph', '-outputGraph', '-e', '--exec'}
@@ -1327,7 +1327,7 @@ def _diagnostico(programa, argumentos, espacio):
     return True, programa + ' mide la app que el agente compiló en su worktree'
 
 
-# Opciones con las que Luna arranca la VM de ensayo de CuyScale (con topes de CPU,
+# Opciones con las que un agente arranca su VM de ensayo (con topes de CPU,
 # memoria y disco). Nada
 # que monte carpetas del Mac (--mount sólo «none»), cambie la red o la active como
 # contexto Docker por defecto.
@@ -1348,7 +1348,7 @@ def _vm_de_ensayo(argumentos):
         if a.startswith('--profile='):
             perfil = a.split('=', 1)[1]; i += 1; continue
         if not a.startswith('-') and perfil is None:
-            perfil = a; i += 1; continue  # `colima start cuyscale-ensayo`
+            perfil = a; i += 1; continue  # `colima start vm-de-ensayo`
         nombre, _, valor = a.partition('=')
         clave = a if a in COLIMA_OPCIONES else nombre
         if clave not in COLIMA_OPCIONES:
@@ -1383,7 +1383,7 @@ def _orden_de(pid):
 def _ssh_de_vm_de_ensayo(pid):
     """El SSH maestro que deja Colima de una VM propia (no «default») ya parada.
 
-    La limpieza del ensayo de CuyScale quedó dando vueltas once horas porque
+    La limpieza de un ensayo quedó dando vueltas once horas porque
     `kill` de ese proceso preguntaba y nadie respondía. Sólo es la conexión a
     la VM de ensayo: cerrarlo no toca la VM del usuario ni nada más.
     """
@@ -1395,8 +1395,8 @@ def _ssh_de_vm_de_ensayo(pid):
 def _kill(argumentos, espacio):
     """Cerrar procesos propios: sólo si cada pid trabaja dentro del worktree.
 
-    A Sol se le colgó un `swift test` en CuyScale y Luna dejó un python suyo en
-    OllamaCloudChat: los dos pidieron permiso para `kill -TERM <pid>`. Un pid
+    A un agente se le colgó un `swift test` y otro dejó un python suyo en una
+    app de Mac: los dos pidieron permiso para `kill -TERM <pid>`. Un pid
     de fuera (una app del usuario, el propio arnés) sigue preguntando.
     """
     pids = [a for a in argumentos if a.isdigit()]
@@ -1420,8 +1420,8 @@ def _ps(argumentos):
     """`ps` sólo lista procesos, salvo -e/-E o `e`, que en macOS enseñan el
     entorno de cada proceso (y con él el token del forge, como `env`).
 
-    Sol esperó permiso por `ps -axo pid,ppid,comm` al revisar el cierre de
-    las apps de prueba en OllamaCloudChat.
+    Un agente esperó permiso por `ps -axo pid,ppid,comm` al revisar el cierre
+    de las apps de prueba de una app de Mac.
     """
     formato = False
     for a in argumentos:
@@ -1465,10 +1465,10 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
                  (Path(partes[0]).is_absolute() and _fuera_del_espacio(partes[0], espacio)
                   and Path(partes[0]).is_file() and os.access(partes[0], os.X_OK))):
         # Un programa ya instalado (no uno del worktree) que sólo dice su versión:
-        # GLM esperó permiso por `/opt/homebrew/bin/opencode --version`.
+        # un agente esperó permiso por `/opt/homebrew/bin/opencode --version`.
         return True, Path(partes[0]).name + ' sólo dice su versión'
     if partes[:3] == ['swift', 'package', 'clean'] and len(partes) == 3:
-        # Borra .build del propio worktree, que se regenera: Backend Sol esperó por esto.
+        # Borra .build del propio worktree, que se regenera: un agente de backend esperó por esto.
         return True, 'swift package clean sólo borra la compilación del worktree'
     # `python -m pytest` es lo mismo que `pytest`; otros módulos no se conceden.
     # -B/-u delante no cambian nada (el revisor de una app de iPhone esperó por
@@ -1504,7 +1504,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     argumentos = partes[1:]
     if programa == 'time' and partes[0] in ('time', '/usr/bin/time'):
         # `/usr/bin/time -p go test …`: sólo mide; vale lo que valga la orden medida.
-        # Sol esperó permiso por eso al verificar el arreglo de failover.test.
+        # Un agente esperó permiso por eso al verificar el arreglo de failover.test.
         resto = [a for a in argumentos if a not in ('-p', '-l')]
         if not resto or resto[0].startswith('-'):
             return False, 'time sin orden que medir'
@@ -1512,8 +1512,8 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
         return veredicto, ('mide ' if veredicto else '') + motivo
     if programa == 'caffeinate' and partes[0] in ('caffeinate', '/usr/bin/caffeinate'):
         # `caffeinate -i python3 ci/…`: sólo impide que el Mac se duerma o frene
-        # la prueba; vale lo que valga la orden. Sol se quedó sin su corrida de
-        # memoria porque se le negó. Sin orden (-w, -t solos) no se concede.
+        # la prueba; vale lo que valga la orden. Un agente se quedó sin su corrida
+        # de memoria porque se le negó. Sin orden (-w, -t solos) no se concede.
         resto = list(argumentos)
         while resto and re.fullmatch(r'-[dimsu]+', resto[0]):
             resto.pop(0)
@@ -1530,16 +1530,16 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
             and all(a in ('--json', '-j', '--extended', '-e') or a.startswith(('--profile=', '-p='))
                     or (i > 0 and argumentos[i - 1] in ('--profile', '-p')) or a in ('--profile', '-p')
                     for i, a in enumerate(argumentos[1:], 1)):
-        # Luna esperó permiso por `colima status --profile cuyscale-ensayo --json`
-        # en el ensayo Linux de CuyScale: status/list sólo leen el estado de las VM.
+        # Un agente esperó permiso por `colima status --profile vm-de-ensayo --json`
+        # en un ensayo en Linux: status/list sólo leen el estado de las VM.
         return True, 'colima sólo consulta el estado de sus máquinas virtuales'
     if programa == 'colima' and argumentos[:1] in (['start'], ['stop']) and _vm_de_ensayo(argumentos[1:]):
-        # Arrancar o parar una VM de ensayo ya creada (Luna esperó por `colima start
-        # --profile cuyscale-ensayo` al medir memoria). Sin opciones no cambia su
+        # Arrancar o parar una VM de ensayo ya creada (un agente esperó por `colima
+        # start --profile vm-de-ensayo` al medir memoria). Sin opciones no cambia su
         # configuración; crearla o borrarla, o tocar la VM «default» del usuario, sigue preguntando.
         return True, 'arranca o para una máquina virtual de ensayo propia'
     if programa == 'openssl' and argumentos[:1] in (['verify'], ['x509'], ['pkey']):
-        # El revisor de la guía de CuyScale esperó por `openssl verify` y por sacar la
+        # El revisor de una guía esperó por `openssl verify` y por sacar la
         # clave pública de certificados de ensayo para compararlas. Leer y verificar no
         # cambia nada; lo que escriba (-out) tiene que quedar dentro del worktree, y de
         # una clave privada sólo puede salir la pública (-pubout).
@@ -1561,8 +1561,8 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     if programa == 'kill':
         return _kill(argumentos, espacio)
     if programa == 'gofmt':
-        # Formatear los .go del propio worktree (`gofmt -w internal/x.go`): Luna
-        # esperó permiso por eso en CuyScale. Un revisor sólo puede mirar (-l, -d).
+        # Formatear los .go del propio worktree (`gofmt -w internal/x.go`): un
+        # agente esperó permiso por eso en un proyecto Go. Un revisor sólo puede mirar (-l, -d).
         rutas = [a for a in argumentos if not a.startswith('-')]
         banderas = {a for a in argumentos if a.startswith('-')}
         if not banderas <= {'-w', '-l', '-d', '-s'} or not rutas:
@@ -1575,12 +1575,12 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     if re.fullmatch(r'python3\.\d+', programa) and (
             '/' not in partes[0] or partes[0].startswith(PYTHON_DEL_SISTEMA)):
         # `/opt/homebrew/opt/python@3.11/bin/python3.11 -B deploy/tests/…` es
-        # python3: Sol esperó permiso por eso al revisar CuyScale.
+        # python3: un revisor esperó permiso por eso.
         programa = 'python3'
     if programa in ('git', 'go') and len(argumentos) >= 2 and argumentos[0] == '-C':
         # `git -C ..` desde una subcarpeta del worktree: lo que cuenta es que la
-        # carpeta siga dentro (Opus en OllamaCloudChat esperó permiso por esto).
-        # `go -C macos/helper test` igual: el revisor de CuyScale esperó por eso.
+        # carpeta siga dentro (un agente esperó permiso por esto).
+        # `go -C macos/helper test` igual: un revisor esperó por eso.
         raiz = Path(espacio).resolve()
         carpeta = Path(argumentos[1])
         carpeta = (raiz / carpeta).resolve() if not carpeta.is_absolute() else carpeta.resolve()
@@ -1588,7 +1588,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
             return False, programa + ' -C apunta fuera del worktree'
         # Las rutas relativas que siguen son relativas a esa carpeta: `go -C
         # controlplane build -o ../.tmp-alfalfa/x` escribe en el worktree, no fuera
-        # (Luna esperó permiso por eso al construir el generador de carga de CuyScale).
+        # (un agente esperó permiso por eso al construir un generador de carga).
         sub = argumentos[1].rstrip('/')
         # Sólo cambian de sentido las que suben (`../`); el resto sigue dentro igual.
         argumentos = [sub + '/' + a if a.startswith('../') else a for a in argumentos[2:]]
@@ -1633,12 +1633,12 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
                 return False, 'apunta fuera del worktree: ' + argumento
         return True, 'node ejecuta las pruebas del proyecto dentro del worktree'
     if programa in ('python3', 'python') and escritura:
-        # -B (sin .pyc) o -u (salida sin búfer) no cambian qué se ejecuta: Sol
-        # esperó permiso por `python3 -B …/verificar.py` en una app de iPhone.
+        # -B (sin .pyc) o -u (salida sin búfer) no cambian qué se ejecuta: un
+        # agente esperó permiso por `python3 -B …/verificar.py` en una app de iPhone.
         while argumentos and argumentos[0] in OPCIONES_INOFENSIVAS_DE_PYTHON:
             argumentos = argumentos[1:]
     if programa == 'swiftc' and argumentos and ({'-typecheck', '-parse'} & set(argumentos)):
-        # Sólo comprobar tipos, sin generar nada: el revisor de OllamaCloudChat
+        # Sólo comprobar tipos, sin generar nada: el revisor de una app de Mac
         # esperó permiso por `swiftc -typecheck …`. El SDK está dentro de Xcode y
         # la caché de módulos en el propio worktree.
         if {'-o', '-emit-executable', '-emit-library', '-emit-object', '-c'} & set(argumentos):
@@ -1658,7 +1658,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     # Un guion del propio proyecto que sólo envuelve otra orden tras `--`
     # (`python3 ci/supervised_xcodebuild.py --timeout 900 -- xcodebuild … test`,
     # que vigila la memoria mientras compila): vale lo que valga la orden de
-    # dentro. Tres revisiones de Sol en OllamaCloudChat esperaron por esto.
+    # dentro. Tres revisiones de una app de Mac esperaron por esto.
     if programa in ('python3', 'python') and argumentos and '--' in argumentos \
             and not argumentos[0].startswith('-') and argumentos[0].endswith('.py'):
         corte = argumentos.index('--')
@@ -1674,11 +1674,11 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
             if veredicto:
                 return True, 'un guion del proyecto que supervisa una orden segura: ' + motivo
     # Un revisor corre las pruebas del proyecto aunque no use pytest: el de
-    # seguridad de CuyScale esperó permiso para `python3 deploy/tests/test_deploy.py`.
+    # seguridad de un proyecto esperó permiso para `python3 deploy/tests/test_deploy.py`.
     prueba = bool(argumentos) and re.fullmatch(r'(?:test_\w+|\w+_test)\.py', Path(argumentos[0]).name) \
         and any(p in ('tests', 'test') for p in Path(argumentos[0]).parts)
     if programa in ('python3', 'python') and (escritura or prueba) and argumentos and not argumentos[0].startswith('-'):
-        # Igual que node: el verificador de accesibilidad de Sol en una app de iPhone
+        # Igual que node: el verificador de accesibilidad de una app de iPhone
         # (python3 App/evidencia/accesibilidad/verificar.py) esperó permiso en
         # mitad de una carrera. Sin -c ni -m: eso sigue preguntando.
         guion = argumentos[0]
@@ -1714,19 +1714,19 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     rutas = [a for a in argumentos if a not in ('-p', '--parents')]
     if programa == 'mkdir' and rutas and all(_es_cache(a, espacio) for a in rutas):
         # Crear .tmp-alfalfa/ para dejar la salida de las pruebas no toca el
-        # trabajo: está ignorada y fuera de la huella. Un revisor de Sol se
+        # trabajo: está ignorada y fuera de la huella. Un revisor se
         # quedó esperando a una persona por esto.
         return True, 'crea una carpeta temporal dentro del worktree'
     if programa == 'mkdir' and escritura and rutas and all(
             not r.startswith('-') and not _fuera_del_espacio(r if '/' in r else './' + r, espacio)
             and not r.startswith('~') for r in rutas):
         # Una carpeta vacía en el propio worktree (p. ej. evidence/<ticket>/…) no
-        # cambia nada que no pudiera crear igual al escribir un archivo; Luna en
-        # CuyScale esperó por `mkdir -p evidence/…`. Un revisor no escribe.
+        # cambia nada que no pudiera crear igual al escribir un archivo; un agente
+        # esperó por `mkdir -p evidence/…`. Un revisor no escribe.
         return True, 'crea carpetas dentro del worktree'
     if programa == 'mkdir' and rutas and all(_carpeta_de_evidencia(r, espacio) for r in rutas):
-        # Un revisor no escribe código, pero sí deja su evidencia: Sol en
-        # OllamaCloudChat esperó (y caducó) por `mkdir -p OllamaCloudChat/evidencia/<ticket>-revision`.
+        # Un revisor no escribe código, pero sí deja su evidencia: uno esperó
+        # (y caducó) por `mkdir -p App/evidencia/<ticket>-revision`.
         return True, 'crea una carpeta de evidencia dentro del worktree'
     referencia = _copia_de_referencia(programa, argumentos, espacio, escritura)
     if referencia is not None:
@@ -1787,7 +1787,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
                 and not ({'--abort', '--continue', '--quit'} & set(argumentos)):
             return False, 'traer otra rama a la del ticket lo decide el usuario, no el agente'
     elif programa == 'sed' and _sed_que_solo_imprime(argumentos):
-        pass  # `sed -n '660,810p' archivo` sólo lee: la QA de Ciudad esperó permiso por esto
+        pass  # `sed -n '660,810p' archivo` sólo lee: un agente de QA esperó permiso por esto
     elif programa not in LECTURA:
         return False, programa + ' no está entre las órdenes de sólo lectura'
     temporales = _salida_de_compilacion_temporal(programa, argumentos, espacio) | _sdk_de_xcode(programa, argumentos)
@@ -1959,7 +1959,7 @@ OPCIONES_INOFENSIVAS_DE_PYTHON = ('-B', '-u', '-E', '-s', '-I')
 # entregables con código en línea (contar ramas de un esquema, comparar con los
 # ejemplos) porque se les pidió no dejar guiones en .tmp-alfalfa/, y cada uno
 # esperaba al usuario: el texto trae saltos de línea y `$ref`, y eso se rechaza
-# antes de mirar qué hace (GLM, a167417260, 31/10). Aquí se lee el código: sólo
+# antes de mirar qué hace. Aquí se lee el código: sólo
 # módulos que no tocan el sistema, `open` en modo lectura y nada que escriba,
 # borre, mueva, ejecute o lea el entorno (donde vive el token del forge).
 MODULOS_DE_LECTURA = {
@@ -2045,7 +2045,7 @@ def python_en_linea_seguro(argv, espacio):
     """
     if not isinstance(argv, (list, tuple)) or not argv:
         return False, ''
-    # DeepSeek esperó diez minutos por `python3 -I -c` (b86066ed3d, 04/11).
+    # Un agente esperó diez minutos por `python3 -I -c`.
     argv = [argv[0]] + list(dropwhile(lambda a: a in OPCIONES_INOFENSIVAS_DE_PYTHON, argv[1:]))
     if len(argv) != 3 or argv[1] != '-c':
         return False, ''

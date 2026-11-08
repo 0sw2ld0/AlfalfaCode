@@ -1,6 +1,6 @@
 """Lectura pública de la evidencia nativa: si una comprobación vale y si sigue vigente.
 
-Antes el estudio llamaba a privados de `RunEvidence` (`_check_sufficient`,
+Antes el integrador llamaba a privados de `RunEvidence` (`_check_sufficient`,
 `_check_is_current`, `_classification`). La regla vive aquí, sin depender del
 runtime, y esos métodos delegan en estas funciones para que el resultado sea el
 mismo por cualquiera de los dos caminos.
