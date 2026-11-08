@@ -133,3 +133,41 @@ def test_version_dice_la_del_paquete(capsys):
     with pytest.raises(SystemExit):
         main(['--version'])
     assert capsys.readouterr().out.strip() == 'AlfalfaCode ' + __version__
+
+
+def test_pip_usa_uv_si_el_entorno_no_trae_pip(monkeypatch):
+    ordenes = []
+
+    def ejecutar(orden, **kwargs):
+        ordenes.append(orden)
+        return subprocess.CompletedProcess(orden, 1 if orden[1:3] == ['-m', 'pip'] else 0, '', '')
+    monkeypatch.setattr(act.subprocess, 'run', ejecutar)
+    monkeypatch.setattr(act.shutil, 'which', lambda nombre: '/bin/uv' if nombre == 'uv' else None)
+
+    act._pip('/v/bin/python', '-e', '/repo')
+
+    assert ordenes[-1] == ['/bin/uv', 'pip', 'install', '--quiet', '--python', '/v/bin/python', '-e', '/repo']
+
+
+def test_pip_del_entorno_si_lo_trae(monkeypatch):
+    ordenes = []
+
+    def ejecutar(orden, **kwargs):
+        ordenes.append(orden)
+        return subprocess.CompletedProcess(orden, 0, '', '')
+    monkeypatch.setattr(act.subprocess, 'run', ejecutar)
+    monkeypatch.setattr(act.shutil, 'which', lambda nombre: '/bin/uv')
+
+    act._pip('/v/bin/python', '-e', '/repo')
+
+    assert ordenes[-1] == ['/v/bin/python', '-m', 'pip', 'install', '--quiet', '-e', '/repo']
+
+
+def test_instalar_dependencias_reinstala_el_clon_en_su_sitio(origen, pips, tmp_path):
+    _, clon = origen
+
+    act.instalar_dependencias(clon)
+
+    assert pips == [('-e', str(clon))]
+    with pytest.raises(act.ErrorDeActualizacion, match='no está en un clon'):
+        act.instalar_dependencias(False)

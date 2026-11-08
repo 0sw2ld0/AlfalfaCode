@@ -11,6 +11,7 @@ instalado y cada una se actualiza a su manera:
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -125,14 +126,36 @@ def actualizar(raiz=None, instalada=__version__, python=sys.executable):
 
 
 def _pip(python, *args):
+    """`pip install` en ese Python; si el entorno no trae pip (los de `uv venv`), con `uv pip`."""
+    orden = [python, '-m', 'pip', 'install', '--quiet', *args]
+    uv = shutil.which('uv')
+    if uv and not _tiene_pip(python):
+        orden = [uv, 'pip', 'install', '--quiet', '--python', python, *args]
     try:
-        r = subprocess.run([python, '-m', 'pip', 'install', '--quiet', *args], capture_output=True,
-                           text=True, timeout=_ESPERA * 5, env=dict(os.environ, GIT_TERMINAL_PROMPT='0'))
+        r = subprocess.run(orden, capture_output=True, text=True, timeout=_ESPERA * 5,
+                           env=dict(os.environ, GIT_TERMINAL_PROMPT='0'))
     except subprocess.TimeoutExpired:
         raise ErrorDeActualizacion('pip tardó demasiado en instalar la versión nueva.')
     if r.returncode != 0:
         ultimas = '\n'.join((r.stderr or r.stdout).strip().splitlines()[-5:])
         raise ErrorDeActualizacion('pip no pudo instalar la versión nueva:\n' + ultimas)
+
+
+def _tiene_pip(python):
+    try:
+        return subprocess.run([python, '-m', 'pip', '--version'], capture_output=True, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def instalar_dependencias(raiz=None, python=sys.executable):
+    """Vuelve a instalar el clon en su sitio para que estén sus dependencias (por ejemplo,
+    tras un `git pull` que añadió una). Instalado con pip, pip ya las trajo."""
+    if raiz is None:
+        raiz = raiz_del_clon()
+    if not raiz:
+        raise ErrorDeActualizacion('AlfalfaCode no está en un clon: reinstálalo con pip para traer sus dependencias.')
+    _pip(python, '-e', str(raiz))
 
 
 def texto(resultado):
