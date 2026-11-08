@@ -26,7 +26,7 @@ def base_falsa(path):
           ('c1', 'user', 'Dale un rival', 0, '', '2026-11-01 10:01:00', '2026-11-01 10:01:00'),
           ('c1', 'assistant', 'Su rival es Cóndor.', 0, 'glm-5.3-flash:cloud', '2026-11-01 10:01:04', '2026-11-01 10:01:04'),
           ('c1', 'assistant', 'a medio escribir', 1, 'glm-5.3-flash:cloud', '2026-11-01 10:02:00', '2026-11-01 10:02:00');
-    """)
+    """)  # noqa: E501
     con.commit()
     con.close()
     return path

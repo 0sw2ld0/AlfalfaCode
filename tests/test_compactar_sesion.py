@@ -210,7 +210,8 @@ def test_los_archivos_de_memoria_llegan_al_panel(tmp_path, monkeypatch):
             assert asyncio.run(m.run('Hola')) == 0
     finally:
         m.close()
-    contexto = [json.loads(linea) for linea in salida.getvalue().splitlines() if json.loads(linea)['tipo'] == 'contexto'][-1]
+    contexto = [json.loads(linea) for linea in salida.getvalue().splitlines()
+                if json.loads(linea)['tipo'] == 'contexto'][-1]
     archivo, = contexto['memoria']
     assert Path(archivo['ruta']).resolve() == (raiz / 'AGENTS.md').resolve() and archivo['tokens'] > 250
     assert contexto['desglose']['memoria'] > 0
@@ -219,9 +220,11 @@ def test_los_archivos_de_memoria_llegan_al_panel(tmp_path, monkeypatch):
 def test_execvp_sin_archivo_no_es_bloqueo_del_sandbox():
     falta = "sandbox-exec: execvp() of './\"Abrir laboratorio 3D.command\"' failed: No such file or directory"
     assert not is_likely_sandbox_denied('seatbelt', 71, aggregated=falta)
-    assert not is_likely_sandbox_denied('seatbelt', 71, aggregated="sandbox-exec: execvp() of 'x' failed: Not a directory")
+    assert not is_likely_sandbox_denied('seatbelt', 71,
+                                        aggregated="sandbox-exec: execvp() of 'x' failed: Not a directory")
     # Un execvp que el sandbox sí bloquea, o su propio sandbox anidado, siguen contando.
-    assert is_likely_sandbox_denied('seatbelt', 71, aggregated="sandbox-exec: execvp() of 'x' failed: Operation not permitted")
+    assert is_likely_sandbox_denied('seatbelt', 71,
+                                    aggregated="sandbox-exec: execvp() of 'x' failed: Operation not permitted")
     assert is_likely_sandbox_denied('seatbelt', 1, aggregated='sandbox-exec: sandbox_apply: Operation not permitted')
     assert is_likely_sandbox_denied('seatbelt', 1, aggregated=falta + '\nerror: Permission denied')
 

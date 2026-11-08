@@ -156,7 +156,8 @@ def test_solo_alfalfa_ofrece_apply_patch(espacio, tmp_path, monkeypatch):
     integrador = NativeRuntime(rt.manager, dict(rt.task))
     assert 'apply_patch' not in [t['function']['name'] for t in integrador.tool_specs]
     with pytest.raises(ValueError):
-        asyncio.run(integrador.tools.call('apply_patch', {'input': '*** Begin Patch\n*** Add File: x\n+x\n*** End Patch'}))
+        asyncio.run(integrador.tools.call('apply_patch',
+                                          {'input': '*** Begin Patch\n*** Add File: x\n+x\n*** End Patch'}))
     assert not (raiz / 'x').exists()
     sololectura = TerminalManager('x', home=tmp_path / 'otro', read_only=True)
     try:
@@ -170,7 +171,8 @@ def test_el_modelo_usa_apply_patch_en_una_sesion(espacio):
     (raiz / 'a.txt').write_text('uno\n')
     payloads = []
     pasos = [{'role': 'assistant', 'content': '', 'tool_calls': [{'function': {'name': 'apply_patch', 'arguments': {
-        'input': '*** Begin Patch\n*** Update File: a.txt\n@@\n-uno\n+dos\n*** Add File: b.txt\n+tres\n*** End Patch'}}}]},
+        'input': '*** Begin Patch\n*** Update File: a.txt\n@@\n-uno\n+dos\n'
+                 '*** Add File: b.txt\n+tres\n*** End Patch'}}}]},
              {'role': 'assistant', 'content': 'Hecho.'}]
 
     async def request(self, client, endpoint, payload, **kwargs):

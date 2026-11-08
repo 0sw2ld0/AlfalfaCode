@@ -76,7 +76,8 @@ class Firmante:
             return ruta
         swiftc = shutil.which('swiftc') or ('/usr/bin/swiftc' if os.path.exists('/usr/bin/swiftc') else None)
         if not swiftc:
-            raise ErrorDeAlfalfa('El código de cortesía necesita swiftc (Xcode o sus herramientas de línea de órdenes).')
+            raise ErrorDeAlfalfa('El código de cortesía necesita swiftc (Xcode o sus herramientas de línea de '
+                                 'órdenes).')
         ruta.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         temporal = ruta.with_name(ruta.name + '.' + str(os.getpid()) + '.tmp')
         hecho = subprocess.run([swiftc, '-O', str(FUENTE), '-o', str(temporal)], capture_output=True, text=True,

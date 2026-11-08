@@ -83,6 +83,10 @@ ruff se configura en `pyproject.toml`, con líneas de 120 columnas y las reglas 
 - `runtime.py` vuelve a importar a media página la clasificación de fallos, para
   quien la busque allí (`# noqa: E402, F401`).
 - `tests/conftest.py` importa pytest después de limpiar el entorno (`# noqa: E402`).
+- Tres strings de varias líneas tienen una línea de más de 120 columnas y llevan
+  `# noqa: E501`: un docstring de `evidencia/registro.py`, el código Swift de
+  `tests/test_control_de_apps.py` y el SQL de `tests/test_ollama_app.py`. Partirlas
+  cambiaría el texto del string.
 
 ruff encontró un fallo real. Si el ayudante de control de apps contestaba algo que no
 era JSON, salía un `NameError` en vez del mensaje con su stderr. Ya está arreglado y

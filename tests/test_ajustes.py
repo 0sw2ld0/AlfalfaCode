@@ -84,7 +84,8 @@ def test_el_integrador_pone_sus_nombres_en_el_manual_y_los_motivos(m, monkeypatc
     assert ordenes.safe_command('git merge otra', str(m.task['cwd']))[1].endswith('lo decide el usuario, no el agente')
     monkeypatch.setattr(ajustes, 'nombres', lambda: {'runtime': 'MiApp', 'concede': 'MiApp sola', 'decide': 'MiApp',
                                                      'integrador': 'miapp'})
-    assert 'runtime nativo de MiApp' in manual_del_harness('glm') and 'las concede MiApp sola' in manual_del_harness('glm')
+    assert 'runtime nativo de MiApp' in manual_del_harness('glm') \
+        and 'las concede MiApp sola' in manual_del_harness('glm')
     assert 'runtime nativo de MiApp.' in NativeRuntime.default_engine_text('low')
     assert 'lo decide MiApp' in ordenes.safe_command('git merge otra', str(m.task['cwd']))[1]
 

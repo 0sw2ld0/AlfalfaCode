@@ -491,7 +491,8 @@ class CargadorComplementos:
             if not root.is_dir():
                 raise ErrorComplemento('COMP-RAIZ', 'La raíz autorizada no es una carpeta.')
             if root in self._raices_vistas:
-                raise ErrorComplemento('COMP-RAIZ-DUPLICADA', 'La misma raíz autorizada aparece dos veces; no se recarga.')
+                raise ErrorComplemento('COMP-RAIZ-DUPLICADA', 'La misma raíz autorizada aparece dos veces; no se '
+                                                              'recarga.')
             self._raices_vistas.add(root)
             if root == self.cwd or root in self.cwd.parents:
                 raise ErrorComplemento('COMP-CWD-NO-AUTORIZADO',
@@ -544,7 +545,8 @@ class CargadorComplementos:
         if not identidad:
             raise ErrorComplemento('COMP-MANIFIESTO', 'name no produce un identificador utilizable.')
         if identidad in self._ids:
-            raise ErrorComplemento('COMP-ID-DUPLICADO', 'Identidad duplicada; la segunda raíz no sustituye a la primera: '
+            raise ErrorComplemento('COMP-ID-DUPLICADO', 'Identidad duplicada; la segunda raíz no sustituye a la '
+                                                        'primera: '
                                    + identidad)
         plugin = Complemento(identidad, nombre, datos.get('version'), root, formato, relativa,
                              _texto(datos, 'description'))
@@ -954,7 +956,8 @@ class CargadorComplementos:
                 if all(h['procedencia'] != procedencia for h in plugin.hooks):
                     plugin.hooks.append(dict(procedencia=procedencia, datos=_json_regular(real)))
             except FileNotFoundError:
-                plugin.aviso('COMP-RUTA-AUSENTE', 'La ruta declarada en hooks no existe; no aporta hooks.', 'hooks', False)
+                plugin.aviso('COMP-RUTA-AUSENTE', 'La ruta declarada en hooks no existe; no aporta hooks.', 'hooks',
+                             False)
             except (OSError, ErrorComplemento) as exc:
                 plugin.aviso(getattr(exc, 'codigo', 'COMP-HOOKS'),
                              getattr(exc, 'texto', 'Archivo de hooks ilegible; se ignora.'), 'hooks')

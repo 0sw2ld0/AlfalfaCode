@@ -143,7 +143,8 @@ def test_contract_declares_network_and_escalation_with_justification():
     ({'sandbox_permissions': 'require_escalated'}, 'Solicitud de salida del sandbox rechazada'),
     ({'sandbox_permissions': 'require_escalated', 'justification': 'corta'}, 'justification debe'),
     ({'sandbox_permissions': 'require_escalated', 'justification': '          '}, 'justification debe'),
-    ({'sandbox_permissions': 'require_escalated', 'justification': 'Necesito\x07salir del sandbox'}, 'justification debe'),
+    ({'sandbox_permissions': 'require_escalated', 'justification': 'Necesito\x07salir del sandbox'},
+     'justification debe'),
     ({'sandbox_permissions': 'require_escalated', 'justification': 'x' * 501}, 'justification debe'),
     ({'sandbox_permissions': 'always'}, 'valores permitidos'),
     ({'needs_network': 'true'}, 'booleano'),
@@ -188,7 +189,8 @@ def listener():
 def test_real_network_is_asked_before_enabling_and_keeps_write_restrictions(session, outside_home):
     rt, root, call, spawned = session
     server = listener()
-    connect = PY + ['import socket,sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5); print("conectado")',
+    connect = PY + ['import socket,sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5); '
+                    'print("conectado")',
                     str(server.getsockname()[1])]
     try:
         closed = call(Recorder(), argv=connect)

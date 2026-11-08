@@ -119,11 +119,14 @@ def test_configuracion_valida_con_todos_los_campos(tmp_path):
         'apagado': dict(orden='/bin/no', activo=False)})
     servidores, diagnosticos = configuracion.cargar(tmp_path, {'MI_TOKEN': 'tok-1234567', 'MI_CLAVE': 'clave-123456'})
     local, remoto = servidores
-    assert (local.id, local.transporte, local.orden, local.argumentos, local.red) == ('local', 'stdio', '/bin/srv', ['--x'], True)
+    assert (local.id, local.transporte, local.orden, local.argumentos, local.red) \
+        == ('local', 'stdio', '/bin/srv', ['--x'], True)
     assert local.entorno == {'NIVEL': 'info', 'MI_TOKEN': 'tok-1234567'}
-    assert (local.tiempo_inicio, local.tiempo_herramienta, local.tiempo_permiso, local.max_bytes_esquema) == (5, 7, 9, 2048)
+    assert (local.tiempo_inicio, local.tiempo_herramienta, local.tiempo_permiso, local.max_bytes_esquema) \
+        == (5, 7, 9, 2048)
     assert local.habilitada('a') and not local.habilitada('b') and not local.habilitada('c')
-    assert remoto.cabeceras == {'X-Cliente': 'alfalfa', 'X-Api-Key': 'clave-123456', 'Authorization': 'Bearer tok-1234567'}
+    assert remoto.cabeceras == {'X-Cliente': 'alfalfa', 'X-Api-Key': 'clave-123456',
+                                'Authorization': 'Bearer tok-1234567'}
     assert remoto.secretos() == {'clave-123456', 'Bearer tok-1234567', 'tok-1234567'}
     # El conflicto habilitadas/deshabilitadas no invalida: se avisa y gana deshabilitadas.
     assert [(d.codigo, d.servidor, d.grave) for d in diagnosticos] == [('MCP-CONFLICTO', 'local', False)]
@@ -924,7 +927,8 @@ def test_entorno_minimo_secretos_redactados_y_http_con_sus_cabeceras(tmp_path, m
         proc.stderr.close()
     env_a = json.loads((s.root / 'env-a.json').read_text())
     env_b = json.loads((s.root / 'env-b.json').read_text())
-    assert set(env_a) <= set(BASE_ENTORNO) | DEL_SISTEMA | {'SECRETO_A'} and env_a['SECRETO_A'] == CENTINELAS['SECRETO_A']
+    assert set(env_a) <= set(BASE_ENTORNO) | DEL_SISTEMA | {'SECRETO_A'} \
+        and env_a['SECRETO_A'] == CENTINELAS['SECRETO_A']
     assert set(env_b) <= set(BASE_ENTORNO) | DEL_SISTEMA
     for env in (env_a, env_b):
         assert CENTINELAS['OLLAMA_API_KEY'] not in json.dumps(env) and CENTINELAS['OTRO_SECRETO'] not in json.dumps(env)
@@ -968,7 +972,8 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
             try:
                 await s.cargar('mcp__cerrado__escribir', 'mcp__cerrado__conectar', 'mcp__abierto__conectar')
                 # Aprobada por el usuario, pero el sandbox sigue igual.
-                assert (await s.llamar('mcp__cerrado__escribir', {'ruta': '.git/hooks-x'}))['texto'].startswith('denegado')
+                assert (await s.llamar('mcp__cerrado__escribir',
+                                       {'ruta': '.git/hooks-x'}))['texto'].startswith('denegado')
                 assert (await s.llamar('mcp__cerrado__escribir', {'ruta': 'permitido.txt'}))['texto'] == 'escrito'
                 # Confiable tampoco abre la red; sólo red: true en la configuración lo hace.
                 assert (await s.llamar('mcp__cerrado__conectar', {'puerto': puerto}))['texto'].startswith('denegado')

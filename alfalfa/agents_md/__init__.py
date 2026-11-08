@@ -96,7 +96,8 @@ def cargar(carpeta, hogar=None, max_bytes=MAX_BYTES):
                 datos, sobra = _leer(ruta, max_bytes)
                 texto = datos.decode('utf-8', errors='replace')
                 if sobra:
-                    resultado.avisos.append('Sólo se cargaron ' + str(max_bytes) + ' bytes de ' + str(ruta) + '. ' + GUIA)
+                    resultado.avisos.append('Sólo se cargaron ' + str(max_bytes) + ' bytes de ' + str(ruta) + '. '
+                                            + GUIA)
                 if texto.strip():
                     resultado.usuario = texto
                     resultado.usuario_ruta = ruta

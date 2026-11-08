@@ -112,9 +112,11 @@ class TerminalApproval:
                         if args.get('mcp') else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
                         if unsandboxed else
-                        'Sandbox Seatbelt con red: escribe sólo en la carpeta, $TMPDIR y /private/tmp. ¿Ejecutar? [s/N] '
+                        'Sandbox Seatbelt con red: escribe sólo en la carpeta, $TMPDIR y /private/tmp. ¿Ejecutar? '
+                        '[s/N] '
                         if args.get('red') else
-                        'Sandbox Seatbelt: escribe sólo en la carpeta, $TMPDIR y /private/tmp; sin red. ¿Ejecutar? [s/N] ')
+                        'Sandbox Seatbelt: escribe sólo en la carpeta, $TMPDIR y /private/tmp; sin red. ¿Ejecutar? '
+                        '[s/N] ')
             if args.get('para_sesion'):
                 question = question.replace('[s/N] ', '[s/t/N] (t: también el resto de la sesión) ')
             print(question, end='', file=self.stdout, flush=True)

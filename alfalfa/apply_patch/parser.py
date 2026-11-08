@@ -165,7 +165,8 @@ def leer(texto):
                 if not linea_cambio:
                     continue
                 if linea_cambio != EMPTY_CONTEXT and not linea_cambio.startswith(CONTEXT):
-                    raise ParchInvalido("Se esperaba un marcador @@ al empezar el bloque, llegó: '" + linea + "'", numero)
+                    raise ParchInvalido("Se esperaba un marcador @@ al empezar el bloque, llegó: '" + linea + "'",
+                                        numero)
             if not trozos and actual.destino is None and linea_cambio.startswith(MOVE):
                 actual.destino = linea_cambio[len(MOVE):]
                 continue

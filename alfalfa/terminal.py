@@ -393,7 +393,8 @@ class TerminalManager:
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else ''),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
-                             excluded_tools=EXCLUIDAS + (ESCRITURA if self.read_only or modos.solo_lee(modos.modo_de(self.task))
+                             excluded_tools=EXCLUIDAS + (ESCRITURA
+                                                         if self.read_only or modos.solo_lee(modos.modo_de(self.task))
                                                          else ()),
                              working_text='AlfalfaCode está trabajando…',
                              # Sin bytecode: `python3 uso.py` en run_checks creaba __pycache__ en un
@@ -572,7 +573,8 @@ def desglose_de(task):
     memoria = task.get('context_memoria')
     if isinstance(memoria, list):
         extra['memoria'] = [dict(ruta=f['ruta'], tokens=f['tokens']) for f in memoria[:50]
-                            if isinstance(f, dict) and isinstance(f.get('ruta'), str) and isinstance(f.get('tokens'), int)]
+                            if isinstance(f, dict) and isinstance(f.get('ruta'), str)
+                            and isinstance(f.get('tokens'), int)]
     return extra
 
 
@@ -641,7 +643,8 @@ async def execute(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
-        return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas antes de actuar.')
+        return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas '
+                                                 'antes de actuar.')
     finally:
         # Como Codex al cerrar: los procesos en segundo plano terminan con la sesión.
         await manager.fondo.detener_todos()
@@ -652,13 +655,15 @@ async def execute(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o Alfalfa')
+    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o '
+                                                                 'Alfalfa')
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)
     parser.add_argument('--modo', choices=modos.MODOS, help='Permisos: auto, manual, ediciones, plan u omitir')
     parser.add_argument('--auto', action='store_true', help='Aprobar automáticamente sólo lecturas permitidas')
-    parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de ejecución')
+    parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de '
+                                                                    'ejecución')
     parser.add_argument('--reanudar', metavar='ID')
     parser.add_argument('--esperar', action='store_true',
                         help='Con --stdio y --reanudar: abrir la sesión sin turno y esperar un mensaje o «compactar»')

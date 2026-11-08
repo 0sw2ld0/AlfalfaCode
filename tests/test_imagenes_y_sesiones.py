@@ -13,7 +13,8 @@ from alfalfa.stdio import Transport, sessions
 from alfalfa.terminal import TerminalManager, main
 
 # PNG de 1×1.
-PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5E'
+                       'rkJggg==')
 
 
 @pytest.fixture
@@ -104,7 +105,8 @@ def test_marcar_renombra_fija_y_archiva(tmp_path, monkeypatch, capsys):
     salida = [json.loads(linea) for linea in capsys.readouterr().out.splitlines()]
     assert salida[-1]['tipo'] == 'sesion_cambiada'
     fila = sessions()[0]
-    assert (fila['encargo'], fila['titulo'], fila['fijada'], fila.get('archivada')) == ('Arreglar', 'Mi título', True, None)
+    assert (fila['encargo'], fila['titulo'], fila['fijada'], fila.get('archivada')) \
+        == ('Arreglar', 'Mi título', True, None)
     assert main(['--marcar', 'abc', 'color', 'rojo']) == 1
     assert main(['--marcar', '../abc', 'titulo', 'x']) == 1
 

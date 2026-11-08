@@ -80,12 +80,14 @@ class Servicio:
         if request.url.path == '/api/tags':
             return httpx.Response(200, json={'models': [{'name': 'gpt-6-luna', 'nombre': 'GPT-6 Luna'},
                                                         {'name': 'glm-5.3-flash', 'nombre': 'GLM 5.3 Flash'},
-                                                        {'name': 'deepseek-v4.1-flash', 'nombre': 'DeepSeek v4.1 Flash'}]})
+                                                        {'name': 'deepseek-v4.1-flash',
+                                                         'nombre': 'DeepSeek v4.1 Flash'}]})
         if request.url.path == '/cuota':
             return httpx.Response(200, json=cuotas)
         if request.url.path == '/api/show':
             return httpx.Response(200, json={'capabilities': ['completion', 'tools', 'thinking', 'vision'],
-                                             'remote_host': 'alfalfa', 'model_info': {'alfalfa.context_length': 272000}})
+                                             'remote_host': 'alfalfa',
+                                             'model_info': {'alfalfa.context_length': 272000}})
         estado, valor = self.respuestas.pop(0) if self.respuestas else (200, {
             'model': 'gpt-6-luna', 'done': True, 'done_reason': 'stop', 'prompt_eval_count': 50, 'eval_count': 5,
             'message': {'role': 'assistant', 'content': 'Hola desde Alfalfa.'}, 'alfalfa': cuotas})

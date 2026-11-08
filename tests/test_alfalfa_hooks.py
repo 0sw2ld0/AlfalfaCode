@@ -233,7 +233,8 @@ def test_lectura_de_hooks_json_y_diagnosticos(tmp_path):
     }}).replace('async_', 'async'))
     manejadores, diagnosticos = leer_fuente(archivo, 'usuario')
     assert [(m.evento, m.comando, m.tiempo) for m in manejadores] == [
-        ('PreToolUse', 'echo a', 5), ('PreToolUse', 'echo c', 600), ('PreToolUse', 'echo d', 60), ('Stop', 'echo e', 60)]
+        ('PreToolUse', 'echo a', 5), ('PreToolUse', 'echo c', 600), ('PreToolUse', 'echo d', 60),
+        ('Stop', 'echo e', 60)]
     codigos = [d.codigo for d in diagnosticos]
     for codigo in ('HOOK-CAMPO', 'HOOK-FILTRO', 'HOOK-TIPO', 'HOOK-PLAZO', 'HOOK-SIN-EQUIVALENTE', 'HOOK-EVENTO',
                    'HOOK-FORMATO'):
@@ -403,7 +404,8 @@ def test_orden_frecuencia_y_correlacion_de_los_cinco_eventos(tmp_path, monkeypat
     assert filas_[0]['source'] == 'startup' and filas_[1]['prompt'] == 'Prueba de hooks.'
     assert len({f['session_id'] for f in filas_}) == 1 and len({f['turn_id'] for f in filas_}) == 1
     assert [f['tool_use_id'] for f in filas_[2:6]] == ['call-r', 'call-r', 'call-b', 'call-b']
-    assert filas_[2]['tool_name'] == 'Read' and filas_[2]['tool_input'] == {'file_path': str(s.root.resolve() / 'leeme.txt')}
+    assert filas_[2]['tool_name'] == 'Read' \
+        and filas_[2]['tool_input'] == {'file_path': str(s.root.resolve() / 'leeme.txt')}
     assert filas_[3]['tool_response']['text'] == 'hola\n' and filas_[5]['tool_response']['exit_code'] == 0
     assert filas_[6]['stop_hook_active'] is False and filas_[6]['last_assistant_message'] == 'Hecho.'
     # Segundo turno de la misma sesión: sin SessionStart y con otro turn_id.
@@ -584,9 +586,11 @@ def test_variables_del_complemento(tmp_path):
     raiz.mkdir()
     volcado = tmp_path / 'entorno.json'
     complemento = tmp_path / 'complemento'
-    motor = MotorHooks.desde_fuentes([dict(origen='complemento:demo', archivo='hooks.json', raiz_complemento=complemento,
+    motor = MotorHooks.desde_fuentes([dict(origen='complemento:demo', archivo='hooks.json',
+                                           raiz_complemento=complemento,
                                            datos_complemento=tmp_path / 'datos',
-                                           datos={'hooks': {'Stop': [grupo(orden(tmp_path / 'r', 'entorno', str(volcado)))]}})],
+                                           datos={'hooks': {'Stop': [grupo(orden(tmp_path / 'r', 'entorno',
+                                                                                 str(volcado)))]}})],
                                      raiz=raiz)
     asyncio.run(motor.disparar('Stop', {}))
     entorno = json.loads(volcado.read_text())

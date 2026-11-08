@@ -286,7 +286,9 @@ def _xcode(programa, argumentos, escritura, espacio=None):
         return False, 'xcrun con opciones que no reconozco'
     herramienta = sueltos[0]
     resto = argumentos[argumentos.index(herramienta) + 1:]
-    if argumentos.index(herramienta) and not set(argumentos[:argumentos.index(herramienta)]) <= {'--sdk', '-sdk', 'iphonesimulator', 'iphoneos', 'macosx'}:
+    if argumentos.index(herramienta) \
+            and not set(argumentos[:argumentos.index(herramienta)]) <= {'--sdk', '-sdk', 'iphonesimulator', 'iphoneos',
+                                                                        'macosx'}:
         return False, 'xcrun con opciones que no reconozco'
     if herramienta == 'xcodebuild':
         return _xcode('xcodebuild', resto, escritura)
@@ -307,7 +309,8 @@ def _xcode(programa, argumentos, escritura, espacio=None):
             and '--output-path' in resto and resto.index('--output-path') + 1 < len(resto) \
             and _bajo_cache(resto[resto.index('--output-path') + 1], espacio or '/nonexistent'):
         return True, 'saca las capturas de un resultado de pruebas a una carpeta temporal'
-    if herramienta == 'xcresulttool' and next((a for a in resto if not a.startswith('-')), '') in ('get', 'graph', 'version'):
+    if herramienta == 'xcresulttool' \
+            and next((a for a in resto if not a.startswith('-')), '') in ('get', 'graph', 'version'):
         return True, 'lee los resultados de las pruebas de Xcode'
     return False, 'xcrun ' + herramienta + ' no está entre las herramientas de Xcode permitidas'
 
@@ -1666,7 +1669,8 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
             if previo == '-module-cache-path' and a in _salida_de_compilacion_temporal('swift', ['--scratch-path', a]):
                 continue  # caché de módulos en /tmp: regenerable
             if previo in ('-sdk', '-I', '-F', '-module-cache-path', '-target', '-swift-version'):
-                if previo == '-sdk' and re.search(r'/Xcode[^/]*\.app/Contents/Developer/Platforms/[^/]+/Developer/SDKs/', a):
+                if previo == '-sdk' and re.search(r'/Xcode[^/]*\.app/Contents/Developer/Platforms/'
+                                                  r'[^/]+/Developer/SDKs/', a):
                     continue
                 if previo in ('-target', '-swift-version'):
                     continue
@@ -2030,7 +2034,8 @@ def python_que_solo_lee(codigo, espacio):
             nombres = [a.name for a in nodo.names] if isinstance(nodo, ast.Import) else [nodo.module or '']
             if isinstance(nodo, ast.ImportFrom) and nodo.level:
                 return False, 'python -c con una importación relativa'
-            fuera = [n for n in nombres if n not in MODULOS_DE_LECTURA and n.split('.')[0] not in MODULOS_DE_LECTURA - {'os'}]
+            fuera = [n for n in nombres
+                     if n not in MODULOS_DE_LECTURA and n.split('.')[0] not in MODULOS_DE_LECTURA - {'os'}]
             if fuera:
                 return False, 'python -c importa ' + ', '.join(fuera)
             if isinstance(nodo, ast.ImportFrom) and any(a.name in ATRIBUTOS_PROHIBIDOS | LLAMADAS_PROHIBIDAS

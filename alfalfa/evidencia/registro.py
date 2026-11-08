@@ -568,7 +568,7 @@ class RunEvidence:
         archivo, en verde, dejaba el ticket bloqueado hasta que alguien lo habilitara.
         Sólo cuenta tras el aviso, para que antes intente repetir la orden, y con una comprobación posterior, vigente y sustantiva. No se da por
         resuelta: el revisor recibe la lista y decide si esconde un fallo real.
-        """
+        """  # noqa: E501
         if finding.get('status') == 'resolved' or finding.get('source') != 'check' \
                 or not self.runtime.state.get('unresolved_nudged'):
             return False
@@ -1049,8 +1049,10 @@ class RunEvidence:
             'verification': report,
             'checks': checks[-20:],
             'checks_total': len(checks),
-            'operations': (rt.state.get('operations', []) if isinstance(rt.state.get('operations'), list) else [])[-20:],
-            'operations_total': len(rt.state.get('operations', [])) if isinstance(rt.state.get('operations'), list) else 0,
+            'operations': (rt.state.get('operations', []) if isinstance(rt.state.get('operations'), list)
+                           else [])[-20:],
+            'operations_total': (len(rt.state.get('operations', [])) if isinstance(rt.state.get('operations'), list)
+                                 else 0),
             'blockers': rt.state.get('unresolved', {}),
             'unresolved_records': rt.state.get('unresolved_records', {}),
             'resolution_records': rt.state.get('resolution_records', []),

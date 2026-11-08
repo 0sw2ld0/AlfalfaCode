@@ -259,7 +259,8 @@ def classify_operation(argv, purpose, cwd, output, exit_code, *, timed_out=False
             return _classification('expected_absence', 'pass', 'merge_head_absent',
                                    'MERGE_HEAD no existe en este repositorio Git válido.',
                                    context_verified=True,
-                                   context_evidence='Git resolvió el repositorio antes de informar que falta la revisión solicitada.')
+                                   context_evidence='Git resolvió el repositorio antes de informar que falta la '
+                                                    'revisión solicitada.')
 
     if program == 'rg' and exit_code == 1:
         if _has_command_error(raw_output):
@@ -270,7 +271,8 @@ def classify_operation(argv, purpose, cwd, output, exit_code, *, timed_out=False
             return _classification('expected_absence', 'pass', 'rg_no_matches_expected',
                                    'rg no encontró coincidencias, como pide el propósito.',
                                    context_verified=True,
-                                   context_evidence='El patrón de rg coincide con el elemento cuya ausencia solicita el propósito.')
+                                   context_evidence='El patrón de rg coincide con el elemento cuya ausencia solicita '
+                                                    'el propósito.')
         return _classification('failed', 'failure', 'rg_no_matches_unexpected',
                                'rg no encontró coincidencias y el propósito no confirma que la ausencia sea esperada.')
 
@@ -282,9 +284,11 @@ def classify_operation(argv, purpose, cwd, output, exit_code, *, timed_out=False
             return _classification('expected_absence', 'pass', 'grep_no_matches_expected',
                                    'grep no encontró coincidencias, como pide el propósito.',
                                    context_verified=True,
-                                   context_evidence='El patrón de grep coincide con el elemento cuya ausencia solicita el propósito.')
+                                   context_evidence='El patrón de grep coincide con el elemento cuya ausencia solicita '
+                                                    'el propósito.')
         return _classification('failed', 'failure', 'grep_no_matches_unexpected',
-                               'grep no encontró coincidencias y el propósito no confirma que la ausencia sea esperada.')
+                               'grep no encontró coincidencias y el propósito no confirma que la ausencia sea '
+                               'esperada.')
 
     # Preguntar si una ruta existe y oír «no» es una respuesta, no un fallo
     # (p. ej. `ls .tmp-alfalfa` para confirmar que no quedaron restos).
@@ -296,7 +300,8 @@ def classify_operation(argv, purpose, cwd, output, exit_code, *, timed_out=False
 
     if _is_merge_head_probe(argv) and exit_code == 128:
         return _classification('failed', 'failure', 'merge_head_result_unverified',
-                               'No se puede concluir que MERGE_HEAD esté ausente: faltan contexto o salida Git compatibles.')
+                               'No se puede concluir que MERGE_HEAD esté ausente: faltan contexto o salida Git '
+                               'compatibles.')
 
     if type(exit_code) is int and exit_code == 0:
         if (program == 'rg' and _rg_purpose_is_absence(purpose)

@@ -282,11 +282,13 @@ def leer(datos, origen=ARCHIVO):
         for ejemplo in normal.get('match', []) or []:
             argv = _ejemplo(ejemplo, donde)
             if regla.coincide(argv) is None:
-                raise ReglasInvalidas(donde + ': el ejemplo «' + shlex.join(argv) + '» debería coincidir y no coincide.')
+                raise ReglasInvalidas(donde + ': el ejemplo «' + shlex.join(argv)
+                                      + '» debería coincidir y no coincide.')
         for ejemplo in normal.get('not_match', []) or []:
             argv = _ejemplo(ejemplo, donde)
             if regla.coincide(argv) is not None:
-                raise ReglasInvalidas(donde + ': el ejemplo «' + shlex.join(argv) + '» no debería coincidir y coincide.')
+                raise ReglasInvalidas(donde + ': el ejemplo «' + shlex.join(argv)
+                                      + '» no debería coincidir y coincide.')
         reglas.append(regla)
     return Reglas(reglas)
 

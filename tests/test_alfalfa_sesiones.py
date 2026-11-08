@@ -84,7 +84,8 @@ def test_metadatos_de_la_sesion(proyecto, tmp_path):
     m = TerminalManager('x')
     try:
         meta = json.loads((m.directory / 'task.json').read_text())['meta']
-        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=proyecto, capture_output=True, text=True).stdout.strip()
+        commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=proyecto, capture_output=True,
+                                text=True).stdout.strip()
         assert meta['id'] == m.task['id'] and meta['cwd'] == str(proyecto.resolve())
         assert meta['modelo'] == 'deepseek-v4.1-flash:cloud' and meta['proveedor'] == 'ollama'
         assert meta['originador'] == 'alfalfa' and meta['fecha'].endswith('Z')
@@ -110,7 +111,8 @@ def test_cada_turno_tiene_id_tramo_y_estado(proyecto):
         turno(m, 'Segundo.', 'Dos.')
         t1, t2 = m.task['turnos']
         assert t1['id'] != t2['id'] and len(t1['id']) == 16
-        assert (t1['mensaje'], t1['estado'], t2['mensaje'], t2['estado']) == ('Primero.', 'completed', 'Segundo.', 'completed')
+        assert (t1['mensaje'], t1['estado'], t2['mensaje'], t2['estado']) \
+            == ('Primero.', 'completed', 'Segundo.', 'completed')
         mensajes = json.loads((m.directory / 'native' / m.task['id'] / 'session.json').read_text())['messages']
         assert t1['desde'] == 0 and t1['hasta'] == t2['desde'] and t2['hasta'] == len(mensajes)
         assert mensajes[t2['desde']] == {'role': 'user', 'content': 'Segundo.'}

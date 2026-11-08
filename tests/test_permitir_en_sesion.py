@@ -201,7 +201,8 @@ def test_el_transporte_solo_concede_la_sesion_si_se_ofrecio():
         async def pedir(**extra):
             tarea = asyncio.create_task(aprobacion(dict(argv=['make'], purpose='Compilar', motivo='red', **extra)))
             await asyncio.sleep(0)
-            fila = [json.loads(linea) for linea in salida.getvalue().splitlines() if json.loads(linea)['tipo'] == 'permiso'][-1]
+            fila = [json.loads(linea) for linea in salida.getvalue().splitlines()
+                    if json.loads(linea)['tipo'] == 'permiso'][-1]
             t.receive(json.dumps({'tipo': 'permiso', 'id': fila['id'], 'aprobado': True, 'sesion': True}))
             return fila, await tarea
 

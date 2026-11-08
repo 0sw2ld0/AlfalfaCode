@@ -21,7 +21,8 @@ def _iso(epoch: float | int | None) -> str | None:
     if epoch is None:
         return None
     try:
-        return datetime.fromtimestamp(float(epoch), timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        return (datetime.fromtimestamp(float(epoch), timezone.utc).isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z"))
     except (OverflowError, OSError, TypeError, ValueError):
         return None
 
@@ -166,8 +167,10 @@ class CodexEnergyStore:
             windows[name] = copy.deepcopy(source) if source else _unavailable_window()
         applicable = [row for row in windows.values() if row["availability"] == "available"]
         fresh = [row for row in applicable if
-                 0 <= as_of - datetime.fromisoformat(row["source"]["measuredAt"].replace("Z", "+00:00")).timestamp() < FRESHNESS_SECONDS
-                 and (row["resetAt"] is None or as_of < datetime.fromisoformat(row["resetAt"].replace("Z", "+00:00")).timestamp())]
+                 0 <= as_of - datetime.fromisoformat(row["source"]["measuredAt"].replace("Z", "+00:00")).timestamp()
+                 < FRESHNESS_SECONDS
+                 and (row["resetAt"] is None
+                      or as_of < datetime.fromisoformat(row["resetAt"].replace("Z", "+00:00")).timestamp())]
         has_unknown = len(applicable) != 2 or len(fresh) != len(applicable)
         zeros = [row for row in fresh if row["remainingPercent"] == 0]
         if zeros:
@@ -516,7 +519,8 @@ class OllamaCloudEnergy:
                 'resetAt': iso(reset) if reset else None,
                 'resetKind': 'fixed' if reset else 'unknown',
                 'resetSource': reset_source, 'observedAt': stamp,
-                'source': {'kind': kind, 'locator': 'ollama.com/settings', 'method': method, 'measuredAt': measured_stamp}}
+                'source': {'kind': kind, 'locator': 'ollama.com/settings', 'method': method,
+                           'measuredAt': measured_stamp}}
 
     @staticmethod
     def _has_exact_reader_provenance(row, name):
@@ -671,7 +675,8 @@ class OllamaCloudEnergy:
             snapshot = self.snapshot(account_id, now)
             unavailable = snapshot['energy']['reason'] == 'incomplete_or_stale'
             linked = account_id in self.runner_accounts.values()
-            rows.append({'id': pool_id(self.pool(account_id)), 'availability': 'unavailable' if unavailable else 'available',
+            rows.append({'id': pool_id(self.pool(account_id)),
+                         'availability': 'unavailable' if unavailable else 'available',
                          'snapshot': snapshot, 'block': None,
                          'identityLink': 'verified' if linked else 'unverified',
                          'readStatus': self.accounts[account_id].get('readStatus', 'ok')})
@@ -710,7 +715,8 @@ def combine_energy(tasks, codex=None, claude=None, ollama=None, now=None):
             models.append({'kind': 'ollama_local', 'taskId': task['id'], 'quota': 'none', 'showsBar': False})
         elif destination == 'cloud':
             # Sólo con identidad declarada por la tarea: la cuenta web no se adivina.
-            pool = next((p for p in cloud_pools if p['snapshot']['pool']['accountId'] == task.get('ollamaAccountId')), None)
+            pool = next((p for p in cloud_pools
+                         if p['snapshot']['pool']['accountId'] == task.get('ollamaAccountId')), None)
             if pool:
                 task_pools.append({'taskId': task['id'], 'poolId': pool['id']})
 

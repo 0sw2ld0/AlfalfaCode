@@ -248,7 +248,8 @@ class OnRequestPolicy:
             if policy is not None and isinstance(getattr(policy, 'denied', None), int):
                 policy.denied += 1
             raise ValueError('Sin respuesta a tiempo al permiso para ejecutar sin sandbox (el usuario no contestó); '
-                             'la orden no se ejecutó. No es un rechazo de la orden: vuelve a pedirla si hace falta.') from None
+                             'la orden no se ejecutó. No es un rechazo de la orden: vuelve a pedirla si hace '
+                             'falta.') from None
         if para_sesion and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
         return respuesta

@@ -67,9 +67,11 @@ def _leer(base, operacion):
                     continue
                 raise ErrorDeOllama('La base de Ollama sigue ocupada; espera a que termine la respuesta y '
                                     'vuelve a intentarlo.') from None
-            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede leerla.') from None
+            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede '
+                                'leerla.') from None
         except sqlite3.DatabaseError:
-            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede leerla.') from None
+            raise ErrorDeOllama('La base de Ollama tiene un esquema inesperado; esta versión no puede '
+                                'leerla.') from None
         finally:
             conexion.close()
     raise ErrorDeOllama('La base de Ollama sigue ocupada.')

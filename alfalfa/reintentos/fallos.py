@@ -169,12 +169,14 @@ _ACCIONES = {
     'timeout': 'no respondió a tiempo (timed out); espera y reintenta.',
     'network': 'fallo de conexión; revisa la red o el servicio de Ollama y reintenta.',
     'invalid_request': 'solicitud inválida; revisa los parámetros y el cuerpo que envía el arnés; no se reintenta.',
-    'model_not_found': 'modelo inexistente o no descargado; selecciona otro modelo o descárgalo (ollama pull); no se reintenta.',
+    'model_not_found': 'modelo inexistente o no descargado; selecciona otro modelo o descárgalo (ollama pull); no se '
+                       'reintenta.',
     'access_denied': 'falta de acceso; inicia sesión en Ollama por el mecanismo oficial (Ajustes → Ollama) '
                      'o revisa la credencial configurada; no se reintenta.',
     'tls_error': 'el certificado TLS del servidor no valida (caducado o de otra autoridad); revisa el '
                  'certificado o su configuración; no se reintenta y no se desactiva la verificación.',
-    'unknown': 'causa desconocida; no se reintenta automáticamente ni se asume una causa; revisa el estado del proveedor.',
+    'unknown': 'causa desconocida; no se reintenta automáticamente ni se asume una causa; revisa el estado del '
+               'proveedor.',
 }
 
 

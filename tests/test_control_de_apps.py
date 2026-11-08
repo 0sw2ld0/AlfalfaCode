@@ -311,7 +311,7 @@ let d = D()
 a.delegate = d
 a.setActivationPolicy(.regular)
 a.run()
-''')
+''')  # noqa: E501
     binario = tmp_path / 'PruebaAlfalfa'
     subprocess.run(['swiftc', '-O', str(fuente), '-o', str(binario)], check=True)
     proc = subprocess.Popen([str(binario)])
@@ -326,11 +326,13 @@ a.run()
                 break
             time.sleep(0.3)
         estado = correr(c.estado({'app': str(proc.pid)}))
-        boton = next(int(linea.split(']')[0].strip(' [')) for linea in estado['arbol'].splitlines() if 'Sumar uno' in linea)
+        boton = next(int(linea.split(']')[0].strip(' [')) for linea in estado['arbol'].splitlines()
+                     if 'Sumar uno' in linea)
         assert Path(estado['captura']).is_file()
         despues = correr(c.accion({'app': str(proc.pid), 'action': 'click', 'element': boton}))
         assert 'Pulsado 1 veces' in despues['arbol']
-        campo = next(int(linea.split(']')[0].strip(' [')) for linea in despues['arbol'].splitlines() if 'TextField' in linea)
+        campo = next(int(linea.split(']')[0].strip(' [')) for linea in despues['arbol'].splitlines()
+                     if 'TextField' in linea)
         despues = correr(c.accion({'app': str(proc.pid), 'action': 'type', 'element': campo, 'text': 'Señal ñ'}))
         assert 'Señal ñ' in despues['arbol']
         # Ratón propio: un lienzo que no acepta el primer clic, sin traer la app ni mover el ratón.
@@ -347,7 +349,8 @@ a.run()
             {'action': 'click', 'target': 'Sumar uno'}]}))
         assert 'Pulsado 3 veces' in despues['arbol'], despues
         assert [h['como'] for h in despues['hechos']] == ['menu', 'AXPress']
-        assert 'StaticText valor="Pulsado 3 veces"' in [linea.split('(')[0].strip() for linea in despues['cambios']['aparece']]
+        assert 'StaticText valor="Pulsado 3 veces"' in [linea.split('(')[0].strip()
+                                                        for linea in despues['cambios']['aparece']]
         # Desplegable por coordenadas: un clic en fondo no abre su menú; se abre por accesibilidad.
         def centro(arbol, texto):
             linea = next(renglon for renglon in arbol.splitlines() if texto in renglon)

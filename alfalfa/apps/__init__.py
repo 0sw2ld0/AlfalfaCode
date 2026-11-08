@@ -227,7 +227,8 @@ class Ayudante:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise ValueError('La app no respondió a tiempo (' + str(ORDEN_SEGUNDOS) + ' s); puede estar colgada.') from None
+            raise ValueError('La app no respondió a tiempo (' + str(ORDEN_SEGUNDOS)
+                             + ' s); puede estar colgada.') from None
         try:
             datos = json.loads(salida.decode(errors='replace').strip().splitlines()[-1])
         except (IndexError, ValueError):
@@ -295,7 +296,8 @@ class ControlDeApps:
                              'con run_command background: true o con open) y mira app_list.')
         if len(parecidas) > 1:
             raise ValueError('Hay varias apps que encajan con «' + texto + '»: '
-                             + ', '.join(str(a.get('nombre')) + ' (pid ' + str(a.get('pid')) + ')' for a in parecidas[:8])
+                             + ', '.join(str(a.get('nombre')) + ' (pid ' + str(a.get('pid')) + ')'
+                                         for a in parecidas[:8])
                              + '. Usa su bundle id o su pid.')
         app = parecidas[0]
         grado, motivo = nivel(app)
@@ -539,7 +541,8 @@ class ControlDeApps:
             return despues
         # Como mejora sobre Codex: la ventana ya cambiada, para comprobar el efecto sin otra llamada.
         try:
-            despues = await self._leer(app, ventana, captura=args.get('screenshot') is True or bool(args.get('question')))
+            despues = await self._leer(app, ventana,
+                                       captura=args.get('screenshot') is True or bool(args.get('question')))
         except ValueError as exc:
             despues = {'aviso': 'Hecho, pero no se pudo volver a leer la ventana: ' + str(exc)}
         await self._mirar(despues, args.get('question'))

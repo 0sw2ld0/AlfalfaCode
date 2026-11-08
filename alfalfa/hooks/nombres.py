@@ -36,7 +36,8 @@ SIN_EQUIVALENTE = {
     'app_action': 'Claude Code no maneja otras apps del Mac por sí mismo; Codex lo hace con Computer Use.',
     'list_files': 'Glob recibe un patrón; list_files lista una carpeta.',
     'search': 'Grep recibe una expresión regular; search busca texto literal.',
-    'update_plan': 'TodoWrite recibe todos con content y activeForm; update_plan, plan con step y status (los mismos estados).',
+    'update_plan': 'TodoWrite recibe todos con content y activeForm; update_plan, plan con step y status (los mismos '
+                   'estados).',
     'inspect_image': 'Read de Claude también abre imágenes, pero aquí analiza otro modelo.',
     'web_search': 'WebSearch existe, pero AlfalfaCode no ofrece web en la terminal.',
     'read_web': 'WebFetch existe, pero AlfalfaCode no ofrece web en la terminal.',
