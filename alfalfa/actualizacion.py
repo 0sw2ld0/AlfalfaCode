@@ -8,6 +8,10 @@ instalado y cada una se actualiza a su manera:
   sólo si no hay cambios sin guardar ni commits propios.
 - paquete: instalado con pip desde GitHub. Se reinstala con pip en la etiqueta
   nueva, en el mismo Python que está ejecutando la orden.
+- app: va dentro de `AlfalfaCode.app` (`empaquetado.py`). La versión se busca por
+  HTTPS, sin git (en un Mac sin las herramientas de línea de órdenes, `git`
+  abre el diálogo de instalarlas), y no se instala nada: el bundle está firmado.
+  Se descarga el DMG nuevo y se arrastra a Aplicaciones.
 """
 import os
 import re
@@ -15,11 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import __version__
+from . import __version__, empaquetado
 
 REPO_POR_DEFECTO = 'https://github.com/0sw2ld0/AlfalfaCode.git'
 _ETIQUETA = re.compile(r'^v(\d+)\.(\d+)\.(\d+)$')
 _ESPERA = 120
+PAGINA_DE_DESCARGA = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest'
+_GITHUB = re.compile(r'^https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$')
 
 
 class ErrorDeActualizacion(Exception):
@@ -78,30 +84,69 @@ def ultima_version(url):
     return max(validas, key=clave) if validas else None
 
 
-def buscar(raiz=None, instalada=__version__):
+def ultima_version_https(url, get=None):
+    """Como `ultima_version`, por la API de GitHub y sin git (para la app empaquetada)."""
+    m = _GITHUB.match(url)
+    if not m:
+        raise ErrorDeActualizacion('Sólo se pueden buscar versiones de un repositorio de github.com: ' + url)
+    if get is None:
+        import httpx
+        get = httpx.get
+    try:
+        r = get(f'https://api.github.com/repos/{m[1]}/{m[2]}/tags', params={'per_page': 100},
+                headers={'Accept': 'application/vnd.github+json', 'User-Agent': f'AlfalfaCode/{__version__}'},
+                timeout=20, follow_redirects=True)
+        r.raise_for_status()
+        etiquetas = [e.get('name', '') for e in r.json() if isinstance(e, dict)]
+    except Exception as exc:
+        raise ErrorDeActualizacion('No se pudo consultar el repositorio de AlfalfaCode: '
+                                   + (str(exc) or type(exc).__name__)) from None
+    validas = [e for e in etiquetas if isinstance(e, str) and clave(e)]
+    return max(validas, key=clave) if validas else None
+
+
+def buscar(raiz=None, instalada=__version__, app=None):
     """Qué versión hay instalada, cuál es la última y si conviene actualizar."""
-    if raiz is None:
-        raiz = raiz_del_clon()
-    url = url_del_repo(raiz)
-    ultima = ultima_version(url)
+    if app is None:
+        app = empaquetado.en_la_app()
+    if app:
+        url = os.environ.get('ALFALFA_REPO_URL') or REPO_POR_DEFECTO
+        ultima = ultima_version_https(url)
+        instalacion = 'app'
+    else:
+        if raiz is None:
+            raiz = raiz_del_clon()
+        url = url_del_repo(raiz)
+        ultima = ultima_version(url)
+        instalacion = 'clon' if raiz else 'paquete'
     hay_nueva = bool(ultima and clave(instalada) and clave(ultima) > clave(instalada))
-    return {
+    info = {
         'instalada': instalada,
         'ultima': ultima.lstrip('v') if ultima else None,
         'etiqueta': ultima,
         'hay_nueva': hay_nueva,
-        'instalacion': 'clon' if raiz else 'paquete',
+        'instalacion': instalacion,
         'url': url,
     }
+    if app:
+        info['descarga'] = PAGINA_DE_DESCARGA
+    return info
 
 
-def actualizar(raiz=None, instalada=__version__, python=sys.executable):
+def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None):
     """Instala la última versión si es más nueva. Devuelve lo que pasó."""
-    if raiz is None:
+    if app is None:
+        app = empaquetado.en_la_app()
+    if raiz is None and not app:
         raiz = raiz_del_clon()
-    info = buscar(raiz, instalada)
+    info = buscar(raiz, instalada, app=app)
     if not info['hay_nueva']:
         return dict(info, actualizado=False, app_mac_cambio=False)
+    if info['instalacion'] == 'app':
+        # Escribir en el bundle rompería su firma: la versión nueva llega en un DMG nuevo.
+        raise ErrorDeActualizacion(
+            f'Esta copia va dentro de AlfalfaCode.app y no se cambia sola. Descarga AlfalfaCode '
+            f'{info["ultima"]} de {info["descarga"]} y arrástrala a Aplicaciones.')
     etiqueta = info['etiqueta']
     app_mac_cambio = False
     if raiz:
@@ -142,6 +187,9 @@ def texto(resultado):
         if resultado.get('app_mac_cambio'):
             frase += ' La app de Mac también cambió: vuelve a compilarla con `swift build` en alfalfa-mac.'
         return frase
+    if resultado['hay_nueva'] and resultado.get('instalacion') == 'app':
+        return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
+                f'Descárgala de {resultado["descarga"]} y arrástrala a Aplicaciones.')
     if resultado['hay_nueva']:
         return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
                 'Instálala con `alfalfa --actualizar`.')

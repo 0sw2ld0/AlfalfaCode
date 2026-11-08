@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from .. import empaquetado
 from . import Proveedor, cliente_de_lista
 from .ollama import LOCALES, validar_url
 
@@ -102,6 +103,10 @@ class Firmante:
 
     def asegurar(self):
         ruta = self.binario
+        # En AlfalfaCode.app el ayudante va ya compilado y firmado con la app.
+        incluido = empaquetado.ayudante(ruta.name)
+        if incluido:
+            return incluido
         if ruta.is_file() and os.access(ruta, os.X_OK):
             return ruta
         swiftc = shutil.which('swiftc') or ('/usr/bin/swiftc' if os.path.exists('/usr/bin/swiftc') else None)

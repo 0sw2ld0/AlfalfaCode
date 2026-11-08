@@ -133,3 +133,56 @@ def test_version_dice_la_del_paquete(capsys):
     with pytest.raises(SystemExit):
         main(['--version'])
     assert capsys.readouterr().out.strip() == 'AlfalfaCode ' + __version__
+
+
+# -- AlfalfaCode.app ------------------------------------------------------------
+
+class _Respuesta:
+    def __init__(self, datos, estado=200):
+        self.datos, self.estado = datos, estado
+
+    def raise_for_status(self):
+        if self.estado != 200:
+            raise RuntimeError(f'HTTP {self.estado}')
+
+    def json(self):
+        return self.datos
+
+
+def _github(etiquetas, vistas=None, estado=200):
+    def get(url, **kw):
+        if vistas is not None:
+            vistas.append(url)
+        return _Respuesta([{'name': e} for e in etiquetas], estado)
+    return get
+
+
+def test_la_app_busca_la_version_por_https_sin_git(monkeypatch):
+    vistas = []
+    monkeypatch.setattr(act, '_git', lambda *a, **k: pytest.fail('dentro de la app no se usa git'))
+    falsa = _github(['v0.9.0', 'v0.10.0', 'beta'], vistas)
+    monkeypatch.setattr(act, 'ultima_version_https', lambda url, f=act.ultima_version_https: f(url, get=falsa))
+    monkeypatch.delenv('ALFALFA_REPO_URL', raising=False)
+    info = act.buscar(instalada='0.9.5', app=True)
+    assert vistas == ['https://api.github.com/repos/0sw2ld0/AlfalfaCode/tags']
+    assert (info['ultima'], info['hay_nueva'], info['instalacion']) == ('0.10.0', True, 'app')
+    assert info['descarga'].startswith('https://github.com/0sw2ld0/AlfalfaCode/releases')
+    assert 'Descárgala' in act.texto(dict(info, actualizado=False))
+
+
+def test_la_app_no_se_reinstala_sola(monkeypatch, pips):
+    monkeypatch.setattr(act, 'ultima_version_https', lambda url: 'v9.0.0')
+    monkeypatch.setattr(act, '_git', lambda *a, **k: pytest.fail('dentro de la app no se usa git'))
+    with pytest.raises(act.ErrorDeActualizacion, match='arrástrala a Aplicaciones'):
+        act.actualizar(instalada='0.1.0', app=True)
+    assert pips == []
+    # Al día: no hay nada que descargar ni error.
+    monkeypatch.setattr(act, 'ultima_version_https', lambda url: 'v0.1.0')
+    assert act.actualizar(instalada='0.1.0', app=True)['actualizado'] is False
+
+
+def test_la_app_explica_si_github_no_responde():
+    with pytest.raises(act.ErrorDeActualizacion, match='No se pudo consultar'):
+        act.ultima_version_https('https://github.com/0sw2ld0/AlfalfaCode.git', get=_github([], estado=503))
+    with pytest.raises(act.ErrorDeActualizacion, match='github.com'):
+        act.ultima_version_https('https://ejemplo.com/repo.git', get=_github([]))

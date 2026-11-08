@@ -28,7 +28,7 @@ alfalfa = "alfalfa.terminal:main"
 version = {attr = "alfalfa.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["alfalfa*"]
+include = ["alfalfa", "alfalfa.*"]  # sin «alfalfa-mac/», que no es parte del paquete
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.sbpl", "*.swift", "LICENSE", "NOTICE"]

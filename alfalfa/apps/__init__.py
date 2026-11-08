@@ -51,6 +51,8 @@ import shutil
 import time
 from pathlib import Path
 
+from .. import empaquetado
+
 FUENTE = Path(__file__).with_name('ayudante.swift')
 MAX_SALIDA = 24000
 MAX_ELEMENTOS = 400
@@ -184,6 +186,10 @@ class Ayudante:
 
     async def asegurar(self):
         async with self._candado:
+            # En AlfalfaCode.app el ayudante va ya compilado y firmado con la app.
+            incluido = empaquetado.ayudante(self.ruta.name)
+            if incluido:
+                return incluido
             if self.ruta.is_file() and os.access(self.ruta, os.X_OK):
                 return self.ruta
             swiftc = shutil.which('swiftc') or ('/usr/bin/swiftc' if os.path.exists('/usr/bin/swiftc') else None)
