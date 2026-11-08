@@ -239,3 +239,11 @@ def test_cualquier_carpeta_tmp_de_primer_nivel_es_de_temporales():
     from alfalfa.evidencia.espacio import temporal
     assert temporal('.tmp-alfalfa/x.log') and temporal('.tmp-chiyo/dd/a') and temporal('.temp-app')
     assert not temporal('src/.tmp-x/a') and not temporal('tmp/a') and not temporal('.tmpx/a')
+
+
+def test_una_clave_de_proveedor_no_llega_a_mcp_ni_con_otro_nombre(monkeypatch):
+    from alfalfa.mcp_cliente import configuracion as mcp
+    monkeypatch.setattr(ajustes, 'ollama_clave', lambda: 'clave-del-integrador-123')
+    with pytest.raises(ValueError, match='clave de proveedor'):
+        mcp._heredada('APP_OLLAMA_API_KEY', 'entorno', {'APP_OLLAMA_API_KEY': 'clave-del-integrador-123'})
+    assert mcp._heredada('OTRA', 'entorno', {'OTRA': 'valor-normal'}) == 'valor-normal'
