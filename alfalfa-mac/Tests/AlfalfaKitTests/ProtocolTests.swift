@@ -63,6 +63,14 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(AlfalfaMessage.decode(line: notSent),
                        .reported(ReportResult(sent: false, reason: "No hay servicio Alfalfa configurado.")))
         XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"reporte"}"#))
+        let search = #"{"version":2,"tipo":"buscador","modo":"searxng","searxng_url":"http://127.0.0.1:9999","#
+            + #""remoto":false,"libreria":true,"ollama_clave":true}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: search),
+                       .webSearch(WebSearchSettings(mode: "searxng", searxngURL: "http://127.0.0.1:9999",
+                                                    hasOllamaKey: true)))
+        XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"buscador","modo":"google"}"#))
+        XCTAssertEqual(WebSearchSettings.modes.map(WebSearchSettings.label(of:)),
+                       ["Automático", "Ollama Web Search", "SearXNG", "Apagado"])
         var timeline = Timeline()
         timeline.apply(.quota([Quota(provider: "ollama", usedPercent: 10)]))
         XCTAssertEqual(timeline.quotas.first?.usedPercent, 10)
