@@ -1748,6 +1748,13 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
             if argumento not in temporales and _fuera_del_espacio(argumento, espacio):
                 return False, 'apunta fuera del worktree: ' + argumento
         return xcode
+    from .. import ajustes
+    try:
+        propia = ajustes.orden_permitida(programa, list(argumentos), espacio)
+    except Exception:
+        propia = None
+    if isinstance(propia, str) and propia:
+        return True, propia
     herramienta = _herramienta_del_proyecto(programa, argumentos)
     if herramienta is not None:
         if not herramienta[0]:
@@ -1774,7 +1781,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
         # rama al día: lo pedía quien arreglaba una integración en rojo.
         avance = (sub == 'merge' and '--ff-only' in argumentos
                   and [a for a in argumentos if not a.startswith('-') and a != 'merge']
-                  in (['main'], ['origin/main']))
+                  in [['main'], ['origin/main']] + [[r] for r in _ramas_de_avance()])
         ramas_recuperacion = ({merge_base, 'origin/' + merge_base}
                               if isinstance(merge_base, str) and merge_base
                               and not merge_base.startswith('-') and not any(c.isspace() for c in merge_base)
@@ -1785,7 +1792,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
         )
         if sub == 'merge' and not avance and not merge_recuperacion \
                 and not ({'--abort', '--continue', '--quit'} & set(argumentos)):
-            return False, 'traer otra rama a la del ticket lo decide el usuario, no el agente'
+            return False, 'traer otra rama a la del ticket lo decide ' + ajustes.nombre('decide') + ', no el agente'
     elif programa == 'sed' and _sed_que_solo_imprime(argumentos):
         pass  # `sed -n '660,810p' archivo` sólo lee: un agente de QA esperó permiso por esto
     elif programa not in LECTURA:
@@ -2056,3 +2063,17 @@ def python_en_linea_seguro(argv, espacio):
                                 or programa_de_confianza(programa, espacio)):
         return False, 'un python que no es del sistema, del worktree ni del .venv del integrador'
     return python_que_solo_lee(str(argv[2]), espacio)
+
+
+def _ramas_de_avance():
+    from .. import ajustes
+    try:
+        return [r for r in ajustes.ramas_de_avance() or () if isinstance(r, str) and r and not r.startswith('-')
+                and not any(c.isspace() for c in r)]
+    except Exception:
+        return []
+
+
+def fuera_del_espacio(ruta, espacio):
+    """¿`ruta` sale del worktree `espacio`? Para las órdenes que aprueba un integrador."""
+    return _fuera_del_espacio(ruta, espacio)

@@ -700,7 +700,8 @@ def combine_energy(tasks, codex=None, claude=None, ollama=None, now=None):
                 pools.append(row)
         task_pools += [{'taskId': t, 'poolId': p} for t, p in mapped.items()]
 
-    models = [{'kind': 'integrador', 'quota': 'none', 'showsBar': False}]
+    from .. import ajustes
+    models = [{'kind': ajustes.nombre('integrador'), 'quota': 'none', 'showsBar': False}]
     cloud_pools = ollama.envelope_pools(now) if ollama else []
     pools += cloud_pools
     for task in tasks:

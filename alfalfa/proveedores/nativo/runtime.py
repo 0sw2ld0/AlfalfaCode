@@ -223,7 +223,11 @@ def manual_del_harness(model):
     edit_file sin path, grep tomado por error, entregas sin pasar pruebas)."""
     partes = []
     try:
-        partes.append((MANUALES / 'base.md').read_text())
+        from ... import ajustes
+        base = (MANUALES / 'base.md').read_text()
+        for clave in ('runtime', 'concede'):
+            base = base.replace('{' + clave + '}', ajustes.nombre(clave))
+        partes.append(base)
         nombre = str(model or '').lower()
         archivo = next((f for clave, f in FAMILIAS if clave in nombre), None)
         if archivo:
@@ -1905,7 +1909,8 @@ class NativeRuntime:
 
     @staticmethod
     def default_engine_text(effort):
-        return ('\nEres un agente del runtime nativo de AlfalfaCode. Usa herramientas para comprobar hechos. '
+        from ... import ajustes
+        return ('\nEres un agente del runtime nativo de ' + ajustes.nombre('runtime') + '. Usa herramientas para comprobar hechos. '
                    'Actualiza el plan para trabajo de varios pasos. Lee antes de editar y conserva el SHA256. '
                    'Usa inspect_image para cualquier imagen. Para hechos externos (especificaciones, versiones, documentación) '
                    'usa web_search y read_web y cita las URLs; si la web no responde, marca esos hechos como sin verificar. '
