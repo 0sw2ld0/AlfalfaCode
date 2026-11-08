@@ -64,10 +64,11 @@ struct QuotaLine: View {
             ForEach(quotas) { quota in
                 HStack(spacing: 6) {
                     Text(quota.label).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                        .lineLimit(1).fixedSize()
                     ProgressView(value: min(100, max(0, quota.tightestPercent)), total: 100).frame(width: 60)
                         .tint(QuotaText.tint(quota.tightestPercent))
                     Text(QuotaText.short(quota)).font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Theme.secondary)
+                        .foregroundStyle(Theme.secondary).lineLimit(1).fixedSize()
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(QuotaText.help(quota))
