@@ -232,7 +232,7 @@ class Ayudante:
             datos = json.loads(salida.decode(errors='replace').strip().splitlines()[-1])
         except (IndexError, ValueError):
             raise ValueError('Respuesta inválida del ayudante de apps: '
-                             + (errors or salida).decode(errors='replace')[-300:]) from None
+                             + (errores or salida).decode(errors='replace')[-300:]) from None
         if isinstance(datos, dict) and datos.get('error'):
             raise ValueError(str(datos['error']))
         return datos

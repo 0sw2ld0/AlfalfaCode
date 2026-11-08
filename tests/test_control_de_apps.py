@@ -362,3 +362,18 @@ a.run()
     finally:
         proc.terminate()
         proc.wait(5)
+
+
+def test_respuesta_invalida_del_ayudante_cuenta_lo_que_dijo(tmp_path):
+    """Si el ayudante no devuelve JSON, el error lleva su stderr (antes: NameError)."""
+    guion = tmp_path / 'ayudante'
+    guion.write_text('#!/bin/sh\necho "se rompió el ayudante" >&2\n')
+    guion.chmod(0o700)
+    ayudante = apps.Ayudante(tmp_path)
+
+    async def asegurar():
+        return guion
+
+    ayudante.asegurar = asegurar
+    with pytest.raises(ValueError, match='se rompió el ayudante'):
+        asyncio.run(ayudante.llamar('lista'))
