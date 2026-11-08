@@ -9,6 +9,7 @@
     alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
     alfalfa --buscador [MODO] [--json]        buscador web: auto, ollama, searxng o apagado
     alfalfa --fijar-searxng URL               SearXNG del modo searxng («-» vuelve a la de CuySearch Manager)
+    alfalfa --instalar-buscador               instala la librería cuysearch si falta (tras un `git pull`)
     alfalfa --reportar [--json]               manda un reporte de error; lee por la entrada una línea
                                               JSON {texto, contacto?, registro?, diagnostico?} o, en la
                                               terminal, pregunta qué pasó
@@ -73,10 +74,16 @@ def orden(args, entrada=None):
                     '\n'.join(f"{f['nombre']}: {f['usado_pct']:g} % usado (se renueva el {f['renueva']})"
                               for f in filas) or 'Sin cuota.')
             return 0
-        if getattr(args, 'buscador', None) is not None or getattr(args, 'fijar_searxng', None):
+        if (getattr(args, 'buscador', None) is not None or getattr(args, 'fijar_searxng', None)
+                or getattr(args, 'instalar_buscador', False)):
             from .nativo import web
             modo = args.buscador or None
-            datos = web.configurar(modo, args.fijar_searxng) if (modo or args.fijar_searxng) else web.estado()
+            if args.instalar_buscador:
+                datos = web.instalar()
+            elif modo or args.fijar_searxng:
+                datos = web.configurar(modo, args.fijar_searxng)
+            else:
+                datos = web.estado()
             _salida({'tipo': 'buscador', **datos}, como_json,
                     'Buscador web: ' + datos['modo']
                     + (' · ' + datos['searxng_url'] if datos['modo'] == 'searxng' else '')
@@ -179,6 +186,8 @@ def argumentos(grupo):
                        help='Buscador web de los agentes: ' + ', '.join(MODOS) + ' (sin MODO, el actual)')
     grupo.add_argument('--fijar-searxng', metavar='URL',
                        help='URL del SearXNG del modo searxng («-» vuelve a http://127.0.0.1:8888)')
+    grupo.add_argument('--instalar-buscador', action='store_true',
+                       help='Instalar la librería de búsqueda web si falta (por ejemplo, tras un git pull)')
     grupo.add_argument('--reportar', action='store_true',
                        help='Mandar un reporte de error (al servicio Alfalfa o, si no se puede, por correo)')
 
@@ -187,4 +196,4 @@ def pedida(args):
     return bool(args.proveedores or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
                 or getattr(args, 'reportar', False) or getattr(args, 'buscador', None) is not None
-                or getattr(args, 'fijar_searxng', None))
+                or getattr(args, 'fijar_searxng', None) or getattr(args, 'instalar_buscador', False))

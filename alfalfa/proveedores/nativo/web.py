@@ -93,6 +93,19 @@ def configurar(nuevo_modo=None, url=None):
     return estado()
 
 
+def instalar():
+    """Instala la librería cuysearch en el entorno de AlfalfaCode (botón de Ajustes)."""
+    import importlib
+
+    from ...actualizacion import ErrorDeActualizacion, instalar_dependencias
+    try:
+        instalar_dependencias()
+    except ErrorDeActualizacion as exc:
+        raise ValueError(str(exc)) from exc
+    importlib.invalidate_caches()
+    return estado()
+
+
 def estado():
     """Lo que enseña Ajustes, sin secretos."""
     return {'modo': modo(), 'searxng_url': searxng_url(), 'remoto': bool(_remoto()),

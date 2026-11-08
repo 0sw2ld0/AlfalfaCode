@@ -155,3 +155,27 @@ def test_la_orden_buscador_para_la_app(argv, modo):
     assert datos['modo'] == modo and datos['libreria'] is True and datos['remoto'] is False
     if argv[0] == '--fijar-searxng':
         assert datos['searxng_url'] == 'http://127.0.0.1:7777'
+
+
+def test_instalar_buscador_reinstala_y_devuelve_el_estado(monkeypatch):
+    from alfalfa import actualizacion
+    llamadas = []
+    monkeypatch.setattr(actualizacion, 'instalar_dependencias', lambda: llamadas.append('pip'))
+    salida = io.StringIO()
+    with redirect_stdout(salida):
+        assert terminal.main(['--instalar-buscador', '--json']) == 0
+    datos = json.loads(salida.getvalue())
+    assert llamadas == ['pip'] and datos['tipo'] == 'buscador' and datos['libreria'] is True
+
+
+def test_si_no_se_puede_instalar_la_app_recibe_el_motivo(monkeypatch):
+    from alfalfa import actualizacion
+
+    def falla():
+        raise actualizacion.ErrorDeActualizacion('pip no pudo instalar la versión nueva:\nsin red')
+    monkeypatch.setattr(actualizacion, 'instalar_dependencias', falla)
+    salida = io.StringIO()
+    with redirect_stdout(salida):
+        assert terminal.main(['--instalar-buscador', '--json']) == 1
+    assert json.loads(salida.getvalue()) == {'version': 2, 'tipo': 'error',
+                                             'texto': 'pip no pudo instalar la versión nueva:\nsin red'}

@@ -446,7 +446,11 @@ alfalfa --actualizar
 
 En un clon, `--actualizar` avanza la rama hasta la etiqueta nueva (sólo si no hay
 cambios sin guardar ni commits propios) y reinstala el paquete; instalado con pip,
-lo reinstala desde GitHub en esa etiqueta. La app de Mac tiene el mismo botón en
+lo reinstala desde GitHub en esa etiqueta. Así llegan también las dependencias
+nuevas. Si actualizas con `git pull`, vuelve a instalar con `pip install -e .`,
+`alfalfa --instalar-buscador` o el botón «Instalar ahora» de Ajustes ▸ General, que
+aparece si falta la librería de búsqueda web. Los `.venv` creados con `uv`, que no
+traen pip, se instalan con `uv pip`. La app de Mac tiene el mismo botón en
 la barra lateral (flecha hacia abajo, o el menú del nombre), en Ajustes ▸
 Actualizaciones y en el menú AlfalfaCode → «Buscar actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
 compilarla con `swift build`.

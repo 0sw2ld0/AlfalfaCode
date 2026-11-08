@@ -151,7 +151,9 @@ de la app, con `alfalfa --buscador MODO` o con `ALFALFA_BUSCADOR`:
   Manager; otro con `alfalfa --fijar-searxng URL`) y, si falla, los anteriores;
 - `apagado`: los agentes no reciben las herramientas web.
 
-Si un motor bloquea o falla, se pasa al siguiente. Con `ALFALFA_CUYSEARCH_URL` se usa
+Si un motor bloquea o falla, se pasa al siguiente. Si falta la librería (por ejemplo,
+tras un `git pull` sin reinstalar), los agentes no reciben las herramientas web:
+`alfalfa --instalar-buscador` o «Instalar ahora» en Ajustes la instala. Con `ALFALFA_CUYSEARCH_URL` se usa
 en su lugar un servicio CuySearch remoto (`ALFALFA_CUYSEARCH_KEY` es su clave).
 
 `--modelo` selecciona el modelo (por defecto `deepseek-v4.1-flash:cloud`).
