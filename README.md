@@ -9,6 +9,11 @@ Se usa desde la terminal, con `--stdio` (JSONL) para integrarlo en otra
 aplicación o con la app de Mac de `alfalfa-mac/`
 (`cd alfalfa-mac && swift run AlfalfaCode`).
 
+La app de Mac también se puede instalar sin el repositorio: `alfalfa-mac/build-app.sh`
+la empaqueta con su propio Python y el motor dentro, y `alfalfa-mac/publicar.sh` hace
+el DMG firmado y notarizado. Detalles en
+[alfalfa-mac/EMPAQUETADO.md](alfalfa-mac/EMPAQUETADO.md).
+
 ## Instalar
 
 ```bash
@@ -446,7 +451,8 @@ alfalfa --actualizar
 
 En un clon, `--actualizar` avanza la rama hasta la etiqueta nueva (sólo si no hay
 cambios sin guardar ni commits propios) y reinstala el paquete; instalado con pip,
-lo reinstala desde GitHub en esa etiqueta. La app de Mac tiene el mismo botón en
+lo reinstala desde GitHub en esa etiqueta. Dentro de AlfalfaCode.app no instala
+nada (el bundle está firmado): dice dónde descargar el DMG nuevo. La app de Mac tiene el mismo botón en
 la barra lateral (flecha hacia abajo, o el menú del nombre), en Ajustes ▸
 Actualizaciones y en el menú AlfalfaCode → «Buscar actualización…». Si la versión nueva cambia `alfalfa-mac/`, hay que volver a
 compilarla con `swift build`.
