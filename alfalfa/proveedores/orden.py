@@ -5,7 +5,7 @@
     alfalfa --borrar-clave openai
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
-    alfalfa --activar-codigo                  lee el código CUY por la entrada y lo ata a este Mac
+    alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
     alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
 """
 from __future__ import annotations
@@ -53,7 +53,7 @@ def orden(args, entrada=None):
         if getattr(args, 'activar_codigo', False):
             from .alfalfa import Alfalfa
             if entrada.isatty():
-                codigo = input('Código de cortesía (CUY-…): ')
+                codigo = input('Código de cortesía (CUY-…@servicio): ')
             else:
                 codigo = entrada.readline()
             hecho = Alfalfa().activar(codigo)

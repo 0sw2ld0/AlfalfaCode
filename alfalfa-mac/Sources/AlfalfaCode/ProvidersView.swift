@@ -35,7 +35,6 @@ struct ProvidersView: View {
     @State private var ollamaURL = ""
     @State private var ollamaKey = ""
     @State private var openAIKey = ""
-    @State private var alfalfaURL = ""
     @State private var alfalfaCode = ""
     @State private var busy = false
     @State private var notice: String?
@@ -73,16 +72,20 @@ struct ProvidersView: View {
                 }
             }
             section("Alfalfa", status: status("alfalfa"),
-                    detail: "Con un código de cortesía: cuota mensual de GPT-6 Luna, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
+                    detail: "Con un código de cortesía, CUY-…@servicio, que trae la dirección del servicio: "
+                        + "cuota mensual de GPT-6 Luna, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
                         + "El código queda atado a este Mac.") {
-                TextField("https://servicio-alfalfa…", text: $alfalfaURL).textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Dirección del servicio Alfalfa")
-                SecureField(status("alfalfa")?.configured == true ? "Código activado · escribe otro para cambiarlo"
-                                                                   : "Código de cortesía (CUY-…)", text: $alfalfaCode)
+                // La dirección del servicio va dentro del código: CUY-XXXX-XXXX-XXXX@servicio.
+                SecureField(status("alfalfa")?.configured == true ? "Código activado · pega otro para cambiarlo"
+                                                                   : "Código de cortesía (CUY-…@servicio)",
+                            text: $alfalfaCode)
                     .textFieldStyle(.roundedBorder).accessibilityLabel("Código de cortesía")
+                if let host = status("alfalfa")?.url.flatMap({ URL(string: $0)?.host() }) {
+                    Text("Servicio: \(host)").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                }
                 HStack {
                     Button("Activar en este Mac") { Task { await activateAlfalfa() } }
-                        .disabled(busy || alfalfaCode.isEmpty || alfalfaURL.isEmpty)
+                        .disabled(busy || alfalfaCode.isEmpty)
                     if status("alfalfa")?.hasKey == true {
                         Button("Quitar código") { Task { await run { await model.deleteKey(for: "alfalfa") } } }
                             .disabled(busy)
@@ -99,7 +102,6 @@ struct ProvidersView: View {
         .task {
             await model.reloadProviders()
             ollamaURL = status("ollama")?.url ?? ""
-            alfalfaURL = status("alfalfa")?.url ?? ""
             await model.loadAlfalfaQuota()
         }
     }
@@ -156,7 +158,8 @@ struct ProvidersView: View {
 
     private func activateAlfalfa() async {
         await run {
-            if await model.activate(code: alfalfaCode, url: alfalfaURL) {
+            // Sin URL aparte: `alfalfa --activar-codigo` la lee del propio código.
+            if await model.activate(code: alfalfaCode, url: "") {
                 alfalfaCode = ""
                 notice = "Código activado en este Mac."
             }

@@ -10,7 +10,9 @@ servicio guarda su parte pública. Cada petición va firmada con
 por el ayudante `firmante.swift` (Python no puede usar el Secure Enclave). Cada
 respuesta trae el % usado de la cuota del mes, que la app enseña en una barra.
 
-La URL del servicio no viene en el repositorio: se configura con
+La URL del servicio no viene en el repositorio: va dentro del código que se
+reparte, `CUY-XXXX-XXXX-XXXX@servicio.example.com`, y se guarda al activarlo.
+Al servicio sólo le llega la parte `CUY-…`. También se puede fijar a mano con
 `alfalfa --fijar-url alfalfa https://…` o `ALFALFA_SERVICIO_URL`.
 """
 from __future__ import annotations
@@ -25,11 +27,12 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
 from . import Proveedor, cliente_de_lista
-from .ollama import validar_url
+from .ollama import LOCALES, validar_url
 
 FUENTE = Path(__file__).with_name('firmante.swift')
 COMPILAR_SEGUNDOS = 240
@@ -48,6 +51,29 @@ def canonico(metodo, ruta, marca, nonce, cuerpo):
 
 def normalizar(codigo):
     return ''.join(str(codigo or '').upper().split())
+
+
+def separar(texto):
+    """(código, URL del servicio o None) de lo que pega el usuario.
+
+    El código se reparte con su servicio detrás de una arroba:
+    `CUY-XXXX-XXXX-XXXX@servicio.example.com`, o con puerto (`@servicio.example.com:8444`).
+    Sin esquema es HTTPS, salvo en este mismo equipo. Sin arroba, es sólo el código.
+    """
+    limpio = ''.join(str(texto or '').split())
+    codigo, arroba, servicio = limpio.partition('@')
+    if not arroba:
+        return normalizar(codigo), None
+    servicio = servicio.rstrip('/')
+    if not servicio:
+        raise ErrorDeAlfalfa('Falta el servicio detrás de la arroba: CUY-…@servicio.example.com.')
+    if '://' not in servicio:
+        local = urlparse('//' + servicio).hostname in LOCALES
+        servicio = ('http://' if local else 'https://') + servicio
+    try:
+        return normalizar(codigo), validar_url(servicio, 'el código de cortesía', 'El servicio Alfalfa')
+    except ValueError as exc:
+        raise ErrorDeAlfalfa(str(exc)) from exc
 
 
 def _hogar():
@@ -215,8 +241,8 @@ class Alfalfa(Proveedor):
         from .. import ajustes
         valor = ajustes.alfalfa_servicio_url()
         if not valor:
-            raise ErrorDeAlfalfa('Falta la dirección del servicio Alfalfa: '
-                                 '`alfalfa --fijar-url alfalfa https://…` o «Proveedores».')
+            raise ErrorDeAlfalfa('Falta la dirección del servicio Alfalfa: pega el código completo, '
+                                 'CUY-…@servicio, en Proveedores o con `alfalfa --activar-codigo`.')
         return validar_url(valor, 'ALFALFA_SERVICIO_URL', 'El servicio Alfalfa')
 
     def codigo(self):
@@ -251,13 +277,13 @@ class Alfalfa(Proveedor):
 
     # -- consultas de una sola pasada ------------------------------------------
 
-    def _pedir(self, metodo, ruta, cuerpo=None, codigo=None):
+    def _pedir(self, metodo, ruta, cuerpo=None, codigo=None, url=None):
         codigo = codigo or self.codigo()
         datos = json.dumps(cuerpo, ensure_ascii=False).encode() if cuerpo is not None else b''
         encabezados = cabeceras(codigo, self.firmante.firmar, metodo, ruta, datos)
         encabezados['Content-Type'] = 'application/json'
         with cliente_de_lista() as cliente:
-            respuesta = cliente.request(metodo, self.url() + ruta, content=datos, headers=encabezados)
+            respuesta = cliente.request(metodo, (url or self.url()) + ruta, content=datos, headers=encabezados)
         try:
             valor = respuesta.json()
         except ValueError:
@@ -277,14 +303,20 @@ class Alfalfa(Proveedor):
         return _cuotas(self._pedir('GET', '/cuota')) or []
 
     def activar(self, codigo):
-        """Ata el código a este Mac y lo guarda en el Llavero. Devuelve lo que dice el servicio."""
-        from . import llavero
-        codigo = normalizar(codigo)
+        """Ata el código a este Mac y lo guarda en el Llavero. Devuelve lo que dice el servicio.
+
+        Si el código trae su servicio (`CUY-…@servicio`), se activa ahí y esa dirección queda
+        guardada en `proveedores.json`, pero sólo cuando el servicio acepta el código.
+        """
+        from . import configuracion, llavero
+        codigo, servicio = separar(codigo)
         if not codigo.startswith('CUY-') or len(codigo) < 10:
             raise ErrorDeAlfalfa('El código de cortesía empieza por CUY-.')
         publica = self.firmante.publica()
         valor = self._pedir('POST', '/activar', {'codigo': codigo, 'clave_publica': publica, 'equipo': _equipo()},
-                            codigo=codigo)
+                            codigo=codigo, url=servicio)
+        if servicio:
+            configuracion.cambiar('alfalfa', 'url', servicio)
         llavero.guardar('alfalfa', codigo)
         return {'nombre': valor.get('nombre'), 'caduca': valor.get('caduca'),
                 'modelos': [m.get('name') for m in valor.get('modelos') or []],

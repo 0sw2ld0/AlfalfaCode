@@ -129,6 +129,46 @@ def test_activar_ata_el_codigo_y_lo_guarda_en_el_llavero(servicio):
     assert proveedores.obtener('alfalfa').configurado()
 
 
+def test_el_codigo_trae_su_servicio_detras_de_la_arroba():
+    assert alfalfa.separar(' cuy-abcd-efgh-jkmn@Alfalfa.example.com:8444/ ') == (CODIGO, 'https://Alfalfa.example.com:8444')
+    assert alfalfa.separar(CODIGO + '@https://alfalfa.example.com') == (CODIGO, 'https://alfalfa.example.com')
+    assert alfalfa.separar(CODIGO + '@127.0.0.1:8090') == (CODIGO, 'http://127.0.0.1:8090')
+    assert alfalfa.separar(CODIGO) == (CODIGO, None)
+
+
+@pytest.mark.parametrize('malo', [CODIGO + '@', CODIGO + '@http://alfalfa.example.com',
+                                  CODIGO + '@alfalfa.example.com/ruta', CODIGO + '@ana:clave@alfalfa.example.com'])
+def test_un_servicio_mal_escrito_no_se_usa(malo):
+    with pytest.raises(alfalfa.ErrorDeAlfalfa):
+        alfalfa.separar(malo)
+
+
+def test_activar_con_el_servicio_en_el_codigo_guarda_la_direccion(servicio):
+    configuracion.cambiar('alfalfa', 'url', None)
+    hecho = proveedores.obtener('alfalfa').activar(CODIGO + '@alfalfa.example.com:8444')
+    assert hecho['nombre'] == 'Ana'
+    assert configuracion.de('alfalfa')['url'] == URL
+    assert llavero.leer('alfalfa') == CODIGO
+
+
+def test_si_el_servicio_rechaza_el_codigo_no_se_guarda_la_direccion(servicio, monkeypatch):
+    configuracion.cambiar('alfalfa', 'url', None)
+    monkeypatch.setattr(alfalfa, 'cliente_de_lista',
+                        lambda: httpx.Client(transport=httpx.MockTransport(
+                            lambda request: httpx.Response(403, json={'error': 'Código revocado.'}))))
+    with pytest.raises(alfalfa.ErrorDeAlfalfa, match='revocado'):
+        proveedores.obtener('alfalfa').activar(CODIGO + '@otro.example.com')
+    assert not configuracion.de('alfalfa').get('url')
+    assert not llavero.leer('alfalfa')
+
+
+def test_sin_servicio_guardado_ni_en_el_codigo_lo_pide_completo(servicio):
+    configuracion.cambiar('alfalfa', 'url', None)
+    with pytest.raises(alfalfa.ErrorDeAlfalfa, match='CUY-…@servicio'):
+        proveedores.obtener('alfalfa').activar(CODIGO)
+    assert servicio.vistas == []
+
+
 def test_un_codigo_que_no_es_cuy_no_se_envia(servicio):
     with pytest.raises(alfalfa.ErrorDeAlfalfa, match='CUY-'):
         proveedores.obtener('alfalfa').activar('hola')

@@ -46,13 +46,20 @@ secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
 La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
 también abre «Proveedores…» en el selector de modelo.
 
-Con un **código de cortesía** de un servicio Alfalfa:
+Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección del
+servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
 
 ```bash
-alfalfa --fijar-url alfalfa https://servicio.example.com
-alfalfa --activar-codigo     # pide el CUY-XXXX-XXXX-XXXX y lo ata a este Mac
+alfalfa --activar-codigo     # pide el CUY-…@servicio y lo ata a este Mac
 alfalfa --cuota              # % usado este mes
 ```
+
+El repositorio no trae la dirección de ningún servicio: llega con el código. Al
+servicio sólo se le manda la parte `CUY-…`, y la dirección queda guardada en
+`proveedores.json` cuando el servicio acepta el código. Sin esquema se usa HTTPS
+(HTTP sólo en este mismo equipo, como `@127.0.0.1:8090`). Un código suelto, sin
+arroba, vale si la dirección ya está guardada o se fija a mano con
+`alfalfa --fijar-url alfalfa https://…`.
 
 El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
 ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
