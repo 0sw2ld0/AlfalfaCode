@@ -145,6 +145,10 @@ struct SessionView: View {
             if !options.isEmpty {
                 CommandPopup(suggestions: options, selection: min(selection, options.count - 1)) { choose($0) }
             }
+            if Presentation.provider(of: session.model) == "alfalfa" {
+                let quotas = session.timeline.quotas.isEmpty ? app.alfalfaQuotas : session.timeline.quotas
+                if !quotas.isEmpty { QuotaLine(quotas: quotas).frame(maxWidth: .infinity, alignment: .leading) }
+            }
             AttachmentStrip(images: $session.draftImages).frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 10) {
                 Button { ImagePicker.choose(into: &session.draftImages) } label: {

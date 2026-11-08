@@ -356,7 +356,7 @@ public struct Timeline: Equatable, Sendable {
             if steps.count > Self.subagentStepLimit { steps.removeFirst(steps.count - Self.subagentStepLimit) }
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
-        case .sessions, .models, .providers, .update, .sessionChanged, .history, .ollamaChats:
+        case .sessions, .models, .providers, .activated, .update, .sessionChanged, .history, .ollamaChats:
             break
         }
     }

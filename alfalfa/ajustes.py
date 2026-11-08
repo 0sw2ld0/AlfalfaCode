@@ -40,6 +40,12 @@ def openai_clave():
     return os.getenv('OPENAI_API_KEY') or llavero.leer('openai')
 
 
+def alfalfa_codigo():
+    """Código de cortesía del servicio Alfalfa: `ALFALFA_CODIGO` o el guardado al activarlo."""
+    from .proveedores import llavero
+    return os.getenv('ALFALFA_CODIGO') or llavero.leer('alfalfa')
+
+
 def alfalfa_servicio_url():
     """URL base del servicio Alfalfa: `ALFALFA_SERVICIO_URL` o la de `proveedores.json`.
 

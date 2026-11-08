@@ -56,10 +56,11 @@ class Proveedor:
         """'local' o 'remote', para explicar los fallos de conexión."""
         return 'remote'
 
-    def cliente(self, timeout, tarea=None):
+    def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         """`httpx.AsyncClient` que habla el formato de Ollama.
 
-        `tarea` es la de la sesión, por si el proveedor necesita su esfuerzo.
+        `tarea` es la de la sesión, por si el proveedor necesita su esfuerzo;
+        `al_cambiar_cuota(filas)` se llama cuando el proveedor informa de su cuota.
         """
         raise NotImplementedError
 
@@ -67,6 +68,10 @@ class Proveedor:
         """Filas al estilo de `/api/tags` con `name` (el que guarda la sesión),
         `nombre` (el visible) y `proveedor`."""
         raise NotImplementedError
+
+    def accion(self, clas, error_text):
+        """Qué hacer ante un fallo clasificado, en palabras de este proveedor, o None."""
+        return None
 
     def estado(self):
         """Resumen para la pantalla de proveedores, sin secretos."""
@@ -80,6 +85,9 @@ def obtener(ident):
     if ident == 'openai':
         from .openai import OpenAI
         return OpenAI()
+    if ident == 'alfalfa':
+        from .alfalfa import Alfalfa
+        return Alfalfa()
     raise ErrorDeProveedor('Proveedor desconocido: ' + str(ident))
 
 
@@ -104,7 +112,7 @@ def secretos():
     """Todas las claves conocidas, para sanear lo que se escribe o se emite."""
     from .. import ajustes
     valores = []
-    for leer in (ajustes.ollama_clave, ajustes.openai_clave):
+    for leer in (ajustes.ollama_clave, ajustes.openai_clave, ajustes.alfalfa_codigo):
         try:
             valores.append(leer())
         except Exception:

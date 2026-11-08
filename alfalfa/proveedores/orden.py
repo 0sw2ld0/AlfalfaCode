@@ -5,6 +5,8 @@
     alfalfa --borrar-clave openai
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
+    alfalfa --activar-codigo                  lee el código CUY por la entrada y lo ata a este Mac
+    alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ from . import PREFIJOS, disponibles, llavero, configuracion
 from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.
-CON_CLAVE = ('ollama', 'openai', 'alfalfa')
+CON_CLAVE = ('ollama', 'openai')
 CON_URL = ('ollama', 'alfalfa')
 
 
@@ -48,6 +50,24 @@ def orden(args, entrada=None):
     entrada = entrada or sys.stdin
     como_json = bool(getattr(args, 'json', False))
     try:
+        if getattr(args, 'activar_codigo', False):
+            from .alfalfa import Alfalfa
+            if entrada.isatty():
+                codigo = input('Código de cortesía (CUY-…): ')
+            else:
+                codigo = entrada.readline()
+            hecho = Alfalfa().activar(codigo)
+            _salida({'tipo': 'activado', 'servicio': 'alfalfa', **hecho}, como_json,
+                    'Código activado en este Mac' + (' para ' + hecho['nombre'] if hecho.get('nombre') else '')
+                    + '. Modelos: ' + ', '.join(hecho['modelos']) + '.')
+            return 0
+        if getattr(args, 'cuota', False):
+            from .alfalfa import Alfalfa
+            filas = Alfalfa().cuota()
+            _salida({'tipo': 'cuota', 'servicio': 'alfalfa', 'cuotas': filas}, como_json,
+                    '\n'.join(f"{f['nombre']}: {f['usado_pct']:g} % usado (se renueva el {f['renueva']})"
+                              for f in filas) or 'Sin cuota.')
+            return 0
         if args.guardar_clave:
             proveedor = args.guardar_clave
             if proveedor not in CON_CLAVE:
@@ -91,12 +111,16 @@ def argumentos(grupo):
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
     grupo.add_argument('--guardar-clave', choices=CON_CLAVE, metavar='PROVEEDOR',
                        help='Guardar en el Llavero la clave que llega por la entrada estándar')
-    grupo.add_argument('--borrar-clave', choices=CON_CLAVE, metavar='PROVEEDOR')
+    grupo.add_argument('--borrar-clave', choices=CON_CLAVE + ('alfalfa',), metavar='PROVEEDOR',
+                       help='Borrar del Llavero una clave o el código de cortesía')
     grupo.add_argument('--proveedor-por-defecto', choices=PREFIJOS, metavar='PROVEEDOR')
     grupo.add_argument('--fijar-url', nargs=2, metavar=('PROVEEDOR', 'URL'),
                        help='URL base de Ollama o del servicio Alfalfa («-» la quita)')
+    grupo.add_argument('--activar-codigo', action='store_true',
+                       help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
+    grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
 
 
 def pedida(args):
     return bool(args.proveedores or args.guardar_clave or args.borrar_clave
-                or args.proveedor_por_defecto or args.fijar_url)
+                or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota)

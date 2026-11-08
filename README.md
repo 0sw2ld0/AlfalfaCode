@@ -45,6 +45,18 @@ También valen las variables estándar `OLLAMA_API_KEY` y `OPENAI_API_KEY`, y
 secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
 La app de Mac lo configura todo desde «Proveedores…» en el selector de modelo.
 
+Con un **código de cortesía** de un servicio Alfalfa:
+
+```bash
+alfalfa --fijar-url alfalfa https://servicio.example.com
+alfalfa --activar-codigo     # pide el CUY-XXXX-XXXX-XXXX y lo ata a este Mac
+alfalfa --cuota              # % usado este mes
+```
+
+El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
+ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
+enseña una barra con el % de la cuota del mes.
+
 ## Usar
 
 ```bash

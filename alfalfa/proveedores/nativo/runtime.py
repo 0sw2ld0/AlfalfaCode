@@ -665,7 +665,10 @@ class NativeRuntime:
                              'añade su clave o su código en Proveedores.')
         self._proveedor = proveedor
         self.task['provider'] = proveedor.id
-        return proveedor, model, proveedor.cliente(timeout, tarea=self.task)
+        aviso = getattr(self.manager, 'cuota', None)
+        return proveedor, model, proveedor.cliente(
+            timeout, tarea=self.task, al_cambiar_cuota=(lambda filas: aviso(self.task, proveedor.id, filas))
+            if callable(aviso) else None)
 
     @staticmethod
     def _texto_de_error(value):
@@ -715,10 +718,10 @@ class NativeRuntime:
     def _provider_failure(self, clas, error_text=None, intentos=None):
         """Error clasificado que deja su información estructurada en la tarea."""
         proveedor = self._proveedor_actual()
-        if proveedor.id != 'ollama' and clas.get('cause') == 'access_denied':
-            # La acción por defecto habla de iniciar sesión en Ollama.
-            clas = dict(clas, action='falta de acceso; revisa la clave o el código de ' + proveedor.nombre
-                        + ' en Proveedores; no se reintenta.')
+        # La acción por defecto habla de Ollama; cada proveedor explica los suyos.
+        accion = proveedor.accion(clas, error_text)
+        if accion:
+            clas = dict(clas, action=accion)
         exc = _ollama_failure(clas, error_text, intentos, proveedor.nombre)
         details = exc.as_dict()
         if proveedor.id != 'ollama':

@@ -258,7 +258,12 @@ class OpenAI(Proveedor):
     def secretos(self):
         return [self.clave()]
 
-    def cliente(self, timeout, tarea=None):
+    def accion(self, clas, error_text):
+        if clas.get('cause') == 'access_denied':
+            return 'falta de acceso; revisa la clave de OpenAI en Proveedores; no se reintenta.'
+        return None
+
+    def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         clave = self.clave()
         if not clave:
             raise ValueError('Falta la clave de OpenAI: guárdala con `alfalfa --guardar-clave openai`.')

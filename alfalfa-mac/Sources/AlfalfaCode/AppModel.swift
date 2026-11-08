@@ -102,6 +102,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var providers: [ProviderStatus] = []
     @Published private(set) var defaultProvider = "ollama"
     @Published var providersError: String?
+    /// Cuota del mes del servicio Alfalfa (GPT-6 Luna y los Flash), si hay código activado.
+    @Published private(set) var alfalfaQuotas: [Quota] = []
     @Published private(set) var loadError: String?
     @Published var model = Presentation.defaultModel
     @Published var effort = "medium"
@@ -174,6 +176,7 @@ final class AppModel: ObservableObject {
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
         }
         await reloadProviders()
+        await loadAlfalfaQuota()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
     }
@@ -224,6 +227,43 @@ final class AppModel: ObservableObject {
         let ok = await providerCommand(["--fijar-url", provider, value.isEmpty ? "-" : value, "--json"])
         if ok { await reload() }
         return ok
+    }
+
+    /// Ata el código de cortesía a este Mac (clave en el Secure Enclave) y lo guarda en el Llavero.
+    func activate(code: String, url: String) async -> Bool {
+        let clean = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let launcher else { return false }
+        if !url.isEmpty, url != providers.first(where: { $0.id == "alfalfa" })?.url {
+            guard await setURL(url, for: "alfalfa") else { return false }
+        }
+        do {
+            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--activar-codigo", "--json"],
+                                                          directory: home, input: clean)
+            for message in messages {
+                if case let .error(text) = message { providersError = text; return false }
+                if case let .activated(_, quotas) = message {
+                    alfalfaQuotas = quotas
+                    providersError = nil
+                    await reload()
+                    return true
+                }
+            }
+            providersError = "El servicio Alfalfa no confirmó la activación."
+        } catch {
+            providersError = error.localizedDescription
+        }
+        return false
+    }
+
+    func loadAlfalfaQuota() async {
+        guard let launcher, providers.first(where: { $0.id == "alfalfa" })?.configured == true else {
+            alfalfaQuotas = []
+            return
+        }
+        if let messages = try? await AlfalfaProcess.query(launcher: launcher, arguments: ["--cuota", "--json"],
+                                                          directory: home) {
+            for case let .quota(rows) in messages { alfalfaQuotas = rows }
+        }
     }
 
     func setDefaultProvider(_ provider: String) async {

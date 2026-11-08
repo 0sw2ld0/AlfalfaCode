@@ -36,6 +36,8 @@ struct ProvidersView: View {
     @State private var ollamaURL = ""
     @State private var ollamaKey = ""
     @State private var openAIKey = ""
+    @State private var alfalfaURL = ""
+    @State private var alfalfaCode = ""
     @State private var busy = false
     @State private var notice: String?
 
@@ -75,6 +77,24 @@ struct ProvidersView: View {
                     }
                 }
             }
+            section("Alfalfa", status: status("alfalfa"),
+                    detail: "Con un código de cortesía: cuota mensual de GPT-6 Luna, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
+                        + "El código queda atado a este Mac.") {
+                TextField("https://servicio-alfalfa…", text: $alfalfaURL).textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Dirección del servicio Alfalfa")
+                SecureField(status("alfalfa")?.configured == true ? "Código activado · escribe otro para cambiarlo"
+                                                                   : "Código de cortesía (CUY-…)", text: $alfalfaCode)
+                    .textFieldStyle(.roundedBorder).accessibilityLabel("Código de cortesía")
+                HStack {
+                    Button("Activar en este Mac") { Task { await activateAlfalfa() } }
+                        .disabled(busy || alfalfaCode.isEmpty || alfalfaURL.isEmpty)
+                    if status("alfalfa")?.hasKey == true {
+                        Button("Quitar código") { Task { await run { await model.deleteKey(for: "alfalfa") } } }
+                            .disabled(busy)
+                    }
+                }
+                if !model.alfalfaQuotas.isEmpty { QuotaBars(quotas: model.alfalfaQuotas) }
+            }
             if let text = model.providersError ?? notice {
                 Text(text).font(.system(size: 12))
                     .foregroundStyle(model.providersError == nil ? Theme.secondary : Theme.danger)
@@ -85,6 +105,8 @@ struct ProvidersView: View {
         .task {
             await model.reloadProviders()
             ollamaURL = status("ollama")?.url ?? ""
+            alfalfaURL = status("alfalfa")?.url ?? ""
+            await model.loadAlfalfaQuota()
         }
     }
 
@@ -138,6 +160,15 @@ struct ProvidersView: View {
         }
     }
 
+    private func activateAlfalfa() async {
+        await run {
+            if await model.activate(code: alfalfaCode, url: alfalfaURL) {
+                alfalfaCode = ""
+                notice = "Código activado en este Mac."
+            }
+        }
+    }
+
     private func saveOpenAI() async {
         await run {
             if await model.saveKey(openAIKey, for: "openai") {
@@ -145,5 +176,53 @@ struct ProvidersView: View {
                 notice = "Clave guardada en el Llavero."
             }
         }
+    }
+}
+
+/// El % usado de la cuota del mes, una barra por parte (GPT-6 Luna, los Flash).
+struct QuotaBars: View {
+    let quotas: [Quota]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(quotas) { quota in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text(quota.label).font(.system(size: 11.5))
+                        Spacer()
+                        Text(String(format: "%.0f %%", quota.usedPercent)).font(.system(size: 11.5, design: .monospaced))
+                    }
+                    ProgressView(value: min(100, max(0, quota.usedPercent)), total: 100)
+                        .tint(quota.usedPercent >= 90 ? Theme.danger : quota.usedPercent >= 70 ? Theme.warning : Theme.alfalfa)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(quota.label): \(Int(quota.usedPercent)) por ciento de la cuota del mes")
+            }
+            if let renews = quotas.first?.renews {
+                Text("Se renueva el \(renews)").font(.system(size: 11)).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+}
+
+/// La cuota en una línea, encima del cuadro de texto de una sesión con Alfalfa.
+struct QuotaLine: View {
+    let quotas: [Quota]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(quotas) { quota in
+                HStack(spacing: 6) {
+                    Text(quota.label).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                    ProgressView(value: min(100, max(0, quota.usedPercent)), total: 100).frame(width: 60)
+                        .tint(quota.usedPercent >= 90 ? Theme.danger : quota.usedPercent >= 70 ? Theme.warning : Theme.alfalfa)
+                    Text(String(format: "%.0f %%", quota.usedPercent)).font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(quota.label): \(Int(quota.usedPercent)) por ciento de la cuota del mes")
+            }
+        }
+        .help(quotas.first?.renews.map { "Cuota del mes del servicio Alfalfa · se renueva el \($0)" } ?? "Cuota del mes")
     }
 }

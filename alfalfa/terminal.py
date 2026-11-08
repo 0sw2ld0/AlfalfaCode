@@ -331,6 +331,13 @@ class TerminalManager:
                 self._ultimo_contexto = campos
                 self.transport.emit('contexto', **campos)
 
+    def cuota(self, task, proveedor, filas):
+        """La cuota mensual de un proveedor con límite, para la barra de la app."""
+        task['cuotas'] = {'servicio': proveedor, 'cuotas': filas}
+        if self.transport and filas != getattr(self, '_ultima_cuota', None):
+            self._ultima_cuota = filas
+            self.transport.emit('cuota', servicio=proveedor, cuotas=filas)
+
     def _mcp_medicion(self):
         return self.mcp.medicion() if getattr(self, 'mcp', None) is not None else {}
 

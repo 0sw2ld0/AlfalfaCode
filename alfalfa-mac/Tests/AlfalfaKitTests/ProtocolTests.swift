@@ -38,8 +38,11 @@ final class ProtocolTests: XCTestCase {
             ProviderStatus(id: "ollama", name: "Ollama", configured: true, url: "http://127.0.0.1:11434"),
             ProviderStatus(id: "openai", name: "OpenAI", configured: true, hasKey: true),
         ]))
-        let quota = #"{"version":2,"tipo":"cuota","cuotas":[{"proveedor":"openai","usado_pct":42.5,"renueva":"2026-12-01"}]}"#
-        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([Quota(provider: "openai", usedPercent: 42.5, renews: "2026-12-01")]))
+        let quota = #"{"version":2,"tipo":"cuota","servicio":"alfalfa","cuotas":[{"proveedor":"openai","nombre":"GPT-6 Luna","usado_pct":42.5,"renueva":"2026-12-01"}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([Quota(provider: "openai", label: "GPT-6 Luna",
+                                                                         usedPercent: 42.5, renews: "2026-12-01")]))
+        let activated = #"{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","modelos":["gpt-6-luna"],"cuotas":[]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: activated), .activated(name: "Ana", quotas: []))
         var timeline = Timeline()
         timeline.apply(.quota([Quota(provider: "ollama", usedPercent: 10)]))
         XCTAssertEqual(timeline.quotas.first?.usedPercent, 10)
