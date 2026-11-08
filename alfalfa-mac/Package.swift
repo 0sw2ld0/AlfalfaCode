@@ -13,11 +13,16 @@ let package = Package(
         .executable(name: "AlfalfaCode", targets: ["AlfalfaCode"]),
         .library(name: "AlfalfaKit", targets: ["AlfalfaKit"])
     ],
+    dependencies: [
+        // La terminal integrada: CuyTerm, nuestra copia de SwiftTerm (MIT) sin dependencias y
+        // con el portapapeles cerrado. Versión exacta: nada cambia sin que lo decidamos.
+        .package(url: "https://github.com/0sw2ld0/CuyTerm.git", exact: "1.99.2-cuy.1")
+    ],
     targets: [
         .target(name: "AlfalfaKit"),
         .executableTarget(
             name: "AlfalfaCode",
-            dependencies: ["AlfalfaKit"],
+            dependencies: ["AlfalfaKit", .product(name: "SwiftTerm", package: "CuyTerm")],
             exclude: ["Info.plist"],
             resources: [.process("Resources")],
             linkerSettings: [

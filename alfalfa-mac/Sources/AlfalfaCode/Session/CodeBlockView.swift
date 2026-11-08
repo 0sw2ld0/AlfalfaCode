@@ -2,7 +2,8 @@ import AlfalfaKit
 import AppKit
 import SwiftUI
 
-/// Bloque de código con Copiar y, si es de terminal, Ejecutar en Terminal.app.
+/// Bloque de código con Copiar y, si es de terminal, Ejecutar: en la terminal de la sesión
+/// cuando la hay (como en Claude Code) y si no, en Terminal.app.
 struct CodeBlockView: View {
 
     // MARK: - Constantes
@@ -27,7 +28,12 @@ struct CodeBlockView: View {
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 4) {
                 if let folder, CodeActions.isRunnable(language: language, code: code) {
-                    iconButton("play", "Ejecutar en Terminal") { run(in: folder) }
+                    if let runInTerminal {
+                        iconButton("play", "Ejecutar en la terminal de la sesión") { runInTerminal(code) }
+                            .contextMenu { Button("Ejecutar en Terminal.app") { run(in: folder) } }
+                    } else {
+                        iconButton("play", "Ejecutar en Terminal") { run(in: folder) }
+                    }
                 }
                 iconButton(copied ? "checkmark" : "doc.on.doc", copied ? "Copiado" : "Copiar") { copy() }
             }
@@ -38,6 +44,7 @@ struct CodeBlockView: View {
 
     // MARK: - Propiedades privadas
 
+    @Environment(\.runInTerminal) private var runInTerminal
     @State private var copied = false
     @State private var error: String?
 

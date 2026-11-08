@@ -1,7 +1,7 @@
 import AlfalfaKit
 import SwiftUI
 
-/// Pantalla de sesión: conversación, composición y panel derecho.
+/// Pantalla de sesión: conversación, composición y, a la derecha, el panel de detalles o la terminal.
 struct SessionView: View {
 
     // MARK: - Propiedades
@@ -10,35 +10,24 @@ struct SessionView: View {
     var notice: String?
 
     var body: some View {
+        let terminals = TerminalHub.shared.terminals(for: session)
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                header
-                conversation
+                header(terminals)
+                conversation.environment(\.runInTerminal) { terminals.run($0) }
                 Composer(session: session)
             }
             .frame(maxWidth: .infinity)
             Divider().overlay(Theme.border)
-            SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
-                      timeline: session.timeline, canCompact: session.canCompact,
-                      onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) })
-                .frame(width: 300)
+            SessionSidePane(terminals: terminals) {
+                SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
+                          timeline: session.timeline, canCompact: session.canCompact,
+                          onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) })
+            }
         }
     }
 
     // MARK: - Propiedades privadas
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            LeafIcon()
-            Text(session.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-            Spacer()
-            if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
-            if session.isDormant { dormantHint }
-            folderButton
-        }
-        .padding(.horizontal, 24).frame(minHeight: 48).padding(.top, 4)
-        .overlay(alignment: .bottom) { Divider().overlay(Theme.border) }
-    }
 
     /// Abre en Finder la carpeta del proyecto, no la del historial de la sesión.
     private var folderButton: some View {
@@ -101,6 +90,20 @@ struct SessionView: View {
     }
 
     // MARK: - Métodos privados
+
+    private func header(_ terminals: SessionTerminals) -> some View {
+        HStack(spacing: 10) {
+            LeafIcon()
+            Text(session.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            Spacer()
+            if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
+            if session.isDormant { dormantHint }
+            TerminalToggle(terminals: terminals)
+            folderButton
+        }
+        .padding(.horizontal, 24).frame(minHeight: 48).padding(.top, 4)
+        .overlay(alignment: .bottom) { Divider().overlay(Theme.border) }
+    }
 
     /// Una respuesta del agente que no va seguida de más trabajo: lleva copiar y la hora.
     private func closesRun(_ items: [TimelineItem], _ index: Int) -> Bool {
