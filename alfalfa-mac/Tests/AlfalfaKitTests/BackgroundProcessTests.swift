@@ -9,7 +9,7 @@ final class BackgroundProcessTests: XCTestCase {
         XCTAssertEqual(list, [
             BackgroundProcess(id: "p1", argv: ["swift", "run", "Juego"], purpose: "Abrir", since: 10, alive: true,
                               exitCode: nil, unsandboxed: true, lastLines: ["listo"]),
-            BackgroundProcess(id: "p2", argv: ["make"], alive: false, exitCode: 2),
+            BackgroundProcess(id: "p2", argv: ["make"], alive: false, exitCode: 2)
         ])
         var timeline = Timeline()
         timeline.apply(.processes(list))

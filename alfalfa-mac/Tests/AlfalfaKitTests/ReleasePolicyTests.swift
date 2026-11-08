@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 final class ReleasePolicyTests: XCTestCase {
     func testLeavingFreeSessionClosesNow() {

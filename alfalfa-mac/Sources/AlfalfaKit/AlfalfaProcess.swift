@@ -1,12 +1,17 @@
 import Foundation
 
-public enum AlfalfaError: Error, LocalizedError {
+public enum AlfalfaError: Error {
     case launcherNotFound
     case failed(String)
+}
 
+// MARK: - LocalizedError
+
+extension AlfalfaError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .launcherNotFound: return "No se encontró scripts/alfalfa. Define ALFALFA_REPO con la carpeta del repositorio."
+        case .launcherNotFound:
+            return "No se encontró scripts/alfalfa. Define ALFALFA_REPO con la carpeta del repositorio."
         case let .failed(text): return text
         }
     }

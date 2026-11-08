@@ -17,9 +17,9 @@ public struct AgentEvent: Equatable, Sendable {
     public var text: String
     public var time: Double
     /// Turno al que pertenece (`turno`); nil en motores anteriores o eventos sin turno.
-    public var turn: String? = nil
+    public var turn: String?
     /// Datos de una compactación (`compactacion`): la conversación pinta su marca.
-    public var compaction: Compaction? = nil
+    public var compaction: Compaction?
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -399,9 +399,9 @@ public struct Outcome: Equatable, Sendable {
     public var exitCode: Int
     public var tokens: Int
     /// Cierre del turno (herramienta `wrap_up`); nil si el agente no lo dio.
-    public var wrapUp: WrapUp? = nil
+    public var wrapUp: WrapUp?
     /// Id del turno que terminó (`turno`).
-    public var turn: String? = nil
+    public var turn: String?
 }
 
 /// Caja «siguiente paso» al final de un turno: resumen y, si el usuario decide, pregunta y botones.
@@ -427,10 +427,10 @@ public struct SessionSummary: Equatable, Identifiable, Sendable {
     public var date: Double
     public var tokens: Int
     /// Marcas de la app (`--marcar`): título propio, fijada y archivada.
-    public var title: String? = nil
+    public var title: String?
     public var pinned: Bool = false
     public var archived: Bool = false
-    public var mode: String? = nil
+    public var mode: String?
 
     /// El título propio si lo hay; si no, el encargo.
     public var displayTitle: String? { title ?? task }

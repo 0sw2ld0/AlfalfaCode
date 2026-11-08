@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 final class TimelineTests: XCTestCase {
     private func replay(_ name: String) throws -> Timeline {
@@ -35,7 +35,7 @@ final class TimelineTests: XCTestCase {
         XCTAssertEqual(timeline.pendingPermissions.count, 1)
         timeline.processExited(code: 0)
         XCTAssertEqual(timeline.pendingPermissions, [])
-        guard case let .permission(_, _, state) = timeline.items[0] else { return XCTFail() }
+        guard case let .permission(_, _, state) = timeline.items[0] else { return XCTFail("permiso") }
         XCTAssertEqual(state, .denied("Sesión terminada"))
     }
 
@@ -44,7 +44,7 @@ final class TimelineTests: XCTestCase {
         timeline.addUser("segundo", queued: true)
         timeline.apply(.event(AgentEvent(role: "user", text: "segundo", time: 1)))
         XCTAssertEqual(timeline.items.count, 1)
-        guard case let .user(_, text, queued) = timeline.items[0] else { return XCTFail() }
+        guard case let .user(_, text, queued) = timeline.items[0] else { return XCTFail("mensaje") }
         XCTAssertEqual(text, "segundo")
         XCTAssertFalse(queued)
     }
@@ -177,7 +177,7 @@ final class MarkdownTextTests: XCTestCase {
             .numbered(1, "primero"),
             .numbered(2, "segundo"),
             .code("return a + b"),
-            .paragraph("Fin"),
+            .paragraph("Fin")
         ])
     }
 
@@ -200,7 +200,7 @@ final class MarkdownTextTests: XCTestCase {
             .task(false, "pendiente"),
             .task(true, "hecho"),
             .bullet("anidado sigue aquí", level: 1),
-            .heading(3, "Fin"),
+            .heading(3, "Fin")
         ])
     }
 
@@ -208,7 +208,7 @@ final class MarkdownTextTests: XCTestCase {
         let text = "| Cosa | Dónde |\n|---|:---:|\n| Romance | `Engine.swift:343` |\n| a \\| b |\n\n```swift\nlet x = 1\n```"
         XCTAssertEqual(MarkdownText.blocks(text), [
             .table(header: ["Cosa", "Dónde"], rows: [["Romance", "`Engine.swift:343`"], ["a | b", ""]]),
-            .code("let x = 1", language: "swift"),
+            .code("let x = 1", language: "swift")
         ])
     }
 

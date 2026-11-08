@@ -1,5 +1,5 @@
-import XCTest
 @testable import AlfalfaKit
+import XCTest
 
 /// Campos MCP de `permiso` y `contexto` en `alfalfa --stdio` (opcionales en el protocolo v2).
 final class McpTests: XCTestCase {
@@ -13,7 +13,7 @@ final class McpTests: XCTestCase {
             McpArgument(key: "filtros", value: #"{"estado":"abierto"}"#),
             McpArgument(key: "nota", value: "stdio"),
             McpArgument(key: "pagina", value: "2"),
-            McpArgument(key: "token", value: "[REDACTADO]"),
+            McpArgument(key: "token", value: "[REDACTADO]")
         ], callID: "a1b2c3d4e5f6"))
         // `mcp` no es un motivo on-request conocido: no cambia el alcance de los comandos.
         XCTAssertNil(request.reason)
@@ -24,13 +24,13 @@ final class McpTests: XCTestCase {
 
     func testResultEventCorrelatesWithTheCard() throws {
         let rows = try decoded()
-        guard case let .permission(request)? = rows[1], case let .event(event)? = rows[3] else { return XCTFail() }
+        guard case let .permission(request)? = rows[1], case let .event(event)? = rows[3] else { return XCTFail("permiso y evento") }
         XCTAssertTrue(event.text.contains(request.mcp!.callID))
     }
 
     func testCommandCardsAndMalformedMcpStayCompatible() throws {
         let rows = try decoded()
-        guard case let .permission(command)? = rows[6], case let .permission(broken)? = rows[7] else { return XCTFail() }
+        guard case let .permission(command)? = rows[6], case let .permission(broken)? = rows[7] else { return XCTFail("dos permisos") }
         XCTAssertEqual(command.reason, .dangerous)
         XCTAssertNil(command.mcp)
         XCTAssertEqual(command.rule, "rm con opción de fuerza")

@@ -16,8 +16,8 @@ struct SidebarRow: Identifiable {
     let route: Route
     let date: Double
     /// Id de la sesión guardada (las vivas lo tienen en cuanto alfalfa lo anuncia).
-    var sessionID: String? = nil
-    var folder: String? = nil
+    var sessionID: String?
+    var folder: String?
     var pinned = false
     var archived = false
     /// Una sesión con turno en marcha no se puede eliminar ni bifurcar.
@@ -29,14 +29,14 @@ struct SidebarRow: Identifiable {
 struct SidebarGroup: Identifiable {
     let folder: String
     let rows: [SidebarRow]
-    var title: String? = nil
+    var title: String?
     var id: String { title ?? folder }
     var name: String { title ?? URL(fileURLWithPath: folder).lastPathComponent }
 }
 
 enum Presentation {
     static let efforts: [(value: String, label: String)] = [
-        ("low", "Bajo"), ("medium", "Medio"), ("high", "Alto"), ("xhigh", "Muy alto"), ("max", "Máximo"),
+        ("low", "Bajo"), ("medium", "Medio"), ("high", "Alto"), ("xhigh", "Muy alto"), ("max", "Máximo")
     ]
     static let defaultModel = "deepseek-v4.1-flash:cloud"
 
@@ -151,7 +151,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Carga
+    // MARK: - Carga
 
     func reload() async {
         guard let launcher else { return }
@@ -203,7 +203,7 @@ final class AppModel: ObservableObject {
         providers.first { $0.id == id }?.name ?? Presentation.providerNames[id] ?? id
     }
 
-    // MARK: Proveedores
+    // MARK: - Proveedores
 
     func reloadProviders() async {
         _ = await providerCommand(["--proveedores", "--json"])
@@ -323,7 +323,7 @@ final class AppModel: ObservableObject {
             .sorted { $0.date > $1.date }.prefix(3).map { $0 }
     }
 
-    // MARK: Actualización
+    // MARK: - Actualización
 
     /// Compara la versión instalada con la última etiqueta del repositorio de AlfalfaCode.
     func checkForUpdate() {
@@ -368,7 +368,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Carpeta
+    // MARK: - Carpeta
 
     func chooseFolder() {
         let panel = NSOpenPanel()
@@ -395,7 +395,7 @@ final class AppModel: ObservableObject {
         newOllama = await reachable
     }
 
-    // MARK: Sesiones
+    // MARK: - Sesiones
 
     func startTask() {
         var task = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -468,7 +468,7 @@ final class AppModel: ObservableObject {
     private func loadHistory(_ id: String, into session: LiveSession, launcher: URL, resumable: Bool) async {
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
-                                                         directory: home)
+                                                          directory: home)
             for case let .history(_, events, wrapUp, context, tokens) in messages {
                 session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens),
                                 launcher: launcher, resumable: resumable)
@@ -492,7 +492,7 @@ final class AppModel: ObservableObject {
         if case let .live(id) = old { session(id)?.leave() }
     }
 
-    // MARK: Acciones sobre una sesión (clic derecho)
+    // MARK: - Acciones sobre una sesión (clic derecho)
 
     /// `alfalfa --marcar ID CAMPO VALOR` y recarga la barra lateral.
     func mark(_ row: SidebarRow, _ field: String, _ value: String) {
@@ -552,14 +552,14 @@ final class AppModel: ObservableObject {
         return groups.flatMap(\.rows).first { $0.sessionID == id }
     }
 
-    // MARK: Chats de la app de Ollama
+    // MARK: - Chats de la app de Ollama
 
     /// Títulos y recuentos de los chats de Ollama; el contenido sólo se lee al cargar uno.
     func ollamaChats() async -> (chats: [OllamaChat], error: String?) {
         guard let launcher else { return ([], "No se encuentra la orden alfalfa.") }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--chats-ollama", "--json"],
-                                                         directory: home)
+                                                          directory: home)
             for case let .ollamaChats(rows) in messages { return (rows, nil) }
             for case let .error(text) in messages { return ([], text) }
             return ([], "Ollama no devolvió la lista de chats.")
@@ -623,7 +623,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: Barra lateral
+    // MARK: - Barra lateral
 
     var groups: [SidebarGroup] {
         var rows: [String: [SidebarRow]] = [:]

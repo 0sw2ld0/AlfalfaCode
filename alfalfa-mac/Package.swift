@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "AlfalfaCode", targets: ["AlfalfaCode"]),
-        .library(name: "AlfalfaKit", targets: ["AlfalfaKit"]),
+        .library(name: "AlfalfaKit", targets: ["AlfalfaKit"])
     ],
     targets: [
         .target(name: "AlfalfaKit"),
@@ -19,6 +19,6 @@ let package = Package(
             name: "AlfalfaKitTests",
             dependencies: ["AlfalfaKit"],
             resources: [.copy("Fixtures")]
-        ),
+        )
     ]
 )

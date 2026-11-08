@@ -9,7 +9,7 @@ final class SubagentTests: XCTestCase {
         XCTAssertEqual(rows, [
             Subagent(id: "a1", name: "Buscar usos", type: "explorador", state: "trabajando", model: "glm:cloud",
                      since: 10, activity: "tool · Inicio search", steps: 2),
-            Subagent(id: "a2", name: "Revisar", type: "general", state: "terminado", since: 5, until: 9, report: "Sin errores."),
+            Subagent(id: "a2", name: "Revisar", type: "general", state: "terminado", since: 5, until: 9, report: "Sin errores.")
         ])
         let step = #"{"version":2,"tipo":"subagente_evento","agente":"a1","rol":"tool","texto":"Inicio search {}","hora":11}"#
         guard let event = AlfalfaMessage.decode(line: step) else { return XCTFail("subagente_evento") }

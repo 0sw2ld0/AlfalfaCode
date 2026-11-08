@@ -64,7 +64,7 @@ struct RootView: View {
     }
 }
 
-// MARK: Barra lateral
+// MARK: - Barra lateral
 
 struct SidebarView: View {
     @EnvironmentObject private var model: AppModel
@@ -260,7 +260,7 @@ struct StatusDot: View {
     }
 }
 
-// MARK: Sesión anterior
+// MARK: - Sesión anterior
 
 struct PastSessionView: View {
     @EnvironmentObject private var model: AppModel
