@@ -1,6 +1,7 @@
 # AlfalfaCode
 
-Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud).
+Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud),
+de OpenAI con tu propia clave o de un servicio Alfalfa.
 Recibe un encargo, trabaja en la carpeta actual y pregunta antes de ejecutar lo
 que no sea una lectura. La orden es `alfalfa`.
 
@@ -18,9 +19,31 @@ python3.11 -m venv .venv
 Después `alfalfa` queda en `.venv/bin/`. También se puede lanzar con
 `scripts/alfalfa`, que admite un enlace simbólico desde cualquier carpeta del `PATH`.
 
-Ollama se configura con `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`)
-y la clave estándar `OLLAMA_API_KEY`, si el servicio la pide. Las sesiones, reglas, complementos y hooks del usuario
-viven en `$ALFALFA_HOME` (por defecto `~/.alfalfa`).
+Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
+(por defecto `~/.alfalfa`).
+
+## Proveedores
+
+El modelo dice con quién se habla:
+
+| Modelo | Proveedor |
+|---|---|
+| `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
+| `openai/gpt-6-luna` | OpenAI, con tu clave de la API (Responses API) |
+| `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
+
+```bash
+alfalfa --proveedores                         # estado, sin secretos
+alfalfa --guardar-clave openai                # pide la clave sin enseñarla
+alfalfa --fijar-url ollama https://ollama.com
+alfalfa --proveedor-por-defecto openai
+```
+
+Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.
+También valen las variables estándar `OLLAMA_API_KEY` y `OPENAI_API_KEY`, y
+`ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
+secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
+La app de Mac lo configura todo desde «Proveedores…» en el selector de modelo.
 
 ## Usar
 
@@ -398,7 +421,9 @@ versión en sus dependencias.
 
 El arnés no importa nada de quien lo integra. Lo que esa aplicación necesita
 cambiar está en `alfalfa/ajustes.py`: instrucciones por defecto, dónde buscar los
-binarios, cómo llegar al buscador web y qué repositorio da por propio. La
+binarios, cómo llegar al buscador web, qué repositorio da por propio y las URL
+y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`,
+`alfalfa_servicio_url`). La
 aplicación los registra al cargarse.
 
 ## Pruebas
