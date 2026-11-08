@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+alfalfa-mac/.build/
+.pytest_cache/

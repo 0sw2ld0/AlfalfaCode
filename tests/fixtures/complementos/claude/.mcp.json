@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "revision": {
+      "type": "http",
+      "url": "https://mcp.example.invalid/revision"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "demo-claude",
+  "version": "0.9.0",
+  "description": "Complemento de prueba con manifiesto de Claude Code.",
+  "author": {"name": "AlfalfaCode", "email": "pruebas@example.invalid"},
+  "license": "Apache-2.0",
+  "keywords": ["pruebas", "claude"]
+}

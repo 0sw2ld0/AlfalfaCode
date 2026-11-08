@@ -1,0 +1,27 @@
+{
+  "name": "runpod",
+  "version": "1.7.4",
+  "description": "Official Runpod agent skills and MCP server — run Runpod tasks (pods, serverless, templates, volumes) with runpodctl and flash, plus conceptual guidance and worked golden paths.",
+  "author": {
+    "name": "Runpod",
+    "email": "team@runpod.io"
+  },
+  "homepage": "https://github.com/runpod/runpod-plugins-official",
+  "repository": "https://github.com/runpod/runpod-plugins-official",
+  "icon": "./assets/logo.png",
+  "documentationUrl": "https://docs.runpod.io/get-started/agent-skills",
+  "supportUrl": "https://www.runpod.io/contact",
+  "privacyPolicyUrl": "https://www.runpod.io/legal/privacy-policy",
+  "termsOfServiceUrl": "https://www.runpod.io/legal/terms-of-service",
+  "license": "Apache-2.0",
+  "keywords": [
+    "runpod",
+    "gpu",
+    "serverless",
+    "pods",
+    "mcp",
+    "runpodctl",
+    "flash",
+    "infrastructure"
+  ]
+}

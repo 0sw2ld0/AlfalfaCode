@@ -1,0 +1,6 @@
+{"version":2,"tipo":"permiso","id":"p1","argv":["rm","-rf","basura"],"proposito":"Borrar la carpeta desechable","motivo":"peligroso","motivos":["peligroso"],"regla":"rm con opción de fuerza","intento":"a1"}
+{"version":2,"tipo":"permiso","id":"p2","argv":["curl","-fsS","https://example.org"],"proposito":"Descargar la especificación","motivo":"red","motivos":["red","peligroso"],"justificacion":"Necesita la especificación publicada","red":true,"intento":"a2"}
+{"version":2,"tipo":"permiso","id":"p3","argv":["touch","/etc/x"],"proposito":"Configurar","motivo":"salir_sandbox","motivos":["salir_sandbox"],"justificacion":"Escribe fuera del proyecto","sin_sandbox":"Escribe fuera del proyecto","intento":"a3"}
+{"version":2,"tipo":"permiso","id":"p4","argv":["touch","/etc/x"],"proposito":"Configurar","motivo":"reintento","motivos":["reintento"],"reintento_de":"a3","sin_sandbox":"El intento a3 terminó con código 1 y una salida típica del sandbox.","intento":"a4"}
+{"version":2,"tipo":"permiso","id":"p5","argv":["ls"],"proposito":"Listar"}
+{"version":2,"tipo":"permiso","id":"p6","argv":["ls"],"proposito":"Listar","motivo":"futuro","motivos":["futuro","red"],"justificacion":3}

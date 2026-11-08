@@ -1,0 +1,41 @@
+{
+  "name": "runpod",
+  "version": "1.7.4",
+  "description": "Official Runpod agent skills and MCP server — run Runpod tasks (pods, serverless, templates, volumes) with runpodctl and flash, plus conceptual guidance and worked golden paths.",
+  "author": {
+    "name": "Runpod",
+    "email": "team@runpod.io"
+  },
+  "homepage": "https://github.com/runpod/runpod-plugins-official/tree/main/plugins/runpod",
+  "keywords": [
+    "runpod",
+    "gpu",
+    "serverless",
+    "pods",
+    "mcp",
+    "runpodctl",
+    "flash",
+    "infrastructure"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Runpod",
+    "shortDescription": "Official Runpod skills + MCP server — pods, serverless, runpodctl, flash.",
+    "longDescription": "Official Runpod agent skills and a bundled MCP server: a router that dispatches to runpodctl, flash, and companion CLIs, plus conceptual usage guidance and worked golden paths.",
+    "developerName": "Runpod",
+    "category": "Infrastructure",
+    "capabilities": [
+      "Skills",
+      "MCP",
+      "CLI"
+    ],
+    "defaultPrompt": [
+      "Create a pod with an RTX 4090.",
+      "Deploy a serverless endpoint from this image.",
+      "Which GPU should I use for a 13B model?"
+    ],
+    "brandColor": "#5D29F0",
+    "composerIcon": "./assets/logo.png",
+    "logo": "./assets/logo.png"
+  }
+}
