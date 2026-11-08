@@ -23,3 +23,29 @@ def _sin_habilidades_del_usuario(tmp_path_factory, monkeypatch):
     """Las habilidades sueltas de ~/.claude/skills y ~/.codex/skills de quien corre la suite no entran."""
     from alfalfa.complementos import cargador
     monkeypatch.setattr(cargador, 'CASA', tmp_path_factory.mktemp('casa'))
+
+
+@pytest.fixture(autouse=True)
+def _sin_internet_en_la_web(monkeypatch):
+    """web_search y read_web nunca salen a internet en la suite: un motor o una lectura de
+    verdad fallan con «sin red en las pruebas». Las pruebas de la web usan motores falsos."""
+    from cuysearch import ErrorDeLectura
+    from cuysearch.extractor import PageExtractor
+    from cuysearch.motores.base import ErrorDeMotor, Motor
+
+    from alfalfa.proveedores.nativo import web
+
+    async def sin_red(self, *args, **kwargs):
+        raise ErrorDeMotor(self.nombre + ': sin red en las pruebas')
+
+    async def sin_lectura(self, url):
+        from cuysearch.security import UnsafeUrlError, validate_public_url
+        try:
+            validate_public_url(url)  # las URL locales se rechazan igual que fuera de las pruebas
+        except UnsafeUrlError as exc:
+            raise ErrorDeLectura(str(exc)) from exc
+        raise ErrorDeLectura('sin red en las pruebas')
+
+    monkeypatch.setattr(Motor, '_pedir', sin_red)
+    monkeypatch.setattr(PageExtractor, '_extract_limited', lambda self, client, url: sin_lectura(self, url))
+    monkeypatch.setattr(web, '_buscadores', {})

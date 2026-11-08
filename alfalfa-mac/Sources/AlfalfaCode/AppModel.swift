@@ -52,6 +52,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var providers: [ProviderStatus] = []
     @Published private(set) var defaultProvider = "ollama"
     @Published var providersError: String?
+    /// El buscador web de los agentes (`alfalfa --buscador --json`); nil hasta leerlo.
+    @Published var webSearch: WebSearchSettings?
+    @Published var webSearchError: String?
     /// Cuota del mes del servicio Alfalfa (GPT-6 Luna y los Flash), si hay código activado.
     @Published private(set) var alfalfaQuotas: [Quota] = []
     @Published private(set) var loadError: String?

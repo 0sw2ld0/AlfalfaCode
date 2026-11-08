@@ -7,6 +7,8 @@
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
     alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
     alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
+    alfalfa --buscador [MODO] [--json]        buscador web: auto, ollama, searxng o apagado
+    alfalfa --fijar-searxng URL               SearXNG del modo searxng («-» vuelve a la de CuySearch Manager)
     alfalfa --reportar [--json]               manda un reporte de error; lee por la entrada una línea
                                               JSON {texto, contacto?, registro?, diagnostico?} o, en la
                                               terminal, pregunta qué pasó
@@ -70,6 +72,15 @@ def orden(args, entrada=None):
             _salida({'tipo': 'cuota', 'servicio': 'alfalfa', 'cuotas': filas}, como_json,
                     '\n'.join(f"{f['nombre']}: {f['usado_pct']:g} % usado (se renueva el {f['renueva']})"
                               for f in filas) or 'Sin cuota.')
+            return 0
+        if getattr(args, 'buscador', None) is not None or getattr(args, 'fijar_searxng', None):
+            from .nativo import web
+            modo = args.buscador or None
+            datos = web.configurar(modo, args.fijar_searxng) if (modo or args.fijar_searxng) else web.estado()
+            _salida({'tipo': 'buscador', **datos}, como_json,
+                    'Buscador web: ' + datos['modo']
+                    + (' · ' + datos['searxng_url'] if datos['modo'] == 'searxng' else '')
+                    + ('' if datos['libreria'] or datos['remoto'] else ' (falta la librería cuysearch)') + '.')
             return 0
         if getattr(args, 'reportar', False):
             from .alfalfa import Alfalfa
@@ -163,6 +174,11 @@ def argumentos(grupo):
     grupo.add_argument('--activar-codigo', action='store_true',
                        help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
+    from .nativo.web import MODOS
+    grupo.add_argument('--buscador', nargs='?', const='', choices=('',) + MODOS, metavar='MODO',
+                       help='Buscador web de los agentes: ' + ', '.join(MODOS) + ' (sin MODO, el actual)')
+    grupo.add_argument('--fijar-searxng', metavar='URL',
+                       help='URL del SearXNG del modo searxng («-» vuelve a http://127.0.0.1:8888)')
     grupo.add_argument('--reportar', action='store_true',
                        help='Mandar un reporte de error (al servicio Alfalfa o, si no se puede, por correo)')
 
@@ -170,4 +186,5 @@ def argumentos(grupo):
 def pedida(args):
     return bool(args.proveedores or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
-                or getattr(args, 'reportar', False))
+                or getattr(args, 'reportar', False) or getattr(args, 'buscador', None) is not None
+                or getattr(args, 'fijar_searxng', None))

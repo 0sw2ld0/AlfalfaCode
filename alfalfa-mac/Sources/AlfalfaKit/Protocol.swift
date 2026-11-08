@@ -468,6 +468,40 @@ public struct ProviderStatus: Equatable, Identifiable, Sendable {
     }
 }
 
+/// El buscador web de los agentes, como lo cuenta `alfalfa --buscador --json`, sin secretos.
+public struct WebSearchSettings: Equatable, Sendable {
+    /// Los modos que entiende `alfalfa --buscador`, en el orden del selector.
+    public static let modes = ["auto", "ollama", "searxng", "apagado"]
+
+    public var mode: String
+    public var searxngURL: String
+    /// Un integrador usa un servicio CuySearch remoto (`ALFALFA_CUYSEARCH_URL`).
+    public var remote: Bool
+    /// Está instalada la librería cuysearch en el entorno de AlfalfaCode.
+    public var library: Bool
+    public var hasOllamaKey: Bool
+
+    public init(mode: String, searxngURL: String = "http://127.0.0.1:8888", remote: Bool = false,
+                library: Bool = true, hasOllamaKey: Bool = false) {
+        self.mode = mode
+        self.searxngURL = searxngURL
+        self.remote = remote
+        self.library = library
+        self.hasOllamaKey = hasOllamaKey
+    }
+
+    /// El nombre de cada modo en Ajustes.
+    public static func label(of mode: String) -> String {
+        switch mode {
+        case "auto": return "Automático"
+        case "ollama": return "Ollama Web Search"
+        case "searxng": return "SearXNG"
+        case "apagado": return "Apagado"
+        default: return mode
+        }
+    }
+}
+
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
 public enum AlfalfaMessage: Equatable, Sendable {
     case session(SessionInfo)
@@ -487,6 +521,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case models([ModelInfo])
     /// `--proveedores --json` y las órdenes que los cambian: el proveedor por defecto y el estado de cada uno.
     case providers(defaultProvider: String, providers: [ProviderStatus])
+    /// `--buscador --json` y `--fijar-searxng`: el buscador web de los agentes.
+    case webSearch(WebSearchSettings)
     /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
     case quota([Quota])
     /// `--activar-codigo`: el código quedó atado a este Mac.
@@ -583,6 +619,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                       configured: row["configurado"] as? Bool ?? false,
                                       url: text(row["url"]), hasKey: row["clave"] as? Bool ?? false)
             })
+        case "buscador":
+            return webSearch(object).map { .webSearch($0) }
         case "cuota":
             guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
             return .quota(quotas(rows))
@@ -644,6 +682,14 @@ public enum AlfalfaMessage: Equatable, Sendable {
     private static func bool(_ value: Any?) -> Bool? {
         guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
+    }
+
+    /// `--buscador --json`: nil si el modo no es uno de los conocidos.
+    private static func webSearch(_ object: [String: Any]) -> WebSearchSettings? {
+        guard let mode = text(object["modo"]), WebSearchSettings.modes.contains(mode) else { return nil }
+        return WebSearchSettings(mode: mode, searxngURL: text(object["searxng_url"]) ?? "http://127.0.0.1:8888",
+                                 remote: bool(object["remoto"]) ?? false, library: bool(object["libreria"]) ?? true,
+                                 hasOllamaKey: bool(object["ollama_clave"]) ?? false)
     }
 
     private static func number(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }

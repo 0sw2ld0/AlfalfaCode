@@ -137,8 +137,22 @@ y Ollama iniciado con un modelo que declare herramientas y contexto de al menos
 Ollama y disponer de acceso. No instala componentes. Lee `ALFALFA_OLLAMA_URL`
 (por defecto `http://127.0.0.1:11434`) y `OLLAMA_API_KEY`, si el servicio la
 requiere, o la clave guardada en el Llavero con `--guardar-clave ollama`. Con un modelo con visión, `inspect_image`
-mira las imágenes con el mismo modelo. La búsqueda web está deshabilitada en esta
-fase; las tareas locales no necesitan CuySearch.
+mira las imágenes con el mismo modelo.
+
+`web_search` y `read_web` buscan y leen la web con la librería
+[CuySearch](https://github.com/0sw2ld0/CuySearch), desde tu conexión. Lo hace el
+proceso de AlfalfaCode: el sandbox de las órdenes sigue sin red, y `read_web`
+rechaza localhost y las redes privadas. El buscador se elige en Ajustes ▸ General
+de la app, con `alfalfa --buscador MODO` o con `ALFALFA_BUSCADOR`:
+
+- `auto` (por defecto): DuckDuckGo, Bing, Brave, Mojeek y Wikipedia, en ese orden;
+- `ollama`: Ollama Web Search con tu clave de Ollama y, si falla, los anteriores;
+- `searxng`: tu SearXNG (por defecto `http://127.0.0.1:8888`, el de CuySearch
+  Manager; otro con `alfalfa --fijar-searxng URL`) y, si falla, los anteriores;
+- `apagado`: los agentes no reciben las herramientas web.
+
+Si un motor bloquea o falla, se pasa al siguiente. Con `ALFALFA_CUYSEARCH_URL` se usa
+en su lugar un servicio CuySearch remoto (`ALFALFA_CUYSEARCH_KEY` es su clave).
 
 `--modelo` selecciona el modelo (por defecto `deepseek-v4.1-flash:cloud`).
 `--esfuerzo` acepta `low`, `medium` (predeterminado), `high`, `xhigh` y `max`.
