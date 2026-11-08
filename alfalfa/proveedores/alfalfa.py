@@ -174,9 +174,19 @@ def _cuotas(valor):
     if not isinstance(filas, list):
         return None
     nombres = {'openai': 'GPT-6 Luna', 'ollama': 'GLM y DeepSeek Flash'}
-    return [{'proveedor': f.get('proveedor'), 'nombre': nombres.get(f.get('proveedor'), f.get('proveedor')),
-             'usado_pct': f.get('usado_pct'), 'renueva': f.get('renueva')}
-            for f in filas if isinstance(f, dict) and isinstance(f.get('usado_pct'), (int, float))]
+    salida = []
+    for f in filas:
+        if not isinstance(f, dict) or not isinstance(f.get('usado_pct'), (int, float)):
+            continue
+        fila = {'proveedor': f.get('proveedor'),
+                'nombre': f.get('nombre') or nombres.get(f.get('proveedor'), f.get('proveedor')),
+                'usado_pct': f.get('usado_pct'), 'renueva': f.get('renueva')}
+        # El tope de hoy del código (servicio 0.7.0 en adelante): se renueva a medianoche UTC.
+        dia = f.get('dia')
+        if isinstance(dia, dict) and isinstance(dia.get('usado_pct'), (int, float)):
+            fila['dia'] = {'usado_pct': dia['usado_pct'], 'renueva': dia.get('renueva')}
+        salida.append(fila)
+    return salida
 
 
 class Transporte(httpx.AsyncBaseTransport):

@@ -468,23 +468,6 @@ public struct ProviderStatus: Equatable, Identifiable, Sendable {
     }
 }
 
-/// Cuota mensual de un proveedor con límite (el servicio Alfalfa).
-public struct Quota: Equatable, Identifiable, Sendable {
-    /// Qué parte de la cuota: `openai` (GPT-6 Luna) u `ollama` (los Flash).
-    public var provider: String
-    public var label: String
-    public var usedPercent: Double
-    public var renews: String?
-    public var id: String { provider }
-
-    public init(provider: String, label: String? = nil, usedPercent: Double, renews: String? = nil) {
-        self.provider = provider
-        self.label = label ?? provider
-        self.usedPercent = usedPercent
-        self.renews = renews
-    }
-}
-
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
 public enum AlfalfaMessage: Equatable, Sendable {
     case session(SessionInfo)
@@ -666,10 +649,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     private static func number(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
 
     private static func quotas(_ rows: [[String: Any]]) -> [Quota] {
-        rows.compactMap { row in
-            guard let provider = text(row["proveedor"]), let used = number(row["usado_pct"]) else { return nil }
-            return Quota(provider: provider, label: text(row["nombre"]), usedPercent: used, renews: text(row["renueva"]))
-        }
+        rows.compactMap(Quota.init(row:))
     }
 
     /// Texto opcional no vacío; cualquier otro tipo se ignora.

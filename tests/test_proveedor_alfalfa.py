@@ -349,3 +349,15 @@ def test_la_orden_reportar_lee_json_y_anade_el_diagnostico(servicio, capsys):
     registro = servicio.reportes[0]['registro']
     assert registro.startswith('AlfalfaCode ') and 'Proveedor por defecto' in registro
     assert registro.endswith('último error: 502') and URL not in registro
+
+
+def test_las_cuotas_traen_el_tope_de_hoy_y_el_nombre_del_servicio():
+    from alfalfa.proveedores.alfalfa import _cuotas
+    filas = _cuotas({'alfalfa': {'cuotas': [
+        {'proveedor': 'ollama', 'nombre': 'Modelos de Ollama', 'usado_pct': 45.0, 'renueva': '2026-12-01',
+         'dia': {'usado_pct': 90.0, 'renueva': '2026-11-09T00:00:00+00:00'}},
+        {'proveedor': 'openai', 'usado_pct': 1.0, 'renueva': '2026-12-01', 'dia': 'roto'}]}})
+    assert filas[0] == {'proveedor': 'ollama', 'nombre': 'Modelos de Ollama', 'usado_pct': 45.0,
+                        'renueva': '2026-12-01', 'dia': {'usado_pct': 90.0, 'renueva': '2026-11-09T00:00:00+00:00'}}
+    # Un servicio viejo no manda `dia` ni `nombre`: queda como antes.
+    assert filas[1] == {'proveedor': 'openai', 'nombre': 'GPT-6 Luna', 'usado_pct': 1.0, 'renueva': '2026-12-01'}

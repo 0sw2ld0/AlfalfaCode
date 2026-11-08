@@ -27,6 +27,18 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(decoded[9], .models([ModelInfo(name: "deepseek-v4.1-flash:cloud"), ModelInfo(name: "llama3.2:3b")]))
     }
 
+    func testDecodesTheDailyLimitOfAQuota() {
+        let quota = #"{"version":2,"tipo":"cuota","servicio":"alfalfa","cuotas":[{"proveedor":"ollama","#
+            + #""nombre":"Modelos de Ollama","usado_pct":15,"renueva":"2026-12-01","#
+            + #""dia":{"usado_pct":90,"renueva":"2026-11-09T00:00:00+00:00"}}]}"#
+        let daily = QuotaWindow(usedPercent: 90, renews: "2026-11-09T00:00:00+00:00")
+        let expected = Quota(provider: "ollama", label: "Modelos de Ollama", usedPercent: 15, renews: "2026-12-01",
+                             daily: daily)
+        XCTAssertEqual(AlfalfaMessage.decode(line: quota), .quota([expected]))
+        XCTAssertEqual(expected.tightestPercent, 90)
+        XCTAssertNil(Quota(provider: "openai", usedPercent: 3).daily)
+    }
+
     func testDecodesProvidersModelsAndQuota() {
         let models = #"{"version":2,"tipo":"modelos","modelos":[{"name":"glm-5.3-flash:cloud","proveedor":"ollama","nombre":"glm-5.3-flash:cloud"},{"name":"alfalfa/gpt-6-luna","proveedor":"alfalfa","nombre":"GPT-6 Luna - Alfalfa"}],"fallos":{"openai":"No se pudo consultar OpenAI."}}"#
         XCTAssertEqual(AlfalfaMessage.decode(line: models), .models([
