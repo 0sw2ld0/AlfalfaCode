@@ -95,7 +95,7 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 model: resumeID == nil || settingsChanged ? model : nil,
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
                                                 images: images.map(\.path), mode: mode, wait: wait,
-                                                parent: parentSessionID)
+                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }

@@ -290,6 +290,9 @@ async def run(args, transport):
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None))
+        if getattr(args, 'titulo', None) and not args.reanudar:
+            manager.save()
+            marcar(manager.task['id'], 'titulo', args.titulo)
         if esperar:
             code = 0  # Abrir y cerrar sin turno no es un fallo.
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
@@ -607,7 +610,8 @@ def history(ident):
     eventos += sueltos
     for turno in turnos:
         propios = por_turno.get(turno['id'], [])
-        if not (propios and propios[0]['rol'] == 'user' and propios[0]['texto'] == turno.get('mensaje')):
+        # El turno sólo guarda el principio del mensaje: si la transcripción lo tiene entero, vale ese.
+        if not (propios and propios[0]['rol'] == 'user'):
             eventos.append(dict(rol='user', texto=turno.get('mensaje', ''), hora=turno.get('inicio', 0),
                                 turno=turno['id']))
         eventos += propios

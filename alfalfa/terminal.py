@@ -281,7 +281,8 @@ class TerminalManager:
         self.task['updated_at'] = time.time()
         atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
 
-    def event(self, task, role, text):
+    def event(self, task, role, text, emitir=True):
+        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó."""
         if self.transport:
             text = self.transport.clean(text)
         if getattr(self, 'mcp', None) is not None:
@@ -293,6 +294,8 @@ class TerminalManager:
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
+        if not emitir:
+            return
         if self.transport:
             self.transport.emit('evento', rol=role, texto=text, hora=row['time'],
                                 **({'turno': row['turno']} if 'turno' in row else {}))
@@ -523,8 +526,9 @@ class TerminalManager:
         # El cierre (wrap_up) es de cada turno: el del anterior ya no vale.
         self.task.pop('cierre', None)
         turno = registro.abrir_turno(self.task, prompt, len(rt.state.get('messages', [])))
-        if eco:
-            self.event(self.task, 'user', prompt)
+        # Entero en la transcripción: el turno sólo guarda el principio y el historial que se
+        # reabre tiene que enseñarlo como se mandó. A la app sólo vuelve si no lo pintó ella.
+        self.event(self.task, 'user', prompt, emitir=eco)
         # Sin evento propio (el contrato v2 no cambia): el id viaja en cada
         # `evento` y en `turno_terminado`.
         self.save()
@@ -690,6 +694,8 @@ def main(argv=None):
     parser.add_argument('--bifurcar', metavar='ID', help='Seguir en una sesión nueva desde el final de un turno')
     parser.add_argument('--padre', metavar='ID', help='Sesión que propuso esta (propose_session): sale debajo de '
                                                       'ella y le llega una nota al terminar cada turno')
+    parser.add_argument('--titulo', metavar='TEXTO', help='Título de una sesión nueva en la barra lateral de la app '
+                                                          '(el de la propuesta de propose_session)')
     parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado)')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')

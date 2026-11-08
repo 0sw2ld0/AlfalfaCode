@@ -105,3 +105,47 @@ def test_un_padre_invalido_no_se_guarda(tmp_path, monkeypatch, malo):
         TerminalManager('Encargo.', home=tmp_path / 'alfalfa', parent=malo)
     # No queda una carpeta a medias que la barra lateral enseñaría como sesión ilegible.
     assert not list((tmp_path / 'alfalfa' / 'sesiones').glob('*'))
+
+
+HIJA = '''
+import sys
+from unittest.mock import patch
+from alfalfa.terminal import main
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
+async def inference(self, client, endpoint, payload, **kwargs):
+    if endpoint == '/api/show':
+        return {'capabilities': ['tools']}
+    return dict(message=dict(role='assistant', content='Hecho.'), done=True, done_reason='stop',
+                prompt_eval_count=1, eval_count=1)
+with patch.object(NativeRuntime, 'request', inference):
+    sys.exit(main(['--stdio', '--titulo', 'Quitar el aviso', '--', sys.argv[1]]))
+'''
+
+
+def test_la_hija_guarda_el_titulo_de_la_propuesta_y_su_encargo_entero(tmp_path, monkeypatch):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from alfalfa.stdio import history, sessions
+    largo = 'Nota larga: ' + 'x' * (registro.MAX_MENSAJE_TURNO + 100) + ' fin.'
+    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]), ALFALFA_HOME=str(tmp_path / 'home'))
+    # Como la app: la tubería se cierra cuando acaba el turno.
+    proceso = subprocess.Popen([sys.executable, '-c', HIJA, largo], cwd=tmp_path, env=env, stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    salida = []
+    while not salida or '"turno_terminado"' not in salida[-1]:
+        linea = proceso.stdout.readline()
+        assert linea, proceso.stderr.read()
+        salida.append(linea)
+    proceso.stdin.close()
+    proceso.wait(timeout=15)
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path / 'home'))
+    fila, = sessions()
+    assert fila['titulo'] == 'Quitar el aviso'
+    usuario = [e['texto'] for e in history(fila['id'])['eventos'] if e['rol'] == 'user']
+    # Entero y una sola vez, aunque el turno sólo guarde el principio.
+    assert usuario == [largo]
+    # La app ya pintó el encargo: no vuelve como evento.
+    assert not any('"rol": "user"' in linea for linea in salida)

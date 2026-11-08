@@ -47,4 +47,13 @@ final class SessionProposalTests: XCTestCase {
         guard case let .turnFinished(outcome)? = AlfalfaMessage.decode(line: line) else { return XCTFail("turno") }
         XCTAssertEqual(outcome.wrapUp?.sessions, [SessionProposal(title: "Uno", task: "Haz uno.")])
     }
+
+    func testANewChildCarriesItsParentAndTitleButAResumeDoesNot() {
+        let new = Launcher.stdioArguments(task: "Encargo", resume: nil, model: nil, effort: nil, readOnly: false,
+                                          parent: "padre1", title: "Quitar el aviso")
+        XCTAssertEqual(Array(new.prefix(5)), ["--stdio", "--padre", "padre1", "--titulo", "Quitar el aviso"])
+        let resumed = Launcher.stdioArguments(task: "Sigue", resume: "hija1", model: nil, effort: nil, readOnly: false,
+                                              parent: "padre1", title: "Quitar el aviso")
+        XCTAssertFalse(resumed.contains("--padre") || resumed.contains("--titulo"))
+    }
 }
