@@ -120,6 +120,15 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(AlfalfaMessage.decode(line: none),
                        .update(UpdateInfo(installed: "0.1.0", latest: nil, available: false, updated: false,
                                           macAppChanged: false, text: "Sin versiones")))
+        // La app empaquetada se actualiza descargando el DMG: el motor dice dónde.
+        let app = #"{"version":2,"tipo":"actualizacion","instalada":"0.1.0","ultima":"0.2.0","hay_nueva":true,"instalacion":"app","descarga":"https://github.com/0sw2ld0/AlfalfaCode/releases/latest","texto":"Descárgala"}"#
+        guard case let .update(info)? = AlfalfaMessage.decode(line: app) else { return XCTFail("no es una actualización") }
+        XCTAssertTrue(info.needsDownload)
+        XCTAssertEqual(info.downloadURL?.absoluteString, "https://github.com/0sw2ld0/AlfalfaCode/releases/latest")
+        // Un enlace que no es https no se abre.
+        let http = app.replacingOccurrences(of: "https://", with: "http://")
+        guard case let .update(plain)? = AlfalfaMessage.decode(line: http) else { return XCTFail("no es una actualización") }
+        XCTAssertNil(plain.downloadURL)
         // hay_nueva tiene que ser un booleano.
         XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"actualizacion","instalada":"0.1.0","hay_nueva":1}"#))
     }

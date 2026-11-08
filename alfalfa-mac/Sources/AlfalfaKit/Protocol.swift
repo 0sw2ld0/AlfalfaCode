@@ -412,6 +412,13 @@ public struct UpdateInfo: Equatable, Sendable {
     public var updated: Bool
     public var macAppChanged: Bool
     public var text: String
+    /// «app» dentro de AlfalfaCode.app (se actualiza con un DMG nuevo), «clon» o «paquete».
+    public var installation: String? = nil
+    /// Página del DMG nuevo, sólo para la app empaquetada.
+    public var downloadURL: URL? = nil
+
+    /// La app empaquetada no se cambia sola: la versión nueva se descarga.
+    public var needsDownload: Bool { installation == "app" }
 }
 
 /// Un chat de la app de Ollama que se puede cargar (`--chats-ollama`): sólo título y recuentos.
@@ -672,7 +679,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .update(UpdateInfo(installed: installed, latest: text(object["ultima"]), available: available,
                                       updated: bool(object["actualizado"]) ?? false,
                                       macAppChanged: bool(object["app_mac_cambio"]) ?? false,
-                                      text: object["texto"] as? String ?? ""))
+                                      text: object["texto"] as? String ?? "",
+                                      installation: text(object["instalacion"]),
+                                      downloadURL: text(object["descarga"]).flatMap(Self.httpsURL)))
         default:
             return ReportResult(kind: kind, object: object).map(Self.reported)
         }
@@ -699,6 +708,12 @@ public enum AlfalfaMessage: Equatable, Sendable {
     }
 
     /// Texto opcional no vacío; cualquier otro tipo se ignora.
+    /// Sólo un enlace https: la app lo abre en el navegador.
+    private static func httpsURL(_ value: String) -> URL? {
+        guard let url = URL(string: value), url.scheme == "https", url.host != nil else { return nil }
+        return url
+    }
+
     private static func text(_ value: Any?) -> String? {
         guard let string = value as? String, !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return string

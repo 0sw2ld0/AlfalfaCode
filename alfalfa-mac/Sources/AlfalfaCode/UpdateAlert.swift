@@ -36,7 +36,11 @@ struct UpdateAlert: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(title, isPresented: shown, presenting: model.update) { check in
-            if case .available = check {
+            if case let .available(info) = check, info.needsDownload, let url = info.downloadURL {
+                // AlfalfaCode.app no se cambia sola (está firmada): se descarga el DMG nuevo.
+                Button("Descargar") { NSWorkspace.shared.open(url); model.update = nil }
+                Button("Ahora no", role: .cancel) { model.update = nil }
+            } else if case .available = check {
                 Button("Actualizar") { model.installUpdate() }
                 Button("Ahora no", role: .cancel) { model.update = nil }
             } else {
@@ -44,6 +48,8 @@ struct UpdateAlert: ViewModifier {
             }
         } message: { check in
             switch check {
+            case let .available(info) where info.needsDownload:
+                Text(info.text)
             case let .available(info):
                 Text("Hay una versión nueva: \(info.latest ?? "?") (tienes \(info.installed)).")
             case let .message(_, text): Text(text)

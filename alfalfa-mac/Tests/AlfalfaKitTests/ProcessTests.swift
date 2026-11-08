@@ -114,4 +114,32 @@ final class ProcessTests: XCTestCase {
         XCTAssertEqual(url?.lastPathComponent, "alfalfa")
         XCTAssertEqual(url?.deletingLastPathComponent().lastPathComponent, "scripts")
     }
+
+    /// Dentro de AlfalfaCode.app manda el motor del bundle, aunque la app esté dentro de un clon.
+    func testLauncherPrefersBundledEngine() throws {
+        let engine = try script("exit 0")
+        let url = Launcher.locate(environment: [:], from: [URL(fileURLWithPath: #filePath)], bundled: engine)
+        XCTAssertEqual(url, engine)
+    }
+
+    /// ALFALFA_REPO sigue mandando: es el modo desarrollo con la app empaquetada.
+    func testRepositoryVariableWinsOverBundledEngine() throws {
+        let engine = try script("exit 0")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent()  // …/Tests/AlfalfaKitTests
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let url = Launcher.locate(environment: ["ALFALFA_REPO": repo.path], from: [], bundled: engine)
+        XCTAssertEqual(url?.standardizedFileURL, repo.appendingPathComponent("scripts/alfalfa").standardizedFileURL)
+    }
+
+    /// Un motor del bundle que falta o no es ejecutable no se usa: se busca el clon como antes.
+    func testMissingBundledEngineFallsBackToClone() {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("no-existe-\(UUID().uuidString)")
+        let url = Launcher.locate(environment: [:], from: [URL(fileURLWithPath: #filePath)], bundled: missing)
+        XCTAssertEqual(url?.deletingLastPathComponent().lastPathComponent, "scripts")
+    }
+
+    /// Con `swift run` o en las pruebas no hay .app, y por tanto no hay motor empaquetado.
+    func testBundledEngineOnlyInsideAnApp() {
+        XCTAssertNil(Launcher.bundledEngine(bundle: Bundle(for: Self.self)))
+    }
 }

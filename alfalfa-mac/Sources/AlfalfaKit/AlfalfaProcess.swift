@@ -18,11 +18,18 @@ extension AlfalfaError: LocalizedError {
 }
 
 public enum Launcher {
-    /// Busca `scripts/alfalfa`: ALFALFA_REPO, y después hacia arriba desde el ejecutable y la carpeta actual.
+    /// El motor: `scripts/alfalfa` de ALFALFA_REPO; si no, el que va dentro de AlfalfaCode.app
+    /// (`Contents/Resources/motor/alfalfa`, lo pone build-app.sh); si no, `scripts/alfalfa`
+    /// hacia arriba desde el ejecutable y la carpeta actual (la app compilada en un clon).
     public static func locate(environment: [String: String] = ProcessInfo.processInfo.environment,
-                              from starts: [URL] = defaultStarts()) -> URL? {
+                              from starts: [URL] = defaultStarts(),
+                              bundled: URL? = bundledEngine()) -> URL? {
         var candidates: [URL] = []
-        if let repo = environment["ALFALFA_REPO"] { candidates.append(URL(fileURLWithPath: repo)) }
+        if let repo = environment["ALFALFA_REPO"] {
+            let script = URL(fileURLWithPath: repo).appendingPathComponent("scripts/alfalfa")
+            if FileManager.default.isExecutableFile(atPath: script.path) { return script }
+        }
+        if let bundled, FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled }
         for start in starts {
             var url = start.standardizedFileURL
             for _ in 0..<12 {
@@ -35,6 +42,12 @@ public enum Launcher {
             if FileManager.default.isExecutableFile(atPath: script.path) { return script }
         }
         return nil
+    }
+
+    /// El lanzador del motor empaquetado, si esta app es un .app (no `swift run`).
+    public static func bundledEngine(bundle: Bundle = .main) -> URL? {
+        guard bundle.bundleURL.pathExtension == "app", let resources = bundle.resourceURL else { return nil }
+        return resources.appendingPathComponent("motor/alfalfa")
     }
 
     public static func defaultStarts() -> [URL] {
