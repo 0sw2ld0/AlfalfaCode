@@ -489,8 +489,17 @@ El estilo se comprueba con `ruff check .` en el motor y con `swiftlint` dentro d
 `alfalfa-mac/`. Las reglas, la deuda que queda y cómo partir los archivos grandes están
 en [docs/ESTILO.md](docs/ESTILO.md).
 
+## Licencia
+
+AlfalfaCode es MIT; ver [LICENSE](LICENSE). Las piezas adaptadas de terceros
+conservan la suya, como se cuenta en «Procedencia».
+
 ## Procedencia
 
 Varias piezas son adaptaciones de [OpenAI Codex](https://github.com/openai/codex)
 (Apache-2.0). Cada una lleva junto a su código `LICENSE`, `NOTICE` y
-`PROCEDENCIA.md` con lo que se tomó y cómo se cambió.
+`PROCEDENCIA.md` con lo que se tomó y cómo se cambió. El código de terceros de la
+app de Mac está en [alfalfa-mac/TERCEROS.md](alfalfa-mac/TERCEROS.md).
+
+La búsqueda web usa la librería [CuySearch](https://github.com/0sw2ld0/CuySearch)
+(MIT) como dependencia.
