@@ -9,7 +9,7 @@
   uso Apache-2.0 y remite a la licencia íntegra del proyecto en
   `../seatbelt/LICENSE`.
 
-## Fuentes contrastadas (CA-3)
+## Fuentes contrastadas
 
 | Regla local | Archivo de Codex | Qué se tomó |
 |---|---|---|
@@ -40,7 +40,7 @@ Modificado para AlfalfaCode en noviembre de 2026:
    `plugin.json` raíz detiene la carga con diagnóstico en vez de degradar al
    manifiesto de cliente, para no adivinar el formato.
 3. Los hooks, `.app.json` y los conectores se enumeran y se ignoran: no se
-   ejecutan ni se registran (CA-12).
+   ejecutan ni se registran.
 4. La confianza, las herramientas directas, los filtros y los límites de
    esquema sólo pueden venir de la configuración del usuario; ningún campo del
-   complemento los concede (CA-10).
+   complemento los concede.

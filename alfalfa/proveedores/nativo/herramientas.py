@@ -559,7 +559,7 @@ def _neutral(tool):
 ON_REQUEST_TOOLS = [_neutral(_on_request(tool)) for tool in TOOLS] + [APPLY_PATCH_TOOL, WRAP_UP_TOOL,
                                                                       COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS
 
-# Herramientas de sesión para los complementos autorizados (CA-7, CA-8).
+# Herramientas de sesión para los complementos autorizados.
 # Sólo las ofrece un runtime con cargador de complementos; sin él no se
 # declaran y el modelo no puede resolver una referencia que no tiene.
 COMPLEMENTOS_TOOLS = [
@@ -848,7 +848,7 @@ class WorkspaceTools:
             self.runtime.task['cierre'] = cierre_de_turno(args)
             return {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
         if name in ('abrir_habilidad', 'invocar_comando'):
-            # CA-7/CA-8: sólo el cargador de la sesión resuelve la referencia y
+            # Sólo el cargador de la sesión resuelve la referencia y
             # siempre desde una raíz autorizada; nunca se ejecuta su texto.
             cargador = getattr(self.runtime, 'complementos', None)
             if cargador is None:

@@ -51,7 +51,7 @@ Modificado para AlfalfaCode en noviembre de 2026:
 6. Antes de cada orden se lanza la misma política con `/usr/bin/true` para distinguir un
    fallo del sandbox de un fallo de la orden.
 
-## Política on-request (ticket 10900b10dc-2)
+## Política on-request
 
 Se añadieron fuera de esta carpeta tres módulos más, derivados de la misma revisión de
 Codex (`faeb379646bdbad016e11f7c9ca91113cad4bc9d`). Usan este mismo `NOTICE` y este mismo

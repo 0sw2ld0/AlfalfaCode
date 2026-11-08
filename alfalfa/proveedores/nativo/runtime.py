@@ -371,11 +371,11 @@ class NativeRuntime:
         self.hooks = hooks
         self._hooks_detener = None
         self.manager, self.task = manager, task
-        # CA-1: opt-in explícito, como tolerant_edit y command_policy. Los agentes
+        # Opt-in explícito, como tolerant_edit y command_policy. Los agentes
         # del integrador no lo pasan, así que ningún atributo homónimo del gestor puede
         # colarles complementos: sin argumento no hay carga ni instrucciones.
         self.complementos = complementos
-        # H-006: las referencias de habilidades y comandos necesitan una
+        # Las referencias de habilidades y comandos necesitan una
         # herramienta de sesión que las resuelva; sin cargador no se declaran.
         self.complementos_tools = tuple(COMPLEMENTOS_TOOLS) if complementos is not None else ()
         self.directory = manager.directory / 'native' / task['id']
@@ -2162,7 +2162,7 @@ class NativeRuntime:
                 if (self.complementos_tools and not self.task.get('conversation_only')
                         and not self.task.get('review')):
                     # Resolver una referencia de habilidad o comando es una acción
-                    # explícita; el contenido sigue abriéndose bajo demanda (CA-7).
+                    # explícita; el contenido sigue abriéndose bajo demanda.
                     allowed_tools += [t for t in self.complementos_tools
                                       if t['function']['name'] not in self.excluded_tools]
                 salida = limite_num_predict(model)

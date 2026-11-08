@@ -1,10 +1,10 @@
 """Complementos compatibles con Codex, Claude Code, Cursor y Agent Plugins.
 
-Cubre CA-2 (los cuatro manifiestos), CA-3 (precedencia contrastada con Codex y
-selección determinista sin carga duplicada), CA-4 (diagnósticos y campos
-opcionales), CA-5/CA-6 (sólo raíces autorizadas), CA-7/CA-8 (habilidades y
-comandos), CA-9/CA-10/CA-11 (MCP, confianza y conflictos), CA-12 (.app.json),
-CA-13 (`--complementos --json`), CA-17 (procedencia) y CA-18 (fixture intacto).
+Cubre los cuatro manifiestos, la precedencia contrastada con Codex y la
+selección determinista sin carga duplicada, los diagnósticos y campos
+opcionales, que sólo se lean raíces autorizadas, habilidades y comandos, MCP
+(confianza y conflictos), `.app.json`, `--complementos --json`, la procedencia
+y que el fixture quede intacto.
 
 Los fixtures viven en `tests/fixtures/complementos/`; las pruebas que los
 modifican trabajan sobre una copia en `tmp_path`.
@@ -51,7 +51,7 @@ def codigos(cargador):
     return [d.codigo for d in cargador.diagnosticos]
 
 
-# ---------------------------------------------------------------- CA-2: los cuatro formatos
+# ---------------------------------------------------------------- los cuatro formatos
 
 @pytest.mark.parametrize('fixture,formato,manifiesto', [
     ('codex', 'codex', '.codex-plugin/plugin.json'),
@@ -87,7 +87,7 @@ def test_los_fixtures_son_independientes(tmp_path):
         assert cargador.complementos[0].manifiesto == relativa
 
 
-# ---------------------------------------------------------------- CA-3: precedencia
+# ---------------------------------------------------------------- precedencia
 
 def test_precedencia_codex_antes_que_claude_y_cursor(tmp_path):
     """DISCOVERABLE_PLUGIN_MANIFEST_PATHS: gana el primero que existe, no se suman."""
@@ -163,7 +163,7 @@ def test_dos_raices_con_la_misma_identidad_no_se_sobrescriben(tmp_path):
     assert any('Identidad duplicada' in d.texto for d in cargador.diagnosticos)
 
 
-# ---------------------------------------------------------------- CA-4: manifiestos inválidos
+# ---------------------------------------------------------------- manifiestos inválidos
 
 @pytest.mark.parametrize('nombre,contenido,codigo', [
     ('json roto', '{', 'COMP-JSON'),
@@ -214,7 +214,7 @@ def test_claude_plugin_root_se_resuelve_como_plugin_root(tmp_path):
                                          ('description', 3)])
 def test_agent_plugins_con_tipos_imposibles_no_carga_ni_registra_servidores(tmp_path, campo, valor):
     """`version` null, keywords [7] u homepage 7 se aceptaban sin
-    diagnóstico y el servidor MCP del complemento quedaba registrado (CA-4)."""
+    diagnóstico y el servidor MCP del complemento quedaba registrado."""
     raiz = copiar(tmp_path, 'agent-plugins')
     manifiesto = json.loads((raiz / 'plugin.json').read_text())
     manifiesto[campo] = valor
@@ -243,7 +243,7 @@ def test_manifiesto_portable_ignora_campos_fuera_del_esquema(tmp_path):
 
     `agent_plugin_manifest.rs` avisa e ignora los campos fuera de
     AGENT_PLUGIN_FIELDS; aquí se conserva la carga y las capacidades compatibles,
-    mientras el campo queda enumerado como ignorado (CA-4).
+    mientras el campo queda enumerado como ignorado.
     """
     raiz = copiar(tmp_path, 'agent-plugins')
     manifiesto = json.loads((raiz / 'plugin.json').read_text())
@@ -261,7 +261,7 @@ def test_manifiesto_portable_ignora_campos_fuera_del_esquema(tmp_path):
 
 
 def test_manifiesto_portable_no_interpreta_rutas_fuera_del_contrato(tmp_path):
-    """Un campo de ruta legado en Agent Plugins se avisa y no se interpreta (CA-4)."""
+    """Un campo de ruta legado en Agent Plugins se avisa y no se interpreta."""
     raiz = copiar(tmp_path, 'agent-plugins')
     manifiesto = json.loads((raiz / 'plugin.json').read_text())
     manifiesto['mcpServers'] = './mcp.json'
@@ -290,14 +290,14 @@ def test_estado_de_esquema_traduce_la_referencia(tmp_path):
     assert _estado_esquema(enlace)[0] == 'ajeno'
 
 
-# ---------------------------------------------------------------- CA-5 / CA-6: autorización
+# ---------------------------------------------------------------- autorización
 
 def test_sin_configuracion_no_se_carga_nada(tmp_path):
     assert CargadorComplementos(tmp_path / 'vacio', tmp_path / 'obra').cargar().informe()['complementos'] == []
 
 
 def test_presencia_en_un_marketplace_o_en_claude_no_activa(tmp_path, monkeypatch):
-    """CA-5: ni ~/.claude/plugins ni un marketplace conceden autorización."""
+    """ni ~/.claude/plugins ni un marketplace conceden autorización."""
     hogar = tmp_path / 'usuario'
     cache = hogar / '.claude' / 'plugins' / 'cache' / 'runpod' / 'runpod' / '1.7.4'
     shutil.copytree(FIXTURES / 'runpod-1.7.4' / 'claude', cache)
@@ -334,7 +334,7 @@ def test_configuracion_invalida_no_carga_ni_rompe(tmp_path):
 
 
 def test_carpeta_de_trabajo_con_manifiesto_no_se_autoriza_sola(tmp_path):
-    """CA-6: el cwd no se activa por su contenido, aunque tenga todo."""
+    """el cwd no se activa por su contenido, aunque tenga todo."""
     obra = tmp_path / 'obra'
     shutil.copytree(FIXTURES / 'codex', obra)
     cargador = cargar(tmp_path, [obra], cwd=obra)
@@ -383,7 +383,7 @@ def test_raiz_que_es_enlace_si_se_resuelve_y_se_contiene(tmp_path):
     assert cargador.complementos[0].raiz == real.resolve()
 
 
-# ---------------------------------------------------------------- CA-7: habilidades bajo demanda
+# ---------------------------------------------------------------- habilidades bajo demanda
 
 def test_descubrimiento_guarda_solo_metadatos_y_apertura_lee_el_cuerpo(tmp_path):
     raiz = copiar(tmp_path, 'claude')
@@ -430,7 +430,7 @@ def test_habilidades_anidadas_se_descubren_recursivamente(tmp_path):
     assert set(cargador.complementos[0].habilidades) == {'runpod:pod-doctor', 'runpod:runpod-mcp'}
 
 
-# ---------------------------------------------------------------- CA-8: comandos
+# ---------------------------------------------------------------- comandos
 
 def test_comandos_con_namespace_estable_y_sustitucion(tmp_path):
     cargador = cargar(tmp_path, [FIXTURES / 'codex'])
@@ -468,7 +468,7 @@ def test_cuerpo_quita_solo_el_front_matter():
     assert _front_matter('---\nname: x\ndescription: "y"\n---\n') == {'name': 'x', 'description': 'y'}
 
 
-# ---------------------------------------------------------------- CA-9: MCP normalizado
+# ---------------------------------------------------------------- MCP normalizado
 
 def test_mcp_stdio_resuelve_plugin_root_y_conserva_procedencia(tmp_path):
     cargador = cargar(tmp_path, [FIXTURES / 'codex'])
@@ -542,7 +542,7 @@ def test_servidor_mcp_invalido_no_se_inicia(tmp_path, entrada, codigo):
 
 
 def test_el_complemento_no_puede_conceder_confianza_ni_directas(tmp_path):
-    """CA-10: sólo la configuración del usuario concede excepciones."""
+    """sólo la configuración del usuario concede excepciones."""
     raiz = copiar(tmp_path, 'claude')
     (raiz / '.mcp.json').write_text(json.dumps({'mcpServers': {'revision': {
         'type': 'http', 'url': 'https://a.example.invalid/mcp',
@@ -580,7 +580,7 @@ def test_politica_del_usuario_no_puede_traer_campos_ajenos(tmp_path):
 
 
 def test_conflicto_entre_usuario_y_complemento_es_restrictivo(tmp_path):
-    """CA-11: deshabilitadas gana sobre habilitadas y sobre directas."""
+    """deshabilitadas gana sobre habilitadas y sobre directas."""
     raiz = copiar(tmp_path, 'claude')
     politicas = {'demo-claude': {'mcp': {'revision': {'habilitadas': ['leer'],
                                                       'deshabilitadas': ['leer'],
@@ -625,7 +625,7 @@ def test_author_null_es_un_manifiesto_invalido(tmp_path, fixture, ruta):
     assert cargador.servidores_mcp() == []
 
 
-# ---------------------------------------------------------------- CA-12: .app.json
+# ---------------------------------------------------------------- .app.json
 
 def test_app_json_se_ignora_sin_abrir_conectores(tmp_path):
     raiz = copiar(tmp_path, 'claude')
@@ -646,7 +646,7 @@ def test_app_json_ilegible_no_rompe_ni_produce_conectores(tmp_path):
     assert all(s.complemento == 'demo-claude' for s in cargador.servidores_mcp())
 
 
-# ---------------------------------------------------------------- CA-13: CLI JSON
+# ---------------------------------------------------------------- CLI JSON
 
 def test_cli_complementos_json_es_valido_y_determinista(tmp_path, monkeypatch, capsys):
     from alfalfa.stdio import entry
@@ -690,10 +690,10 @@ def test_cli_complementos_no_revela_secretos(tmp_path, monkeypatch, capsys):
     json.loads(salida)
 
 
-# ---------------------------------------------------------------- CA-1: sólo TerminalManager
+# ---------------------------------------------------------------- sólo TerminalManager
 
 def test_native_runtime_no_hereda_complementos_de_otro_gestor(tmp_path):
-    """CA-1: el gestor del integrador no puede colar complementos por un atributo homónimo."""
+    """el gestor del integrador no puede colar complementos por un atributo homónimo."""
     from alfalfa.proveedores.nativo.runtime import NativeRuntime
 
     class GestorIntegrador:
@@ -711,7 +711,7 @@ def test_native_runtime_no_hereda_complementos_de_otro_gestor(tmp_path):
 
 
 def test_terminal_manager_si_expone_los_complementos_cargados(tmp_path, monkeypatch):
-    """CA-1: la sesión de TerminalManager sí recibe el cargador y sus instrucciones."""
+    """la sesión de TerminalManager sí recibe el cargador y sus instrucciones."""
     from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
     raiz = FIXTURES / 'codex'
@@ -729,7 +729,7 @@ def test_terminal_manager_si_expone_los_complementos_cargados(tmp_path, monkeypa
 
 
 def test_solo_lectura_no_arranca_los_servidores_del_complemento(tmp_path, monkeypatch):
-    """CA-1/CA-9: listar el complemento no inicia MCP; en solo lectura tampoco se conecta."""
+    """listar el complemento no inicia MCP; en solo lectura tampoco se conecta."""
     from alfalfa.terminal import TerminalManager
     monkeypatch.chdir(tmp_path)
     home = configurar(tmp_path / 'alfalfa', [FIXTURES / 'codex'])
@@ -741,7 +741,7 @@ def test_solo_lectura_no_arranca_los_servidores_del_complemento(tmp_path, monkey
         m.close()
 
 
-# ---------------------------------------------------------------- CA-14 / CA-15: Runpod 1.7.4
+# ---------------------------------------------------------------- Runpod 1.7.4
 
 CAPACIDADES_RUNPOD_CLAUDE = {'habilidades': {'runpod:pod-doctor', 'runpod:runpod-mcp'},
                              'comandos': {'runpod:migrate'},
@@ -749,7 +749,7 @@ CAPACIDADES_RUNPOD_CLAUDE = {'habilidades': {'runpod:pod-doctor', 'runpod:runpod
 
 
 def test_el_mismo_runpod_se_reconoce_desde_sus_dos_manifiestos(tmp_path):
-    """CA-15: Codex y Claude describen el mismo complemento sin convertir su contenido."""
+    """Codex y Claude describen el mismo complemento sin convertir su contenido."""
     desde_claude = cargar(tmp_path / 'a', [FIXTURES / 'runpod-1.7.4' / 'claude']).complementos[0]
     desde_codex = cargar(tmp_path / 'b', [FIXTURES / 'runpod-1.7.4' / 'codex']).complementos[0]
     assert (desde_claude.identidad, desde_codex.identidad) == ('runpod', 'runpod')
@@ -761,7 +761,7 @@ def test_el_mismo_runpod_se_reconoce_desde_sus_dos_manifiestos(tmp_path):
 
 
 def test_capacidades_compatibles_y_no_soportadas_de_runpod(tmp_path):
-    """CA-15: el informe enumera lo compatible y lo ignorado; no declara equivalencia total."""
+    """el informe enumera lo compatible y lo ignorado; no declara equivalencia total."""
     cargador = cargar(tmp_path, [FIXTURES / 'runpod-1.7.4' / 'claude'])
     informe = cargador.informe()['complementos'][0]
     assert {h['id'] for h in informe['capacidades']['habilidades']} == CAPACIDADES_RUNPOD_CLAUDE['habilidades']
@@ -776,7 +776,7 @@ def test_capacidades_compatibles_y_no_soportadas_de_runpod(tmp_path):
 
 
 def test_el_fixture_de_runpod_no_trae_credenciales_ni_conecta(tmp_path, monkeypatch):
-    """CA-14: carga real del fixture; la conexión externa es doble y no se abre."""
+    """carga real del fixture; la conexión externa es doble y no se abre."""
     llamadas = []
 
     def sin_red(*args, **kwargs):
@@ -798,10 +798,10 @@ def test_el_fixture_de_runpod_no_trae_credenciales_ni_conecta(tmp_path, monkeypa
         assert prohibido not in texto
 
 
-# ---------------------------------------------------------------- CA-16: catálogo grande diferido
+# ---------------------------------------------------------------- catálogo grande diferido
 
 def test_catalogo_mcp_grande_no_entra_al_contexto_y_se_descubre(tmp_path):
-    """CA-16: 300 herramientas con esquema no engordan el prompt; buscar_herramientas las halla.
+    """300 herramientas con esquema no engordan el prompt; buscar_herramientas las halla.
 
     La conexión se sustituye por un doble: no se abre ningún proceso ni socket.
     """

@@ -136,7 +136,7 @@ def herramienta(payload, indice=-1):
     return json.loads(mensajes[indice]['content'])
 
 
-# ---------------------------------------------------------------- equivalencias (CA-5, CA-6)
+# ---------------------------------------------------------------- equivalencias
 
 def test_tabla_de_equivalencias_e_inventario_completo():
     assert nombres.EQUIVALENCIAS['run_command'] == 'Bash'
@@ -209,7 +209,7 @@ def test_conversiones_no_representables_se_rechazan(tmp_path, nativo, nueva):
         nombres.desde_claude(nativo, {'path': 'a', 'argv': ['true'], 'purpose': 'p'}, nueva, tmp_path / 'p')
 
 
-# ---------------------------------------------------------------- configuración (CA-2, CA-4)
+# ---------------------------------------------------------------- configuración
 
 def test_filtros_exacto_lista_regex_y_todo():
     assert Filtro('').coincide(['x']) and Filtro('*').coincide(['x'])
@@ -276,7 +276,7 @@ def test_solo_lectura_y_agentes_del_integrador_no_tienen_hooks(tmp_path, monkeyp
         m.close()
 
 
-# ---------------------------------------------------------------- interpretación (CA-3, CA-4, CA-13)
+# ---------------------------------------------------------------- interpretación
 
 def ejecucion(evento, codigo=0, stdout='', stderr='', error=None):
     return Ejecucion(Manejador(evento, Filtro(''), 'x', 60, 'usuario', 'hooks.json'), codigo, stdout, stderr, error)
@@ -352,7 +352,7 @@ def test_otros_eventos_codigos_y_salidas():
     assert any('updatedMCPToolOutput' in a for a in r.avisos)
 
 
-# ---------------------------------------------------------------- sesiones reales (CA-2, CA-3, CA-7)
+# ---------------------------------------------------------------- sesiones reales
 
 @macos
 def test_pre_tool_use_bash_bloquea_run_command_sin_efectos(tmp_path, monkeypatch):
@@ -478,7 +478,7 @@ def test_stop_pide_seguir_con_proteccion_contra_bucles(tmp_path, monkeypatch):
     assert any('para no entrar en bucle' in t for t in s.textos())
 
 
-# ---------------------------------------------------------------- reescritura y permisos (CA-9, CA-10)
+# ---------------------------------------------------------------- reescritura y permisos
 
 def reescribir(comando):
     return json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'allow',
@@ -553,7 +553,7 @@ def test_allow_de_un_hook_no_sustituye_el_permiso_mcp(tmp_path, monkeypatch, res
     assert any('no concede permisos' in t for t in s.textos())
 
 
-# ---------------------------------------------------------------- entorno y sandbox (CA-11, CA-12)
+# ---------------------------------------------------------------- entorno y sandbox
 
 CENTINELAS = {'OLLAMA_API_KEY': 'CENTINELA-OLLAMA-5e4d', 'OTRO_SECRETO': 'CENTINELA-OTRO-8c7b',
               'OLLAMA_API_KEY': 'CENTINELA-OLLAMA2-3a2f'}
@@ -622,7 +622,7 @@ def test_sandbox_impide_escribir_fuera_proteger_git_y_usar_la_red(tmp_path, monk
                for t in s.textos())
 
 
-# ---------------------------------------------------------------- límites (CA-13)
+# ---------------------------------------------------------------- límites
 
 def motor_de(tmp_path, evento, comando, **extra):
     raiz = tmp_path / 'proyecto'
@@ -688,7 +688,7 @@ def test_sin_sandbox_disponible_el_hook_no_se_lanza(tmp_path):
     assert r.bloquear and 'sandbox' in r.motivo and not registro.exists()
 
 
-# ---------------------------------------------------------------- complementos (CA-1)
+# ---------------------------------------------------------------- complementos
 
 def complemento(raiz, nombre='demo-hooks', hooks=None, inline=None):
     (raiz / '.claude-plugin').mkdir(parents=True)

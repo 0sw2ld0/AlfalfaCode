@@ -94,7 +94,7 @@ def test_normal_commands_are_not_dangerous(command):
     assert dangerous_command_match(command) is None
 
 
-# ---------------------------------------------------------------- sudo (CA-4)
+# ---------------------------------------------------------------- sudo
 
 @pytest.mark.parametrize('command', [
     ['sudo', 'ls'], ['/usr/bin/sudo', 'true'], ['sudo', '-n', 'whoami'], ['sudo'],

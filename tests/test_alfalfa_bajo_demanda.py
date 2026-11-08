@@ -92,7 +92,7 @@ def commands(spawned):
     return [argv for argv in spawned if argv[-1] != '/usr/bin/true']
 
 
-# ---------------------------------------------------------------- activación (CA-1, CA-15)
+# ---------------------------------------------------------------- activación
 
 def test_policy_is_enabled_only_by_terminal_manager_and_integrators_keep_their_catalog(session):
     rt, *_ = session
@@ -122,7 +122,7 @@ def test_read_only_still_neither_offers_nor_runs_write_and_exec_tools(tmp_path, 
         m.close()
 
 
-# ---------------------------------------------------------------- contrato (CA-6)
+# ---------------------------------------------------------------- contrato
 
 def test_contract_declares_network_and_escalation_with_justification():
     for name in ('run_command', 'run_checks'):
@@ -158,7 +158,7 @@ def test_invalid_exception_requests_are_rejected_before_asking_or_spawning(sessi
     assert not (root / 'marca').exists()
 
 
-# ---------------------------------------------------------------- normal (CA-2)
+# ---------------------------------------------------------------- normal
 
 @real
 @pytest.mark.parametrize('tool', ['run_command', 'run_checks'])
@@ -174,7 +174,7 @@ def test_real_normal_command_runs_sandboxed_without_asking(session, tool):
     assert launched[0] == SANDBOX_EXEC and 'network-outbound' not in launched[2]
 
 
-# ---------------------------------------------------------------- red (CA-7)
+# ---------------------------------------------------------------- red
 
 def listener():
     server = socket.socket()
@@ -211,7 +211,7 @@ def test_real_network_is_asked_before_enabling_and_keeps_write_restrictions(sess
     assert not target.exists()
 
 
-# ---------------------------------------------------------------- peligroso (CA-8)
+# ---------------------------------------------------------------- peligroso
 
 @real
 def test_real_approved_dangerous_command_stays_sandboxed_without_network(session, outside_home):
@@ -248,7 +248,7 @@ def test_dangerous_rejection_launches_nothing(session):
     assert commands(spawned) == []
 
 
-# ---------------------------------------------------------------- una decisión por intento (CA-1)
+# ---------------------------------------------------------------- una decisión por intento
 
 @real
 def test_real_combined_reasons_are_one_decision(session):
@@ -284,7 +284,7 @@ def test_sandbox_failure_and_danger_are_one_decision(session, tmp_path):
     assert request['fallo_sandbox'].startswith('No existe ') and spawned == []
 
 
-# ---------------------------------------------------------------- reintento (CA-10, CA-11)
+# ---------------------------------------------------------------- reintento
 
 @real
 def test_real_ordinary_failure_does_not_offer_retry(session):
@@ -336,7 +336,7 @@ def test_real_approved_retry_runs_exact_command_once_and_links_attempts(session,
     assert ids[-2:] == [result['reintento_de'], result['intento']]
 
 
-# ---------------------------------------------------------------- motivos visibles (CA-12)
+# ---------------------------------------------------------------- motivos visibles
 
 REQUESTS = {
     'peligroso': dict(argv=['rm', '-rf', 'x'], purpose='Borrar', motivo='peligroso', motivos=['peligroso'],
@@ -394,7 +394,7 @@ def test_stdio_permission_event_carries_reason_fields(motivo):
         assert event.get(key) == request.get(key)
 
 
-# ---------------------------------------------------------------- nunca autoriza por omisión (CA-14)
+# ---------------------------------------------------------------- nunca autoriza por omisión
 
 @pytest.mark.parametrize('answer', [False, 'true', 1, None, 'sí', [True], {'aprobado': True}])
 @pytest.mark.parametrize('motivo', list(REQUESTS))
@@ -464,7 +464,7 @@ def test_cancelled_exception_request_never_runs(session):
     assert commands(spawned) == []
 
 
-# ---------------------------------------------------------------- --stdio de punta a punta (CA-2, CA-12)
+# ---------------------------------------------------------------- --stdio de punta a punta
 
 STDIO_SESSION = '''
 import json, sys

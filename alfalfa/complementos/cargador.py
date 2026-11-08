@@ -549,7 +549,7 @@ class CargadorComplementos:
         plugin = Complemento(identidad, nombre, datos.get('version'), root, formato, relativa,
                              _texto(datos, 'description'))
         # El manifiesto de cliente puede traer campos de su propio ecosistema;
-        # sólo los desconocidos se avisan, nunca invalidan la carga (CA-4).
+        # sólo los desconocidos se avisan, nunca invalidan la carga.
         permitidos = AGENT_PLUGINS if formato == 'agent-plugins' else COMUNES
         for campo in sorted(set(declarado) - permitidos):
             plugin.aviso('COMP-CAMPO-DESCONOCIDO', 'Campo opcional desconocido ignorado: ' + campo, campo, False)
@@ -560,7 +560,7 @@ class CargadorComplementos:
             plugin.aviso('COMP-CAMPO-NO-SOPORTADO',
                          'Campo conocido sin capacidad compatible en AlfalfaCode; se ignora: ' + campo,
                          campo, False)
-        # Se enumera, nunca se interpreta: .app.json no se abre (CA-12). Los
+        # Se enumera, nunca se interpreta: .app.json no se abre. Los
         # hooks se leen aquí y sólo los ejecuta arnes/hooks, en el sandbox.
         if (root / '.app.json').exists() or (root / '.app.json').is_symlink():
             plugin.ignoradas.append('.app.json')
@@ -694,7 +694,7 @@ class CargadorComplementos:
                     ident = plugin.identidad + ':' + _normalizar_id(nombre)
                     if ident in plugin.habilidades:
                         raise ErrorComplemento('COMP-DUPLICADO', 'Habilidad duplicada: ' + ident)
-                    # Sólo metadatos y hash: el cuerpo se lee al abrirla (CA-7).
+                    # Sólo metadatos y hash: el cuerpo se lee al abrirla.
                     plugin.habilidades[ident] = Habilidad(
                         ident, nombre, descripcion, str(candidata.relative_to(plugin.raiz)),
                         hashlib.sha256(texto.encode('utf-8')).hexdigest())
@@ -981,7 +981,7 @@ class CargadorComplementos:
         """Objetos Servidor ya validados para el McpManager.
 
         `reservados` son los identificadores que ya ocupa la configuración del
-        usuario en `mcp.json`. CA-11: el usuario tiene precedencia y el
+        usuario en `mcp.json`. El usuario tiene precedencia y el
         complemento no sustituye su servidor en silencio; el
         identificador repetido se diagnostica y no se registra.
         """
