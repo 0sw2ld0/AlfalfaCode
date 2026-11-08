@@ -69,6 +69,10 @@ final class ProtocolTests: XCTestCase {
                        .webSearch(WebSearchSettings(mode: "searxng", searxngURL: "http://127.0.0.1:9999",
                                                     hasOllamaKey: true)))
         XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"buscador","modo":"google"}"#))
+        XCTAssertTrue(WebSearchSettings(mode: "auto", library: false).needsInstall)
+        XCTAssertFalse(WebSearchSettings(mode: "apagado", library: false).needsInstall)
+        XCTAssertFalse(WebSearchSettings(mode: "auto", remote: true, library: false).needsInstall)
+        XCTAssertFalse(WebSearchSettings(mode: "auto").needsInstall)
         XCTAssertEqual(WebSearchSettings.modes.map(WebSearchSettings.label(of:)),
                        ["Automático", "Ollama Web Search", "SearXNG", "Apagado"])
         var timeline = Timeline()

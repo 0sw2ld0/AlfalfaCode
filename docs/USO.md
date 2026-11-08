@@ -152,8 +152,8 @@ de la app, con `alfalfa --buscador MODO` o con `ALFALFA_BUSCADOR`:
 - `apagado`: los agentes no reciben las herramientas web.
 
 Si un motor bloquea o falla, se pasa al siguiente. Si falta la librería (por ejemplo,
-tras un `git pull` sin reinstalar), los agentes no reciben las herramientas web:
-`alfalfa --instalar-buscador` o «Instalar ahora» en Ajustes la instala. Con `ALFALFA_CUYSEARCH_URL` se usa
+tras un `git pull` sin reinstalar), los agentes no reciben las herramientas web. La app
+de Mac la instala sola al abrirse; en la terminal, `alfalfa --instalar-buscador`. Con `ALFALFA_CUYSEARCH_URL` se usa
 en su lugar un servicio CuySearch remoto (`ALFALFA_CUYSEARCH_KEY` es su clave).
 
 `--modelo` selecciona el modelo (por defecto `deepseek-v4.1-flash:cloud`).

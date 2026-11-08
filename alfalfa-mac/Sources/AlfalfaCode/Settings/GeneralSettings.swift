@@ -9,7 +9,6 @@ struct GeneralSettings: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage(Preferences.Key.displayName) private var name = ""
     @State private var searxngURL = ""
-    @State private var installing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -65,18 +64,13 @@ struct GeneralSettings: View {
             .accessibilityLabel("Buscador web")
             Text(explanation(settings)).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
-            if !settings.library && !settings.remote {
-                HStack(spacing: 10) {
-                    Button(installing ? "Instalando…" : "Instalar ahora") {
-                        installing = true
-                        Task {
-                            await model.installWebSearch()
-                            installing = false
-                        }
-                    }
-                    .disabled(installing)
-                    if installing { ProgressView().controlSize(.small) }
+            if model.installingWebSearch {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Instalando la búsqueda web…").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
+            } else if settings.needsInstall {
+                Button("Reintentar la instalación") { Task { await model.installWebSearch() } }
             }
             if settings.mode == "searxng" {
                 HStack {
@@ -95,9 +89,12 @@ struct GeneralSettings: View {
 
     private func explanation(_ settings: WebSearchSettings) -> String {
         if settings.remote { return "Esta instalación usa un servicio CuySearch propio; el selector no lo cambia." }
-        if !settings.library && settings.mode != "apagado" {
-            return "Falta la librería de búsqueda en el entorno de AlfalfaCode (pasa tras un git pull sin "
-                + "reinstalar). Sin ella los agentes no reciben las herramientas web."
+        if settings.needsInstall {
+            if model.installingWebSearch {
+                return "AlfalfaCode está instalando su librería de búsqueda; en un momento los encargos nuevos tendrán web."
+            }
+            return model.webSearchError == nil ? "Falta la librería de búsqueda; AlfalfaCode la instala sola al abrirse."
+                : "No se pudo instalar la librería de búsqueda; mientras falte, los agentes no tienen web."
         }
         switch settings.mode {
         case "ollama":

@@ -20,10 +20,21 @@ extension AppModel {
         await webSearchCommand(["--fijar-searxng", value.isEmpty ? "-" : value, "--json"])
     }
 
-    /// Instala la librería de búsqueda en el entorno de AlfalfaCode, si falta (por ejemplo, tras un
-    /// `git pull` sin reinstalar). Tarda lo que tarde pip.
+    /// Al arrancar: si falta la librería de búsqueda (por ejemplo, tras un `git pull` sin reinstalar),
+    /// la instala sin preguntar. Una vez por arranque; si falla, Ajustes ofrece reintentar.
+    func ensureWebSearch() async {
+        guard !triedWebSearchInstall else { return }
+        triedWebSearchInstall = true
+        await reloadWebSearch()
+        if webSearch?.needsInstall == true { await installWebSearch() }
+    }
+
+    /// Instala la librería de búsqueda en el entorno de AlfalfaCode. Tarda lo que tarde pip.
     func installWebSearch() async {
+        guard !installingWebSearch else { return }
+        installingWebSearch = true
         await webSearchCommand(["--instalar-buscador", "--json"])
+        installingWebSearch = false
     }
 
     // MARK: - Métodos privados

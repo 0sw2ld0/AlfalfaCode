@@ -55,6 +55,9 @@ final class AppModel: ObservableObject {
     /// El buscador web de los agentes (`alfalfa --buscador --json`); nil hasta leerlo.
     @Published var webSearch: WebSearchSettings?
     @Published var webSearchError: String?
+    @Published var installingWebSearch = false
+    /// La instalación automática de la librería de búsqueda se intenta una vez por arranque.
+    var triedWebSearchInstall = false
     /// Cuota del mes del servicio Alfalfa (GPT-6 Luna y los Flash), si hay código activado.
     @Published private(set) var alfalfaQuotas: [Quota] = []
     @Published private(set) var loadError: String?
@@ -129,6 +132,8 @@ final class AppModel: ObservableObject {
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
         }
         await reloadProviders()
+        // Sin esperar: si falta la librería de búsqueda web, se instala mientras la app sigue.
+        Task { await ensureWebSearch() }
         await loadAlfalfaQuota()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()

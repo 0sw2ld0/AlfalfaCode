@@ -490,6 +490,9 @@ public struct WebSearchSettings: Equatable, Sendable {
         self.hasOllamaKey = hasOllamaKey
     }
 
+    /// Falta la librería y hace falta: la app la instala sola al arrancar.
+    public var needsInstall: Bool { !library && !remote && mode != "apagado" }
+
     /// El nombre de cada modo en Ajustes.
     public static func label(of mode: String) -> String {
         switch mode {
