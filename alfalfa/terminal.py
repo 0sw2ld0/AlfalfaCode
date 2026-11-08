@@ -24,6 +24,7 @@ from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos import modos
 from .permisos.terminal import TerminalApproval
 from .seatbelt import SeatbeltSandbox
+from . import proveedores
 from .proveedores.nativo.runtime import NativeRuntime, SIN_EFECTOS
 from .proveedores.nativo.herramientas import atomic_json
 
@@ -121,6 +122,23 @@ def engine_text(effort):
     return '\nMotor NativeRuntime de AlfalfaCode. Esfuerzo solicitado: ' + effort
 
 
+MODELO_POR_DEFECTO = 'deepseek-v4.1-flash:cloud'
+
+
+def modelo_por_defecto():
+    """El modelo de una sesión nueva sin `--modelo`: el del proveedor por defecto."""
+    from .proveedores import configuracion
+    ident = configuracion.por_defecto()
+    if ident != 'ollama':
+        try:
+            proveedor = proveedores.obtener(ident)
+        except proveedores.ErrorDeProveedor:
+            return MODELO_POR_DEFECTO
+        if proveedor.configurado() and getattr(proveedor, 'modelo_por_defecto', None):
+            return proveedores.con_prefijo(ident, proveedor.modelo_por_defecto)
+    return MODELO_POR_DEFECTO
+
+
 def home_dir(home=None):
     return Path(home or os.environ.get('ALFALFA_HOME') or Path.home() / '.alfalfa').expanduser().absolute()
 
@@ -179,9 +197,10 @@ class TerminalManager:
                 if Path(self.task['cwd']).resolve() != Path.cwd().resolve():
                     raise ValueError('Reanuda desde la carpeta original: ' + self.task['cwd'])
             else:
+                model = model or modelo_por_defecto()
                 self.task = dict(id=ident, cwd=str(Path.cwd().resolve()), objective=objective,
-                                 status='created', provider='ollama', runner='native',
-                                 model=model or 'deepseek-v4.1-flash:cloud', effort=effort or 'medium')
+                                 status='created', provider=proveedores.separar(model)[0], runner='native',
+                                 model=model, effort=effort or 'medium')
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
                 self.task['meta'] = registro.metadatos(ident, self.task['cwd'], self.task['model'],
                                                        self.task['effort'])
@@ -627,7 +646,7 @@ async def execute(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime y Ollama')
+    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o Alfalfa')
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)
@@ -666,7 +685,11 @@ def main(argv=None):
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
     listing.add_argument('--solo-bifurcar', metavar='ID',
                          help='Crear la sesión bifurcada sin lanzarla y decir su id (JSON)')
+    from .proveedores import orden as orden_de_proveedores
+    orden_de_proveedores.argumentos(listing)
     args = parser.parse_args(argv)
+    if orden_de_proveedores.pedida(args):
+        return orden_de_proveedores.orden(args)
     if args.marcar or args.eliminar_sesion or args.solo_bifurcar:
         from .stdio import gestionar
         return gestionar(args)

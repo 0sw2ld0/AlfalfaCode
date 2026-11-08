@@ -35,6 +35,8 @@ Diferencias intencionales con Codex (más conservadoras: sólo añaden preguntas
 - Una barra invertida fuera de comillas deja literal el carácter siguiente
   (`\\rm -rf x` es `rm -rf x`), y `function NOMBRE { … }` analiza el cuerpo;
   Codex trata ambas palabras como no literales y las omite.
+- `security` (la orden del Llavero de macOS) siempre pregunta: con ella se
+  leerían las claves de los proveedores que AlfalfaCode guarda allí.
 - Sólo POSIX: no se portan las reglas de PowerShell/Windows ni el caso SIGSYS.
 """
 from __future__ import annotations
@@ -114,6 +116,9 @@ def _match_for_exec(command, depth):
         return FORCED_RM
     if cmd0 == 'sudo':
         return SUDO
+    if cmd0 == 'security':
+        # Lee el Llavero, donde están las claves de los proveedores de AlfalfaCode.
+        return OTHER
     if cmd0 == 'env':
         return _match_for_env(command, depth)
     if cmd0 == 'trap':

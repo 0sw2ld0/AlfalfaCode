@@ -113,5 +113,8 @@ final class ProtocolTests: XCTestCase {
         let env = ["OLLAMA_API_KEY": "sk-secreto"]
         XCTAssertEqual(Redactor.clean("clave sk-secreto fin", environment: env), "clave [REDACTADO] fin")
         XCTAssertEqual(Redactor.clean("sin clave", environment: [:]), "sin clave")
+        let both = ["OLLAMA_API_KEY": "ollama-secreto", "OPENAI_API_KEY": "sk-openai-secreto"]
+        XCTAssertEqual(Redactor.clean("a ollama-secreto b sk-openai-secreto", environment: both),
+                       "a [REDACTADO] b [REDACTADO]")
     }
 }

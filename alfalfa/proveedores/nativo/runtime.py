@@ -648,15 +648,24 @@ class NativeRuntime:
         self.manager.save()
 
     def endpoint(self):
-        from ... import ajustes
-        value = ajustes.ollama_url().rstrip('/')
-        url = urlparse(value)
-        if url.username or url.password or url.query or url.fragment or url.path not in ('', '/'):
-            raise ValueError('La URL de Ollama (ALFALFA_OLLAMA_URL) debe ser una URL base '
-                             'sin credenciales ni ruta.')
-        if url.scheme != 'https' and not (url.scheme == 'http' and url.hostname in ('localhost','127.0.0.1','::1')):
-            raise ValueError('Ollama remoto requiere HTTPS.')
-        return value
+        """URL base de Ollama, validada (HTTPS salvo en este equipo)."""
+        from ..ollama import Ollama
+        return Ollama().url()
+
+    def _cliente(self, timeout):
+        """(proveedor, modelo sin prefijo, cliente) para el modelo de la tarea.
+
+        Todo proveedor habla el formato de Ollama hacia el bucle; los que no son
+        Ollama traducen por dentro de su cliente.
+        """
+        from ... import proveedores
+        proveedor, model = proveedores.para_modelo(self.task.get('model'))
+        if not proveedor.configurado():
+            raise ValueError('El proveedor ' + proveedor.nombre + ' no está configurado: '
+                             'añade su clave o su código en Proveedores.')
+        self._proveedor = proveedor
+        self.task['provider'] = proveedor.id
+        return proveedor, model, proveedor.cliente(timeout)
 
     @staticmethod
     def _texto_de_error(value):
@@ -707,12 +716,18 @@ class NativeRuntime:
         """Error clasificado que deja su información estructurada en la tarea."""
         exc = _ollama_failure(clas, error_text, intentos)
         details = exc.as_dict()
-        from ... import ajustes
-        endpoint = urlparse(ajustes.ollama_url())
-        if endpoint.hostname in ('localhost', '127.0.0.1', '::1'):
-            details['endpoint_scope'] = 'local'
-        elif endpoint.scheme == 'https' and endpoint.hostname:
-            details['endpoint_scope'] = 'remote'
+        proveedor = getattr(self, '_proveedor', None)
+        if proveedor is None:
+            from ..ollama import Ollama
+            proveedor = Ollama()
+        if proveedor.id != 'ollama':
+            details['provider'] = proveedor.id
+        try:
+            alcance = proveedor.alcance()
+        except Exception:
+            alcance = None
+        if alcance:
+            details['endpoint_scope'] = alcance
         self.task['runtime_provider_error'] = details
         return exc
 
@@ -1358,18 +1373,14 @@ class NativeRuntime:
         marcha, como /compact de Claude Code. No abre turno ni ejecuta herramientas."""
         if self.compaction != 'codex':
             raise ValueError('Esta sesión no admite compactar a mano.')
-        model = (self.task.get('model') or '').removeprefix('ollama/')
-        if not model:
-            raise ValueError('Selecciona un modelo Ollama para compactar.')
+        from ... import proveedores
+        if not proveedores.separar(self.task.get('model'))[1]:
+            raise ValueError('Selecciona un modelo para compactar.')
         if len(self.state.get('messages') or []) < 2:
             raise ValueError('Aún no hay conversación que compactar.')
-        headers = {}
-        from ... import ajustes
-        if key := ajustes.ollama_clave():
-            headers['Authorization'] = 'Bearer ' + key
         timeout = httpx.Timeout(TRANSPORT_SESSION_TIMEOUT_SECONDS, connect=5)
-        async with httpx.AsyncClient(base_url=self.endpoint(), headers=headers, timeout=timeout,
-                                     trust_env=False) as client:
+        _, model, cliente = self._cliente(timeout)
+        async with cliente as client:
             info = await self.request(client, '/api/show', {'model': model})
             self.task['runtime_capabilities'] = info.get('capabilities', [])
             self._ventana(model, info)
@@ -2025,13 +2036,7 @@ class NativeRuntime:
                 return
         model = self.task.get('model')
         if not model:
-            raise ValueError('Selecciona un modelo Ollama para el agente nativo.')
-        model = model.removeprefix('ollama/')
-        headers = {}
-        from ... import ajustes
-        if key := ajustes.ollama_clave():
-            headers['Authorization'] = 'Bearer '+key
-        base = self.endpoint()
+            raise ValueError('Selecciona un modelo para el agente nativo.')
         timeout = httpx.Timeout(TRANSPORT_SESSION_TIMEOUT_SECONDS, connect=5)
         session_deadline = self.started + TIEMPO.get(self.task.get('effort'), 3600)
         if self.task.get('review') and not self.task.get('conversation_only'):
@@ -2040,7 +2045,8 @@ class NativeRuntime:
                                              TIEMPO.get(self.task.get('effort'), 3600))
             session_deadline = min(session_deadline, time.monotonic() + deadline - time.time())
             self.save()
-        async with httpx.AsyncClient(base_url=base, headers=headers, timeout=timeout, trust_env=False) as client:
+        _, model, cliente = self._cliente(timeout)
+        async with cliente as client:
             # inspect_image con el modelo de la sesión reutiliza este cliente.
             self._ollama = (client, model, session_deadline)
             info = await self.request(client, '/api/show', {'model':model},

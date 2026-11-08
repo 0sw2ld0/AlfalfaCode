@@ -22,13 +22,31 @@ def ejecutable(nombre):
 
 
 def ollama_url():
-    """URL base de Ollama: `ALFALFA_OLLAMA_URL`, o la local de siempre."""
-    return os.getenv('ALFALFA_OLLAMA_URL') or 'http://127.0.0.1:11434'
+    """URL base de Ollama: `ALFALFA_OLLAMA_URL`, la de `proveedores.json` o la local de siempre."""
+    from .proveedores import configuracion
+    return (os.getenv('ALFALFA_OLLAMA_URL') or configuracion.de('ollama').get('url')
+            or 'http://127.0.0.1:11434')
 
 
 def ollama_clave():
-    """Clave de Ollama Cloud: la estándar `OLLAMA_API_KEY`."""
-    return os.getenv('OLLAMA_API_KEY') or None
+    """Clave de Ollama Cloud: la estándar `OLLAMA_API_KEY` o la guardada en el Llavero."""
+    from .proveedores import llavero
+    return os.getenv('OLLAMA_API_KEY') or llavero.leer('ollama')
+
+
+def openai_clave():
+    """Clave de la API de OpenAI: la estándar `OPENAI_API_KEY` o la guardada en el Llavero."""
+    from .proveedores import llavero
+    return os.getenv('OPENAI_API_KEY') or llavero.leer('openai')
+
+
+def alfalfa_servicio_url():
+    """URL base del servicio Alfalfa: `ALFALFA_SERVICIO_URL` o la de `proveedores.json`.
+
+    El repositorio es público y no trae ninguna: sin URL el proveedor no aparece.
+    """
+    from .proveedores import configuracion
+    return os.getenv('ALFALFA_SERVICIO_URL') or configuracion.de('alfalfa').get('url') or None
 
 
 def cuysearch_url():

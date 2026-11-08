@@ -68,9 +68,14 @@ def git_info(cwd):
     return {k: v for k, v in info.items() if v}
 
 
+def _proveedor(modelo):
+    from ..proveedores import separar
+    return separar(modelo)[0]
+
+
 def metadatos(ident, cwd, modelo, esfuerzo):
     meta = dict(id=ident, fecha=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), cwd=cwd, modelo=modelo,
-                esfuerzo=esfuerzo, proveedor='ollama', originador=ORIGINADOR)
+                esfuerzo=esfuerzo, proveedor=_proveedor(modelo), originador=ORIGINADOR)
     git = git_info(cwd)
     if git:
         meta['git'] = git

@@ -10,7 +10,6 @@ import sys
 import time
 from uuid import uuid4
 
-import httpx
 
 from .permisos.terminal import solo_lectura
 
@@ -59,12 +58,11 @@ class Transport:
         self.pending_settings = {}
 
     def clean(self, value):
-        from . import ajustes
-        secret = ajustes.ollama_clave()
+        from . import proveedores
         if isinstance(value, str):
-            for other in sorted(self.secretos, key=len, reverse=True):
+            for other in sorted(set(self.secretos) | set(proveedores.secretos()), key=len, reverse=True):
                 value = value.replace(other, '[REDACTADO]')
-            return value.replace(secret, '[REDACTADO]') if secret else value
+            return value
         if isinstance(value, dict):
             return {k: self.clean(v) for k, v in value.items()}
         if isinstance(value, list):
@@ -671,12 +669,12 @@ def entry(args):
             if args.sesiones:
                 transport.emit('sesiones', sesiones=sessions())
             else:
-                from .proveedores.nativo.runtime import NativeRuntime
-                endpoint = NativeRuntime.endpoint(None)
-                with httpx.Client(timeout=10) as client:
-                    response = client.get(endpoint + '/api/tags')
-                    response.raise_for_status()
-                    transport.emit('modelos', modelos=response.json()['models'])
+                from . import proveedores
+                modelos, fallos = proveedores.listar_modelos()
+                if not modelos and fallos:
+                    raise proveedores.ErrorDeProveedor(' '.join(fallos.values()))
+                # `fallos` sólo aparece si un proveedor no respondió: los que sí, se listan.
+                transport.emit('modelos', modelos=modelos, **({'fallos': fallos} if fallos else {}))
             return 0
         except Exception:
             transport.emit('error', texto='No se pudo consultar Ollama o las sesiones de AlfalfaCode.')
