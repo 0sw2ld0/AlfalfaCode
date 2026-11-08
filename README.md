@@ -448,6 +448,10 @@ aplicación los registra al cargarse.
 cd alfalfa-mac && swift test
 ```
 
+El estilo se comprueba con `ruff check .` en el motor y con `swiftlint` dentro de
+`alfalfa-mac/`. Las reglas, la deuda que queda y cómo partir los archivos grandes están
+en [docs/ESTILO.md](docs/ESTILO.md).
+
 ## Procedencia
 
 Varias piezas son adaptaciones de [OpenAI Codex](https://github.com/openai/codex)
