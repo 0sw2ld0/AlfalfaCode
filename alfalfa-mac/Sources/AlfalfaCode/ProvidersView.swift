@@ -43,14 +43,15 @@ struct ModelMenuItems: View {
     }
 }
 
-/// Ajustes ▸ Proveedores: Ollama con su URL y su clave, OpenAI y los compatibles con OpenAI (OpenRouter,
-/// OpenCode Zen…) con la del usuario, el servicio Alfalfa y el proveedor por defecto.
+/// Ajustes ▸ Proveedores: Ollama con su URL y su clave, OpenAI, Anthropic y los compatibles con OpenAI
+/// (OpenRouter, OpenCode Zen…) con la del usuario, el servicio Alfalfa y el proveedor por defecto.
 /// Las claves van al Llavero a través de `alfalfa`; la app no las guarda ni las vuelve a enseñar.
 struct ProvidersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var ollamaURL = ""
     @State private var ollamaKey = ""
     @State private var openAIKey = ""
+    @State private var anthropicKey = ""
     @State private var alfalfaCode = ""
     /// Claves que se escriben para los compatibles con OpenAI (OpenRouter, OpenCode Zen…), por id.
     @State private var compatibleKeys: [String: String] = [:]
@@ -86,6 +87,22 @@ struct ProvidersView: View {
                     if status("openai")?.hasKey == true {
                         Button("Borrar clave") { Task { await run { await model.deleteKey(for: "openai") } } }
                             .disabled(busy)
+                    }
+                }
+            }
+            section("Anthropic", status: status("anthropic"),
+                    detail: "Claude con tu propia clave de la API; el uso se cobra en tu cuenta de Anthropic.") {
+                SecureField(status("anthropic")?.hasKey == true ? "Clave guardada · escribe otra para cambiarla"
+                                                                : "sk-ant-…", text: $anthropicKey)
+                    .textFieldStyle(.roundedBorder).accessibilityLabel("Clave de Anthropic")
+                HStack {
+                    Button("Guardar") { Task { await saveAnthropic() } }.disabled(busy || anthropicKey.isEmpty)
+                    if status("anthropic")?.hasKey == true {
+                        Button("Borrar clave") { Task { await run { await model.deleteKey(for: "anthropic") } } }
+                            .disabled(busy)
+                    }
+                    if let page = status("anthropic")?.keyPage, let url = URL(string: page) {
+                        Link("Conseguir la clave", destination: url).font(.system(size: 12))
                     }
                 }
             }
@@ -221,6 +238,15 @@ struct ProvidersView: View {
             if await model.activate(code: alfalfaCode, url: "") {
                 alfalfaCode = ""
                 notice = "Código activado en este Mac."
+            }
+        }
+    }
+
+    private func saveAnthropic() async {
+        await run {
+            if await model.saveKey(anthropicKey, for: "anthropic") {
+                anthropicKey = ""
+                notice = "Clave guardada en el Llavero."
             }
         }
     }

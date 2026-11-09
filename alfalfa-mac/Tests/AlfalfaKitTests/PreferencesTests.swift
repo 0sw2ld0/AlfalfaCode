@@ -67,6 +67,7 @@ final class PreferencesTests: XCTestCase {
         let models = [ModelInfo(name: "gpt-6-luna", provider: "alfalfa")]
         XCTAssertEqual(ModelProvider.id(of: "gpt-6-luna", in: models), "alfalfa")
         XCTAssertEqual(ModelProvider.id(of: "openai/gpt-6", in: models), "openai")
+        XCTAssertEqual(ModelProvider.id(of: "anthropic/claude-haiku-5-5", in: []), "anthropic")
         XCTAssertEqual(ModelProvider.id(of: "alfalfa/glm-5.3-flash", in: []), "alfalfa")
         XCTAssertEqual(ModelProvider.id(of: "deepseek-v4.1-flash:cloud", in: []), "ollama")
         XCTAssertEqual(ModelProvider.id(of: "hf.co/usuario/modelo", in: []), "ollama")

@@ -1,18 +1,18 @@
 import Foundation
 
-/// De qué proveedor es un modelo: Ollama, OpenAI o Alfalfa.
+/// De qué proveedor es un modelo: Ollama, OpenAI, Anthropic o Alfalfa.
 public enum ModelProvider {
 
     // MARK: - Constantes
 
-    public static let names = ["ollama": "Ollama", "openai": "OpenAI", "alfalfa": "Alfalfa"]
+    public static let names = ["ollama": "Ollama", "openai": "OpenAI", "anthropic": "Anthropic", "alfalfa": "Alfalfa"]
 
     // MARK: - Métodos públicos
 
-    /// Por el prefijo del modelo, como en el motor: sin prefijo de OpenAI o Alfalfa es Ollama.
+    /// Por el prefijo del modelo, como en el motor: sin prefijo de OpenAI, Anthropic o Alfalfa es Ollama.
     public static func id(of model: String) -> String {
         let head = model.split(separator: "/", maxSplits: 1).first.map(String.init) ?? ""
-        return model.contains("/") && ["openai", "alfalfa"].contains(head) ? head : "ollama"
+        return model.contains("/") && ["openai", "anthropic", "alfalfa"].contains(head) ? head : "ollama"
     }
 
     /// El de la lista de modelos de `alfalfa`, que manda; si el modelo no está, el del prefijo.

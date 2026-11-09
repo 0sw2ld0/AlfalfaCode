@@ -1,4 +1,4 @@
-"""AlfalfaCode: arnés de agentes de programación para Ollama, OpenAI o un servicio Alfalfa.
+"""AlfalfaCode: arnés de agentes de programación para Ollama, OpenAI, Anthropic o un servicio Alfalfa.
 
 Lanza el agente, le da permisos, ejecuta sus herramientas y guarda sus sesiones.
 No importa nada de quien lo integra: lo que esa aplicación cambia está en

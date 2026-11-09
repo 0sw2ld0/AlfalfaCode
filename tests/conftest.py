@@ -2,7 +2,8 @@ import os
 
 # La suite no debe heredar el entorno de quien la corre: una sesión de
 # AlfalfaCode exporta su hogar, su Ollama y sus referencias.
-for _nombre in [n for n in os.environ if n.startswith(('ALFALFA_', 'OLLAMA_', 'OPENAI_', 'OPENROUTER_', 'OPENCODE_'))]:
+_PREFIJOS = ('ALFALFA_', 'OLLAMA_', 'OPENAI_', 'ANTHROPIC_', 'OPENROUTER_', 'OPENCODE_')
+for _nombre in [n for n in os.environ if n.startswith(_PREFIJOS)]:
     del os.environ[_nombre]
 # Ni los procesos hijos de la suite (`alfalfa --stdio` de verdad) mantienen el Mac despierto:
 # test_mantener_despierto lo enciende donde lo prueba.

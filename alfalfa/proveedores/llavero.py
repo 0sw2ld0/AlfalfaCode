@@ -1,7 +1,7 @@
 """Claves de los proveedores en el Llavero de macOS, nunca en texto plano.
 
 Se guardan como contraseñas genéricas del servicio `AlfalfaCode`, una cuenta por
-proveedor (`ollama`, `openai`, `alfalfa` y el id de cada compatible con OpenAI,
+proveedor (`ollama`, `openai`, `anthropic`, `alfalfa` y el id de cada compatible con OpenAI,
 como `openrouter`). La orden `security` del sistema las
 lee y las escribe, así que la terminal y la app de Mac comparten las mismas sin
 que el Llavero pregunte a cada uso. El secreto nunca va en los argumentos de la
@@ -19,7 +19,7 @@ import sys
 import time
 
 SERVICIO = 'AlfalfaCode'
-CUENTAS = ('ollama', 'openai', 'alfalfa')
+CUENTAS = ('ollama', 'openai', 'anthropic', 'alfalfa')
 # Las claves de las API son ASCII imprimible sin espacios; así no hay comillas
 # ni barras que escapar al hablar con `security -i`.
 _SECRETO = re.compile(r'^[\x21-\x7e]{8,512}$')

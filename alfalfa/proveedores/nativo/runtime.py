@@ -665,9 +665,9 @@ class NativeRuntime:
         raise ValueError('Sesión deliberativa de solo lectura: herramienta rechazada y registrada.')
 
     def save(self):
-        # El razonamiento sólo vive en memoria para devolvérselo al modelo:
-        # nunca se escribe a disco.
-        estado = dict(self.state, messages=[{k: v for k, v in m.items() if k != 'thinking'}
+        # El razonamiento (y los bloques firmados de Claude) sólo vive en memoria
+        # para devolvérselo al modelo: nunca se escribe a disco.
+        estado = dict(self.state, messages=[{k: v for k, v in m.items() if k not in ('thinking', 'alfalfa_bloques')}
                                             for m in self.state.get('messages', [])])
         atomic_json(self.path, estado)
         self.task['session_id'] = 'alfalfa-'+self.task['id']
@@ -1009,6 +1009,10 @@ class NativeRuntime:
         if not perfil(self.task.get('model')).get('preserve_thinking'):
             for m in messages:
                 m.pop('thinking', None)
+        if not str(self.task.get('model') or '').startswith('anthropic/'):
+            # Los bloques firmados sólo los entiende Claude.
+            for m in messages:
+                m.pop('alfalfa_bloques', None)
         # Keep the full durable log; compact only old tool output in model context.
         removed = 0
         if len(json.dumps(messages)) > self.context_chars:
@@ -1249,9 +1253,12 @@ class NativeRuntime:
         from ... import catalogo
         entrada, salida = response['prompt_eval_count'], response['eval_count']
         cache = response.get('alfalfa_cache') if type(response.get('alfalfa_cache')) is int else 0
+        # Anthropic cobra aparte lo que escribe en la caché.
+        escrita = response.get('alfalfa_cache_escritura')
+        escrita = escrita if type(escrita) is int else 0
         self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
         self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
-        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache)
+        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache, escrita)
         if coste is not None:
             self.task['coste_usd'] = (self.task.get('coste_usd') or 0.0) + coste
 
@@ -1310,6 +1317,7 @@ class NativeRuntime:
         older = json.loads(json.dumps(log[start:through]))
         for item in older:
             item.pop('thinking', None)
+            item.pop('alfalfa_bloques', None)
             if item['role']=='tool':
                 item['content']=item.get('content','')[:700]
         content = json.dumps({'previous':previous.get('text',''), 'history':older,
@@ -2345,6 +2353,9 @@ class NativeRuntime:
                 if perfil(model).get('preserve_thinking') and isinstance(message.get('thinking'), str) \
                         and message['thinking'].strip():
                     clean['thinking'] = message['thinking'][:20000]
+                if isinstance(message.get('alfalfa_bloques'), list):
+                    # Claude: el razonamiento firmado vuelve tal cual con los resultados.
+                    clean['alfalfa_bloques'] = message['alfalfa_bloques']
                 if calls:
                     clean['tool_calls'] = calls
                 elif not clean['content'].strip():
