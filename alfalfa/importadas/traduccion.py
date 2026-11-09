@@ -67,17 +67,34 @@ def _dentro(ruta, carpeta):
         return False
 
 
-def carpeta_segura(real, lugar):
-    """La carpeta escribible de un servidor: nunca la personal, una que la contenga o una que
-    contenga $ALFALFA_HOME; la de un servidor del proyecto, dentro del proyecto."""
-    real = Path(real).resolve()
+def _es_carpeta_git(ruta):
+    """Una carpeta `.git` o un repositorio desnudo (HEAD, objects y refs): sus hooks corren fuera del
+    sandbox en el siguiente `git commit`."""
+    return ruta.name == '.git' or all((ruta / n).exists() for n in ('HEAD', 'objects', 'refs'))
+
+
+def carpeta_segura(ruta, lugar):
+    """La carpeta escribible de un servidor: nunca la personal, una que la contenga, ni nada dentro
+    de un `.git` o de $ALFALFA_HOME (ni que lo contenga); la de un servidor del proyecto, dentro del
+    proyecto, y el proyecto no puede ser la carpeta personal ni contenerla."""
+    pedida = Path(ruta)
+    real = pedida.resolve()
     hogar, casa = lugar.hogar.resolve(), lugar.casa.resolve()
-    if _dentro(hogar, real):
-        raise Invalido('la carpeta ' + str(real) + ' contiene la configuración de AlfalfaCode; no se usa')
+    # Se mira la ruta tal como se pidió y la real: un enlace no esconde un `.git`.
+    if '.git' in pedida.parts or '.git' in real.parts or any(_es_carpeta_git(c) for c in (real, *real.parents)):
+        raise Invalido('la carpeta ' + str(real) + ' está dentro de un .git (sus hooks corren fuera del '
+                       'sandbox); no se usa')
+    if _dentro(hogar, real) or _dentro(real, hogar):
+        raise Invalido('la carpeta ' + str(real) + ' contiene la configuración de AlfalfaCode o está dentro de '
+                       'ella; no se usa')
     if real == casa or _dentro(casa, real):
         raise Invalido('la carpeta ' + str(real) + ' es tu carpeta personal o la contiene; no se usa')
-    if lugar.proyecto is not None and not _dentro(real, lugar.proyecto.resolve()):
-        raise Invalido('la carpeta ' + str(real) + ' sale del proyecto; no se usa')
+    if lugar.proyecto is not None:
+        proyecto = lugar.proyecto.resolve()
+        if proyecto == casa or _dentro(casa, proyecto):
+            raise Invalido('el proyecto es tu carpeta personal o la contiene; no se usa una carpeta suya')
+        if not _dentro(real, proyecto):
+            raise Invalido('la carpeta ' + str(real) + ' sale del proyecto; no se usa')
     return str(real)
 
 
@@ -268,57 +285,89 @@ def _valores(mapa, oculto, ambitos=None, lugar=None):
         de_usuario = (ambitos or {}).get(nombre, lugar.ambito if lugar else 'usuario') == 'usuario'
         if oculto and de_usuario and not referencia:
             valor = OCULTO
-        filas.append(str(nombre) + '=' + valor)
+        filas.append(str(nombre) + '=' + sin_tokens(valor))
     return filas
 
 
-def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None):
-    """La definición cruda para decidir si se autoriza (ver el docstring del módulo)."""
+MAX_ORDEN = 8000
+URL_EN_TEXTO = re.compile(r'https?://[^\s\'"]+')
+
+
+def visible(texto):
+    """Sin secuencias de escape ni retornos de carro crudos: no pueden tapar lo que se enseña."""
+    return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in str(texto))
+
+
+def sin_tokens(texto):
+    """Tapa lo que en una URL suele ser una credencial (/s/<token>/mcp, ?key=…)."""
+    secretos = {secreto for url in URL_EN_TEXTO.findall(texto) for secreto in configuracion_mcp._secretos_de_url(url)
+                if len(secreto) >= configuracion_mcp.MIN_SECRETO}
+    for secreto in sorted(secretos, key=len, reverse=True):  # el más largo primero: no deja restos
+        texto = texto.replace(secreto, OCULTO)
+    return texto
+
+
+def _ejecutable(nombre, entorno, carpeta):
+    """La ruta que se lanzará: con el PATH de la propia definición si declara uno (sus tramos
+    relativos cuentan desde la carpeta del proceso), y si no con el de quien lo enseña."""
+    if '/' in nombre:
+        return (Path(carpeta) / Path(nombre).expanduser()).resolve(), False
+    ruta = (entorno or {}).get('PATH') if isinstance(entorno, dict) else None
+    if isinstance(ruta, str) and ruta:
+        tramos = [t if Path(t).is_absolute() else str(Path(carpeta) / t) for t in ruta.split(':') if t]
+        encontrado = shutil.which(nombre, path=':'.join(tramos))
+        return (Path(encontrado).resolve() if encontrado else None), True
+    encontrado = shutil.which(nombre)
+    return (Path(encontrado).resolve() if encontrado else None), False
+
+
+def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None, entorno=None):
+    """La definición cruda para decidir si se autoriza (ver el docstring del módulo).
+
+    `carpeta` es donde correrá el proceso (su cwd o la de la sesión) y `entorno`, el entorno ya
+    resuelto que recibirá: con ellos se dice qué ejecutable se lanza de verdad."""
     if not isinstance(entrada, dict):
         return {}
     if herramienta == 'OpenCode':
         orden = entrada.get('command') if entrada.get('type') == 'local' else None
         orden = list(orden) if isinstance(orden, list) else None
-        url, entorno, cabeceras = entrada.get('url'), entrada.get('environment'), entrada.get('headers')
+        url, crudo_entorno, cabeceras = entrada.get('url'), entrada.get('environment'), entrada.get('headers')
         heredadas = []
     elif herramienta == 'Codex':
         orden = [entrada['command'], *entrada.get('args', [])] if 'command' in entrada else None
-        url, entorno, cabeceras = entrada.get('url'), entrada.get('env'), entrada.get('http_headers')
+        url, crudo_entorno, cabeceras = entrada.get('url'), entrada.get('env'), entrada.get('http_headers')
         heredadas = [v.get('name') if isinstance(v, dict) else v for v in entrada.get('env_vars', []) or []]
         heredadas += list((entrada.get('env_http_headers') or {}).values())
         if entrada.get('bearer_token_env_var'):
             heredadas.append(entrada['bearer_token_env_var'])
     else:
         orden = [entrada['command'], *entrada.get('args', [])] if 'command' in entrada else None
-        url, entorno, cabeceras = entrada.get('url'), entrada.get('env'), entrada.get('headers')
+        url, crudo_entorno, cabeceras = entrada.get('url'), entrada.get('env'), entrada.get('headers')
         heredadas = []
     fila = {}
     if orden:
         orden = [_texto(p) for p in orden]
         fila['transporte'] = 'stdio'
-        fila['orden'] = shlex.join(orden)[:2000]
-        ejecutable = orden[0]
-        if '/' in ejecutable:
-            real = (Path(cwd or lugar.base) / Path(ejecutable).expanduser()).resolve()
-            fila['ejecutable'] = str(real)
-            fila['del_repositorio'] = lugar.proyecto is not None and _dentro(real, lugar.proyecto.resolve())
-        else:
-            fila['ejecutable'] = shutil.which(ejecutable) or ejecutable + ' (no está en el PATH)'
-            fila['del_repositorio'] = False
+        # Entera, sin recortar (lo que pase de MAX_ORDEN no se usa), con los tokens de URL tapados.
+        fila['orden'] = sin_tokens(shlex.join(orden))
+        real, con_path = _ejecutable(orden[0], entorno, carpeta or cwd or lugar.base)
+        fila['ejecutable'] = (str(real) if real else orden[0] + ' (no está en el PATH)') + (
+            ' (con el PATH de la definición)' if con_path else '')
+        fila['del_repositorio'] = bool(real and lugar.proyecto is not None and _dentro(real, lugar.proyecto.resolve()))
         if cwd:
             fila['carpeta'] = cwd
     elif isinstance(url, str):
         fila['transporte'] = 'http'
         # Sólo el host: la ruta o la consulta pueden llevar una clave (/s/<token>/mcp).
         fila['host'] = urlparse(ENV_OPENCODE.sub('X', ENV_CLAUDE.sub('X', url))).hostname or '?'
-    entorno_filas = _valores(entorno, True, ambitos and ambitos.get('environment'), lugar)
+    entorno_filas = _valores(crudo_entorno, True, ambitos and ambitos.get('environment'), lugar)
     if entorno_filas:
         fila['entorno'] = entorno_filas
     cabecera_filas = _valores(cabeceras, True, ambitos and ambitos.get('headers'), lugar)
     if cabecera_filas:
         fila['cabeceras'] = cabecera_filas
     heredadas = [h for h in heredadas if isinstance(h, str)]
-    referencias = [m.group('nombre') for valor in [*(entorno or {}).values(), *(cabeceras or {}).values(),
+    referencias = [m.group('nombre') for valor in [*(crudo_entorno or {}).values(), *(cabeceras or {}).values(),
                                                     *(orden or []), _texto(url or '')]
                    if isinstance(valor, str) for m in [*ENV_OPENCODE.finditer(valor), *ENV_CLAUDE.finditer(valor)]]
     heredadas = list(dict.fromkeys(heredadas + referencias))
@@ -330,8 +379,9 @@ def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None):
 def resumen_mcp(definicion):
     """Una línea: la orden entera o el host."""
     if definicion.get('transporte') == 'stdio':
-        return 'stdio · ' + definicion['orden'][:200] + (' · del repositorio' if definicion.get('del_repositorio')
-                                                         else '')
+        orden = definicion['orden']
+        corta = orden if len(orden) <= 200 else orden[:200] + '… (sigue: mira la orden entera)'
+        return visible('stdio · ' + corta + (' · del repositorio' if definicion.get('del_repositorio') else ''))
     if definicion.get('transporte') == 'http':
         return 'HTTP · ' + definicion['host']
     return ''
@@ -352,7 +402,7 @@ def lineas_mcp(definicion, red):
     for campo, titulo in (('entorno', 'entorno'), ('cabeceras', 'cabeceras'), ('variables', 'variables que lee')):
         if definicion.get(campo):
             lineas.append(titulo + ': ' + ', '.join(definicion[campo]))
-    return lineas
+    return [visible(linea) for linea in lineas]
 
 
 # --- agentes -------------------------------------------------------------------------

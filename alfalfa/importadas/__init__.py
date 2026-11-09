@@ -86,17 +86,18 @@ class Elemento:
                     estado=self.estado,
                     autorizable=self.tipo in REQUIEREN_AUTORIZACION and self.estado in ('pendiente', 'cambio',
                                                                                         'autorizado'))
+        fila['detalle'] = traduccion.visible(self.detalle)
         if self.problema:
-            fila['problema'] = self.problema
+            fila['problema'] = traduccion.visible(self.problema)
         if self.avisos:
-            fila['avisos'] = list(self.avisos)
+            fila['avisos'] = [traduccion.visible(a) for a in self.avisos]
         if self.tapado_por:
             fila['tapado_por'] = self.tapado_por
         if self.tipo in ('comando', 'agente') and isinstance(self.valor, dict):
             texto = self.valor.get('plantilla') if self.tipo == 'comando' else self.valor.get('instrucciones')
             if isinstance(texto, str) and texto.strip():
                 lineas = texto.strip().splitlines()
-                vista = '\n'.join(lineas[:8])[:600]
+                vista = '\n'.join(traduccion.visible(linea) for linea in lineas[:8])[:600]
                 fila['vista'] = vista + ('\n…' if len(lineas) > 8 or len(vista) < len('\n'.join(lineas)) else '')
         if self.tipo == 'mcp':
             red = True
@@ -313,7 +314,13 @@ class Importadas:
             self.elementos.append(elemento)
 
     def _lugar(self, ambito, base):
-        return traduccion.Lugar(base=Path(base), proyecto=self.raiz if ambito == 'proyecto' else None,
+        # Si la raíz del repositorio es la carpeta personal (dotfiles en ~) o la contiene, el
+        # proyecto que acota la carpeta de un servidor es la carpeta de trabajo, no ~.
+        limite = self.raiz
+        casa = self.casa.resolve()
+        if limite == casa or traduccion._dentro(casa, limite):
+            limite = self.cwd
+        return traduccion.Lugar(base=Path(base), proyecto=limite if ambito == 'proyecto' else None,
                                 casa=self.casa, hogar=self.hogar)
 
     def _mcp(self, herramienta, origen, ambito, nombre, entrada, traducir, base, ambitos=None):
@@ -336,11 +343,18 @@ class Importadas:
             elemento.avisos += [a.texto for a in configuracion_mcp.avisos(servidor)]
         except (Invalido, configuracion_mcp._Invalido) as exc:
             elemento.problema = str(exc)
+        resuelto = elemento.valor.entorno if elemento.valor is not None else None
         try:
-            elemento.definicion = traduccion.definicion_mcp(herramienta, entrada, lugar, cwd, ambitos)
+            elemento.definicion = traduccion.definicion_mcp(herramienta, entrada, lugar, cwd, ambitos,
+                                                            carpeta=cwd or self.cwd, entorno=resuelto)
         except (TypeError, ValueError, OSError):
             elemento.definicion = {}
-        elemento.detalle = prefijo + traduccion.resumen_mcp(elemento.definicion)
+        if len(elemento.definicion.get('orden', '')) > traduccion.MAX_ORDEN:
+            # No se recorta lo que hay que revisar: lo que no cabe entero no se usa.
+            elemento.problema = ('la orden ocupa más de ' + str(traduccion.MAX_ORDEN) + ' caracteres y no se puede '
+                                 'revisar entera; no se usa')
+            elemento.valor = None
+        elemento.detalle = traduccion.visible(prefijo) + traduccion.resumen_mcp(elemento.definicion)
         # La huella cubre la definición cruda y la carpeta ya resuelta: lo que se va a usar.
         elemento.crudo = {'entrada': entrada, 'cwd': cwd}
         self._anadir(elemento)

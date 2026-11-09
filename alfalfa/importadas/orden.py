@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from . import REQUIEREN_AUTORIZACION, Importadas
+from .traduccion import visible
 
 ESTADOS = {'autorizado': 'autorizado', 'pendiente': 'sin autorizar', 'cambio': 'cambió: vuelve a autorizarlo',
            'activo': 'activo', 'desactivado': 'desactivado en su configuración', 'duplicado': 'duplicado',
@@ -111,22 +112,22 @@ def imprimir(importadas, errores=()):
             estado = ESTADOS.get(fila['estado'], fila['estado'])
             if fila.get('red') is False:
                 estado += ', sin internet'
-            print('  ' + ('/' if tipo == 'comando' else '') + fila['nombre'] + '  [' + estado + ']  '
-                  + fila['herramienta'] + ' · ' + fila['lugar'])
+            print('  ' + visible(('/' if tipo == 'comando' else '') + fila['nombre']) + '  [' + estado + ']  '
+                  + fila['herramienta'] + ' · ' + visible(fila['lugar']))
             textos = [fila.get('detalle'), *(fila.get('definicion') or []), fila.get('problema'),
                       *(fila.get('avisos') or []), 'lo tapa ' + fila['tapado_por'] if fila.get('tapado_por') else None]
             for texto in textos:
                 if texto:
-                    print('      ' + texto)
+                    print('      ' + visible(texto))
             if fila.get('vista'):
                 print('      ┊ ' + fila['vista'].replace('\n', '\n      ┊ '))
             if fila['autorizable'] and fila['estado'] != 'autorizado':
                 print('      alfalfa --importar --autorizar ' + shlex.quote(fila['corta'] + '@' + fila['huella']))
     for aviso in informe['avisos']:
-        print('\nAviso: ' + aviso)
+        print('\nAviso: ' + visible(aviso))
     if importadas.autorizables():
         print('\nLos servidores MCP, los agentes y las órdenes «/» no se activan hasta que los autorizas, una vez.'
               ' Todos (en esta terminal): alfalfa --importar --autorizar todo')
     print('Autorizaciones en ' + informe['archivo'] + ' (sólo huellas; ninguna clave se copia).')
     for error in errores:
-        print('Error: ' + error, file=sys.stderr)
+        print('Error: ' + visible(error), file=sys.stderr)

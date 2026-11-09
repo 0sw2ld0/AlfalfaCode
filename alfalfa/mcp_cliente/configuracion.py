@@ -117,6 +117,10 @@ class Servidor:
                 if partes:
                     valores.append(partes[-1].strip())
         valores += list(self.secretos_extra) + _secretos_de_url(self.url)
+        # También las URL que van en los argumentos (`mcp-remote https://…/s/<token>/mcp`).
+        for argumento in self.argumentos:
+            for url in re.findall(r'https?://[^\s\'"]+', argumento if isinstance(argumento, str) else ''):
+                valores += _secretos_de_url(url)
         return {v for v in valores if isinstance(v, str) and len(v) >= MIN_SECRETO}
 
 

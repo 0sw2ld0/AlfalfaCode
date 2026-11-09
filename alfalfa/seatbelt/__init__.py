@@ -154,6 +154,12 @@ class SeatbeltSandbox:
 
     def writable_roots(self):
         root = _checked(self.root, 'La carpeta de trabajo')
+        # La expresión que protege `.git` se ancla en la carpeta de trabajo: si ésta ya está dentro
+        # de un `.git` (p. ej. `.git/hooks`), no lo cubriría y un hook escrito aquí correría fuera
+        # del sandbox en el siguiente commit. Esa carpeta no se abre para escribir.
+        if any(parte in PROTECTED_METADATA for parte in Path(root).parts + Path(str(self.root)).parts):
+            raise SandboxUnavailable('La carpeta de trabajo está dentro de un .git; no se abre para escribir: '
+                                     + root)
         roots = [root]
         home = os.path.realpath(str(self.home or Path.home()))
         tmpdir = self.tmpdir if self.tmpdir is not None else os.environ.get('TMPDIR')

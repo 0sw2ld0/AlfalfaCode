@@ -579,9 +579,11 @@ sigue yendo primero.
 Como los complementos, lo que viene de una configuración ajena no se activa hasta
 que lo autorizas. La lista enseña de qué herramienta y de qué archivo viene cada
 uno y su definición sin resolver. De un servidor stdio enseña la orden entera con
-sus argumentos y la ruta del ejecutable, avisando si es del repositorio. También la
-carpeta que podrá escribir, si tendrá internet y qué variables lee. De uno HTTP
-enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
+sus argumentos, sin recortar; una de más de 8000 caracteres no se usa. Los tokens de
+las URL que lleve se tapan y los caracteres de control salen escritos. También
+enseña la ruta del ejecutable, buscada con el PATH de la propia definición si declara
+uno y avisando si es del repositorio, la carpeta que podrá escribir, si tendrá
+internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
 Al empezar una sesión, un aviso dice qué queda sin autorizar.
 
 ```bash
@@ -612,8 +614,12 @@ autorizar». Otro proyecto con un servidor del mismo nombre no hereda la autoriz
   sitio. La lista enseña los valores literales que puso el proyecto y oculta los de
   tu configuración.
 - La carpeta de un servidor stdio es la única que puede escribir. La de uno del
-  proyecto queda dentro del proyecto. Ninguna puede ser tu carpeta personal, una que
-  la contenga ni una que contenga `~/.alfalfa`; si lo es, el servidor no se usa.
+  proyecto queda dentro del proyecto; si la raíz del repositorio es tu carpeta
+  personal (dotfiles), dentro de la carpeta de trabajo. Ninguna puede ser tu carpeta
+  personal ni una que la contenga. Tampoco puede estar dentro de `~/.alfalfa` ni
+  contenerla, ni estar dentro de un `.git` o de un repositorio desnudo, cuyos hooks
+  correrían fuera del sandbox. Si lo es, el servidor no se usa. El sandbox tampoco
+  abre para escribir una carpeta de trabajo que esté dentro de un `.git`.
 - `mcp.json` y los complementos ganan. Las capas de OpenCode se fusionan campo a
   campo como en OpenCode: la más cercana gana, así que `{"gh": {"disabled": true}}`
   en el proyecto apaga el `gh` del usuario. Luego va lo del proyecto (de la carpeta
