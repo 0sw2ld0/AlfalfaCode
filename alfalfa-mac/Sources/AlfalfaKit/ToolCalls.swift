@@ -9,6 +9,9 @@ public struct ToolInfo: Equatable, Sendable {
     public var phase: Phase
     /// «Buscar dónde se guarda session.json»: el `description` de la orden o el generado.
     public var description: String?
+    /// La misma frase en gerundio para la fila viva («Buscando dónde…», `en_curso`); nil en
+    /// motores anteriores.
+    public var ongoing: String?
     /// La orden tal cual («git status --short»), sólo en `run_command` y `run_checks`.
     public var command: String?
     public var cwd: String?
@@ -42,6 +45,15 @@ public struct ToolInfo: Equatable, Sendable {
 
     /// Lee `herramienta`; nil si falta o no tiene nombre y fase.
     public static func parse(_ value: Any?) -> ToolInfo? {
+        guard var info = parseFields(value) else { return nil }
+        if let ongoing = ((value as? [String: Any])?["en_curso"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !ongoing.isEmpty {
+            info.ongoing = ongoing
+        }
+        return info
+    }
+
+    private static func parseFields(_ value: Any?) -> ToolInfo? {
         guard let object = value as? [String: Any], let name = object["nombre"] as? String, !name.isEmpty,
               let phase = (object["fase"] as? String).flatMap(Phase.init(rawValue:)) else { return nil }
         func text(_ key: String) -> String? {
@@ -93,6 +105,11 @@ public struct ToolCall: Equatable, Identifiable, Sendable {
     public var kind: ToolKind
     /// Lo que enseña la fila: la descripción del motor o un texto de respaldo.
     public var description: String
+    /// Lo que dice la fila viva mientras corre («Leyendo runtime.py»); nil en motores anteriores.
+    public var ongoing: String?
+    /// Horas del inicio y del resultado (segundos desde 1970), de los eventos; nil si no se saben.
+    public var startTime: Double?
+    public var endTime: Double?
     /// La orden de terminal, para el bloque con `$`.
     public var command: String?
     /// La llamada tal como la pidió el modelo, para las herramientas que no son órdenes.
@@ -237,11 +254,12 @@ public enum ToolCalls {
         let targets = info.targets.isEmpty && info.name == "apply_patch" ? patchFiles(in: request) : info.targets
         return ToolCall(id: event.id, name: info.name, kind: kind, description: description, command: command,
                         request: kind == .command && command != nil ? nil : request,
-                        target: path ?? pythonField("url", in: request), targets: targets)
+                        target: path ?? pythonField("url", in: request), targets: targets).started(event, info)
     }
 
     private static func finish(_ call: inout ToolCall, _ event: ToolEvent, _ info: ToolInfo) {
         call.finished = true
+        call.endTime = event.time > 0 ? event.time : nil
         let body = event.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
         let raw = body.count > 1 ? String(body[1]) : ""
         var object = (raw.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any]

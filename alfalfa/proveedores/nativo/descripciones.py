@@ -11,6 +11,8 @@ import re
 import shlex
 from pathlib import PurePosixPath
 
+from .gerundio import en_curso
+
 MAX_DESCRIPCION = 200
 MAX_ORDEN = 2000
 
@@ -156,6 +158,10 @@ def _del_navegador(nombre, args):
 def datos_de_inicio(nombre, args):
     """Campo `herramienta` del evento que abre la llamada."""
     datos = {'nombre': str(nombre)[:200], 'fase': 'inicio', 'descripcion': descripcion(nombre, args)}
+    # La misma frase en gerundio para la fila viva de la app («Leyendo runtime.py · 12s»).
+    propia = nombre in ORDENES and isinstance(args, dict) and bool(
+        _texto(args.get('description')) or _texto(args.get('purpose')))
+    datos['en_curso'] = en_curso(datos['descripcion'], propia=propia)
     # El archivo o la página: la app no cuenta dos veces el mismo al resumir el grupo.
     objetivo = args.get('path') or args.get('url') if isinstance(args, dict) else None
     if isinstance(objetivo, str) and objetivo.strip():

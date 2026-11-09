@@ -66,9 +66,10 @@ def test_datos_del_evento():
     inicio = datos_de_inicio('run_command', {'argv': ['git', 'status'], 'purpose': 'p', 'cwd': 'srv',
                                              'description': 'Ver el estado'})
     assert inicio == {'nombre': 'run_command', 'fase': 'inicio', 'descripcion': 'Ver el estado',
-                      'orden': 'git status', 'cwd': 'srv'}
+                      'en_curso': 'Viendo el estado', 'orden': 'git status', 'cwd': 'srv'}
     assert datos_de_inicio('read_file', {'path': 'x.py'}) == {'nombre': 'read_file', 'fase': 'inicio',
-                                                               'descripcion': 'Leer x.py', 'objetivo': 'x.py'}
+                                                               'descripcion': 'Leer x.py', 'en_curso': 'Leyendo x.py',
+                                                               'objetivo': 'x.py'}
     assert datos_de_fin('run_command', {'exit_code': 2, 'output': ''}) == {'nombre': 'run_command', 'fase': 'fin',
                                                                            'codigo': 2}
     assert datos_de_fin('read_file', {'error': 'no existe'}) == {'nombre': 'read_file', 'fase': 'fin', 'error': True}
@@ -123,10 +124,11 @@ def test_description_viaja_en_los_eventos_y_en_el_historial(tmp_path):
             proc.wait()
     herramientas = [f['herramienta'] for f in filas if f['tipo'] == 'evento' and f['rol'] == 'tool']
     assert herramientas[0] == {'nombre': 'read_file', 'fase': 'inicio', 'descripcion': 'Leer nota.txt',
-                               'objetivo': 'nota.txt'}
+                               'en_curso': 'Leyendo nota.txt', 'objetivo': 'nota.txt'}
     assert herramientas[1] == {'nombre': 'read_file', 'fase': 'fin'}
     assert herramientas[2] == {'nombre': 'run_command', 'fase': 'inicio',
                                'descripcion': 'Comprobar que Python suma bien',
+                               'en_curso': 'Comprobando que Python suma bien',
                                'orden': sys.executable + " -c 'print(40 + 2)'"}
     assert herramientas[3] == {'nombre': 'run_command', 'fase': 'fin', 'codigo': 0,
                                'clasificacion': {'disposition': 'pass', 'status': 'passed'}}

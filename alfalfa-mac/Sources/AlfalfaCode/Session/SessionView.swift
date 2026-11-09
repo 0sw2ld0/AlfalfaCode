@@ -63,10 +63,13 @@ struct SessionView: View {
             ScrollView {
                 let items = session.timeline.items
                 // Sólo el último grupo de acciones es el que está trabajando ahora, y sólo si es de
-                // este turno: el de antes del último mensaje ya no corre.
+                // este turno: el de antes del último mensaje ya no corre. Si el agente escribió
+                // después, el grupo terminó y lo que sigue es pensar (la fila de abajo).
                 let lastUser = items.lastIndex { if case .user = $0 { return true } else { return false } }
+                let lastAgent = items.lastIndex { if case .agent = $0 { return true } else { return false } }
                 let lastEvents = items.lastIndex { if case .events = $0 { return true } else { return false } }
-                let liveWork = session.timeline.status.isRunning && (lastEvents ?? -1) > (lastUser ?? -1)
+                let status = session.timeline.status
+                let liveWork = status.isRunning && (lastEvents ?? -1) > max(lastUser ?? -1, lastAgent ?? -1)
                     ? lastEvents : nil
                 LazyVStack(alignment: .leading, spacing: 22) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -79,6 +82,10 @@ struct SessionView: View {
                         PlanCard(plan: plan, fromBefore: session.timeline.planIsFromBeforeLastMessage).id("plan")
                     }
                     if session.timeline.compacting { CompactingLine().id("compactando") }
+                    // Sin herramienta en curso: el modelo piensa desde el último mensaje.
+                    if liveWork == nil, status.isRunning, status != .waitingPermission, !session.timeline.compacting {
+                        LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince)).id("pensando")
+                    }
                 }
                 .frame(maxWidth: Theme.column, alignment: .leading)
                 .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 32)
