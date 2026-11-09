@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import httpx
 
-from . import __version__, agents_md, procesos, proveedores
+from . import __version__, agents_md, deshacer, procesos, proveedores
 from . import reglas as reglas_usuario
 from . import sesiones as registro
 from .hooks import HooksDeSesion, motor_de_sesion
@@ -727,6 +727,8 @@ class TerminalManager:
             for diagnostico in self.hooks.motor.diagnosticos:
                 self.event(self.task, 'system', 'Hooks · ' + diagnostico.texto)
         try:
+            # El código de la carpeta antes del turno, para poder volver a este mensaje con él.
+            await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'])
             await rt.run(prompt)
             if self.task['status'] == 'running':
                 if (rt.evidence.handoff().get('status') in ('failed', 'stale', 'changed_externally')
@@ -756,6 +758,8 @@ class TerminalManager:
             registro.cerrar_turno(self.task, turno['id'], self.task['status'], len(rt.state.get('messages', [])),
                                   cierre=self.task.get('cierre'),
                                   gasto=registro.gasto_del_turno(self.task, *antes))
+            # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
+            deshacer.al_terminar_turno(self.home, self.task, turno['id'])
             rt._record_context_details()
             if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
                 self.context(self.task, self.task['context_tokens'], self.task['context_limit'])
@@ -905,7 +909,8 @@ def main(argv=None):
                                                       'ella y le llega una nota al terminar cada turno')
     parser.add_argument('--titulo', metavar='TEXTO', help='Título de una sesión nueva en la barra lateral de la app '
                                                           '(el de la propuesta de propose_session)')
-    parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado)')
+    parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado) '
+                                                       'o de --volver')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')
     parser.add_argument('--sin-mantener-despierto', action='store_true',
@@ -942,9 +947,13 @@ def main(argv=None):
                          help='Crear la sesión bifurcada sin lanzarla y decir su id (JSON)')
     from .proveedores import orden as orden_de_proveedores
     orden_de_proveedores.argumentos(listing)
+    from .deshacer import orden as orden_de_deshacer
+    orden_de_deshacer.argumentos(parser, listing)
     args = parser.parse_args(argv)
     if orden_de_proveedores.pedida(args):
         return orden_de_proveedores.orden(args)
+    if orden_de_deshacer.pedida(args):
+        return orden_de_deshacer.orden(args)
     if args.descartar_no_relevantes and not args.aligerar_sesiones:
         parser.error('--descartar-no-relevantes sólo vale con --aligerar-sesiones')
     if args.aligerar_sesiones:

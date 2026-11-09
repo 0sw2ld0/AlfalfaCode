@@ -323,6 +323,13 @@ final class LiveSession: ObservableObject, Identifiable {
         onChange?()
     }
 
+    /// La marca de un deshacer o rehacer del código; el panel vuelve a leer los cambios de la carpeta.
+    func addUndo(_ step: UndoStep) {
+        timeline.addUndo(step)
+        onChange?()
+        Task { await refreshPanel() }
+    }
+
     func addNotice(_ text: String) {
         timeline.addNotice(text)
         onChange?()

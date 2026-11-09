@@ -44,7 +44,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var dormant: [String: LiveSession] = [:]
     private var openedAtLaunch = false
     /// Texto que espera en el cuadro de una sesión bifurcada al abrirla.
-    private var pendingDrafts: [String: String] = [:]
+    var pendingDrafts: [String: String] = [:]
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
     @Published private(set) var models: [ModelInfo] = []
@@ -84,7 +84,7 @@ final class AppModel: ObservableObject {
     private var pasteMonitor: Any?
 
     let launcher: URL?
-    private let home = FileManager.default.homeDirectoryForCurrentUser
+    let home = FileManager.default.homeDirectoryForCurrentUser
     private static let recentsKey = "recentFolders"
 
     init() {
@@ -569,7 +569,7 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
-    private func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
+    func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
         guard let launcher else { return nil }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: arguments, directory: home)

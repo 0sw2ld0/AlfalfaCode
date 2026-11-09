@@ -2,7 +2,7 @@ import AlfalfaKit
 import SwiftUI
 
 /// Un elemento de la conversación: mensaje, respuesta, registro de trabajo, permiso, aviso,
-/// resumen de fin de turno, ficha de información o marca de compactación.
+/// resumen de fin de turno, ficha de información o marca de compactación o de deshacer.
 struct ItemView: View {
 
     // MARK: - Propiedades
@@ -38,6 +38,8 @@ struct ItemView: View {
             CompactionMarker(compaction: compaction)
         case let .priceWarning(_, warning, answered):
             PriceWarningCard(warning: warning, answered: answered, session: session)
+        case let .undo(_, step, redone):
+            UndoMarker(step: step, redone: redone, session: session)
         }
     }
 
