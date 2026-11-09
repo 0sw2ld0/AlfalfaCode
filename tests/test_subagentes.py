@@ -128,6 +128,57 @@ def test_en_segundo_plano_trabajan_a_la_vez_y_wait_agent_recoge_los_informes(tmp
     assert {a['agent']: a['result'] for a in esperado['agents']} == {'a1': 'Informe de a1', 'a2': 'Informe de a2'}
 
 
+async def _hasta_que_acaben(sesion, paso):
+    """Antes de dar `paso`, el principal espera a que todos sus subagentes hayan acabado."""
+    for _ in range(500):
+        agentes = sesion.m.subagentes.agentes.values()
+        if agentes and not any(a.vivo for a in agentes):
+            return paso
+        await asyncio.sleep(0.01)
+    raise AssertionError('los subagentes no acabaron')
+
+
+def test_wait_agent_entrega_los_informes_de_los_que_ya_acabaron(tmp_path, monkeypatch):
+    # Con Python 3.13 los subagentes solían acabar antes de que el principal
+    # llamara a wait_agent, que respondía «No hay subagentes trabajando» y los
+    # informes se perdían.
+    s = Sesion(tmp_path, monkeypatch, None)
+    guion = Guion(
+        principal=[{'role': 'assistant', 'content': '', 'tool_calls': [
+                       {'function': {'name': 'spawn_agent', 'arguments': {
+                           'message': 'Parte uno', 'description': 'Uno', 'background': True}}},
+                       {'function': {'name': 'spawn_agent', 'arguments': {
+                           'message': 'Parte dos', 'description': 'Dos', 'background': True}}}]},
+                   lambda payload: _hasta_que_acaben(s, llamada('wait_agent', {'timeout_seconds': 30})),
+                   llamada('wait_agent', {'timeout_seconds': 30}),
+                   {'role': 'assistant', 'content': 'Junté los dos informes.'}],
+        por_agente={'a1': [{'role': 'assistant', 'content': 'Informe de a1'}],
+                    'a2': [{'role': 'assistant', 'content': 'Informe de a2'}]})
+    assert correr(s, guion) == 0
+    recogido = resultados(guion.payloads['principal'][2])[-1]
+    assert {a['agent']: a['result'] for a in recogido['agents']} == {'a1': 'Informe de a1', 'a2': 'Informe de a2'}
+    # Ya entregados: la segunda espera no los repite.
+    assert resultados(guion.payloads['principal'][3])[-1] == {'agents': [], 'note': 'No hay subagentes trabajando.'}
+    # Ni se los vuelve a pasar al terminar el turno.
+    assert len(guion.payloads['principal']) == 4
+
+
+def test_al_terminar_el_turno_entrega_los_informes_que_nadie_recogio(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    guion = Guion(
+        principal=[llamada('spawn_agent', {'message': 'Busca usos', 'background': True}),
+                   lambda payload: _hasta_que_acaben(s, {'role': 'assistant', 'content': 'Reviso lo mío.'}),
+                   {'role': 'assistant', 'content': 'Con el informe: hay tres usos.'}],
+        por_agente={'a1': [{'role': 'assistant', 'content': 'Encontré tres usos.'}]})
+    assert correr(s, guion) == 0
+    assert len(guion.payloads['principal']) == 3
+    aviso = guion.payloads['principal'][2]['messages'][-1]
+    assert aviso['role'] == 'user' and 'Tus subagentes terminaron' in aviso['content']
+    assert 'Encontré tres usos.' in aviso['content']
+    # No había nadie trabajando: no dice que espera.
+    assert not any(t.startswith('Esperando a que terminen los subagentes') for t in s.textos())
+
+
 def test_el_turno_no_se_cierra_con_subagentes_trabajando(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, None)
 

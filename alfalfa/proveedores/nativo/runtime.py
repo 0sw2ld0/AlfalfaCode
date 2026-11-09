@@ -2368,9 +2368,9 @@ class NativeRuntime:
                         self.save()
                         continue
                 subagentes = getattr(self.manager, 'subagentes', None)
-                if not calls and subagentes is not None and subagentes.vivos() and not review:
+                if not calls and subagentes is not None and subagentes.pendientes() and not review:
                     # Como las notificaciones de Claude Code: el turno no se cierra con
-                    # subagentes trabajando; sus informes vuelven al principal.
+                    # subagentes trabajando ni con informes que el principal no recogió.
                     self.task['activity'] = 'Esperando a los subagentes'
                     self.manager.save()
                     aviso = await subagentes.esperar_al_terminar(self)

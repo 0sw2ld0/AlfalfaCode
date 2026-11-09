@@ -190,7 +190,9 @@ def test_real_network_is_asked_before_enabling_and_keeps_write_restrictions(sess
     rt, root, call, spawned = session
     server = listener()
     connect = PY + ['import socket,sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5); '
-                    'print("conectado")',
+                    # Desde Python 3.13 el error enseña la línea de código: el texto que
+                    # se busca no puede aparecer tal cual en ella.
+                    'print("cone" + "ctado")',
                     str(server.getsockname()[1])]
     try:
         closed = call(Recorder(), argv=connect)
