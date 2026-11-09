@@ -326,6 +326,7 @@ struct SidePanel: View {
     }
 
     private var branchText: String {
+        if snapshot?.gitAvailable == false { return "git no está en este Mac" }
         guard let snapshot, let branch = snapshot.branch else { return "sin repositorio git" }
         let count = snapshot.files.count
         return "\(branch) · " + (count == 0 ? "sin cambios" : "\(count) archivo\(count == 1 ? "" : "s") modificado\(count == 1 ? "" : "s")")

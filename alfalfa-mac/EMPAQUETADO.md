@@ -1,8 +1,8 @@
 # AlfalfaCode.app autónoma
 
 `build-app.sh` hace una app que funciona sin el repositorio: quien la descarga abre el DMG,
-la arrastra a Aplicaciones y la abre. No hace falta clonar nada, ni un `.venv`, ni pip, ni
-las herramientas de línea de órdenes de Xcode para el motor.
+la arrastra a Aplicaciones y la abre. Después no se instala nada más: ni clonar, ni un `.venv`,
+ni pip, ni las herramientas de línea de órdenes de Apple.
 
 ```bash
 cd alfalfa-mac
@@ -20,6 +20,9 @@ AlfalfaCode.app/Contents/
   Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (control de apps)
   Resources/AppIcon.icns
   Resources/motor/alfalfa           lanzador: python3 -I -B -m alfalfa.terminal
+  Resources/motor/bin/rg            ripgrep 15.2.0 oficial (fijado por huella), al final del PATH
+  Resources/motor/sin-herramientas/git  delante en el PATH sólo si faltan las herramientas de Apple
+  Resources/motor/licencias/        licencias de lo que va dentro y no es nuestro
   Resources/motor/python/           CPython 3.13 de uv (python-build-standalone)
       lib/python3.13/site-packages/ alfalfa, httpx, mcp, jsonschema, cuysearch… (motor-requisitos.txt)
 ```
@@ -60,15 +63,29 @@ notarytool se guarda una vez en el llavero con el nombre `AlfalfaCode`.
 
 ## Qué necesita el motor del Mac de quien lo usa
 
-| Qué | Si falta | Cómo se resuelve |
+Nada que haya que instalar después de copiar la app.
+
+| Qué | Cómo va | Si falta |
 |---|---|---|
-| `firmante.swift`, `ayudante.swift` | En un clon sin `swiftc`, el código del proveedor Alfalfa y el control de apps fallan con «necesita swiftc». | La app los lleva compilados en `Contents/Helpers`; el motor los usa antes de intentar compilar. |
-| Perfiles `*.sbpl` de Seatbelt | Sin ellos no hay sandbox y no se ejecuta ninguna orden. | Van dentro del paquete `alfalfa` (datos del paquete); `sandbox-exec` es parte de macOS. `build-app.sh` comprueba que están. |
-| `git` | `/usr/bin/git` es un atajo de las herramientas de línea de órdenes: sin ellas, la primera llamada abre el diálogo de macOS para instalarlas. Mientras tanto las sesiones salen sin rama ni cambios y las órdenes `git` de los agentes fallan. | Instalarlas (`xcode-select --install`, o aceptar ese diálogo). El aviso de versiones de la app ya no usa git: consulta GitHub por HTTPS. |
-| `rg` | El motor no lo llama; sólo un agente puede pedirlo en una orden. Falla con «command not found» y el modelo usa `grep`. | Opcional: `brew install ripgrep`. Se podría incluir en `Helpers` (5 MB) si se ve que los modelos insisten. |
-| `codex` | Sólo se usa para delegar la visión a Codex; sin él, esa subtarea dice «requiere Codex instalado». | Instalar Codex con su propia cuenta. No se incluye: es un producto de otro con su propio inicio de sesión. |
-| Ollama | Sin Ollama ni otro proveedor no hay modelo. | Instalar Ollama, o configurar OpenAI o el servicio Alfalfa en Ajustes ▸ Proveedores. |
-| Xcode, `swift`, `node`… del proyecto | Los agentes compilan y prueban con las herramientas del usuario. | Son las del proyecto: las instala quien programa. |
+| Python y dependencias (`cuysearch` incluida) | Dentro, en `motor/python`. | — |
+| `firmante.swift`, `ayudante.swift` | Compilados al empaquetar, en `Contents/Helpers`; el motor los usa antes de intentar compilar. | — (en un clon sin `swiftc` fallan con «necesita swiftc») |
+| Perfiles `*.sbpl` de Seatbelt | Dentro del paquete `alfalfa`; `sandbox-exec` es parte de macOS. `build-app.sh` comprueba que están. | — |
+| `rg` | Dentro, en `motor/bin`, al final del PATH: si el usuario tiene el suyo, se usa el suyo. Funciona dentro del sandbox. | — |
+| `git` | No va dentro (ver abajo). | Sin las herramientas de Apple, `/usr/bin/git` es un atajo que abre el diálogo de macOS para instalarlas. Para que eso no pase, el lanzador pone delante `sin-herramientas/git`: usa otro git del PATH si existe (Homebrew) y, si no, falla con un aviso claro. El agente lo sabe desde el principio (`- Git: no está en este Mac` en su contexto) y trabaja sin ramas ni commits (si aun así llama a `/usr/bin/git` con la ruta entera, ese atajo puede abrir el diálogo). La app no ejecuta `/usr/bin/git` en ese caso y el panel Entorno dice «git no está en este Mac». |
+| `codex` | No va dentro. | AlfalfaCode.app nunca lo usa: sólo una aplicación que integra el motor y registra `ajustes.vision_delegada` (Chiyo) delega en él la visión, y si falta lo dice («requiere Codex instalado»). |
+| Ollama | — | Sin Ollama, se configura OpenAI o el servicio Alfalfa en Ajustes ▸ Proveedores. |
+
+Las herramientas propias de cada proyecto (Xcode, `swift`, `node`, `python3`…) no son del
+motor: si el agente las necesita, son las del usuario.
+
+### Llevar git dentro (propuesta)
+
+Lo que de verdad quita el requisito es compilar git al empaquetar, como `rg` pero desde su
+fuente oficial (kernel.org, fijada por huella): reubicable (`RUNTIME_PREFIX`), sólo con
+bibliotecas de macOS (CommonCrypto y el curl del sistema), con `git-credential-osxkeychain` y un
+`etc/gitconfig` que lo usa. Coste: unos 15–25 MB más, un par de minutos de compilación (en
+caché), y vigilar las versiones de seguridad de git en cada publicación. Es GPL-2.0: va como
+programa aparte, con su licencia y el enlace a su fuente exacta.
 
 ## Actualizaciones
 

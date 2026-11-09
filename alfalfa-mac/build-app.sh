@@ -113,11 +113,49 @@ rm -rf "$LIB/site-packages/bin"   # los lanzadores de pip apuntan a rutas de est
 "$PY" -I -m compileall -q -j 0 --invalidation-mode unchecked-hash "$LIB" >/dev/null \
   || echo "aviso: compileall no pudo compilar algún archivo (se interpretará al importarlo)"
 
+# rg (ripgrep): el binario oficial, fijado por versión y huella. Sólo enlaza bibliotecas de macOS.
+RG_VERSION="15.2.0"
+RG_SHA256="3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+RG_NOMBRE="ripgrep-$RG_VERSION-aarch64-apple-darwin"
+RG_TGZ="$CACHE/$RG_NOMBRE.tar.gz"
+rg_valido() { [ -f "$RG_TGZ" ] && [ "$(shasum -a 256 "$RG_TGZ" | cut -d' ' -f1)" = "$RG_SHA256" ]; }
+if ! rg_valido; then
+  curl -fsSL -o "$RG_TGZ" "https://github.com/BurntSushi/ripgrep/releases/download/$RG_VERSION/$RG_NOMBRE.tar.gz"
+  rg_valido || { rm -f "$RG_TGZ"; echo "✗ ripgrep descargado no coincide con su huella" >&2; exit 1; }
+fi
+mkdir -p "$MOTOR/bin" "$MOTOR/licencias/ripgrep" "$MOTOR/sin-herramientas"
+tar -xzf "$RG_TGZ" -C "$MOTOR/licencias/ripgrep" --strip-components 1 \
+    "$RG_NOMBRE/rg" "$RG_NOMBRE/COPYING" "$RG_NOMBRE/UNLICENSE" "$RG_NOMBRE/LICENSE-MIT"
+mv "$MOTOR/licencias/ripgrep/rg" "$MOTOR/bin/rg"
+otool -L "$MOTOR/bin/rg" | tail -n +2 | grep -qv '^[[:space:]]*/usr/lib/' \
+  && { echo "✗ rg enlaza bibliotecas que no son de macOS" >&2; exit 1; }
+
+# Sin las herramientas de línea de órdenes de Apple, /usr/bin/git es un atajo que abre el
+# diálogo de macOS para instalarlas. Este git va delante en ese caso: usa otro git de verdad
+# si lo hay (Homebrew, por ejemplo) y, si no, explica qué pasa y sale con error.
+cat > "$MOTOR/sin-herramientas/git" <<'GIT'
+#!/bin/sh
+yo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+viejo_ifs=$IFS; IFS=:
+for d in $PATH; do
+  case "$d" in ""|"$yo"|/usr/bin) continue ;; esac
+  if [ -x "$d/git" ]; then IFS=$viejo_ifs; exec "$d/git" "$@"; fi
+done
+echo "AlfalfaCode: git no está disponible en este Mac. macOS lo trae con sus herramientas de línea de órdenes, que no están instaladas. Se puede trabajar sin git, pero sin ramas, diffs ni commits. Para tenerlo: xcode-select --install" >&2
+exit 1
+GIT
+chmod 755 "$MOTOR/sin-herramientas/git"
+
 cat > "$MOTOR/alfalfa" <<'LANZADOR'
 #!/bin/sh
 # El motor de AlfalfaCode dentro de la app. -I: ni PYTHONPATH, ni el site del usuario, ni la
 # carpeta actual (la del proyecto) en sys.path. -B: no escribe .pyc en el bundle firmado.
 motor=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Lo que trae la app (rg) va detrás: si el usuario tiene el suyo, manda el suyo.
+PATH="${PATH:-/usr/bin:/bin}:$motor/bin"
+# Sin las herramientas de Apple, delante va el git que no abre el diálogo de instalarlas.
+/usr/bin/xcode-select -p >/dev/null 2>&1 || PATH="$motor/sin-herramientas:$PATH"
+export PATH
 exec "$motor/python/bin/python3" -I -B -m alfalfa.terminal "$@"
 LANZADOR
 chmod 755 "$MOTOR/alfalfa"
@@ -169,6 +207,14 @@ PRUEBA_HOME="$(mktemp -d)"
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$MOTOR/alfalfa" --version
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$PY" -I -B -c \
   'import alfalfa.terminal, alfalfa.empaquetado as e, cuysearch, mcp, jsonschema, httpx; assert e.en_la_app(), "no se ve dentro de la app"'
+"$MOTOR/bin/rg" --version | head -1
+# Sin otro git en el PATH, el de sustitución explica y falla; nunca llama a /usr/bin/git.
+AVISO_GIT="$(env -i PATH=/usr/bin:/bin "$MOTOR/sin-herramientas/git" status 2>&1 || true)"
+if [[ "$AVISO_GIT" == *"git no está disponible"* ]]; then
+  echo "git de sustitución: ok"
+else
+  echo "✗ el git de sustitución no avisa" >&2; exit 1
+fi
 if [ -n "$(find "$APP" -newer "$MARCA" -print -quit)" ]; then
   echo "✗ el motor escribió dentro de la app:" >&2; find "$APP" -newer "$MARCA" >&2; exit 1
 fi

@@ -63,3 +63,21 @@ def test_el_control_de_apps_no_compila_si_la_app_trae_el_ayudante(tmp_path, monk
     monkeypatch.setattr(empaquetado, 'ayudante', lambda nombre: incluido if nombre == ayudante.ruta.name else None)
     monkeypatch.setattr(apps.shutil, 'which', lambda *_: (_ for _ in ()).throw(AssertionError('swiftc')))
     assert asyncio.run(ayudante.asegurar()) == incluido
+
+
+def test_sin_git_el_agente_lo_sabe_desde_el_principio(tmp_path, monkeypatch):
+    # El git de sustitución de la app: avisa por stderr y falla, sin abrir el diálogo de macOS.
+    from alfalfa.proveedores.nativo.runtime import entorno
+    bin_ = tmp_path / 'bin'
+    bin_.mkdir()
+    falso = bin_ / 'git'
+    falso.write_text(f"#!/bin/sh\necho '{empaquetado.SIN_GIT}. Para tenerlo: xcode-select --install' >&2\nexit 1\n")
+    os.chmod(falso, 0o755)
+    monkeypatch.setenv('PATH', f'{bin_}:/bin')
+    proyecto = tmp_path / 'proyecto'
+    proyecto.mkdir()
+    texto = entorno(proyecto)
+    assert '- Git: no está en este Mac' in texto
+    # Con un git normal en una carpeta sin repositorio no se dice nada de esto.
+    monkeypatch.setenv('PATH', '/usr/bin:/bin')
+    assert 'no está en este Mac' not in entorno(proyecto)

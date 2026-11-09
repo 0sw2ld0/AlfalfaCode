@@ -56,6 +56,8 @@ public struct GitSnapshot: Equatable, Sendable {
     public var files: [DiffFile]
     public var added: Int { files.reduce(0) { $0 + $1.added } }
     public var removed: Int { files.reduce(0) { $0 + $1.removed } }
+    /// false si en este Mac no hay un git que se pueda usar sin instalar nada (ver `Workspace.git`).
+    public var gitAvailable = true
 }
 
 public enum Workspace {
@@ -85,10 +87,42 @@ public enum Workspace {
         }
     }
 
+    /// Si están las herramientas de línea de órdenes de Apple (o Xcode). Sin ellas, `/usr/bin/git`
+    /// es sólo un atajo que abre el diálogo de macOS para instalarlas. `xcode-select -p` no lo abre.
+    public static let appleToolsInstalled: Bool = {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
+        process.arguments = ["-p"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return false }
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    }()
+
+    /// El git que se puede usar sin que macOS pida instalar nada: `/usr/bin/git` si están las
+    /// herramientas de Apple; si no, otro del PATH (Homebrew, por ejemplo); si no hay, nil.
+    public static func git(environment: [String: String] = ProcessInfo.processInfo.environment,
+                           appleTools: Bool = appleToolsInstalled,
+                           isExecutable: (String) -> Bool = FileManager.default.isExecutableFile(atPath:)) -> String? {
+        if appleTools { return "/usr/bin/git" }
+        let path = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
+        for directory in path + ["/opt/homebrew/bin", "/usr/local/bin"] where !directory.isEmpty && directory != "/usr/bin" {
+            let candidate = (directory as NSString).appendingPathComponent("git")
+            if isExecutable(candidate) { return candidate }
+        }
+        return nil
+    }
+
     public static func snapshot(of directory: URL, environment: [String: String] = ProcessInfo.processInfo.environment) async -> GitSnapshot {
-        let branch = await capture("/usr/bin/git", ["rev-parse", "--abbrev-ref", "HEAD"], in: directory)?
+        guard let git = git(environment: environment) else {
+            var empty = GitSnapshot(branch: nil, files: [])
+            empty.gitAvailable = false
+            return empty
+        }
+        let branch = await capture(git, ["rev-parse", "--abbrev-ref", "HEAD"], in: directory)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let diff = await capture("/usr/bin/git", ["diff", "--no-ext-diff", "--no-textconv", "--no-color"], in: directory)
+        let diff = await capture(git, ["diff", "--no-ext-diff", "--no-textconv", "--no-color"], in: directory)
         // La redacción va antes de interpretar el diff: ninguna línea expuesta contiene la clave.
         let clean = Redactor.clean(diff ?? "", environment: environment)
         return GitSnapshot(branch: branch?.isEmpty == false ? branch : nil, files: DiffParser.parse(clean))

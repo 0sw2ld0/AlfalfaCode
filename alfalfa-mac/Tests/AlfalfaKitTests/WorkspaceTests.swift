@@ -86,4 +86,25 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertNil(snapshot.branch)
         XCTAssertEqual(snapshot.files, [])
     }
+
+    // MARK: - git sin las herramientas de Apple
+
+    /// Con las herramientas de Apple, el git de siempre.
+    func testGitIsSystemGitWithAppleTools() {
+        XCTAssertEqual(Workspace.git(environment: ["PATH": "/opt/homebrew/bin:/usr/bin"], appleTools: true,
+                                     isExecutable: { _ in true }), "/usr/bin/git")
+    }
+
+    /// Sin ellas, /usr/bin/git abriría el diálogo de instalarlas: se usa otro git del PATH.
+    func testGitSkipsTheInstallerStubWithoutAppleTools() {
+        let found = Workspace.git(environment: ["PATH": "/usr/bin:/bin:/opt/homebrew/bin"], appleTools: false,
+                                  isExecutable: { $0 == "/usr/bin/git" || $0 == "/opt/homebrew/bin/git" })
+        XCTAssertEqual(found, "/opt/homebrew/bin/git")
+    }
+
+    /// Y si no hay ninguno, no se ejecuta nada: el panel dice que git no está.
+    func testNoGitWithoutAppleToolsNorAnotherGit() {
+        XCTAssertNil(Workspace.git(environment: ["PATH": "/usr/bin:/bin"], appleTools: false,
+                                   isExecutable: { $0 == "/usr/bin/git" }))
+    }
 }

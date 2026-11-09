@@ -32,3 +32,14 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
+
+## Dentro de AlfalfaCode.app (build-app.sh)
+
+La app empaquetada lleva además programas de terceros sin cambios, cada uno con su licencia:
+
+- **CPython** 3.13 de [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+  (licencia PSF, en `motor/python/lib/python3.13/LICENSE.txt`).
+- Las bibliotecas de Python de `motor-requisitos.txt` (httpx, mcp, jsonschema, pydantic,
+  cryptography…), cada una con su licencia en su `*.dist-info`.
+- **ripgrep** 15.2.0, binario oficial de [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep)
+  (MIT o Unlicense, en `motor/licencias/ripgrep/`).

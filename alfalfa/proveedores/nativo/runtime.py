@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import httpx
 
+from ... import empaquetado
 from ...admision.despacho import check_task, inference_stream, resolved_model_aliases
 from ...evidencia.registro import RunEvidence
 
@@ -266,10 +267,15 @@ def entorno(root):
              '- Sistema: macOS ' + (platform.mac_ver()[0] or platform.platform()),
              '- Fecha: ' + date.today().isoformat()]
     try:
-        rama = _sp.run(['git', '-C', str(root), 'rev-parse', '--abbrev-ref', 'HEAD'],
-                       capture_output=True, text=True, timeout=5).stdout.strip()
+        hecho = _sp.run(['git', '-C', str(root), 'rev-parse', '--abbrev-ref', 'HEAD'],
+                        capture_output=True, text=True, timeout=5)
+        rama = hecho.stdout.strip()
+        if empaquetado.SIN_GIT in hecho.stderr:
+            # AlfalfaCode.app en un Mac sin las herramientas de Apple: que el modelo lo sepa ya.
+            filas.append('- Git: no está en este Mac (faltan las herramientas de línea de órdenes de Apple); '
+                         'trabaja sin ramas, diffs ni commits y, si hacen falta, díselo al usuario')
         cambios = _sp.run(['git', '-C', str(root), 'status', '--short'],
-                          capture_output=True, text=True, timeout=5).stdout.splitlines()
+                          capture_output=True, text=True, timeout=5).stdout.splitlines() if rama else []
         if rama:
             filas.append('- Git: rama ' + rama + ', ' + (str(len(cambios)) + ' archivos con cambios'
                                                        if cambios else 'sin cambios pendientes'))

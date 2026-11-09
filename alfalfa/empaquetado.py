@@ -15,6 +15,9 @@ import os
 from pathlib import Path
 
 CARPETA_MOTOR = ('Resources', 'motor')
+# Lo que escribe el `git` de sustitución de la app (build-app.sh) en un Mac sin las
+# herramientas de línea de órdenes de Apple, donde /usr/bin/git abriría el diálogo de instalarlas.
+SIN_GIT = 'AlfalfaCode: git no está disponible en este Mac'
 
 
 def contenidos(paquete=None):
