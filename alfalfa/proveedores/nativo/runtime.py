@@ -37,7 +37,8 @@ from .herramientas import (
     atomic_json,
     digest,
 )
-from .historial import Historial, Mensajes
+from .historial import VERSION as VERSION_SESION
+from .historial import Historial, Lista, Mensajes
 
 
 def is_cloud(model, info=None):
@@ -413,18 +414,20 @@ class NativeRuntime:
         self.directory = manager.directory / 'native' / task['id']
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = self.directory / 'session.json'
-        # La conversación y las fotos del espacio van en JSONL a los que sólo se
-        # añade (historial.py); session.json queda pequeño.
+        # La conversación, las fotos del espacio y la evidencia que crece (operaciones,
+        # comprobaciones e incidencias) van en JSONL a los que sólo se añade
+        # (historial.py); session.json queda pequeño.
         self.historial = Historial(self.directory)
-        self.state = {'version': 3, 'messages': Mensajes(), 'pending': [], 'plan': '', 'changes': []}
+        self.state = {'version': VERSION_SESION, 'messages': Mensajes(), 'pending': [], 'plan': '', 'changes': [],
+                      'operations': Lista(), 'checks': Lista()}
         self.historial.empezar(self.state['messages'])
         migrar = False
         if self.path.exists():
             self.state, migrar = self.historial.cargar(json.loads(self.path.read_text()))
-            # Version 2 added an append-only incident/resolution ledger and 3 moved
-            # the conversation out of session.json. Keep every older field intact;
-            # RunEvidence enriches it on construction.
-            self.state['version'] = 3
+            # Version 2 added an append-only incident/resolution ledger, 3 moved
+            # the conversation out of session.json and 4 the growing evidence.
+            # Keep every older field intact; RunEvidence enriches it on construction.
+            self.state['version'] = VERSION_SESION
         self.tools = WorkspaceTools(self)
         self.evidence = RunEvidence(self)
         if migrar:
@@ -671,7 +674,7 @@ class NativeRuntime:
         raise ValueError('Sesión deliberativa de solo lectura: herramienta rechazada y registrada.')
 
     def _guardar_sesion(self):
-        # Sólo se añade lo nuevo a messages.jsonl y fotos.jsonl; session.json, ya
+        # Sólo se añade lo nuevo a los JSONL (historial.py); session.json, ya
         # pequeño, se reescribe entero. El razonamiento sólo vive en memoria para
         # devolvérselo al modelo: nunca se escribe a disco.
         atomic_json(self.path, self.historial.guardar(self.state))
@@ -1838,13 +1841,41 @@ class NativeRuntime:
         self.save()
 
     def _review_closing_context(self):
-        """Freeze evidence before withdrawing tools; keep the full journal on disk."""
+        """Freeze evidence before withdrawing tools; keep the full journal on disk.
+
+        Sólo guarda hasta dónde llega la evidencia (cuántos mensajes y resoluciones,
+        qué incidencias): una copia de la conversación, las resoluciones y las
+        incidencias dentro de session.json lo hacía crecer con cada revisión, y al
+        recargar no se actualizaba. `_review_closing_evidence` la reconstruye.
+        """
         closing = self.state.get('review_closing')
         if closing:
             return closing
+        resolutions = self.state.get('resolution_records', [])
+        records = self.state.get('unresolved_records', {})
+        closing = {'status': 'pending',
+                   'request': next((m['content'] for m in self.state['messages']
+                                    if m['role'] == 'user'), self.task.get('objective', '')),
+                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
+                   'unresolved': self.state.get('unresolved', {}),
+                   'evidence_through': {
+                       'messages': len(self.state['messages']),
+                       'resolution_records': len(resolutions) if isinstance(resolutions, list) else 0,
+                       'unresolved_records': list(records) if isinstance(records, dict) else []}}
+        self.state['review_closing'] = closing
+        self.save()
+        return closing
+
+    def _review_closing_evidence(self, closing):
+        """Observaciones, fuentes, incidencias y resoluciones que congeló el cierre."""
+        through = closing.get('evidence_through')
+        if not isinstance(through, dict):
+            # Cierres de antes: llevaban la copia dentro.
+            return {key: closing.get(key, default) for key, default in (
+                ('observations', []), ('sources', []), ('unresolved_records', {}), ('resolution_records', []))}
         sources, observations = [], []
         queued = []
-        for message in self.state['messages']:
+        for message in self.state['messages'][:through.get('messages', 0)]:
             if message['role'] == 'assistant':
                 queued = list(message.get('tool_calls') or [])
                 if message.get('content'):
@@ -1854,23 +1885,22 @@ class NativeRuntime:
                 sources.append({'tool': message.get('tool_name'),
                                 'arguments': function.get('arguments', {}),
                                 'result': message.get('content', '')})
-        closing = {'status': 'pending', 'observations': observations, 'sources': sources,
-                   'request': next((m['content'] for m in self.state['messages']
-                                    if m['role'] == 'user'), self.task.get('objective', '')),
-                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
-                   'unresolved': self.state.get('unresolved', {}),
-                   'unresolved_records': self.state.get('unresolved_records', {}),
-                   'resolution_records': self.state.get('resolution_records', [])}
-        self.state['review_closing'] = closing
-        self.save()
-        return closing
+        records = self.state.get('unresolved_records', {})
+        records = records if isinstance(records, dict) else {}
+        resolutions = self.state.get('resolution_records', [])
+        resolutions = resolutions if isinstance(resolutions, list) else []
+        return {'observations': observations, 'sources': sources,
+                'unresolved_records': {key: records[key] for key in through.get('unresolved_records', [])
+                                       if key in records},
+                'resolution_records': list(resolutions[:through.get('resolution_records', 0)])}
 
     async def _close_review(self, client, payload, session_deadline):
         closing = self._review_closing_context()
         # Include exact observations and source identities even if compaction omitted
         # them. Raw tool results remain in the durable snapshot and original journal.
+        frozen = self._review_closing_evidence(closing)
         sources, excerpts = [], []
-        for source in closing['sources']:
+        for source in frozen['sources']:
             try:
                 result = json.loads(source['result'])
             except ValueError:
@@ -1880,8 +1910,9 @@ class NativeRuntime:
                             result.get('truncated'), result.get('error'), '', False])
             excerpts.append(str(result.get('text') or result.get('analysis') or
                                 json.dumps(result, ensure_ascii=False, separators=(',', ':'))))
-        evidence = {**closing, 'sources': sources}
-        evidence.pop('result', None)
+        evidence = {**closing, **frozen, 'sources': sources}
+        for key in ('result', 'evidence_through'):
+            evidence.pop(key, None)
         instruction = (
             'FASE FINAL DE REVISIÓN: el presupuesto restante está reservado para cerrar. '
             'No hay herramientas; no solicites ninguna. Devuelve únicamente un JSON breve del esquema. '
