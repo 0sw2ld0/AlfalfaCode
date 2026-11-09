@@ -1,3 +1,7 @@
-Se instala desde un DMG firmado y notarizado: arrastra AlfalfaCode a Aplicaciones y listo, sin nada más que instalar.
-Lleva dentro su propio Python, el motor, ripgrep y la búsqueda web desde tu conexión.
-Se actualiza sola: comprueba la firma de CuyCoders y la notarización de Apple antes de instalar.
+Claude con tu propia clave de Anthropic: Haiku 5.5, Sonnet 5.5 y Opus 5.5, con caché de prompts.
+Navegador propio dentro de la app para que el agente abra, lea y pruebe páginas sin Chrome.
+La lista de modelos dice cuáles ven imágenes y avisa antes de mandar una a un modelo que no las ve.
+Modos Ahorro y Contexto completo para los modelos que cobran más por contexto largo, como GPT-6 Luna y Claude Haiku 5.5.
+Las órdenes del agente se agrupan y cada una dice para qué sirve.
+Sesiones mucho más ligeras: la conversación y la evidencia van en archivos que sólo crecen.
+Enlaces a la privacidad y a Alfalfa Cloud en el menú de la cuenta y en Proveedores.
