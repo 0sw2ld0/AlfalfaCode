@@ -38,6 +38,16 @@ public struct ImportedItem: Equatable, Identifiable, Sendable {
     public var authorizable: Bool
     /// Sólo en un servidor MCP autorizado: si corre con red.
     public var network: Bool?
+    /// Huella pública de la definición: se autoriza `clave@huella`, así que si el archivo cambia
+    /// entre que se ve y se pulsa, el motor lo rechaza.
+    public var fingerprint: String
+    /// La definición de un servidor MCP en líneas (orden, ejecutable, carpeta, internet, variables).
+    public var definition: [String]
+    /// El principio del texto de una orden «/» o de un agente.
+    public var preview: String?
+
+    /// Lo que se manda a `--autorizar`.
+    public var authorizationKey: String { fingerprint.isEmpty ? key : key + "@" + fingerprint }
 
     public var id: String { key }
 
@@ -61,7 +71,8 @@ public struct ImportedItem: Equatable, Identifiable, Sendable {
 
     public init(key: String, kind: Kind, name: String, tool: String, place: String, state: String,
                 detail: String = "", problem: String? = nil, warnings: [String] = [], coveredBy: String? = nil,
-                authorizable: Bool = false, network: Bool? = nil) {
+                authorizable: Bool = false, network: Bool? = nil, fingerprint: String = "",
+                definition: [String] = [], preview: String? = nil) {
         self.key = key
         self.kind = kind
         self.name = name
@@ -74,6 +85,9 @@ public struct ImportedItem: Equatable, Identifiable, Sendable {
         self.coveredBy = coveredBy
         self.authorizable = authorizable
         self.network = network
+        self.fingerprint = fingerprint
+        self.definition = definition
+        self.preview = preview
     }
 
     init?(_ row: [String: Any]) {
@@ -84,7 +98,8 @@ public struct ImportedItem: Equatable, Identifiable, Sendable {
                   state: row["estado"] as? String ?? "", detail: row["detalle"] as? String ?? "",
                   problem: row["problema"] as? String, warnings: row["avisos"] as? [String] ?? [],
                   coveredBy: row["tapado_por"] as? String, authorizable: row["autorizable"] as? Bool ?? false,
-                  network: row["red"] as? Bool)
+                  network: row["red"] as? Bool, fingerprint: row["huella"] as? String ?? "",
+                  definition: row["definicion"] as? [String] ?? [], preview: row["vista"] as? String)
     }
 }
 
@@ -123,11 +138,12 @@ public struct ImportedConfig: Equatable, Sendable {
 
     public func items(of kind: ImportedItem.Kind) -> [ImportedItem] { items.filter { $0.kind == kind } }
 
-    /// Las órdenes «/» del proyecto que encajan con lo escrito, sin las que tapa una orden propia de la app.
+    /// Las órdenes «/» del proyecto que encajan con lo escrito (autorizadas o por autorizar), sin las
+    /// que tapa una orden propia de la app.
     public func commands(matching prefix: String) -> [ImportedItem] {
         let wanted = prefix.lowercased()
         return items(of: .comando).filter { item in
-            item.state == "activo" && SlashCommand.named(item.name) == nil
+            (item.state == "autorizado" || item.needsAuthorization) && SlashCommand.named(item.name) == nil
                 && (wanted.isEmpty || item.name.lowercased().hasPrefix(wanted))
         }
     }

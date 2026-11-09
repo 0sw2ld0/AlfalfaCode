@@ -565,7 +565,9 @@ class TerminalManager:
                              # Sin bytecode: `python3 uso.py` en run_checks creaba __pycache__ en un
                              # repo sin .gitignore y la comprobación quedaba «el workspace cambió».
                              process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
-                                          'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1'},
+                                          'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
+                                          # `alfalfa --importar --autorizar` no autoriza desde aquí.
+                                          'ALFALFA_SESION': self.task['id']},
                              # Red cerrada: sólo un permiso «red» de la política
                              # on-request abre la variante con red para ese intento.
                              process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False),
@@ -744,8 +746,14 @@ class TerminalManager:
             for diagnostico in self.hooks.motor.diagnosticos:
                 self.event(self.task, 'system', 'Hooks · ' + diagnostico.texto)
         try:
-            # «/comando» de OpenCode o Claude Code: el modelo recibe su plantilla.
-            await rt.run(self.importadas.expandir(prompt) or prompt)
+            # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
+            expandido = self.importadas.expandir(prompt)
+            pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
+            if pendiente is not None:
+                self.event(self.task, 'system', 'La orden /' + pendiente.nombre + ' del proyecto ('
+                           + pendiente.herramienta + ') no está autorizada: se manda tal cual. Autorízala en '
+                           'Ajustes ▸ Importar o con alfalfa --importar.')
+            await rt.run(expandido or prompt)
             if self.task['status'] == 'running':
                 if (rt.evidence.handoff().get('status') in ('failed', 'stale', 'changed_externally')
                         or rt.state.get('unresolved') or self.approval.denied

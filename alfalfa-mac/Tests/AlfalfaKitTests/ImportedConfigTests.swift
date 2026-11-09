@@ -8,7 +8,8 @@ final class ImportedConfigTests: XCTestCase {
      "elementos": [
       {"clave": "mcp:eco@/p/opencode.json", "corta": "mcp:eco", "tipo": "mcp", "nombre": "eco",
        "herramienta": "OpenCode", "origen": "/p/opencode.json", "lugar": "opencode.json", "ambito": "proyecto",
-       "detalle": "orden · python3", "estado": "pendiente", "autorizable": true},
+       "detalle": "stdio · python3 srv.py", "estado": "pendiente", "autorizable": true,
+       "huella": "aaaabbbbccccdddd", "definicion": ["orden: python3 srv.py", "internet: sí"]},
       {"clave": "mcp:docs@/p/.mcp.json", "tipo": "mcp", "nombre": "docs", "herramienta": "Claude Code",
        "origen": "/p/.mcp.json", "lugar": ".mcp.json", "ambito": "proyecto", "detalle": "HTTP · x.y/mcp",
        "estado": "autorizado", "autorizable": true, "red": false},
@@ -17,7 +18,10 @@ final class ImportedConfigTests: XCTestCase {
        "estado": "cambio", "autorizable": true},
       {"clave": "comando:probar@/p/opencode.json", "tipo": "comando", "nombre": "probar", "herramienta": "OpenCode",
        "origen": "/p/opencode.json", "lugar": "opencode.json", "ambito": "proyecto", "detalle": "Corre pruebas",
-       "estado": "activo", "autorizable": false},
+       "estado": "autorizado", "autorizable": true, "huella": "0123456789abcdef", "vista": "Ejecuta $ARGUMENTS"},
+      {"clave": "comando:nuevo2@/p/opencode.json", "tipo": "comando", "nombre": "nuevo2", "herramienta": "OpenCode",
+       "origen": "/p/opencode.json", "lugar": "opencode.json", "ambito": "proyecto", "detalle": "",
+       "estado": "pendiente", "autorizable": true, "huella": "fedcba9876543210"},
       {"clave": "comando:revisar@/p/.claude/commands/revisar.md", "tipo": "comando", "nombre": "revisar",
        "herramienta": "Claude Code", "origen": "/p/.claude/commands/revisar.md", "lugar": ".claude/commands/revisar.md",
        "ambito": "proyecto", "detalle": "", "estado": "activo", "autorizable": false},
@@ -41,9 +45,13 @@ final class ImportedConfigTests: XCTestCase {
     func testDecodesTheImportListWithStatesAndPlaces() throws {
         let config = try decoded()
         XCTAssertEqual(config.folder, "/p")
-        XCTAssertEqual(config.items.count, 7)
+        XCTAssertEqual(config.items.count, 8)
         XCTAssertEqual(config.warnings, ["opencode.json: JSON inválido en la línea 3"])
-        XCTAssertEqual(config.pending.map(\.name), ["eco", "revisor"])
+        XCTAssertEqual(config.pending.map(\.name), ["eco", "revisor", "nuevo2"])
+        let eco = try XCTUnwrap(config.items.first)
+        XCTAssertEqual(eco.authorizationKey, "mcp:eco@/p/opencode.json@aaaabbbbccccdddd")
+        XCTAssertEqual(eco.definition, ["orden: python3 srv.py", "internet: sí"])
+        XCTAssertEqual(config.items(of: .comando).first?.preview, "Ejecuta $ARGUMENTS")
         let docs = try XCTUnwrap(config.items.first { $0.name == "docs" })
         XCTAssertEqual(docs.stateTitle, "Autorizado, sin red")
         XCTAssertFalse(docs.needsAuthorization)
@@ -55,7 +63,8 @@ final class ImportedConfigTests: XCTestCase {
     func testProjectCommandsSkipBuiltInsAndInactiveOnes() throws {
         let config = try decoded()
         // /revisar es una orden propia de la app: la del proyecto no la tapa. /viejo está duplicada.
-        XCTAssertEqual(config.commands(matching: "").map(\.name), ["probar"])
+        // /nuevo2 sale (atenuada en el menú) aunque falte autorizarla.
+        XCTAssertEqual(config.commands(matching: "").map(\.name), ["probar", "nuevo2"])
         XCTAssertEqual(config.commands(matching: "PR").map(\.name), ["probar"])
         XCTAssertTrue(config.commands(matching: "x").isEmpty)
     }

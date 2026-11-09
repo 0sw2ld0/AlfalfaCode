@@ -2,8 +2,9 @@ import AlfalfaKit
 import SwiftUI
 
 /// Ajustes ▸ Importar: lo que trae la carpeta de trabajo de OpenCode, Codex y Claude Code.
-/// Los servidores MCP y los agentes no se activan hasta autorizarlos aquí (o con
-/// `alfalfa --importar --autorizar`); las órdenes «/» y las instrucciones ya funcionan.
+/// Los servidores MCP, los agentes y las órdenes «/» no se activan hasta autorizarlos aquí (o con
+/// `alfalfa --importar --autorizar`), viendo antes su definición; las instrucciones ya funcionan.
+/// Se autoriza `clave@huella`: si el archivo cambió desde que se vio, el motor lo rechaza.
 struct ImportSettings: View {
 
     // MARK: - Propiedades
@@ -16,9 +17,10 @@ struct ImportSettings: View {
             SettingsBlock(title: "OpenCode, Codex y Claude Code",
                           detail: "AlfalfaCode lee AGENTS.md y CLAUDE.md, opencode.json, .opencode/, "
                               + ".codex/config.toml y .mcp.json de la carpeta de trabajo, y tus configuraciones de "
-                              + "~/.config/opencode y ~/.codex/config.toml. Los servidores MCP y los agentes que "
-                              + "vienen de ahí no se activan hasta que los autorizas una vez; si su definición cambia, "
-                              + "vuelven a preguntar. Ninguna clave de esos archivos se copia.") {
+                              + "~/.config/opencode y ~/.codex/config.toml. Los servidores MCP, los agentes y las "
+                              + "órdenes «/» que vienen de ahí no se activan hasta que los autorizas una vez, viendo "
+                              + "qué hacen; si su definición cambia, vuelven a preguntar. Ninguna clave de esos "
+                              + "archivos se copia.") {
                 header
             }
             if let error {
@@ -29,6 +31,15 @@ struct ImportSettings: View {
             }
         }
         .task(id: model.folder) { await load() }
+        .confirmationDialog(confirmTitle, isPresented: $confirmingAll) {
+            Button("Autorizar " + String(config?.pending.count ?? 0)) {
+                Task { await change(authorize: (config?.pending ?? []).map(\.authorizationKey)) }
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Cada uno es código o instrucciones que trae la carpeta: revisa antes su definición en la lista. "
+                 + (network ? "Los servidores MCP tendrán internet." : "Los servidores MCP no tendrán internet."))
+        }
     }
 
     // MARK: - Propiedades privadas
@@ -37,6 +48,12 @@ struct ImportSettings: View {
     @State private var error: String?
     @State private var busy = false
     @State private var network = true
+    @State private var confirmingAll = false
+
+    private var confirmTitle: String {
+        let names = (config?.pending ?? []).map { ($0.kind == .comando ? "/" : "") + $0.name }
+        return "¿Autorizar " + names.joined(separator: ", ") + "?"
+    }
 
     private var folder: URL? { model.folder.map { URL(fileURLWithPath: $0) } }
 
@@ -46,10 +63,10 @@ struct ImportSettings: View {
                 .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
                 .lineLimit(1).truncationMode(.middle)
             HStack(spacing: 10) {
-                Button("Autorizar todo") { Task { await change(authorize: (config?.pending ?? []).map(\.key)) } }
+                Button("Autorizar todo…") { confirmingAll = true }
                     .disabled(busy || (config?.pending.isEmpty ?? true))
                 Button("Volver a leer") { Task { await load() } }.disabled(busy || folder == nil)
-                Toggle("Los servidores MCP que autorices tienen red", isOn: $network)
+                Toggle("Los servidores MCP que autorices tienen internet", isOn: $network)
                     .toggleStyle(.checkbox).font(.system(size: 12))
                 if busy { ProgressView().controlSize(.small) }
             }
@@ -91,10 +108,19 @@ struct ImportSettings: View {
                     Text(note).font(.system(size: 11)).foregroundStyle(Theme.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                ForEach(item.definition, id: \.self) { line in
+                    Text(line).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let preview = item.preview {
+                    Text(preview).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.secondary)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        .padding(6).background(Theme.background, in: RoundedRectangle(cornerRadius: 6))
+                }
             }
             Spacer()
             if item.needsAuthorization {
-                Button("Autorizar") { Task { await change(authorize: [item.key]) } }.disabled(busy)
+                Button("Autorizar") { Task { await change(authorize: [item.authorizationKey]) } }.disabled(busy)
             } else if item.authorizable, item.state == "autorizado" {
                 Button("Retirar") { Task { await change(revoke: [item.key]) } }.disabled(busy)
             }

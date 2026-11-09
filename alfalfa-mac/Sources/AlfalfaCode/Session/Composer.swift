@@ -223,10 +223,11 @@ private extension Composer {
     /// Las órdenes «/» de OpenCode y Claude Code de la carpeta (`alfalfa --importar`).
     func projectCommands(_ prefix: String) -> [CommandSuggestion] {
         (imported?.commands(matching: prefix) ?? []).map { item in
-            CommandSuggestion(id: "proyecto:" + item.name, symbol: "text.badge.star", title: "/" + item.name,
-                              detail: [item.detail, item.tool + " · " + item.place].filter { !$0.isEmpty }
-                                  .joined(separator: " · "),
-                              enabled: true, action: .project(item.name))
+            let authorized = item.state == "autorizado"
+            let detail = [item.detail, item.tool + " · " + item.place].filter { !$0.isEmpty }.joined(separator: " · ")
+            return CommandSuggestion(id: "proyecto:" + item.name, symbol: "text.badge.star", title: "/" + item.name,
+                                     detail: authorized ? detail : detail + " · sin autorizar: Ajustes ▸ Importar",
+                                     enabled: authorized, action: .project(item.name))
         }
     }
 

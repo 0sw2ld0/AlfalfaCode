@@ -136,12 +136,18 @@ def cargar(carpeta, hogar=None, max_bytes=MAX_BYTES):
         candidatos.append((elegir(directorio, alternativos), None))
         candidatos += [(directorio / nombre, None) for nombre in CLAUDE if (directorio / nombre).is_file()]
     candidatos += despues
+    limite = (resultado.raiz or Path(carpeta)).resolve()
     resto, vistos, textos = max_bytes, set(), set()
     for ruta, texto in candidatos:
         if ruta is None:
             continue
         real = ruta.resolve() if texto is None else ruta
         if real in vistos:
+            continue
+        if texto is None and not _dentro(real, limite):
+            # Un AGENTS.md o CLAUDE.md que enlaza fuera del proyecto (p. ej. a ~/.aws/credentials) no entra.
+            resultado.avisos.append('No se leen las instrucciones de ' + str(ruta) + ': enlazan fuera del proyecto.')
+            vistos.add(real)
             continue
         vistos.add(real)
         if resto <= 0:
@@ -173,6 +179,14 @@ def cargar(carpeta, hogar=None, max_bytes=MAX_BYTES):
         resultado.proyecto.append((ruta, texto))
         resto -= len(datos)
     return resultado
+
+
+def _dentro(ruta, carpeta):
+    try:
+        Path(ruta).relative_to(carpeta)
+        return True
+    except ValueError:
+        return False
 
 
 def _sin_importaciones_repetidas(texto, carpeta, vistos):

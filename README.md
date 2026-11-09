@@ -570,51 +570,78 @@ está en Ajustes ▸ Importar.
 `developer_instructions` de Codex (como hace Codex, delante); en cada carpeta, de la
 raíz a la de trabajo, `AGENTS.override.md`, `AGENTS.md` o un nombre alternativo de
 Codex, y después los CLAUDE.md; al final, los archivos de `instructions` de OpenCode
-(nunca URL ni rutas fuera del proyecto). Un archivo que ya entró no se repite: ni el
-mismo, ni un enlace a él, ni otro con el mismo texto, y un CLAUDE.md que sólo dice
-`@AGENTS.md` no añade nada. El `AGENTS.md` de `~/.alfalfa` sigue yendo primero.
+(nunca URL). Un archivo que ya entró no se repite: ni el mismo, ni un enlace a él,
+ni otro con el mismo texto, y un CLAUDE.md que sólo dice `@AGENTS.md` no añade nada.
+Un archivo que enlaza fuera del proyecto no se lee. El `AGENTS.md` de `~/.alfalfa`
+sigue yendo primero.
 
-**Servidores MCP y agentes: se autorizan una vez.** Como los complementos, lo que
-viene de una configuración ajena no se activa hasta que lo autorizas. La lista dice
-de qué herramienta y de qué archivo viene cada uno; al empezar una sesión, un aviso
-dice qué queda sin autorizar.
+**Servidores MCP, agentes y órdenes «/»: se autorizan una vez, viendo qué hacen.**
+Como los complementos, lo que viene de una configuración ajena no se activa hasta
+que lo autorizas. La lista enseña de qué herramienta y de qué archivo viene cada
+uno y su definición sin resolver. De un servidor stdio enseña la orden entera con
+sus argumentos y la ruta del ejecutable, avisando si es del repositorio. También la
+carpeta que podrá escribir, si tendrá internet y qué variables lee. De uno HTTP
+enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
+Al empezar una sesión, un aviso dice qué queda sin autorizar.
 
 ```bash
-alfalfa --importar                          # qué hay y en qué estado
-alfalfa --importar --autorizar mcp:docs     # uno (la clave corta vale si no hay dudas)
-alfalfa --importar --autorizar todo         # todos los pendientes
+alfalfa --importar                                # qué hay, su definición y su huella
+alfalfa --importar --autorizar mcp:docs@HUELLA    # lo que viste (la clave corta vale si no hay dudas)
+alfalfa --importar --autorizar todo               # en una terminal: todos los pendientes
 alfalfa --importar --autorizar todo --sin-internet
 alfalfa --importar --retirar agente:revisor
 ```
 
-La autorización queda en `~/.alfalfa/importadas.json` como una huella de la
-definición (HMAC con una clave de este Mac). Si la definición cambia (otra orden,
-otros argumentos, otro entorno), vuelve a «sin autorizar». Otro proyecto con un
-servidor del mismo nombre no hereda la autorización.
+`CLAVE@HUELLA` sólo autoriza si el archivo sigue diciendo lo que viste: si cambió
+entre la lista y la autorización, se rechaza. Sin huella, o con `todo`, hace falta
+una terminal de verdad. Dentro de una sesión de AlfalfaCode no se autoriza nada,
+porque un agente no se da permisos. La app autoriza siempre con la huella, y
+«Autorizar todo» pide confirmación.
+
+La autorización queda en `~/.alfalfa/importadas.json` como una huella de lo que se
+usará (HMAC con una clave de este Mac). Si cambia algo (otra orden, otros argumentos,
+otro entorno, el archivo `{file:…}` del prompt de un agente), vuelve a «sin
+autorizar». Otro proyecto con un servidor del mismo nombre no hereda la autorización.
 
 - Los servidores corren como los de `mcp.json`: stdio dentro del sandbox Seatbelt
   (con internet salvo `--sin-internet`) y cada llamada pide permiso. Sólo reciben el
   entorno que declaran. Las referencias (`{env:X}` de OpenCode, `${X}` de Claude Code,
   `env_vars` y `bearer_token_env_var` de Codex) se resuelven en memoria al abrir la
-  sesión y nunca entregan una clave de proveedor. Ninguna clave de esos archivos se
-  copia a ningún sitio y la lista no enseña argumentos, entorno ni cabeceras.
-- `mcp.json` y los complementos ganan; luego va lo del proyecto (la carpeta de
-  trabajo antes que la raíz, `.opencode/` antes que el `opencode.json` suelto) y por
-  último lo del usuario. Un nombre repetido sale como «duplicado».
-- No se usan: OAuth (sólo cabeceras), `{file:…}` en un servidor, SSE ni
-  `http_headers_helper` de Codex.
-- Un agente de OpenCode se usa como subagente (`spawn_agent`). `permission.edit:
-  deny` o `tools.write/edit: false` lo dejan de sólo lectura, y `bash` denegado le
-  quita las órdenes. Su modelo `proveedor/modelo` no es de AlfalfaCode, así que usa
-  el de la sesión, y la variante (`#high`) pasa a esfuerzo. Un `.alfalfa/agents` o
-  `.claude/agents` con el mismo nombre gana.
+  sesión y nunca entregan una clave de proveedor. Lo que sale de ellas, también en la
+  URL, se redacta como el entorno del servidor. Ninguna clave se copia a ningún
+  sitio. La lista enseña los valores literales que puso el proyecto y oculta los de
+  tu configuración.
+- La carpeta de un servidor stdio es la única que puede escribir. La de uno del
+  proyecto queda dentro del proyecto. Ninguna puede ser tu carpeta personal, una que
+  la contenga ni una que contenga `~/.alfalfa`; si lo es, el servidor no se usa.
+- `mcp.json` y los complementos ganan. Las capas de OpenCode se fusionan campo a
+  campo como en OpenCode: la más cercana gana, así que `{"gh": {"disabled": true}}`
+  en el proyecto apaga el `gh` del usuario. Luego va lo del proyecto (de la carpeta
+  de trabajo a la raíz, también las intermedias) y por último lo del usuario. Un
+  nombre repetido sale como «duplicado». Si lo tapado es algo que ya autorizaste, se
+  avisa.
+- Diferencias con las otras herramientas:
+  - OpenCode deja vacía una `{env:X}` que no existe; aquí el servidor no se inicia sin ella.
+  - Codex sigue sin una variable de `env_vars` que no existe; aquí también, con un aviso.
+  - OAuth no se usa, sólo las cabeceras. Un servidor remoto de OpenCode que dependa
+    de su OAuth por defecto lo avisa.
+  - Tampoco se usan `{file:…}` en un servidor, SSE ni `http_headers_helper` de Codex.
+- Un agente de OpenCode se usa como subagente (`spawn_agent`). Denegar editar
+  (`permission.edit`, `tools.write/edit: false` o las reglas V2 en orden, la última
+  gana) lo deja de sólo lectura, y denegar `bash` le quita las órdenes. Un deny
+  limitado a unas rutas no se puede limitar aquí: se aplica entero y se avisa. Su
+  modelo `proveedor/modelo` no es de AlfalfaCode, así que usa el de la sesión, y la
+  variante (`#high`) pasa a esfuerzo. Un `.alfalfa/agents` o `.claude/agents` con el
+  mismo nombre gana.
 
-**Órdenes «/».** Los comandos de OpenCode y de Claude Code no necesitan autorización:
-sólo corren cuando los escribes. Salen en el menú «/» de la app; `/probar unidad`
-(o `alfalfa "/probar unidad"`) le manda al agente su plantilla con `$ARGUMENTS` y
-`$1`…`$9` sustituidos. `` !`orden` `` no se ejecuta sola: queda como petición al
-agente, que la corre con los permisos de siempre. Si el comando pide un subagente
-(`subtask`/`subagent`), el mensaje lo dice. Las órdenes propias de la app ganan.
+**Órdenes «/».** Las de OpenCode y Claude Code salen en el menú «/» de la app; las que
+faltan por autorizar, atenuadas. Una autorizada, `/probar unidad` (o `alfalfa "/probar
+unidad"`), le manda al agente su plantilla con `$ARGUMENTS` y `$1`, `$2`… sustituidos,
+en una sola pasada. La plantilla va marcada como texto del repositorio, no como
+palabras tuyas. Una sin autorizar se manda tal cual, con un aviso. `` !`orden` `` no
+se ejecuta sola: queda como petición al agente, que la corre con los permisos de
+siempre. Si el comando pide un subagente (`subtask`/`subagent`), el mensaje lo dice.
+Las órdenes propias de la app ganan.
 
 ## Probar apps del Mac (control de apps)
 

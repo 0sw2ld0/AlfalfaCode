@@ -97,6 +97,9 @@ class Servidor:
     procedencia: str | None = None
     complemento: str | None = None
     nombre_original: str | None = None
+    # Valores que salieron de variables del usuario al importar una configuración ajena
+    # (alfalfa/importadas): se redactan igual que el entorno y las cabeceras.
+    secretos_extra: frozenset = frozenset()
 
     def habilitada(self, original):
         """deshabilitadas prevalece; habilitadas None significa todas."""
@@ -113,7 +116,21 @@ class Servidor:
                 partes = valor.split(None, 1)
                 if partes:
                     valores.append(partes[-1].strip())
+        valores += list(self.secretos_extra) + _secretos_de_url(self.url)
         return {v for v in valores if isinstance(v, str) and len(v) >= MIN_SECRETO}
+
+
+def _secretos_de_url(url):
+    """Lo que en una URL suele ser una credencial: los valores de la consulta y los tramos de la
+    ruta con pinta de token (largos y con letras y cifras, como /api/mcp/s/<token>/mcp)."""
+    if not isinstance(url, str) or not url:
+        return []
+    from urllib.parse import parse_qsl
+    partes = urlparse(url)
+    valores = [v for _, v in parse_qsl(partes.query, keep_blank_values=False)]
+    valores += [t for t in partes.path.split('/') if len(t) >= 16 and re.search(r'\d', t)
+                and re.search(r'[A-Za-z]', t)]
+    return valores
 
 
 class _Invalido(ValueError):
