@@ -945,3 +945,104 @@ def test_la_macro_maliciosa_de_la_revision_no_se_ejecuta(sesion, permisos, monke
     assert not rt.manager.diagnosticos.servidores
     time.sleep(0.5)
     assert not marca.exists()
+
+
+# --- tercera revisión: mayúsculas, dependencias sin paréntesis, confianza en el paquete ---------------
+
+
+def _disco_sin_mayusculas(carpeta):
+    prueba = carpeta / 'Mayusculas'
+    prueba.mkdir(exist_ok=True)
+    return (carpeta / 'mayusculas').exists()
+
+
+def test_los_manifiestos_se_buscan_sin_distinguir_mayusculas(tmp_path):
+    (tmp_path / 'package.swift').write_text('// a\n')
+    (tmp_path / 'PACKAGE@swift-6.0.SWIFT').write_text('// b\n')
+    (tmp_path / 'otro.swift').write_text('// c\n')
+    assert [p.name for p in modulo.manifiestos(tmp_path)] == ['PACKAGE@swift-6.0.SWIFT', 'package.swift']
+    assert modulo.es_paquete(tmp_path)
+    (tmp_path / 'package.swift').write_text('let package = Package(name: "X", targets: [.target(name: "X", '
+                                            'swiftSettings: ENV ? [] : [.unsafeFlags(["-x"])])])\n')
+    assert 'package.swift usa unsafeFlags' in modulo.motivo_en_el_texto(tmp_path)
+
+
+@pytest.mark.parametrize('manifiesto,motivo', [
+    ('let p: (String) -> Package.Dependency = Package.Dependency.package\n'
+     'let package = Package(name: "X", dependencies: [p("../otro")])', 'dependencias'),
+    ('let m = Target.macro\nlet package = Package(name: "X")', 'macro'),
+    ('let q = Target.plugin\nlet package = Package(name: "X")', 'plugins'),
+    ('let b = Target.binaryTarget\nlet package = Package(name: "X")', 'binario'),
+])
+def test_el_filtro_de_texto_no_exige_parentesis(tmp_path, manifiesto, motivo):
+    (tmp_path / 'Package.swift').write_text('import PackageDescription\n' + manifiesto + '\n')
+    assert motivo in modulo.motivo_en_el_texto(tmp_path)
+
+
+def test_el_filtro_de_texto_deja_lo_corriente(tmp_path):
+    (tmp_path / 'Package.swift').write_text(
+        '// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: "X", targets: ['
+        '.target(name: "X", packageAccess: true, swiftSettings: [.define("DEBUG")])])\n')
+    assert modulo.motivo_en_el_texto(tmp_path) is None
+
+
+def test_dentro_de_no_distingue_mayusculas_si_el_disco_no_lo_hace(tmp_path):
+    if not _disco_sin_mayusculas(tmp_path):
+        pytest.skip('este disco distingue mayúsculas')
+    raiz = tmp_path / 'proyecto'
+    bins = raiz / 'node_modules' / '.bin'
+    bins.mkdir(parents=True)
+    (bins / 'eslint').write_text('#!/bin/sh\n')
+    (bins / 'eslint').chmod(0o755)
+    otra_forma = tmp_path / 'PROYECTO' / 'node_modules' / '.bin'
+    assert modulo.dentro_de(str(otra_forma / 'eslint'), raiz)
+    assert linters._programa('eslint', {'PATH': str(otra_forma)}, raiz=raiz)[1] is True
+    assert not modulo.dentro_de(str(tmp_path / 'otro'), raiz)
+
+
+def test_el_permiso_de_un_paquete_pide_confiar_en_el(sourcekit, sesion, permisos):
+    raiz, rt = sesion
+    pedidas, _ = permisos
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\n')
+    editar(rt, 'Sources/a.swift', 'let a = 1\n')
+    (pedida,) = pedidas
+    assert pedida['purpose'].startswith('Confiar en el paquete Swift de ' + str(raiz.resolve()))
+    assert 'FUERA del sandbox' in pedida['purpose'] and 'ejecuta el compilador' in pedida['purpose']
+
+
+def test_un_archivo_suelto_no_pide_confiar_en_un_paquete(sourcekit, sesion, permisos):
+    raiz, rt = sesion
+    pedidas, _ = permisos
+    editar(rt, 'suelto.swift', 'let b = 1\n')
+    (pedida,) = pedidas
+    assert not pedida['purpose'].startswith('Confiar') and 'FUERA del sandbox' in pedida['purpose']
+
+
+@pytest.mark.skipif(SOURCEKIT is None or SWIFT is None, reason='sourcekit-lsp o swift no están instalados')
+def test_package_swift_en_minusculas_con_rama_por_entorno(sesion, permisos, monkeypatch, tmp_path):
+    """El caso de la tercera revisión: `package.swift` en minúsculas que sólo pide unsafeFlags fuera del
+    temporal de dump-package. Ni en Omitir permisos se lanza sourcekit-lsp, y evil no deja marca."""
+    raiz, rt = sesion
+    if not _disco_sin_mayusculas(tmp_path):
+        pytest.skip('este disco distingue mayúsculas: SwiftPM no abriría package.swift')
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
+    monkeypatch.setattr(linters, '_programa', lambda *a, **k: (None, False))
+    rt.task['modo'] = 'omitir'
+    marca = tmp_path / 'marca-de-evil'
+    (raiz / 'herr').mkdir()
+    (raiz / 'herr' / 'evil').write_text('#!/bin/sh\ntouch ' + str(marca) + '\n')
+    (raiz / 'herr' / 'evil').chmod(0o755)
+    (raiz / 'Sources' / 'Demo').mkdir(parents=True)
+    (raiz / 'package.swift').write_text(
+        '// swift-tools-version:5.9\nimport PackageDescription\nimport Foundation\n'
+        'let enElVolcado = (ProcessInfo.processInfo.environment["TMPDIR"] ?? "").contains("alfalfa-manifiesto")\n'
+        'let package = Package(name: "Demo", targets: [.target(name: "Demo", swiftSettings: enElVolcado ? [] : '
+        '[.unsafeFlags(["-Xfrontend", "-load-plugin-executable", "-Xfrontend", "' + str(raiz / 'herr' / 'evil')
+        + '#Evil", "-Xfrontend", "-disable-sandbox"])])])\n')
+    resultado = editar(rt, 'Sources/Demo/a.swift', '@freestanding(expression) macro evil() = '
+                                                   '#externalMacro(module: "Evil", type: "Evil")\nlet x = #evil()\n')
+    assert 'package.swift usa unsafeFlags' in resultado['diagnosticos']['sin_respuesta'][0]
+    assert not rt.manager.diagnosticos.servidores
+    time.sleep(0.5)
+    assert not marca.exists()

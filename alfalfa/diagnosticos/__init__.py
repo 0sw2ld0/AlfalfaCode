@@ -151,8 +151,14 @@ def dentro_de(ruta, raiz):
     proyecto."""
     if raiz is None or ruta is None:
         return False
-    real, base = os.path.realpath(ruta), os.path.realpath(raiz)
-    return real == base or real.startswith(base.rstrip(os.sep) + os.sep)
+    # Por antecesores y con samefile: en un disco que no distingue mayúsculas «PROYECTO/node_modules» es el
+    # mismo sitio que «proyecto/node_modules», aunque las cadenas no coincidan.
+    actual = Path(os.path.realpath(ruta))
+    for antecesor in (actual, *actual.parents):
+        with contextlib.suppress(OSError):
+            if os.path.samefile(antecesor, raiz):
+                return True
+    return False
 
 
 def _ejecutable(nombre, env, *extra, raiz=None):
@@ -206,8 +212,26 @@ def trampa_de_sourcekit(desde, raiz):
 
 
 def manifiestos(paquete):
-    """Package.swift y sus variantes por versión (Package@swift-6.0.swift), las que SwiftPM puede elegir."""
-    return sorted(p for p in Path(paquete).glob('Package*.swift') if p.is_file() or p.is_symlink())
+    """Package.swift y sus variantes por versión (Package@swift-6.0.swift), las que SwiftPM puede elegir.
+
+    Sin distinguir mayúsculas: en un disco que no las distingue SwiftPM abre `package.swift` o
+    `PACKAGE.SWIFT` como si fuera Package.swift, y `glob('Package*.swift')` no los vería.
+    """
+    try:
+        nombres = os.listdir(paquete)
+    except OSError:
+        return []
+    return sorted(Path(paquete) / n for n in nombres
+                  if n.casefold().startswith('package') and n.casefold().endswith('.swift'))
+
+
+def es_paquete(carpeta):
+    """¿Hay un Package.swift, escrito con las mayúsculas que sea? SwiftPM lo abre igual en un disco que no
+    las distingue."""
+    try:
+        return any(n.casefold() == 'package.swift' for n in os.listdir(carpeta))
+    except OSError:
+        return False
 
 
 def huella_de_manifiestos(paquete):
@@ -226,10 +250,11 @@ def huella_de_manifiestos(paquete):
 # pedirlo, aunque se comporte distinto dentro y fuera del sandbox (por eso no basta con `dump-package`).
 TEXTO_PELIGROSO = (
     (r'\bunsafeFlags\b', 'usa unsafeFlags (opciones del compilador que pueden cargar programas del repo)'),
-    (r'\.package\s*\(', 'tiene dependencias y sourcekit-lsp tendría que resolverlas'),
+    # Sin exigir paréntesis: `let p = Package.Dependency.package` y luego `p("../otro")` también cuenta.
+    (r'\.package\b', 'tiene dependencias y sourcekit-lsp tendría que resolverlas'),
     (r'\bbinaryTarget\b', 'tiene un binario precompilado'),
-    (r'\.macro\s*\(', 'tiene una macro'),
-    (r'\.plugin\s*\(|\bplugins\s*:', 'tiene o usa plugins'),
+    (r'\.macro\b', 'tiene una macro'),
+    (r'\.plugin\b|\bplugins\s*:', 'tiene o usa plugins'),
     (r'\bsystemLibrary\b', 'tiene una biblioteca del sistema'),
 )
 
@@ -445,7 +470,7 @@ class Diagnosticos:
             argv = _sourcekit(self.env)
             if not argv:
                 return None
-            paquete = _subiendo(ruta.parent, self.raiz, ('Package.swift',))
+            paquete = next((c for c in _carpetas(ruta.parent, self.raiz) if es_paquete(c)), None)
             raiz = paquete or self.raiz
             etiqueta = self._etiqueta('sourcekit-lsp', raiz)
             clave = ('swift', str(raiz))
@@ -473,13 +498,15 @@ class Diagnosticos:
                     'argv': [argv], 'raiz': raiz, 'opciones': opciones, 'aislado': False,
                     'carga': paquete is not None, 'permiso': FUERA, 'paquete': paquete, 'cache': cache,
                     'env': self.entorno_de_sourcekit(cache),
-                    'proposito': ('Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que '
-                                  'se editen en ' + str(raiz) + ' durante esta sesión. Ejecuta el compilador de '
-                                  'Swift sobre el código del repositorio'
-                                  + (' y lee su Package.swift' if paquete is not None else '')
-                                  + ' con los permisos del usuario. Antes se rechazan los paquetes con '
-                                    'unsafeFlags, dependencias, macros, plugins o binarios. Su sourcekitd es un '
-                                    'servicio de Xcode que el sandbox bloquea.')}
+                    'proposito': (
+                        ('Confiar en el paquete Swift de ' + str(raiz) + ': su Package.swift es código que '
+                         'SwiftPM ejecuta y que decide cómo se compila. ' if paquete is not None else '')
+                        + 'Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que se '
+                          'editen en ' + str(raiz) + ' durante esta sesión: ejecuta el compilador de Swift sobre '
+                          'el código del repositorio con los permisos del usuario. Antes se rechazan los '
+                          'paquetes con unsafeFlags, dependencias, macros, plugins o binarios, pero sólo '
+                          'concédelo si confías en este proyecto. Su sourcekitd es un servicio de Xcode que el '
+                          'sandbox bloquea.')}
         if sufijo in PYTHON:
             for nombre in ('basedpyright-langserver', 'pyright-langserver'):
                 argv, propio = _ejecutable(nombre, self.env, raiz=self.raiz)

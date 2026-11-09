@@ -552,17 +552,21 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
   - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
     el sandbox bloquea): ejecuta el compilador de Swift sobre el código del repositorio con
     tus permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete
-    y sesión (Omitir permisos lo concede solo), y compila, genera y guarda su caché de
+    y sesión (Omitir permisos lo concede solo); en un paquete SwiftPM ese permiso empieza por
+    «Confiar en el paquete…», porque su `Package.swift` es código que decide cómo se compila, y compila, genera y guarda su caché de
     módulos y sus temporales en `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las
     órdenes no escribe (ni en `.build` ni en `$TMPDIR`), sin plugins.
   - `sourcekit-lsp` **no se lanza** si el proyecto trae algo que le haría ejecutar órdenes
     o cambiar su configuración (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`,
     `compile_commands.json`, `compile_flags.txt`, también en `build/`), desde la carpeta
-    del archivo hasta la raíz. Tampoco si algún `Package*.swift` del paquete (también
-    `Package@swift-6.0.swift`) usa `unsafeFlags` (pueden cargar un programa del repo como
-    plugin de macros), declara dependencias, macros, plugins, binarios o bibliotecas del
-    sistema. Se mira primero el texto y luego, tras el permiso, el manifiesto evaluado con
-    `swift package dump-package` dentro del sandbox, una vez por versión de los manifiestos.
+    del archivo hasta la raíz. Tampoco si algún manifiesto del paquete (`Package.swift` y
+    `Package@swift-6.0.swift`, con las mayúsculas que sea: en un disco que no las distingue
+    SwiftPM abre igual `package.swift`) nombra `unsafeFlags` (pueden cargar un programa del
+    repo como plugin de macros), dependencias (`.package`, con o sin paréntesis), macros,
+    plugins, binarios o bibliotecas del sistema. La protección es ese filtro de texto, que no
+    ejecuta nada: un manifiesto puede comportarse distinto en otro entorno. Además, tras el
+    permiso, se evalúa con `swift package dump-package` dentro del sandbox, una vez por
+    versión de los manifiestos.
     Si un manifiesto cambia o aparece uno de esos archivos con el servidor en marcha, se
     cierra y se vuelve a revisar.
   - Un programa del PATH que en realidad está dentro del proyecto (un `node_modules/.bin` o
