@@ -55,6 +55,17 @@ extension AppModel {
         }
     }
 
+    /// Ver los errores al editar. Las sesiones abiertas lo aplican desde su siguiente edición;
+    /// las nuevas lo reciben al arrancar (`--sin-diagnosticos`).
+    var diagnostics: Bool {
+        get { preferences.diagnostics }
+        set {
+            objectWillChange.send()
+            preferences.diagnostics = newValue
+            for session in live { session.setDiagnostics(newValue) }
+        }
+    }
+
     /// El proveedor del modelo elegido, como lo pone el pie de la barra lateral.
     var currentProviderName: String {
         providerName(ModelProvider.id(of: model, in: models))

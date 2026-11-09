@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shlex
 import stat
 import subprocess
@@ -24,6 +25,7 @@ from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
 from ...reintentos.politica import expensive_operation_identity, expensive_operation_needs_cause, retry_guard_key
 
 MAX_FILE = 1024 * 1024
+EDICIONES = ('write_file', 'edit_file', 'apply_patch')
 COMMAND_TIMEOUT_SECONDS = 120.0
 
 
@@ -889,6 +891,29 @@ class WorkspaceTools:
         return digest(identity.encode())
 
     async def call(self, name, args):
+        result = await self._call(name, args)
+        if name in EDICIONES and isinstance(result, dict) and 'error' not in result:
+            # Los errores de lo que se acaba de editar, en el resultado del mismo paso
+            # (alfalfa/diagnosticos). Sólo con un gestor que los ofrece: la terminal y la app.
+            diagnosticos = getattr(self.runtime.manager, 'diagnosticos', None)
+            if diagnosticos is not None and not self.runtime.task.get('review'):
+                cambios = result.get('changes') if name == 'apply_patch' else [result]
+                informe = await diagnosticos.tras_editar(self.root, cambios or [], self._contenido_previo)
+                if informe:
+                    # Copia: el resultado de edit_file es la misma fila que guarda state['changes'].
+                    result = dict(result, diagnosticos=informe)
+        return result
+
+    def _contenido_previo(self, sha):
+        """El contenido anterior a una edición, de su copia privada `before-<sha>`, o None."""
+        if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{64}', sha):
+            return None
+        try:
+            return (self.runtime.directory / ('before-' + sha)).read_bytes()
+        except OSError:
+            return None
+
+    async def _call(self, name, args):
         if self.runtime.task.get('conversation_only'):
             self.runtime.reject_conversation_tool(name)
         if name in self.runtime.excluded_tools:

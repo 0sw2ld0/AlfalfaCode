@@ -8,6 +8,8 @@ for _nombre in [n for n in os.environ if n.startswith(_PREFIJOS)]:
 # Ni los procesos hijos de la suite (`alfalfa --stdio` de verdad) mantienen el Mac despierto:
 # test_mantener_despierto lo enciende donde lo prueba.
 os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
+# Ni lanzan servidores de lenguaje ni linters tras cada edición: test_diagnosticos los enciende.
+os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)

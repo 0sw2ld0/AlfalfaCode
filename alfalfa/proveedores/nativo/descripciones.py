@@ -190,4 +190,13 @@ def datos_de_fin(nombre, resultado):
                        if isinstance(clasificacion.get(k), str)}
             if valores:
                 datos['clasificacion'] = valores
+        # Los errores y avisos nuevos que vio el servidor de lenguaje tras una edición (alfalfa/diagnosticos):
+        # la app los cuenta en la fila; no son una comprobación.
+        informe = resultado.get('diagnosticos')
+        if isinstance(informe, dict):
+            resumen = {k: informe[k] for k in ('errores', 'avisos')
+                       if isinstance(informe.get(k), int) and not isinstance(informe.get(k), bool)}
+            if informe.get('sin_respuesta'):
+                resumen['incompleto'] = True
+            datos['diagnosticos'] = resumen
     return datos

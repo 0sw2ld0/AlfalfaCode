@@ -495,6 +495,60 @@ corriente se duerme igual. Sólo sigue despierto con la tapa cerrada si está en
 con una pantalla externa (modo «clamshell»). Tampoco usa `pmset` ni pide contraseña de
 administrador.
 
+## Errores al editar (servidores de lenguaje)
+
+Como OpenCode, el agente ve los errores de lo que acaba de editar sin pedirlos: tras cada
+`write_file`, `edit_file` o `apply_patch`, el resultado de esa misma llamada trae los
+diagnósticos **nuevos** de los archivos tocados (los que no estaban antes de editar),
+con archivo, línea y columna, como mucho 20, primero los errores:
+
+```json
+{"path": "Sources/Demo/Suma.swift", "before": "…", "after": "…",
+ "diagnosticos": {"nuevos": ["Sources/Demo/Suma.swift:2:16 error [SourceKit] Cannot convert value of type 'String' to expected argument type 'Int'"],
+                  "errores": 1, "revisado_con": ["sourcekit-lsp"],
+                  "nota": "Diagnósticos automáticos tras editar: orientan, pero no son una comprobación…"}}
+```
+
+Usa lo que ya está instalado; no instala nada:
+
+| Archivos | Servidor de lenguaje | Si no hay |
+|---|---|---|
+| Swift | `sourcekit-lsp` (viene con Xcode) | — |
+| Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff, los errores de sintaxis del propio Python |
+| TypeScript/JavaScript | `typescript-language-server` (del proyecto o del PATH) | — |
+
+Además, si el proyecto tiene su linter configurado (`ruff.toml` o `[tool.ruff]`,
+la configuración de ESLint, `.swiftlint.yml`), se pasa sólo sobre los archivos tocados.
+
+- Los servidores arrancan la primera vez que hacen falta, siguen vivos durante la sesión
+  (también para sus subagentes) y se cierran con ella.
+- **No alargan el turno**: cada edición espera como mucho 3 s
+  (`ALFALFA_DIAGNOSTICOS_ESPERA`). Lo que no contesta a tiempo se queda fuera y el
+  resultado lo dice en `sin_respuesta` («sourcekit-lsp no contestó en 3 s (sigue
+  arrancando…)»); un servidor que arranca sigue arrancando y sirve en la siguiente
+  edición. `sourcekit-lsp` tarda unos 2,5 s la primera vez en un paquete SwiftPM y
+  centésimas después.
+- **No son una comprobación**: la evidencia sólo cuenta `run_checks`, y el resultado lo
+  recuerda en `nota`. Que no haya diagnósticos nuevos no verifica nada.
+- **Aislamiento**: ESLint, `typescript-language-server`, pyright y los linters corren en
+  el mismo sandbox Seatbelt que las órdenes del agente (sin red, escribiendo sólo en el
+  proyecto y en las carpetas temporales), porque cargan código del proyecto (la
+  configuración de ESLint, los plugins de tsserver). Sin Seatbelt, los que ejecutan código
+  del proyecto no se lanzan. `sourcekit-lsp` es la excepción: su sourcekitd es un servicio
+  XPC de Xcode que Seatbelt bloquea, así que corre fuera y `Package.swift` queda en el
+  sandbox propio de SwiftPM, como cuando Xcode abre un paquete; compila en una carpeta
+  temporal, no en `.build`.
+- En la app, la fila de la edición enseña «2 errores · 1 aviso».
+
+Está **encendido por defecto**. Para apagarlo:
+
+- en la terminal, `ALFALFA_DIAGNOSTICOS=0 alfalfa "…"` o `alfalfa --sin-diagnosticos "…"`;
+- en un proyecto, `{"diagnosticos": false}` en `.alfalfa/ajustes.json`;
+- para el usuario, `{"diagnosticos": false}` en `~/.alfalfa/ajustes.json` (el del proyecto manda);
+- en la app, **Ajustes ▸ General ▸ Ver los errores al editar**. Vale desde la siguiente
+  edición, también en las sesiones abiertas. Por `--stdio`:
+  `{"tipo":"diagnosticos","activo":false}`.
+
 ## Mensajes con el agente ocupado
 
 Lo que escribes mientras el agente trabaja queda «en cola» y entra en su siguiente
@@ -753,6 +807,7 @@ versión en sus dependencias.
 | `mcp_cliente/`, `complementos/`, `hooks/` | Servidores MCP, complementos y hooks compatibles con Claude Code |
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
+| `diagnosticos/` | Servidores de lenguaje y linters tras cada edición |
 | `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |
 | `proveedores/openai.py`, `proveedores/anthropic.py` | OpenAI (Responses API) y Claude (Messages API) con la clave del usuario |
 

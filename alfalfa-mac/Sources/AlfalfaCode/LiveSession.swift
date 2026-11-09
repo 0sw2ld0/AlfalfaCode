@@ -98,12 +98,12 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false) {
         self.launcher = launcher
-        let arguments = Launcher.stdioArguments(task: task, resume: resumeID,
-                                                model: resumeID == nil || settingsChanged ? model : nil,
-                                                effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
-                                                images: images.map(\.path), mode: mode, wait: wait,
-                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake, browser: true)
+        let arguments = Launcher.stdioArguments(
+            task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
+            effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
+            images: images.map(\.path), mode: mode, wait: wait, parent: parentSessionID,
+            title: parentSessionID == nil ? nil : title, keepAwake: Preferences().keepAwake, browser: true,
+            diagnostics: Preferences().diagnostics)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -410,6 +410,11 @@ extension LiveSession {
     /// El interruptor de Ajustes: el proceso abierto lo aplica ya, también a mitad de turno.
     func setKeepAwake(_ on: Bool) {
         process?.send(.keepAwake(on))
+    }
+
+    /// Ajustes ▸ General ▸ Ver los errores al editar: vale desde la siguiente edición.
+    func setDiagnostics(_ on: Bool) {
+        process?.send(.diagnostics(on))
     }
 }
 

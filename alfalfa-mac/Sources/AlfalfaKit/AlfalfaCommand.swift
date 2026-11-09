@@ -1,0 +1,62 @@
+import Foundation
+
+/// Entradas hacia el proceso hijo: una línea JSON por mensaje.
+public enum AlfalfaCommand: Equatable, Sendable {
+    /// `session`: aprobar también lo mismo durante el resto de la sesión.
+    case permission(id: String, approved: Bool, session: Bool = false)
+    case message(String, images: [String] = [])
+    case cancel
+    /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
+    case sendNow(String)
+    /// «Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno.
+    case redirect
+    /// Compactar (`/compactar`, «Compactar sesión»): ya entre turnos, o antes de la siguiente
+    /// respuesta del modelo si hay uno en marcha. Las instrucciones centran el resumen.
+    case compact(instructions: String? = nil)
+    /// `/contexto` y el aviso de tarifa: Ahorro o Contexto completo. Vale ya, también a mitad de turno.
+    case contextMode(ContextMode)
+    /// «Seguir en una sesión nueva»: corta el turno, compacta y abre otra con el resumen.
+    case continueInNewSession
+    /// Detener una orden en segundo plano (`p1`) o todas (`todos`).
+    case stopProcess(String)
+    /// Modelo y esfuerzo para los turnos siguientes.
+    case settings(model: String?, effort: String?, mode: String? = nil)
+    /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
+    case keepAwake(Bool)
+    /// El interruptor de Ajustes ▸ General: ver los errores al editar. Vale desde la siguiente edición.
+    case diagnostics(Bool)
+    /// La respuesta del navegador propio a una petición `navegador`.
+    case browserReply(BrowserReply)
+
+    public var line: String {
+        let object: [String: Any]
+        switch self {
+        case let .permission(id, approved, session):
+            object = approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
+                : ["tipo": "permiso", "id": id, "aprobado": approved]
+        case let .message(text, images):
+            object = images.isEmpty ? ["tipo": "mensaje", "texto": text]
+                : ["tipo": "mensaje", "texto": text, "imagenes": images]
+        case .cancel: object = ["tipo": "cancelar"]
+        case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
+        case .redirect: object = ["tipo": "redirigir"]
+        case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]
+        case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
+        case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
+        case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
+        case let .diagnostics(on): object = ["tipo": "diagnosticos", "activo": on]
+        case let .browserReply(reply): object = reply.object
+        case let .compact(instructions):
+            object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
+        case let .settings(model, effort, mode):
+            var fields: [String: Any] = ["tipo": "ajustes"]
+            if let model { fields["modelo"] = model }
+            if let effort { fields["esfuerzo"] = effort }
+            if let mode { fields["modo"] = mode }
+            object = fields
+        }
+        let options: JSONSerialization.WritingOptions = [.sortedKeys, .withoutEscapingSlashes]
+        let data = (try? JSONSerialization.data(withJSONObject: object, options: options)) ?? Data()
+        return String(decoding: data, as: UTF8.self) + "\n"
+    }
+}

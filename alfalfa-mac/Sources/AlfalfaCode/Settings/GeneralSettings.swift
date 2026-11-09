@@ -1,8 +1,8 @@
 import AlfalfaKit
 import SwiftUI
 
-/// Ajustes ▸ General: el nombre del pie, la carpeta de los encargos nuevos, el buscador web y
-/// si el Mac se mantiene despierto mientras trabaja un agente.
+/// Ajustes ▸ General: el nombre del pie, la carpeta de los encargos nuevos, el buscador web,
+/// si el Mac se mantiene despierto mientras trabaja un agente y si ve los errores al editar.
 struct GeneralSettings: View {
 
     // MARK: - Propiedades
@@ -49,6 +49,15 @@ struct GeneralSettings: View {
                 Toggle("Impedir que el Mac se duerma mientras trabaja", isOn: $model.keepAwake)
                     .toggleStyle(.switch)
                     .accessibilityLabel("Mantener el Mac despierto mientras trabaja un agente")
+            }
+            SettingsBlock(title: "Ver los errores al editar",
+                          detail: "Tras cada edición, el agente recibe los errores y avisos nuevos de los archivos "
+                          + "que tocó: sourcekit-lsp, pyright y typescript-language-server si están instalados, y "
+                          + "el linter del proyecto (ruff, ESLint, SwiftLint). No instala nada ni alarga el turno "
+                          + "más de unos segundos. Un proyecto puede apagarlo con .alfalfa/ajustes.json.") {
+                Toggle("Mirar los archivos editados con el servidor de lenguaje", isOn: $model.diagnostics)
+                    .toggleStyle(.switch)
+                    .accessibilityLabel("Ver los errores al editar")
             }
         }
         .task {

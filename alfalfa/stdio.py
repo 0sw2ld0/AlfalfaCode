@@ -44,6 +44,8 @@ class Transport:
         self.stop_process = None
         # {"tipo":"mantener_despierto","activo":bool}: el interruptor de Ajustes, ya.
         self.keep_awake = None
+        # {"tipo":"diagnosticos","activo":bool}: el de «Ver los errores al editar», desde la siguiente edición.
+        self.diagnostics = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
@@ -270,6 +272,11 @@ class Transport:
                 if not isinstance(activo, bool) or self.keep_awake is None:
                     raise ValueError()
                 self.keep_awake(activo)
+            elif value.get('tipo') == 'diagnosticos':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.diagnostics is None:
+                    raise ValueError()
+                self.diagnostics(activo)
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -331,7 +338,7 @@ class Transport:
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager, keep_awake
+    from .terminal import TerminalManager, diagnostics, keep_awake
     manager = None
     reader_task = None
     pipe = None
@@ -346,7 +353,7 @@ async def run(args, transport):
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
-                                  navegador=bool(getattr(args, 'navegador', False)))
+                                  navegador=bool(getattr(args, 'navegador', False)), diagnosticos=diagnostics(args))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -400,6 +407,8 @@ async def run(args, transport):
 
         transport.stop_process = detener_proceso
         transport.keep_awake = manager.despierto.cambiar
+        if manager.diagnosticos is not None:
+            transport.diagnostics = manager.diagnosticos.cambiar
 
         def cambiar_contexto(modo):
             try:
@@ -520,6 +529,7 @@ async def run(args, transport):
             # Como Codex al salir: los procesos en segundo plano se cierran con la sesión.
             await manager.fondo.detener_todos()
             await manager.close_mcp()
+            await manager.cerrar_diagnosticos()
             manager.save()
             manager.close()
         if code == 1:

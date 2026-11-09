@@ -14,6 +14,7 @@ public struct Preferences {
         public static let defaultEffort = "ajustes.esfuerzo"
         public static let defaultMode = "ajustes.permisos"
         public static let keepAwake = "ajustes.mantenerDespierto"
+        public static let diagnostics = "ajustes.diagnosticos"
         public static let section = "ajustes.seccion"
     }
 
@@ -52,6 +53,13 @@ public struct Preferences {
     public var keepAwake: Bool {
         get { defaults.object(forKey: Key.keepAwake) as? Bool ?? true }
         nonmutating set { defaults.set(newValue, forKey: Key.keepAwake) }
+    }
+
+    /// Ver los errores al editar: tras cada edición del agente, el servidor de lenguaje y el linter
+    /// del proyecto miran los archivos tocados. Encendido si nunca se tocó.
+    public var diagnostics: Bool {
+        get { defaults.object(forKey: Key.diagnostics) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.diagnostics) }
     }
 
     // MARK: - Inicializadores
