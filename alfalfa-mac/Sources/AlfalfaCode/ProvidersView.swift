@@ -113,6 +113,11 @@ struct ProvidersView: View {
                     }
                 }
                 if !model.alfalfaQuotas.isEmpty { QuotaBars(quotas: model.alfalfaQuotas) }
+                HStack(spacing: 14) {
+                    Link("Qué es Alfalfa Cloud", destination: Links.cloud)
+                    Link("Qué datos guarda", destination: Links.privacy)
+                }
+                .font(.system(size: 11.5))
             }
             if let text = model.providersError ?? notice {
                 Text(text).font(.system(size: 12))
