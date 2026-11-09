@@ -113,11 +113,44 @@ def descripcion(nombre, args):
         return 'Proponer una sesión aparte'
     if nombre == 'buscar_herramientas':
         return 'Cargar herramientas'
+    if isinstance(nombre, str) and nombre.startswith('browser_'):
+        return _del_navegador(nombre, args)
     if isinstance(nombre, str) and nombre.startswith('mcp__'):
         partes = nombre.split('__')
         if len(partes) >= 3:
             return 'Usar ' + partes[1] + ' · ' + '__'.join(partes[2:])
     return 'Usar ' + str(nombre)
+
+
+def _del_navegador(nombre, args):
+    """Las herramientas browser_* del navegador propio de la app (alfalfa/navegador.py)."""
+    ref = _texto(args.get('ref'), 20)
+    objetivo = _texto(args.get('target'), 60)
+    sobre = '«' + objetivo + '»' if objetivo else ref
+    if nombre == 'browser_navigate':
+        accion = args.get('action') or 'open'
+        if accion == 'back':
+            return 'Volver a la página anterior'
+        if accion == 'forward':
+            return 'Ir a la página siguiente'
+        if accion == 'reload':
+            return 'Recargar la página'
+        return 'Abrir ' + (_texto(args.get('url'), 120) or 'una página')
+    if nombre == 'browser_read':
+        return 'Leer el texto de la página' if args.get('mode') == 'text' else 'Leer la página'
+    if nombre == 'browser_click':
+        return 'Pulsar ' + (sobre or 'un elemento de la página')
+    if nombre == 'browser_type':
+        return 'Escribir en ' + (sobre or 'un campo de la página')
+    if nombre == 'browser_scroll':
+        return 'Desplazar la página hasta ' + ref if ref else 'Desplazar la página'
+    if nombre == 'browser_screenshot':
+        return 'Captura del navegador'
+    if nombre == 'browser_eval':
+        return 'Ejecutar JavaScript en la página'
+    if nombre == 'browser_download':
+        return 'Descargar ' + (_nombre(args.get('path')) or _texto(args.get('url'), 120) or 'un archivo')
+    return 'Usar el navegador'
 
 
 def datos_de_inicio(nombre, args):

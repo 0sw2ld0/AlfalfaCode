@@ -46,6 +46,17 @@ def test_descripcion_de_cada_herramienta():
     assert descripcion('edit_file', {'path': 'a/b.py'}) == 'Editar b.py'
     parche = '*** Begin Patch\n*** Update File: a.py\n@@\n-x\n+y\n*** Add File: b.py\n+z\n*** End Patch'
     assert descripcion('apply_patch', {'input': parche}) == 'Editar 2 archivos'
+    # El navegador propio de la app.
+    assert descripcion('browser_navigate', {'url': 'http://127.0.0.1:8000/'}) == 'Abrir http://127.0.0.1:8000/'
+    assert descripcion('browser_navigate', {'action': 'back'}) == 'Volver a la página anterior'
+    assert descripcion('browser_read', {}) == 'Leer la página'
+    assert descripcion('browser_click', {'target': 'Entrar'}) == 'Pulsar «Entrar»'
+    assert descripcion('browser_click', {'ref': 'e3'}) == 'Pulsar e3'
+    assert descripcion('browser_type', {'ref': 'e5', 'text': 'secreto'}) == 'Escribir en e5'
+    assert descripcion('browser_scroll', {}) == 'Desplazar la página'
+    assert descripcion('browser_screenshot', {}) == 'Captura del navegador'
+    assert descripcion('browser_eval', {'script': 'return 1'}) == 'Ejecutar JavaScript en la página'
+    assert descripcion('browser_download', {'url': 'https://e.org/i.pdf', 'path': 'd/i.pdf'}) == 'Descargar i.pdf'
     assert descripcion('mcp__github__create_issue', {}) == 'Usar github · create_issue'
     assert descripcion('herramienta_rara', None) == 'Usar herramienta_rara'
     assert len(descripcion('run_command', {'argv': ['x'], 'description': 'a' * 500})) == 200

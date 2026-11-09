@@ -65,7 +65,7 @@ public struct ToolInfo: Equatable, Sendable {
 
 /// Clase de herramienta, para el resumen del grupo («Ejecutó 3 comandos, leyó 2 archivos»).
 public enum ToolKind: Equatable, Sendable {
-    case command, read, list, search, edit, web, image, app, agent, plan, tools, other
+    case command, read, list, search, edit, web, image, app, browser, agent, plan, tools, other
 
     public init(tool name: String) {
         switch name {
@@ -77,6 +77,7 @@ public enum ToolKind: Equatable, Sendable {
         case "web_search", "read_web": self = .web
         case "inspect_image": self = .image
         case "app_list", "app_state", "app_action": self = .app
+        case _ where name.hasPrefix("browser_"): self = .browser
         case "spawn_agent", "wait_agent", "send_input", "close_agent", "list_agents": self = .agent
         case "update_plan": self = .plan
         case "buscar_herramientas": self = .tools
@@ -216,6 +217,7 @@ public enum ToolCalls {
         case .web: return count == 1 ? "consultó la web" : "consultó la web \(count) veces"
         case .image: return "miró " + n(distinct, "imagen", "imágenes")
         case .app: return count == 1 ? "usó una app" : "hizo \(count) acciones en apps"
+        case .browser: return count == 1 ? "usó el navegador" : "hizo \(count) pasos en el navegador"
         case .agent:
             let started = calls.filter { $0.name == "spawn_agent" }.count
             return started > 0 ? "lanzó " + n(started, "subagente", "subagentes") : "coordinó subagentes"
@@ -289,6 +291,26 @@ public enum ToolCalls {
         }
         if call.exitCode == nil { call.exitCode = info.exitCode }
         if call.kind == .command, call.request != nil, call.command != nil { call.request = nil }
+        // Lo que se escribió en un campo de contraseña no se enseña, aunque un motor antiguo lo mandara.
+        if call.name == "browser_type", object?["valor"] as? String == "(oculto)" || raw.contains("campo de contraseña") {
+            call.request = call.request.map(hidingTypedText)
+        }
+    }
+
+    /// `'text': '…'` del inicio de browser_type, cambiado por «••••».
+    static func hidingTypedText(_ request: String) -> String {
+        guard let range = request.range(of: "'text': ") else { return request }
+        let rest = request[range.upperBound...]
+        guard let quote = rest.first, quote == "'" || quote == "\"" else { return request }
+        var end = rest.index(after: rest.startIndex)
+        var escaped = false
+        while end < rest.endIndex {
+            let character = rest[end]
+            if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == quote { break }
+            end = rest.index(after: end)
+        }
+        let close = end < rest.endIndex ? rest.index(after: end) : end
+        return String(request[..<range.upperBound]) + "'••••'" + String(request[close...])
     }
 
     /// Lo que se dice si el motor no mandó descripción (motores anteriores, sesiones guardadas).
@@ -311,6 +333,14 @@ public enum ToolCalls {
         case "spawn_agent": return "Encargar a un subagente"
         case "wait_agent": return "Esperar a los subagentes"
         case "wrap_up": return "Cerrar el turno"
+        case "browser_navigate": return "Abrir una página"
+        case "browser_read": return "Leer la página"
+        case "browser_click": return "Pulsar en la página"
+        case "browser_type": return "Escribir en la página"
+        case "browser_scroll": return "Desplazar la página"
+        case "browser_screenshot": return "Captura del navegador"
+        case "browser_eval": return "Ejecutar JavaScript en la página"
+        case "browser_download": return "Descargar " + (file ?? "un archivo")
         default: return "Usar " + name
         }
     }

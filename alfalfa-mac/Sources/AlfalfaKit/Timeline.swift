@@ -399,7 +399,7 @@ public struct Timeline: Equatable, Sendable {
         case let .quota(rows): quotas = rows
         case let .keepingAwake(on): keepingAwake = on
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats:
+             .ollamaChats, .browser:
             break
         }
     }

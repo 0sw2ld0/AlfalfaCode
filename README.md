@@ -569,6 +569,67 @@ lanzó AlfalfaCode (Terminal o la app AlfalfaCode), en Ajustes del Sistema →
 Privacidad y seguridad. La prueba de punta a punta abre una app de verdad:
 `PRUEBA_APPS_DE_VERDAD=1 python3 -m pytest tests/test_control_de_apps.py`.
 
+## Navegador propio (app de Mac)
+
+Como la app de Codex, la app de AlfalfaCode trae un navegador dentro: un panel con
+WKWebView (el motor de Safari, ya incluido en macOS) a la derecha de la sesión, con
+atrás, adelante, recargar y barra de dirección. Así el agente abre, lee y maneja
+páginas web aunque el Mac no tenga Chrome. Se abre solo cuando lo usa el agente, o con
+el botón del globo de la cabecera (⇧⌘B). Una franja encima de la página dice qué está
+haciendo el agente, y un recuadro verde marca dónde pulsa o escribe.
+
+Cada sesión tiene su propio almacén de datos, no persistente: ni cookies ni cuentas del
+Safari del usuario, y nada queda en disco al cerrar. Para entrar con tus cuentas sigue
+haciendo falta CuyBrowser.
+
+Herramientas, que sólo existen cuando el agente corre dentro de la app (la app arranca
+el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscador web en
+«apagado» tampoco se ofrecen:
+
+- `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
+- `browser_read`: la página como árbol de accesibilidad con referencias
+  (`- button «Enviar pedido» [e7] (envía el formulario)`) o como texto.
+- `browser_click` y `browser_type`: por referencia (`ref`) o por el texto visible
+  (`target`); `browser_type` también elige en un desplegable y con `submit` pulsa Intro.
+- `browser_scroll`: la página, el contenedor que se desplaza o hasta un elemento.
+- `browser_screenshot`: si el modelo ve imágenes, la captura le llega como imagen; con
+  `question`, la mira el modelo de visión y vuelve la respuesta.
+- `browser_eval`: JavaScript que lee, en un mundo aislado de sólo lectura que la página
+  no ve; con `modifies: true`, en la propia página y con permiso.
+- `browser_download`: descargar a una ruta del proyecto, sólo de direcciones públicas
+  (también después de cada redirección y mirando a qué IP resuelve el nombre), hasta
+  200 MB y unos 5 minutos; si no, se cancela y no queda nada a medias.
+
+Permisos, con el mismo criterio que el resto del arnés:
+
+- Leer, desplazarse, mirar y navegar a páginas públicas no pide permiso.
+- Una dirección de este Mac (`127.0.0.1`, `localhost`) o de la red de casa
+  (`192.168.x`, `.local`) se pregunta una vez por sesión y por origen; una redirección a
+  una dirección local sin aprobar se bloquea. Las imágenes, los marcos, `fetch` y los
+  WebSocket de una página pública hacia este Mac o la red de casa también: la app los
+  bloquea con reglas de contenido de WebKit. Una página de un origen aprobado sí puede
+  usar la red local (su backend en otro puerto, por ejemplo). Esas reglas miran la URL, no
+  la IP: un nombre público que resuelve a `127.0.0.1` sólo lo para el motor al abrirlo.
+- Enviar un formulario, escribir en un campo de contraseña, descargar y el JavaScript que
+  cambia la página piden aprobación cada vez. El JavaScript que parece cambiar algo
+  (asignaciones, clics, `fetch`, `localStorage`…) se trata como si lo cambiara; ese
+  filtro sólo es una ayuda. La barrera es el mundo de sólo lectura en el que corre el
+  JavaScript sin permiso: ahí la app bloquea los cambios del DOM, el envío de
+  formularios, los clics, la red y el valor de los campos de contraseña.
+- En **Manual** también se pregunta antes de pulsar o escribir en un sitio, una vez por
+  sesión y sitio, y antes de cada `browser_eval` (igual en **Aceptar ediciones**). En
+  **Plan** y en solo lectura no hay pulsar, escribir, descargar ni `browser_eval`.
+  **Omitir permisos** lo aprueba todo, como siempre.
+- Las descargas que lanza una página, las ventanas nuevas y los diálogos (`alert`,
+  `confirm`) no llegan a nada: se avisa en el panel.
+
+El motor decide los permisos y la app sólo ejecuta (`alfalfa/navegador.py` y
+`alfalfa-mac/Sources/AlfalfaKit/Browser/`). En el protocolo, el motor manda
+`{"tipo":"navegador","id":…,"accion":"pulsar",…}` y la app responde
+`{"tipo":"navegador_respuesta","id":…,"ok":true,"resultado":{…}}`, o
+`"permiso":{"tipo":"formulario",…}` si la acción necesita aprobación: el motor pregunta
+y repite la petición con `permitido`.
+
 ## SwiftPM y apps dentro del sandbox
 
 SwiftPM abre su propio sandbox y macOS no deja anidarlo. Dentro del de AlfalfaCode,
@@ -643,6 +704,7 @@ versión en sus dependencias.
 |---|---|
 | `proveedores/nativo/` | El bucle del agente (`NativeRuntime`) y sus herramientas |
 | `terminal.py`, `stdio.py` | La orden `alfalfa` y el protocolo JSONL para apps |
+| `navegador.py` | Las herramientas `browser_*` del navegador propio de la app de Mac |
 | `permisos/`, `seatbelt/`, `reglas/` | Permisos bajo demanda, sandbox de macOS y reglas de `reglas.toml` |
 | `mcp_cliente/`, `complementos/`, `hooks/` | Servidores MCP, complementos y hooks compatibles con Claude Code |
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |

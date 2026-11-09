@@ -52,10 +52,11 @@ final class PermissionReasonTests: XCTestCase {
     }
 
     func testEachReasonExplainsItsScope() {
-        // modo y edicion los añaden los modos Manual y Aceptar ediciones; app, el control de apps.
+        // modo y edicion los añaden los modos Manual y Aceptar ediciones; app, el control de apps;
+        // navegador, el navegador propio de la app.
         XCTAssertEqual(PermissionReason.allCases.map(\.rawValue),
-                       ["peligroso", "red", "salir_sandbox", "reintento", "modo", "edicion", "app"])
-        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 7)
+                       ["peligroso", "red", "salir_sandbox", "reintento", "modo", "edicion", "app", "navegador"])
+        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 8)
         XCTAssertEqual(PermissionReason.allCases.filter(\.leavesSandbox), [.leaveSandbox, .retry])
         func scope(_ reasons: [PermissionReason]) -> String? {
             PermissionRequest(id: "x", argv: ["ls"], purpose: "", reason: reasons.first, reasons: reasons).scope
@@ -64,6 +65,7 @@ final class PermissionReasonTests: XCTestCase {
         XCTAssertTrue(scope([.network])!.contains("escritura sigue limitada"))
         XCTAssertTrue(scope([.leaveSandbox])!.contains("sin sandbox"))
         XCTAssertTrue(scope([.retry])!.contains("una vez"))
+        XCTAssertTrue(scope([.browser])!.contains("sin tus cuentas"))
         XCTAssertNil(scope([]))
     }
 

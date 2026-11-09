@@ -89,6 +89,28 @@ final class ToolCallsTests: XCTestCase {
                                           call("mcp__github__issue")]),
                        "Cargó herramientas, lanzó 2 subagentes, usó 1 herramienta")
         XCTAssertEqual(ToolCalls.summary([]), "")
+        XCTAssertEqual(ToolCalls.summary([call("browser_navigate", "https://e.org/"), call("browser_read"),
+                                          call("browser_click"), call("read_file", "a")]),
+                       "Hizo 3 pasos en el navegador, leyó 1 archivo")
+        XCTAssertEqual(ToolCalls.summary([call("browser_screenshot")]), "Usó el navegador")
+        XCTAssertEqual(ToolKind(tool: "browser_eval"), .browser)
+    }
+
+    func testTextTypedIntoAPasswordIsHidden() {
+        var timeline = Timeline()
+        var password = start("browser_type", "Escribir en e5")
+        password["texto"] = #"Inicio browser_type · {'ref': 'e5', 'text': 'secre\'to', 'submit': True}"#
+        var email = start("browser_type", "Escribir en e4")
+        email["texto"] = "Inicio browser_type · {'ref': 'e4', 'text': 'ana@correo.pe'}"
+        apply(&timeline, [
+            password, end("browser_type", #"{"elemento": "textbox «Clave»", "valor": "(oculto)"}"#),
+            email, end("browser_type", #"{"elemento": "textbox «Correo»", "valor": "ana@correo.pe"}"#),
+        ])
+        guard case let .events(_, events) = timeline.items[0] else { return XCTFail("grupo") }
+        let calls = ToolCalls.calls(from: events)
+        XCTAssertEqual(calls.map(\.description), ["Escribir en e5", "Escribir en e4"])
+        XCTAssertEqual(calls[0].request, "browser_type · {'ref': 'e5', 'text': '••••', 'submit': True}")
+        XCTAssertEqual(calls[1].request, "browser_type · {'ref': 'e4', 'text': 'ana@correo.pe'}")
     }
 
     func testRunningCallHasNoResultYet() {

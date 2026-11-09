@@ -61,8 +61,11 @@ public enum Launcher {
     public static func stdioArguments(task: String?, resume: String?, model: String?,
                                       effort: String?, readOnly: Bool, images: [String] = [],
                                       mode: String? = nil, wait: Bool = false, parent: String? = nil,
-                                      title: String? = nil, keepAwake: Bool = true) -> [String] {
+                                      title: String? = nil, keepAwake: Bool = true,
+                                      browser: Bool = false) -> [String] {
         var arguments = ["--stdio"]
+        // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
+        if browser { arguments.append("--navegador") }
         // Ajustes ▸ General ▸ Mantener el Mac despierto, apagado.
         if !keepAwake { arguments.append("--sin-mantener-despierto") }
         // La sesión que la propuso: sólo al crearla, se guarda con ella.

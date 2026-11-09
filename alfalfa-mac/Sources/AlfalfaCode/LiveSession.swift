@@ -28,6 +28,9 @@ final class LiveSession: ObservableObject, Identifiable {
     let imageNotice = ImageNotice()
 
     var onChange: (() -> Void)?
+    /// El navegador propio de la sesión (herramientas browser_* del agente), con su almacén de datos aislado.
+    /// Se crea con la primera petición del agente o al pulsar el globo (`openBrowser`).
+    @Published private(set) var browser: BrowserEngine?
     private var process: AlfalfaProcess?
     /// El usuario se fue de la sesión: al quedar libre se cierra stdin del proceso.
     private(set) var releaseWhenParked = false
@@ -98,7 +101,7 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
                                                 images: images.map(\.path), mode: mode, wait: wait,
                                                 parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake)
+                                                keepAwake: Preferences().keepAwake, browser: true)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -127,6 +130,7 @@ final class LiveSession: ObservableObject, Identifiable {
             draftImages = ImageSupport.restoredImages(current: draftImages, returned: rejection.images)
         }
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
+        if case let .browser(request) = message { answerBrowser(request) }
         if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
@@ -306,6 +310,7 @@ final class LiveSession: ObservableObject, Identifiable {
     func shutdown(interrupt: Bool = true) {
         if interrupt { process?.send(.cancel) }
         process?.closeInputAndWait()
+        closeBrowser()
     }
 
     /// Se llama al salir de la sesión: cierra stdin ya si está libre; con permiso pendiente cancela y cierra;
@@ -362,5 +367,34 @@ extension LiveSession {
     /// El interruptor de Ajustes: el proceso abierto lo aplica ya, también a mitad de turno.
     func setKeepAwake(_ on: Bool) {
         process?.send(.keepAwake(on))
+    }
+}
+
+// MARK: - Navegador propio
+
+extension LiveSession {
+    /// El navegador de la sesión, creándolo la primera vez.
+    @discardableResult
+    func openBrowser() -> BrowserEngine {
+        if let browser { return browser }
+        let engine = BrowserEngine()
+        browser = engine
+        return engine
+    }
+
+    /// Lo suelta todo: el WKWebView, su ventana fuera de la pantalla y su almacén de datos.
+    func closeBrowser() {
+        browser?.close()
+        browser = nil
+    }
+
+    /// El agente usa el navegador: el panel se abre y la respuesta vuelve al motor. El motor las
+    /// manda de una en una; BrowserEngine.perform las ejecuta en orden aunque una llegue tarde.
+    private func answerBrowser(_ request: BrowserRequest) {
+        let engine = openBrowser()
+        Task { [weak self] in
+            let reply = await engine.perform(request)
+            self?.process?.send(.browserReply(reply))
+        }
     }
 }

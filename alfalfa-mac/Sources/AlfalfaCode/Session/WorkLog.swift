@@ -161,6 +161,7 @@ struct ToolCallRow: View {
         case .web: return "globe"
         case .image: return "photo"
         case .app: return "macwindow"
+        case .browser: return "safari"
         case .agent: return "person.2"
         case .plan: return "checklist"
         case .tools: return "wrench.and.screwdriver"

@@ -66,7 +66,8 @@ def test_configurar_valida_el_modo_y_la_url_de_searxng():
 def test_apagado_quita_las_herramientas_al_modelo(monkeypatch):
     assert terminal.excluidas() == ()
     monkeypatch.setenv('ALFALFA_BUSCADOR', 'apagado')
-    assert terminal.excluidas() == ('web_search', 'read_web')
+    # Apagado también quita el navegador propio de la app (tests/test_navegador.py).
+    assert terminal.excluidas()[:2] == ('web_search', 'read_web')
     with pytest.raises(ValueError, match='apagada'):
         asyncio.run(web.buscar('alfalfa'))
 
