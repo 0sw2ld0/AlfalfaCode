@@ -66,7 +66,8 @@ struct ComposerToolbar: View {
 
     private var groups: [(provider: String, names: [String])] {
         let all = app.modelGroups
-        if all.contains(where: { $0.names.contains(session.model) }) { return all }
+        let listed = ModelProvider.listed(session.model, in: app.models)
+        if all.contains(where: { $0.names.contains(listed) }) { return all }
         return [(Presentation.provider(of: session.model), [session.model])] + all
     }
 

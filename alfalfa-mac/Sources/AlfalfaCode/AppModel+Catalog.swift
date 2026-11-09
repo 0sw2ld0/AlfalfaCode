@@ -49,7 +49,17 @@ extension AppModel {
 
     /// La fila de la lista de modelos con ese nombre, si está.
     func info(for name: String) -> ModelInfo? {
-        models.first { $0.name == name }
+        let listed = ModelProvider.listed(name, in: models)
+        return models.first { $0.name == listed }
+    }
+
+    /// Un modelo elegido antes sin `ollama/` que la lista ahora trae con él (su autor se llama como un
+    /// proveedor del catálogo) pasa a guardarse con él, para que siga yendo a Ollama.
+    func adoptListedNames() {
+        let current = ModelProvider.listed(model, in: models)
+        if current != model { model = current }
+        let saved = ModelProvider.listed(defaultModel, in: models)
+        if saved != defaultModel { defaultModel = saved }
     }
 
     /// Elige un modelo; si a su proveedor le falta la clave, primero la pide en una hoja.

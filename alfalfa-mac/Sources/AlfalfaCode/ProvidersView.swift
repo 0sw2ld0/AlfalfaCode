@@ -31,7 +31,7 @@ struct ModelMenuItems: View {
     @ViewBuilder private func items(_ names: [String]) -> some View {
         ForEach(names, id: \.self) { name in
             Button { choose(name) } label: {
-                if name == selected { Label(title(name), systemImage: "checkmark") } else { Text(title(name)) }
+                if name == ModelProvider.listed(selected, in: app.models) { Label(title(name), systemImage: "checkmark") } else { Text(title(name)) }
             }
         }
     }

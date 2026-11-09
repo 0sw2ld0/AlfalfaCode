@@ -296,3 +296,22 @@ def test_el_turno_guarda_su_gasto_y_el_protocolo_lo_cuenta():
     assert sesiones.turnos(task)[0]['coste'] == pytest.approx(0.25)
     # Sin precio, ningún coste: 0 $ no es lo mismo que «no se sabe».
     assert gasto({'total_tokens': 5}) == {}
+
+
+def test_un_modelo_de_ollama_con_el_nombre_de_un_proveedor_sigue_en_ollama(con_catalogo, monkeypatch):  # noqa: F811
+    """`deepseek/deepseek-r1:7b` es un modelo de Ollama de un autor que se llama como un proveedor del catálogo."""
+    from alfalfa.proveedores import ollama
+    catalogo._memoria['proveedores']['deepseek'] = dict(catalogo._memoria['proveedores']['nube'], id='deepseek',
+                                                        nombre='DeepSeek', api='https://api.deepseek.com/v1')
+    assert proveedores.es_prefijo('deepseek')
+
+    def manejar(request):
+        return httpx.Response(200, json={'models': [{'name': 'deepseek/deepseek-r1:7b'}, {'name': 'huihui/gemma:1b'}]})
+
+    monkeypatch.setattr(ollama, 'cliente_de_lista', lambda: httpx.Client(transport=httpx.MockTransport(manejar)))
+    filas = {f['nombre']: f for f in ollama.Ollama().modelos()}
+    # Se guarda con `ollama/` y vuelve a Ollama; el nombre visible sigue siendo el corto.
+    assert filas['deepseek/deepseek-r1:7b']['name'] == 'ollama/deepseek/deepseek-r1:7b'
+    assert proveedores.separar(filas['deepseek/deepseek-r1:7b']['name']) == ('ollama', 'deepseek/deepseek-r1:7b')
+    assert filas['huihui/gemma:1b']['name'] == 'huihui/gemma:1b'
+    assert proveedores.para_modelo('ollama/deepseek/deepseek-r1:7b')[0].id == 'ollama'

@@ -126,6 +126,7 @@ final class AppModel: ObservableObject {
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--modelos", "--json"], directory: home)
             for case let .models(rows) in messages { models = rows }
+            adoptListedNames()
         } catch {
             models = []
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
@@ -138,7 +139,8 @@ final class AppModel: ObservableObject {
 
     /// El nombre visible de un modelo («GPT-6 Luna - Alfalfa»), o el corto si no está en la lista.
     func label(for name: String) -> String {
-        models.first { $0.name == name }?.label ?? Presentation.shortModel(name)
+        let listed = ModelProvider.listed(name, in: models)
+        return models.first { $0.name == listed }?.label ?? Presentation.shortModel(name)
     }
 
     /// Los modelos del selector agrupados por proveedor, en el orden de la lista. Los gratis
@@ -256,7 +258,7 @@ final class AppModel: ObservableObject {
         // Los modelos de embeddings no conversan: no se ofrecen para un chat.
         var names = models.map(\.name).filter { !$0.lowercased().contains("embed") }
         if !names.contains(Presentation.defaultModel) { names.insert(Presentation.defaultModel, at: 0) }
-        if !names.contains(model) { names.insert(model, at: 0) }
+        if !names.contains(ModelProvider.listed(model, in: models)) { names.insert(model, at: 0) }
         return names
     }
 

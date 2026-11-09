@@ -9,9 +9,7 @@ enum Presentation {
 
     static func effortLabel(_ value: String) -> String { efforts.first { $0.value == value }?.label ?? value }
 
-    static func shortModel(_ name: String) -> String {
-        name.hasSuffix(":cloud") ? String(name.dropLast(6)) : name
-    }
+    static func shortModel(_ name: String) -> String { ModelProvider.shortName(name) }
 
     /// El proveedor por el prefijo del modelo, como en el motor: sin prefijo es Ollama.
     static func provider(of name: String) -> String { ModelProvider.id(of: name) }

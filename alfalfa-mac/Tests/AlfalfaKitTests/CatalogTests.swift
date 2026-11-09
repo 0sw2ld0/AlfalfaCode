@@ -73,6 +73,23 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(rows.map(\.cost), [0.02, nil])
     }
 
+    func testOllamaModelNamedLikeACatalogProviderStaysWithOllama() {
+        let models = [ModelInfo(name: "ollama/deepseek/deepseek-r1:7b", label: "deepseek/deepseek-r1:7b"),
+                      ModelInfo(name: "huihui/gemma:1b"),
+                      ModelInfo(name: "deepseek/deepseek-chat", provider: "deepseek")]
+        XCTAssertEqual(ModelProvider.id(of: "ollama/deepseek/deepseek-r1:7b"), "ollama")
+        XCTAssertEqual(ModelProvider.shortName("ollama/deepseek/deepseek-r1:7b"), "deepseek/deepseek-r1:7b")
+        XCTAssertEqual(ModelProvider.shortName("ollama/glm-5.3-flash:cloud"), "glm-5.3-flash")
+        // Guardado antes sin prefijo: se encuentra en la lista con el suyo y sigue siendo de Ollama.
+        XCTAssertEqual(ModelProvider.listed("deepseek/deepseek-r1:7b", in: models), "ollama/deepseek/deepseek-r1:7b")
+        XCTAssertEqual(ModelProvider.id(of: "deepseek/deepseek-r1:7b", in: models), "ollama")
+        // Los que están tal cual no cambian.
+        XCTAssertEqual(ModelProvider.listed("huihui/gemma:1b", in: models), "huihui/gemma:1b")
+        XCTAssertEqual(ModelProvider.listed("deepseek/deepseek-chat", in: models), "deepseek/deepseek-chat")
+        XCTAssertEqual(ModelProvider.id(of: "deepseek/deepseek-chat", in: models), "deepseek")
+        XCTAssertEqual(ModelProvider.listed("no/esta", in: models), "no/esta")
+    }
+
     func testCompatibleProvidersInTheProvidersScreen() {
         let line = #"{"version":2,"tipo":"proveedores","por_defecto":"ollama","proveedores":["#
             + #"{"id":"opencode","nombre":"OpenCode Zen","configurado":false,"clave":false,"compatible":true,"#
