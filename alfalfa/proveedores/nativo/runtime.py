@@ -22,7 +22,7 @@ from uuid import uuid4
 
 import httpx
 
-from ... import empaquetado
+from ... import empaquetado, presupuesto
 from ...admision.despacho import check_task, inference_stream, resolved_model_aliases
 from ...evidencia.registro import RunEvidence
 
@@ -902,6 +902,17 @@ class NativeRuntime:
             raise error
 
     async def request(self, client, endpoint, payload, session_deadline=None):
+        """Envía una solicitud de inferencia: antes, el presupuesto en dólares. Es el único sitio por
+        el que sale cada petición al modelo (turno, compactación, visión, recuperación por longitud),
+        así que el tope se respeta en todas."""
+        clave = self._reservar_presupuesto(endpoint, payload)
+        try:
+            return await self._request(client, endpoint, payload, session_deadline=session_deadline)
+        finally:
+            if clave is not None:
+                self._presupuesto().liberar(clave)
+
+    async def _request(self, client, endpoint, payload, session_deadline=None):
         """Envía una solicitud de inferencia con reintentos acotados y cancelables.
 
         El plazo absoluto usa el mismo reloj monótono que `_retry_clock`. Cada
@@ -1377,9 +1388,72 @@ class NativeRuntime:
         escrita = escrita if type(escrita) is int else 0
         self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
         self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
-        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache, escrita)
+        precio = getattr(self, '_precio', None)
+        coste = catalogo.coste(precio, entrada, salida, cache, escrita)
+        # Lo que habría costado sin caché, para enseñar lo que ahorra (Ollama no la da).
+        sin_cache = catalogo.coste(precio, entrada, salida) if coste is not None and (cache or escrita) else None
+        datos_cache = {'leidos': cache, 'escritos': escrita, 'sin_cache': sin_cache,
+                       'con_cache': coste if sin_cache is not None else None} if cache or escrita else None
+        if datos_cache:
+            presupuesto.sumar_cache(self.task, **datos_cache)
+        # Para estimar la siguiente: lo que ya está en la caché del proveedor.
+        self.task['cache_ultima'] = cache + escrita
         if coste is not None:
             self.task['coste_usd'] = (self.task.get('coste_usd') or 0.0) + coste
+            cuenta = self._presupuesto()
+            if cuenta is not None:
+                # Un subagente suma a la sesión que lo lanzó y a sus topes.
+                cuenta.sumar(self.task, coste, datos_cache)
+
+    def _presupuesto(self):
+        """El presupuesto de la sesión (también el de la sesión de un subagente), o None."""
+        cuenta = getattr(self.manager, 'presupuesto', None)
+        return cuenta if isinstance(cuenta, presupuesto.Presupuesto) else None
+
+    def _comprobar_presupuesto(self):
+        """Al empezar el turno: con un tope ya alcanzado, ni el mensaje entra en el historial ni
+        corren los hooks. Un modelo sin precio (local, plan, cortesía) no gasta y sigue."""
+        cuenta = self._presupuesto()
+        if cuenta is not None and getattr(self, '_precio', None):
+            cuenta.comprobar()
+
+    def _avisar_sin_precio(self):
+        """Un modelo de pago que el catálogo no tiene con precio no cuenta para el tope: se dice una vez."""
+        from .. import Proveedor
+        cuenta, proveedor = self._presupuesto(), getattr(self, '_proveedor', None)
+        if (cuenta is None or not cuenta.con_tope or getattr(self, '_precio', None) or proveedor is None
+                or getattr(type(proveedor), 'precio', Proveedor.precio) is Proveedor.precio):
+            return  # sin tope, con precio, o un proveedor que no cobra por token (local, plan, cortesía)
+        modelo = self.task.get('model')
+        if self.task.get('presupuesto_sin_precio') == modelo:
+            return
+        self.task['presupuesto_sin_precio'] = modelo
+        self.manager.event(self.task, 'system', 'No sé el precio de ' + str(modelo) + ': lo que gaste no cuenta '
+                           'para el presupuesto y no lo detendrá. Comprueba el gasto en la cuenta del proveedor.')
+
+    def _entrada_estimada(self, payload):
+        """USD que costará la entrada de esta petición, antes de pedirla: los tokens aproximados de
+        mensajes y herramientas (cada imagen, unos 1.600) y, como caché, lo que leyó la anterior."""
+        from ...compactacion import tokens_aprox
+        mensajes = [{k: v for k, v in m.items() if k != 'images'} if isinstance(m, dict) else m
+                    for m in payload.get('messages') or []]
+        imagenes = sum(len(m.get('images') or []) for m in payload.get('messages') or [] if isinstance(m, dict))
+        tokens = tokens_aprox(json.dumps({'messages': mensajes, 'tools': payload.get('tools')},
+                                         ensure_ascii=False)) + 1600 * imagenes
+        from ... import catalogo
+        anterior = self.task.get('cache_ultima')
+        cache = min(anterior if type(anterior) is int and anterior > 0 else 0, tokens)
+        return catalogo.coste(getattr(self, '_precio', None), tokens, 0, cache) or 0.0
+
+    def _reservar_presupuesto(self, endpoint, payload):
+        """La clave de la reserva, o None si no hace falta (sin tope, sin precio o /api/show).
+        PresupuestoAgotado si lo gastado más lo que costará esta petición pasa del tope."""
+        cuenta = self._presupuesto()
+        if endpoint == '/api/show' or cuenta is None or not cuenta.con_tope or not getattr(self, '_precio', None):
+            return None
+        clave = self.task.get('id', '') + ':' + uuid4().hex
+        cuenta.reservar(clave, self._entrada_estimada(payload))
+        return clave
 
     def _record_response_usage(self, response, payload, attempt=0, purpose='chat'):
         if isinstance(response.get('alfalfa_aviso'), str):
@@ -1555,6 +1629,11 @@ class NativeRuntime:
             if not result.get('done') or result.get('done_reason') == 'length' \
                     or not isinstance(summary, str) or not summary.strip():
                 raise ValueError('Compactación incompleta; historial original conservado.')
+        except presupuesto.PresupuestoAgotado as exc:
+            # No salió ninguna petición: lo dice quien para (el resumen del turno o «No se compactó»).
+            self._compaction_event('No se compactó: el presupuesto no alcanza.', dict(datos, estado='fallida'))
+            exc.compactacion_avisada = True
+            raise
         except (ValueError, httpx.HTTPError) as exc:
             self._compaction_event('No se pudo compactar: ' + str(exc)[:500],
                                    dict(datos, estado='fallida'))
@@ -1621,6 +1700,8 @@ class NativeRuntime:
             raise ValueError('Aún no hay conversación que compactar.')
         timeout = httpx.Timeout(TRANSPORT_SESSION_TIMEOUT_SECONDS, connect=5)
         _, model, cliente = self._cliente(timeout)
+        # Con el tope alcanzado ni se empieza: «No se compactó: El presupuesto … se agotó…».
+        self._comprobar_presupuesto()
         async with cliente as client:
             info = await self.request(client, '/api/show', {'model': model})
             self.task['runtime_capabilities'] = info.get('capabilities', [])
@@ -1785,7 +1866,7 @@ class NativeRuntime:
                 + self._nombre_del_modelo() + ' cobra ' + catalogo.veces(tarifa)
                 + '. Vuelve a pedir sólo la parte que necesites.]')
 
-    def _recorte(self, original, tope):
+    def _recorte(self, original, tope):  # noqa: F811 — el de fallos.py es otro, sólo se reexporta
         """La salida recortada a `tope` tokens con su nota: lo mismo cada vez para el mismo original."""
         from ...compactacion import recortar_medio
         return recortar_medio(original, tope) + self._nota_de_recorte()
@@ -2565,6 +2646,9 @@ class NativeRuntime:
             session_deadline = min(session_deadline, time.monotonic() + deadline - time.time())
             self.save()
         _, model, cliente = self._cliente(timeout)
+        # Con el tope ya alcanzado el mensaje no entra en el historial ni corren los hooks.
+        self._comprobar_presupuesto()
+        self._avisar_sin_precio()
         async with cliente as client:
             # inspect_image con el modelo de la sesión reutiliza este cliente.
             self._ollama = (client, model, session_deadline)
@@ -2754,6 +2838,12 @@ class NativeRuntime:
                     try:
                         response = await self.request(client, "/api/chat", payload,
                                                       session_deadline=session_deadline)
+                    except presupuesto.PresupuestoAgotado:
+                        # No salió: no cuenta como recuperación gastada y, con el tope subido,
+                        # la sesión puede seguir (si no, el turno siguiente la daría por agotada).
+                        self.state.pop("length_recovery", None)
+                        self.save()
+                        raise
                     except BaseException:
                         self._charge_interrupted_conversation_call()
                         self.save()

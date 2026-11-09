@@ -54,6 +54,8 @@ class Transport:
         self.compact_now = False
         # {"tipo":"contexto","modo":"ahorro"|"completo"}: lo conecta run() con el gestor. Vale ya.
         self.context_mode = None
+        # Ajustes ▸ Presupuesto: cambia los topes de la sesión en marcha.
+        self.budget = None
         # {"tipo":"continuar_en_nueva"}: entre turnos compacta y abre una sesión nueva con el
         # resumen; con un turno en marcha espera a que termine (no corta una herramienta a medias).
         self.continue_new = False
@@ -270,6 +272,12 @@ class Transport:
                 if not isinstance(activo, bool) or self.keep_awake is None:
                     raise ValueError()
                 self.keep_awake(activo)
+            elif value.get('tipo') == 'presupuesto':
+                # Ajustes de la app: {sesion, mes} en dólares; null o 0 quitan el tope, sin la clave no cambia.
+                if self.budget is None or not any(k in value for k in ('sesion', 'mes')):
+                    raise ValueError()
+                from .presupuesto import importe
+                self.budget(**{k: importe(value[k]) for k in ('sesion', 'mes') if k in value})
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -346,7 +354,9 @@ async def run(args, transport):
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
-                                  navegador=bool(getattr(args, 'navegador', False)))
+                                  navegador=bool(getattr(args, 'navegador', False)),
+                                  budget=getattr(args, 'presupuesto', None),
+                                  monthly_budget=getattr(args, 'presupuesto_mes', None))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -360,6 +370,10 @@ async def run(args, transport):
                        **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}),
                        **({'continuada_de': manager.task['continuada_de']['sesion']}
                           if isinstance(manager.task.get('continuada_de'), dict) else {}))
+        # Los topes y lo gastado en la sesión y en el mes, para el panel y los Ajustes.
+        topes = manager.presupuesto.para_el_cliente()
+        if topes:
+            transport.emit('presupuesto', **topes)
         # Al reanudar, la app vuelve a enseñar el plan del agente.
         if isinstance(manager.task.get('plan_pasos'), list) and manager.task['plan_pasos']:
             transport.emit('plan', pasos=[{'paso': p.get('step', ''), 'estado': p.get('status', 'pending')}
@@ -408,6 +422,7 @@ async def run(args, transport):
                 transport.emit('error', texto=str(exc))
 
         transport.context_mode = cambiar_contexto
+        transport.budget = manager.cambiar_presupuesto
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, transport.stop)
@@ -497,6 +512,9 @@ async def run(args, transport):
                            **({'turno': ultimo['id']} if ultimo.get('id') else {}),
                            **gasto(manager.task, ultimo),
                            **({'cierre': manager.task['cierre']} if manager.task.get('cierre') else {}))
+            topes = manager.presupuesto.para_el_cliente()
+            if topes:
+                transport.emit('presupuesto', **topes)
             # Un «compactar» que llegó tras la última respuesta del turno se hace ya.
             if transport.compact_pending:
                 transport.compact_now, transport.compact_pending = transport.compact_pending, False
@@ -540,6 +558,10 @@ def gasto(task, turno=None):
             datos['tokens_turno'] = turno['tokens']
         if isinstance(turno.get('coste'), (int, float)) and not isinstance(turno.get('coste'), bool):
             datos['coste_turno'] = round(turno['coste'], 6)
+    from .presupuesto import resumen_cache
+    cache = resumen_cache(task)
+    if cache:
+        datos['cache'] = cache
     return datos
 
 

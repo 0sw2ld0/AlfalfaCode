@@ -193,6 +193,10 @@ def bifurcar(sesiones, ident, turno=None):
         # Las aprobaciones «en esta sesión» no pasan a la bifurcada: es otra sesión.
         for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group', 'aprobadas_en_sesion'):
             task.pop(clave, None)
+        # El gasto es de la otra sesión, como al «Seguir en una sesión nueva»: la bifurcada empieza de
+        # cero para su tope (no nace al 84 % sin avisar) y su caché. El del mes sigue contando aparte.
+        for clave in ('coste_usd', 'cache', 'presupuesto_avisos', 'presupuesto_sin_precio'):
+            task.pop(clave, None)
         meta = dict(task.get('meta') or {}, id=nuevo, fecha=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
         task.update(id=nuevo, status='created', turnos=conservados, meta=meta,
                     bifurcada_de=dict(sesion=ident, turno=elegido['id']), updated_at=time.time())

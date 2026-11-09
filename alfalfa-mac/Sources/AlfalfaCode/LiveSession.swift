@@ -103,7 +103,9 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
                                                 images: images.map(\.path), mode: mode, wait: wait,
                                                 parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake, browser: true)
+                                                keepAwake: Preferences().keepAwake, browser: true,
+                                                budget: Preferences().sessionBudget,
+                                                monthlyBudget: Preferences().monthlyBudget)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -317,6 +319,13 @@ final class LiveSession: ObservableObject, Identifiable {
             rows.append(InfoRow("Último turno", "\(tokens) tokens"
                                 + (timeline.lastTurnCost.map { " · " + CatalogFormat.cost($0) } ?? "")))
         }
+        if let cache = timeline.cacheSavings {
+            rows.append(InfoRow("Caché", (cache.savedText ?? "sin precio") + " · " + cache.detail))
+        }
+        if let budget = timeline.budget, budget.hasCap {
+            if budget.session.cap != nil { rows.append(InfoRow("Presupuesto de la sesión", budget.session.text)) }
+            if budget.month.cap != nil { rows.append(InfoRow("Presupuesto del mes", budget.month.text)) }
+        }
         rows.append(InfoRow("Estado", isDormant ? "guardada; escribe para continuarla" : timeline.status.label))
         if readOnly { rows.append(InfoRow("Permisos", "solo lectura")) }
         timeline.addInfo("Estado de la sesión", rows)
@@ -410,6 +419,11 @@ extension LiveSession {
     /// El interruptor de Ajustes: el proceso abierto lo aplica ya, también a mitad de turno.
     func setKeepAwake(_ on: Bool) {
         process?.send(.keepAwake(on))
+    }
+
+    /// Ajustes ▸ General ▸ Presupuesto: los topes nuevos valen ya, también a mitad de turno.
+    func setBudget(session: Double?, month: Double?) {
+        process?.send(.budget(session: session, month: month))
     }
 }
 
