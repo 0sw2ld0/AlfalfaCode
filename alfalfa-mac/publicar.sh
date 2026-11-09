@@ -13,6 +13,9 @@
 #       PERFIL=otro ./publicar.sh → si guardaste la credencial con otro nombre
 #       ./publicar.sh --local     → DMG con firma ad hoc y sin notarizar, sólo para probar en este Mac
 #                                   (en otro Mac Gatekeeper no lo deja abrir)
+#
+# Escribe también dist/version.json (versión, URL del DMG en la release, huella, tamaño y las notas
+# de NOTAS-VERSION.txt) y enseña la orden para publicar ambos en GitHub. No publica nada.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -101,3 +104,25 @@ spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG
 spctl --assess --type execute --verbose=2 "$APP"
 echo "✓ Listo para publicar: $DMG"
 shasum -a 256 "$DMG"
+
+# --- 6. version.json: lo lee el actualizador de la app (AppUpdater) en la última release ----------
+ETIQUETA="v$VERSION"
+/usr/bin/python3 - "$DMG" "$VERSION" "$ETIQUETA" dist/version.json <<'PY'
+import datetime, hashlib, json, os, sys
+dmg, version, etiqueta, destino = sys.argv[1:5]
+notas = []
+if os.path.exists("NOTAS-VERSION.txt"):
+    notas = [l.strip().lstrip("-• ").strip() for l in open("NOTAS-VERSION.txt", encoding="utf-8") if l.strip()]
+json.dump({
+    "version": version,
+    "url": f"https://github.com/0sw2ld0/AlfalfaCode/releases/download/{etiqueta}/{os.path.basename(dmg)}",
+    "sha256": hashlib.sha256(open(dmg, "rb").read()).hexdigest(),
+    "tamano": os.path.getsize(dmg),
+    "fecha": datetime.date.today().isoformat(),
+    "notas": notas,
+}, open(destino, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print("version.json →", destino)
+PY
+echo
+echo "Para publicarlo (la release tiene que quedar como «Latest»; el actualizador lee releases/latest):"
+echo "  gh release create $ETIQUETA $DMG dist/version.json --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"

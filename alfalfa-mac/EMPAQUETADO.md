@@ -89,7 +89,27 @@ programa aparte, con su licencia y el enlace a su fuente exacta.
 
 ## Actualizaciones
 
-Hoy la app empaquetada comprueba si hay versión nueva (etiquetas de GitHub, por HTTPS) y, si
-la hay, su botón «Descargar» abre la página de la última versión: se descarga el DMG y se
-arrastra a Aplicaciones. `alfalfa --actualizar` dentro de la app no toca el bundle y lo explica.
-La actualización automática dentro de la app está pendiente de decidir (ver el PR).
+La app empaquetada se actualiza sola, con el mismo esquema que CuyCleaner
+(`Sources/AlfalfaKit/AppUpdate.swift` las reglas, `Sources/AlfalfaCode/AppUpdater.swift` la parte
+con interfaz):
+
+1. Al abrirse, como mucho una vez cada 20 horas, lee
+   `https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version.json`
+   (también desde Ajustes ▸ Actualizaciones o el menú «Buscar actualización»).
+2. Si hay una versión más nueva, ofrece «Omitir esta versión», «Más tarde» o «Instalar y reiniciar».
+3. Descarga el DMG (sólo de las releases de 0sw2ld0/AlfalfaCode por https), comprueba la huella
+   SHA-256 de `version.json`, la firma (`codesign --verify --deep --strict`), que el equipo sea
+   FZ8TW9AWLE, el identificador y la versión del `Info.plist`, y la notarización (`spctl`).
+4. Copia la app nueva junto a la instalada, cierra, la cambia y la vuelve a abrir. Si algo falla
+   no se toca la instalada. Si macOS abrió la app desde una copia temporal (App Translocation)
+   explica que hay que moverla a Aplicaciones con Finder.
+
+`publicar.sh` escribe `dist/version.json` y enseña la orden `gh release create` para subir el DMG y
+ese archivo a la release (que tiene que quedar como «Latest»). Las notas salen de
+`NOTAS-VERSION.txt`.
+
+Para probar el circuito sin GitHub: un `version.json` local que apunte a un DMG local y
+`open AlfalfaCode.app --env ALFALFA_ACTUALIZACION_FEED=file:///ruta/version.json --args -actualizarAhora`.
+Sólo se acepta un feed `file://`, y con él sólo un DMG local.
+
+Desde el clon (`swift run`) no cambia nada: `alfalfa --actualizar` actualiza el repositorio.

@@ -60,6 +60,8 @@ extension AppDelegate: NSApplicationDelegate {
 struct AlfalfaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
+    /// Sólo actúa en la app empaquetada (AppUpdater.isPackaged); con `swift run` no hace nada.
+    @ObservedObject private var updater = AppUpdater.shared
 
     init() {
         // Empaquetada (build-app.sh) la app tiene identificador propio; con `swift run` sus
@@ -91,6 +93,9 @@ struct AlfalfaApp: App {
                     delegate.model = model
                     await model.reload()
                 }
+                .task { await updater.checkIfDue() }
+                .environmentObject(updater)
+                .sheet(isPresented: $updater.showWindow) { UpdateWindow().environmentObject(updater) }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

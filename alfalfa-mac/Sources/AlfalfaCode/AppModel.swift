@@ -280,6 +280,8 @@ final class AppModel: ObservableObject {
 
     /// Compara la versión instalada con la última etiqueta del repositorio de AlfalfaCode.
     func checkForUpdate() {
+        // AlfalfaCode.app se actualiza descargando el DMG firmado de la última release.
+        if AppUpdater.isPackaged { AppUpdater.shared.checkManually(); return }
         guard let launcher else {
             update = .message(title: "No se pudo buscar", text: AlfalfaError.launcherNotFound.localizedDescription)
             return
