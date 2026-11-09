@@ -47,7 +47,7 @@ public enum PermissionMode: String, CaseIterable, Sendable {
 /// argumento y si vale con un turno en marcha. También se aceptan sus nombres
 /// en inglés, para quien venga de Codex o Claude Code.
 public enum SlashCommand: String, CaseIterable, Sendable {
-    case nuevo, modelo, esfuerzo, modo, compactar, estado, revisar, inicializar
+    case nuevo, modelo, esfuerzo, modo, compactar, contexto, estado, revisar, inicializar
     case renombrar, fijar, bifurcar, archivar, copiar, exportar, detener
     case procesos, cerrarProcesos = "cerrar-procesos"
 
@@ -60,6 +60,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .esfuerzo: return ["effort"]
         case .modo: return ["mode", "permissions"]
         case .compactar: return ["compact"]
+        case .contexto: return ["context"]
         case .estado: return ["status"]
         case .revisar: return ["review"]
         case .inicializar: return ["init"]
@@ -82,6 +83,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .esfuerzo: return "Elige el esfuerzo para los siguientes turnos"
         case .modo: return "Elige qué puede hacer el agente sin preguntarte"
         case .compactar: return "Resume la conversación para liberar contexto; escribe detrás qué conservar"
+        case .contexto: return "Ahorro (compacta antes de la tarifa cara) o completo (usa la ventana entera)"
         case .estado: return "Muestra el id, el modelo, el contexto y los tokens de la sesión"
         case .revisar: return "Revisa los cambios sin commit y busca fallos"
         case .inicializar: return "Crea un AGENTS.md con instrucciones para el agente"
@@ -105,6 +107,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .esfuerzo: return "gauge.with.dots.needle.50percent"
         case .modo: return "shield.lefthalf.filled"
         case .compactar: return "arrow.down.right.and.arrow.up.left"
+        case .contexto: return "dollarsign.gauge.chart.lefthalf.righthalf"
         case .estado: return "info.circle"
         case .revisar: return "checklist"
         case .inicializar: return "doc.badge.plus"
@@ -121,7 +124,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
     }
 
     /// Admite texto detrás: `/modelo glm-5.3-flash:cloud`, `/renombrar Nuevo título`.
-    public var takesArgument: Bool { [.modelo, .esfuerzo, .modo, .renombrar].contains(self) }
+    public var takesArgument: Bool { [.modelo, .esfuerzo, .modo, .contexto, .renombrar].contains(self) }
 
     /// Como `available_during_task` de Codex: lo que cambia el hilo espera a que acabe el turno.
     public var availableDuringTurn: Bool {

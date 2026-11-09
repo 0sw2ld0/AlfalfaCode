@@ -79,7 +79,8 @@ class Ollama(Proveedor):
         for fila, vision in zip(filas, visiones):
             nombre = fila.get('name', '')
             # Ollama Cloud se paga con su plan: del catálogo sólo se toma la ventana.
-            resumen = {k: v for k, v in catalogo.resumen(self.ficha(nombre)).items() if k != 'precio'}
+            resumen = {k: v for k, v in catalogo.resumen(self.ficha(nombre)).items()
+                       if k not in ('precio', 'barato_hasta', 'tarifa_larga')}
             # Lo que dice Ollama manda sobre el catálogo.
             propia = (fila.get('details') or {}).get('context_length') if isinstance(fila.get('details'), dict) \
                 else None

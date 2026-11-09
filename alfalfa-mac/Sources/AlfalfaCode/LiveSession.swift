@@ -46,6 +46,8 @@ final class LiveSession: ObservableObject, Identifiable {
     var parentSessionID: String?
     /// Al terminar cada turno: la app manda la nota a la sesión padre.
     var onTurnFinished: ((Outcome) -> Void)?
+    /// «Seguir en una sesión nueva»: el motor creó la sesión con el resumen; la app la abre.
+    var onContinued: ((String) -> Void)?
     var isDormant: Bool { dormantLauncher != nil }
     /// Se puede escribir: hay proceso abierto o la sesión duerme hasta el siguiente mensaje.
     var canSend: Bool { timeline.status.isActive || isDormant }
@@ -140,6 +142,8 @@ final class LiveSession: ObservableObject, Identifiable {
             Task { await refreshPanel() }
         case let .event(event) where event.role == "tool":
             if Date().timeIntervalSince(lastRefresh) > 2 { Task { await refreshPanel() } }
+        case let .continued(newID, _):
+            onContinued?(newID)
         default:
             break
         }
@@ -237,6 +241,26 @@ final class LiveSession: ObservableObject, Identifiable {
         process?.send(.compact(instructions: instructions))
     }
 
+    /// `/contexto` y el aviso de tarifa: Ahorro o Contexto completo. Con proceso vale ya; una
+    /// sesión guardada se abre sin turno para cambiarlo.
+    func setContextMode(_ mode: ContextMode) {
+        if isDormant { openWaiting() }
+        process?.send(.contextMode(mode))
+        if mode == .full { timeline.answerPriceWarnings() }
+        onChange?()
+    }
+
+    /// «Seguir en una sesión nueva» del aviso de tarifa: corta el turno, compacta y abre otra
+    /// sesión que empieza con el resumen.
+    func continueInNewSession() {
+        guard !timeline.compacting else { return }
+        if isDormant { openWaiting() }
+        process?.send(.continueInNewSession)
+        timeline.answerPriceWarnings()
+        timeline.addNotice("Preparando una sesión nueva con el resumen de esta…")
+        onChange?()
+    }
+
     /// Se puede compactar: hay conversación y no se está compactando ya.
     var canCompact: Bool {
         !timeline.compacting && sessionID != nil && (isDormant || timeline.status.isActive)
@@ -256,6 +280,21 @@ final class LiveSession: ObservableObject, Identifiable {
         onChange?()
     }
 
+    /// `/contexto` sin argumento: el modo de la sesión, el tramo caro del modelo y cómo cambiarlo.
+    func showContextMode() {
+        let mode = timeline.contextMode ?? .saving
+        var rows = [InfoRow("Modo", mode.label + " · " + mode.explanation)]
+        if let tier = timeline.priceTier {
+            rows.append(InfoRow("Tarifa", "a partir de \(CatalogFormat.window(tier.from)) tokens, toda la petición cuesta "
+                                + tier.multiplier))
+        } else {
+            rows.append(InfoRow("Tarifa", "este modelo no cobra más por contexto largo (o aún no se ha medido)"))
+        }
+        rows.append(InfoRow("Cambiar", "/contexto ahorro · /contexto completo"))
+        timeline.addInfo("Contexto de la sesión", rows)
+        onChange?()
+    }
+
     /// `/estado`, como /status de Codex.
     func showStatus() {
         var rows = [InfoRow("Sesión", sessionID ?? "sin id todavía"), InfoRow("Carpeta", cwd.path),
@@ -265,6 +304,10 @@ final class LiveSession: ObservableObject, Identifiable {
             rows.append(InfoRow("Contexto", "\(percent) % · \(timeline.contextTokens) de \(timeline.contextLimit) tokens"))
         } else {
             rows.append(InfoRow("Contexto", "aún sin medir"))
+        }
+        if let tier = timeline.priceTier {
+            rows.append(InfoRow("Tarifa", (timeline.contextMode ?? .saving).label + " · cobra " + tier.multiplier
+                                + " desde " + CatalogFormat.window(tier.from)))
         }
         rows.append(InfoRow("Tokens gastados", "\(timeline.totalTokens)"))
         if let cost = timeline.totalCost {

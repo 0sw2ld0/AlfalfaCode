@@ -90,11 +90,14 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     case info(id: Int, title: String, rows: [InfoRow])
     /// «Conversación compactada»: lo anterior quedó resumido para el modelo.
     case compaction(id: Int, Compaction)
+    /// Aviso de tarifa por contexto largo; `answered` cuando ya se eligió (o se compactó).
+    case priceWarning(id: Int, PriceWarning, answered: Bool)
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
-             let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _): return id
+             let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
+             let .priceWarning(id, _, _): return id
         }
     }
 }
@@ -211,11 +214,14 @@ public struct Timeline: Equatable, Sendable {
     public init(history events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0,
                 cost: Double? = nil) {
         for event in events { apply(event) }
+        // Un aviso de tarifa guardado ya no espera respuesta: el modo se cambia en el panel o con /contexto.
+        answerPriceWarnings()
         if let context {
             contextTokens = context.tokens
             contextLimit = context.limit
             contextBreakdown = context.breakdown
             contextDetails = context.details
+            contextMode = context.details?.priceTier?.mode
         }
         totalTokens = tokens
         totalCost = cost
@@ -280,6 +286,21 @@ public struct Timeline: Equatable, Sendable {
         items.removeAll { if case .wrapUp(id, _, _) = $0 { return true } else { return false } }
     }
 
+    /// Ahorro o Contexto completo, como lo dijo el motor; nil hasta que lo diga.
+    public private(set) var contextMode: ContextMode?
+
+    /// El tramo de contexto largo del modelo de la sesión, si lo tiene.
+    public var priceTier: PriceTier? { contextDetails?.priceTier }
+
+    /// El aviso ya se contestó (un botón o una compactación): sus botones se retiran.
+    public mutating func answerPriceWarnings() {
+        for index in items.indices {
+            if case let .priceWarning(id, warning, false) = items[index] {
+                items[index] = .priceWarning(id: id, warning, answered: true)
+            }
+        }
+    }
+
     /// Un mensaje nuevo deja contestadas las cajas anteriores: sus botones ya no aplican.
     private mutating func closeWrapUps() {
         for index in items.indices {
@@ -312,6 +333,7 @@ public struct Timeline: Equatable, Sendable {
             case let .wrapUp(_, wrapUp, _): parts.append("> **Siguiente paso:** " + wrapUp.recap)
             case let .compaction(_, compaction):
                 parts.append("---\n\n*Conversación compactada.* Resumen para el modelo:\n\n" + compaction.summary)
+            case let .priceWarning(_, warning, _): parts.append("> " + warning.text)
             default: break
             }
         }
@@ -329,6 +351,11 @@ public struct Timeline: Equatable, Sendable {
         switch message {
         case let .session(info):
             session = info
+            if let mode = info.contextMode {
+                contextMode = mode
+                // Elegido el modo (botón, /contexto o Ajustes), el aviso ya no espera respuesta.
+                if mode == .full { answerPriceWarnings() }
+            }
             if status == .starting { status = .working }
         case let .event(event): apply(event)
         case let .permission(request):
@@ -344,6 +371,7 @@ public struct Timeline: Equatable, Sendable {
             if let mcp { mcpContext = mcp }
             if let breakdown { contextBreakdown = breakdown }
             if let details { contextDetails = details }
+            if let mode = details?.priceTier?.mode { contextMode = mode }
         case let .error(text):
             items.append(.notice(id: nextID(), text: text))
         case let .messageRejected(rejection):
@@ -398,6 +426,7 @@ public struct Timeline: Equatable, Sendable {
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
         case let .keepingAwake(on): keepingAwake = on
+        case .continued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
              .ollamaChats, .browser:
             break
@@ -413,11 +442,16 @@ public struct Timeline: Equatable, Sendable {
     }
 
     private mutating func apply(_ event: AgentEvent) {
+        if let warning = event.priceWarning {
+            items.append(.priceWarning(id: nextID(), warning, answered: warning.mode == .full))
+            return
+        }
         if let compaction = event.compaction {
             switch compaction.state {
             case .running: compacting = true
             case .done:
                 compacting = false
+                answerPriceWarnings()
                 items.append(.compaction(id: nextID(), compaction))
             case .failed:
                 compacting = false

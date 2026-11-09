@@ -345,7 +345,9 @@ class Subagentes:
                     model=str(args.get('model') or tipo.get('modelo') or principal.get('model')),
                     effort=str(args.get('reasoning_effort') or tipo.get('esfuerzo') or principal.get('effort')
                                or 'medium'),
-                    modo=principal.get('modo'), subagente_de=principal['id'])
+                    modo=principal.get('modo'), subagente_de=principal['id'],
+                    # Ahorro o contexto completo, como la sesión que lo lanza.
+                    **({'contexto_modo': principal['contexto_modo']} if principal.get('contexto_modo') else {}))
         if task['effort'] not in ('low', 'medium', 'high', 'xhigh', 'max'):
             task['effort'] = principal.get('effort') or 'medium'
         # Lo aprobado «para la sesión» vale también para sus subagentes, y al revés.

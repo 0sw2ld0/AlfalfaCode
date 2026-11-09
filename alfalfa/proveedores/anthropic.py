@@ -36,14 +36,15 @@ from .openai import _json, _mime, _texto
 URL = 'https://api.anthropic.com/v1'
 VERSION_API = '2023-06-01'
 BETA_BLOQUES = 'thinking-binding-controls-2026-08-01'
-# Lo que se ofrece en el selector. Haiku 5.5 cobra cinco veces más toda la
-# petición si el prompt pasa de 100K tokens: su ventana se queda por debajo,
-# como la de GPT-6 Luna con el tramo caro de OpenAI. Los precios son los de la
-# documentación de Anthropic (noviembre de 2026); manda el catálogo de
-# models.dev cuando trae el modelo.
+# Lo que se ofrece en el selector, con la ventana real (1M las tres: documentación
+# de Anthropic y models.dev, noviembre de 2026; sin cabecera beta para pasar de 200K).
+# Haiku 5.5 cobra cinco veces más toda la petición si el prompt pasa de 100K tokens
+# (`tramo`): el modo Ahorro de la sesión compacta antes (catalogo.tarifa), como con
+# GPT-6 Luna pasados 272K. Los precios son los de la documentación de Anthropic;
+# manda el catálogo de models.dev cuando trae el modelo.
 CATALOGO = {
     'claude-haiku-5-5': {
-        'nombre': 'Claude Haiku 5.5', 'ventana': 100000, 'salida': 128000, 'vision': True,
+        'nombre': 'Claude Haiku 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True,
         'precio': {'entrada': 0.10, 'salida': 0.50, 'cache_lectura': 0.01, 'cache_escritura': 0.125,
                    'tramo': {'desde': 100000, 'entrada': 0.50, 'salida': 2.50, 'cache_lectura': 0.05,
                              'cache_escritura': 0.625}}},
@@ -650,7 +651,9 @@ class Anthropic(Proveedor):
                                        'salida': propia['salida'], 'razona': True, 'herramientas': True,
                                        'vision': propia['vision'], 'esfuerzos': list(ESFUERZOS),
                                        'precio': propia['precio']} if propia else None)
-            resumen = catalogo.resumen(ficha)
+            # El precio propio lleva el tramo largo (barato_hasta) aunque models.dev no lo traiga.
+            precio = self.precio(m)
+            resumen = catalogo.resumen(dict(ficha, precio=precio) if ficha and precio else ficha, self.id)
             if propia:
                 resumen['ventana'] = propia['ventana']
                 resumen['precio'] = {k: propia['precio'][k] for k in ('entrada', 'salida')}

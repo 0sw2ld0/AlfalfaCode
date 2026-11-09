@@ -36,6 +36,8 @@ struct ItemView: View {
             info(title: title, rows: rows)
         case let .compaction(_, compaction):
             CompactionMarker(compaction: compaction)
+        case let .priceWarning(_, warning, answered):
+            PriceWarningCard(warning: warning, answered: answered, session: session)
         }
     }
 

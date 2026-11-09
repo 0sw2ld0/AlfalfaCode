@@ -24,6 +24,8 @@ PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'rein
 
 # Lo que devuelve next_message cuando toca compactar entre turnos.
 COMPACTAR = object()
+# … y cuando toca «Seguir en una sesión nueva» (aviso de tarifa).
+CONTINUAR = object()
 
 
 class Transport:
@@ -50,6 +52,11 @@ class Transport:
         # Sin turno en marcha se compacta ya (como /compact de Claude Code): el bucle
         # lo recoge en next_message. Mismo valor que compact_pending.
         self.compact_now = False
+        # {"tipo":"contexto","modo":"ahorro"|"completo"}: lo conecta run() con el gestor. Vale ya.
+        self.context_mode = None
+        # {"tipo":"continuar_en_nueva"}: entre turnos compacta y abre una sesión nueva con el
+        # resumen; con un turno en marcha espera a que termine (no corta una herramienta a medias).
+        self.continue_new = False
         # Lo marca TerminalManager.run mientras dura un turno.
         self.in_turn = False
         # «Redirigir»: el modelo deja la respuesta que estaba pensando y lee ya los mensajes.
@@ -155,6 +162,9 @@ class Transport:
         Una compactación pedida entre turnos sale antes que los mensajes, como COMPACTAR
         con sus instrucciones: (COMPACTAR, texto o None)."""
         while not self.stopped:
+            if self.continue_new:
+                self.continue_new = False
+                return (CONTINUAR, None)
             if self.compact_now:
                 pedido, self.compact_now = self.compact_now, False
                 return (COMPACTAR, pedido if isinstance(pedido, str) else None)
@@ -238,6 +248,23 @@ class Transport:
                 self.settings(value.get('modelo'), value.get('esfuerzo'), value.get('modo'))
             elif value.get('tipo') == 'compactar':
                 self.compact(value.get('instrucciones'))
+            elif value.get('tipo') == 'contexto':
+                from .compactacion import MODOS_CONTEXTO
+                if value.get('modo') not in MODOS_CONTEXTO or self.context_mode is None:
+                    raise ValueError()
+                self.context_mode(value['modo'])
+            elif value.get('tipo') == 'continuar_en_nueva':
+                if self.compacting:
+                    self.emit('evento', rol='system', hora=time.time(),
+                              texto='Espera a que termine la compactación en curso.')
+                elif not self.continue_new:
+                    self.continue_new = True
+                    if self.in_turn:
+                        # Cortarlo dejaría a medias la herramienta que esté en marcha: se espera.
+                        self.emit('evento', rol='system', hora=time.time(),
+                                  texto='Seguiré en una sesión nueva cuando termine este turno; '
+                                        'detenlo si no quieres esperar.')
+                    self.wake.set()
             elif value.get('tipo') == 'mantener_despierto':
                 activo = value.get('activo')
                 if not isinstance(activo, bool) or self.keep_awake is None:
@@ -323,11 +350,16 @@ async def run(args, transport):
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
+        if getattr(args, 'contexto', None):
+            manager.elegir_contexto(args.contexto)
         if esperar:
             code = 0  # Abrir y cerrar sin turno no es un fallo.
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                        modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
-                       **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}))
+                       contexto=manager.task.get('contexto_modo') or 'ahorro',
+                       **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}),
+                       **({'continuada_de': manager.task['continuada_de']['sesion']}
+                          if isinstance(manager.task.get('continuada_de'), dict) else {}))
         # Al reanudar, la app vuelve a enseñar el plan del agente.
         if isinstance(manager.task.get('plan_pasos'), list) and manager.task['plan_pasos']:
             transport.emit('plan', pasos=[{'paso': p.get('step', ''), 'estado': p.get('status', 'pending')}
@@ -368,6 +400,14 @@ async def run(args, transport):
 
         transport.stop_process = detener_proceso
         transport.keep_awake = manager.despierto.cambiar
+
+        def cambiar_contexto(modo):
+            try:
+                manager.cambiar_contexto(modo)
+            except ValueError as exc:
+                transport.emit('error', texto=str(exc))
+
+        transport.context_mode = cambiar_contexto
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, transport.stop)
@@ -379,6 +419,25 @@ async def run(args, transport):
         # mensaje abre el siguiente. Cancelar o EOF sin turno en curso cierran
         # con el estado del último turno; con turno en curso lo interrumpen.
         while prompt is not None and not transport.stopped:
+            if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
+                transport.compacting = True
+                transport.worker = asyncio.create_task(manager.continuar_en_nueva())
+                try:
+                    nueva = await transport.worker
+                except asyncio.CancelledError:
+                    nueva = None
+                finally:
+                    transport.compacting = False
+                if transport.interrupted:
+                    code = 130
+                    break
+                if nueva:
+                    # La app abre la nueva; esta se cierra lista para reanudarse.
+                    transport.emit('sesion_cambiada', id=nueva, continuada_de=manager.task['id'])
+                    code = 0
+                    break
+                prompt = await transport.next_message()
+                continue
             if isinstance(prompt, tuple) and prompt[0] is COMPACTAR:
                 transport.compacting = True
                 transport.worker = asyncio.create_task(manager.compact_now(prompt[1]))
@@ -399,7 +458,8 @@ async def run(args, transport):
                 manager.task.update(cambios)
                 manager.save()
                 transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
-                               modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'])
+                               modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
+                               contexto=manager.task.get('contexto_modo') or 'ahorro')
             # Imágenes para un modelo que no las ve: se rechaza el mensaje sin empezar el turno.
             # La app lo quita de la conversación y lo devuelve al cuadro (`rechazado`).
             rechazo = await manager.sin_vision(prompt)
@@ -672,6 +732,9 @@ def history(ident):
                 evento['turno'] = row['turno']
             if isinstance(row.get('herramienta'), dict):
                 evento['herramienta'] = row['herramienta']
+            if isinstance(row.get('tarifa'), dict):
+                # El aviso de tarifa: la app lo pinta ya contestado (sin botones vivos).
+                evento['tarifa'] = row['tarifa']
             por_turno.setdefault(row['turno'], []).append(evento) if row.get('turno') else sueltos.append(evento)
     eventos = []
     if task.get('objective') and (not turnos or sueltos):

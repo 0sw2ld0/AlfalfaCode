@@ -10,6 +10,8 @@ public struct SessionInfo: Equatable, Sendable {
     public var effort: String
     /// Modo de permisos (`auto`, `manual`, `ediciones`, `plan`, `omitir`); vacío en motores anteriores.
     public var mode: String = ""
+    /// Ahorro o contexto completo (`contexto`); nil en motores anteriores.
+    public var contextMode: ContextMode?
 }
 
 public struct AgentEvent: Equatable, Sendable {
@@ -18,6 +20,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var time: Double
     /// Turno al que pertenece (`turno`); nil en motores anteriores o eventos sin turno.
     public var turn: String?
+    /// Aviso de tarifa por contexto largo (`tarifa`): la conversación lo pinta con sus botones.
+    public var priceWarning: PriceWarning?
     /// Datos de una compactación (`compactacion`): la conversación pinta su marca.
     public var compaction: Compaction?
     /// Llamada a herramienta (`herramienta`): nombre, fase y descripción; nil en motores anteriores.
@@ -380,8 +384,12 @@ public struct ContextDetails: Equatable, Sendable {
     public var estimate: Int?
     public var threshold: Int?
     public var memoryFiles: [ContextEntry]
+    /// Tramo de contexto largo del modelo y modo de la sesión (`tarifa`); nil si el modelo no lo tiene.
+    public var priceTier: PriceTier?
 
-    public init(estimate: Int? = nil, threshold: Int? = nil, memoryFiles: [ContextEntry] = []) {
+    public init(estimate: Int? = nil, threshold: Int? = nil, memoryFiles: [ContextEntry] = [],
+                priceTier: PriceTier? = nil) {
+        self.priceTier = priceTier
         self.estimate = estimate
         self.threshold = threshold
         self.memoryFiles = memoryFiles
@@ -468,6 +476,8 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
     public var providerName: String?
     /// Ventana de contexto: la del proveedor o, si no la da, la del catálogo de models.dev.
     public var context: Int?
+    /// Hasta dónde llega la tarifa barata (`barato_hasta`): pasado eso, toda la petición cuesta más.
+    public var cheapUntil: Int?
     /// Precio por millón de tokens, de quien cobra por token.
     public var price: ModelPrice?
     /// En «Gratis ahora»: coste 0, de nube y con herramientas.
@@ -482,7 +492,8 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
 
     public init(name: String, label: String? = nil, provider: String = "ollama", providerName: String? = nil,
                 context: Int? = nil, price: ModelPrice? = nil, free: Bool = false, notice: String? = nil,
-                missingKey: MissingKey? = nil, vision: Bool? = nil) {
+                missingKey: MissingKey? = nil, vision: Bool? = nil, cheapUntil: Int? = nil) {
+        self.cheapUntil = cheapUntil
         self.name = name
         self.label = label ?? name
         self.provider = provider
@@ -597,6 +608,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
     case sessionChanged(id: String, forkedFrom: String?)
+    /// «Seguir en una sesión nueva»: la sesión `id` sigue a `from` con su resumen; esta se cierra.
+    case continued(id: String, from: String)
     /// `procesos`: las órdenes en segundo plano de la sesión, vivas o ya terminadas.
     case processes([BackgroundProcess])
     /// `subagentes`: los subagentes de la sesión y cómo van.
@@ -620,14 +633,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
               let kind = object["tipo"] as? String else { return nil }
         switch kind {
         case "sesion":
-            guard let id = object["id"] as? String, let cwd = object["cwd"] as? String else { return nil }
-            return .session(SessionInfo(id: id, cwd: cwd, model: object["modelo"] as? String ?? "",
-                                        effort: object["esfuerzo"] as? String ?? "", mode: object["modo"] as? String ?? ""))
+            return sessionInfo(object).map(Self.session)
         case "evento":
-            guard let role = object["rol"] as? String, let text = object["texto"] as? String else { return nil }
-            return .event(AgentEvent(role: role, text: text, time: number(object["hora"]) ?? 0, turn: Self.text(object["turno"]),
-                                     compaction: compaction(object["compactacion"]),
-                                     tool: ToolInfo.parse(object["herramienta"])))
+            return agentEvent(object).map(Self.event)
         case "permiso":
             guard let id = object["id"] as? String, let argv = object["argv"] as? [String] else { return nil }
             let reason = (object["motivo"] as? String).flatMap(PermissionReason.init(rawValue:))
@@ -669,11 +677,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return outcome(object).map { .finished($0) }
         case "historial":
             guard let id = object["sesion"] as? String, let rows = object["eventos"] as? [[String: Any]] else { return nil }
-            let events = rows.compactMap { row -> AgentEvent? in
-                guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
-                return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
-                                  compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]))
-            }
+            let events = rows.compactMap(agentEvent)
             var saved: SavedContext?
             if let context = object["contexto"] as? [String: Any], let tokens = context["tokens"] as? Int,
                let limit = context["limite"] as? Int {
@@ -694,7 +698,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                  providerName: text(row["nombre_proveedor"]), context: integer(row["ventana"]),
                                  price: modelPrice(row["precio"]), free: bool(row["gratis"]) ?? false,
                                  notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]),
-                                 vision: bool(row["vision"]))
+                                 vision: bool(row["vision"]), cheapUntil: integer(row["barato_hasta"]))
             })
         case "proveedores":
             guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }
@@ -757,6 +761,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .subagentEvent(agent: agent, AgentEvent(role: role, text: content, time: number(object["hora"]) ?? 0))
         case "sesion_cambiada":
             guard let id = text(object["id"]) else { return nil }
+            if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }
             return .sessionChanged(id: id, forkedFrom: text(object["bifurcada_de"]))
         case "actualizacion":
             guard let installed = object["instalada"] as? String, let available = bool(object["hay_nueva"]) else { return nil }
@@ -769,6 +774,22 @@ public enum AlfalfaMessage: Equatable, Sendable {
         default:
             return ReportResult(kind: kind, object: object).map(Self.reported)
         }
+    }
+
+    /// `sesion`: id, carpeta, modelo, esfuerzo, modo de permisos y de contexto.
+    private static func sessionInfo(_ object: [String: Any]) -> SessionInfo? {
+        guard let id = object["id"] as? String, let cwd = object["cwd"] as? String else { return nil }
+        return SessionInfo(id: id, cwd: cwd, model: object["modelo"] as? String ?? "",
+                           effort: object["esfuerzo"] as? String ?? "", mode: object["modo"] as? String ?? "",
+                           contextMode: (object["contexto"] as? String).flatMap(ContextMode.init(rawValue:)))
+    }
+
+    /// Un `evento` en vivo o una fila de `historial`, con su compactación o su aviso de tarifa.
+    private static func agentEvent(_ row: [String: Any]) -> AgentEvent? {
+        guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
+        return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
+                          priceWarning: PriceWarning.parse(row["tarifa"], text: text),
+                          compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]))
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.
@@ -860,8 +881,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
         let estimate = integer(object["estimado"]).map { max(0, $0) }
         let threshold = integer(object["umbral"]).flatMap { $0 > 0 ? $0 : nil }
         let memory = entries(object["memoria"], name: "ruta")
-        guard estimate != nil || threshold != nil || object["memoria"] != nil else { return nil }
-        return ContextDetails(estimate: estimate, threshold: threshold, memoryFiles: memory)
+        let tier = PriceTier.parse(object["tarifa"])
+        guard estimate != nil || threshold != nil || object["memoria"] != nil || tier != nil else { return nil }
+        return ContextDetails(estimate: estimate, threshold: threshold, memoryFiles: memory, priceTier: tier)
     }
 
     private static func compaction(_ value: Any?) -> Compaction? {
@@ -933,6 +955,10 @@ public enum AlfalfaCommand: Equatable, Sendable {
     /// Compactar (`/compactar`, «Compactar sesión»): ya entre turnos, o antes de la siguiente
     /// respuesta del modelo si hay uno en marcha. Las instrucciones centran el resumen.
     case compact(instructions: String? = nil)
+    /// `/contexto` y el aviso de tarifa: Ahorro o Contexto completo. Vale ya, también a mitad de turno.
+    case contextMode(ContextMode)
+    /// «Seguir en una sesión nueva»: corta el turno, compacta y abre otra con el resumen.
+    case continueInNewSession
     /// Detener una orden en segundo plano (`p1`) o todas (`todos`).
     case stopProcess(String)
     /// Modelo y esfuerzo para los turnos siguientes.
@@ -954,6 +980,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case .cancel: object = ["tipo": "cancelar"]
         case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
         case .redirect: object = ["tipo": "redirigir"]
+        case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]
+        case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
         case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
         case let .browserReply(reply): object = reply.object

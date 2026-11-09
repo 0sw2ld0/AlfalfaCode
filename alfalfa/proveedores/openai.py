@@ -21,10 +21,11 @@ from . import Proveedor
 from .ollama import validar_url
 
 URL = 'https://api.openai.com/v1'
-# Lo que se ofrece en el selector. La ventana se queda por debajo de los 272K
-# de entrada a partir de los cuales OpenAI cobra el doble por toda la petición.
+# Lo que se ofrece en el selector, con la ventana real (developers.openai.com, 2026-11-09).
+# Por encima de 272K tokens de entrada OpenAI cobra 2× la entrada y 1,5× la salida de toda
+# la petición: el modo Ahorro de la sesión compacta antes (catalogo.tarifa).
 CATALOGO = {
-    'gpt-6-luna': {'nombre': 'GPT-6 Luna', 'ventana': 272000, 'vision': True},
+    'gpt-6-luna': {'nombre': 'GPT-6 Luna', 'ventana': 1_050_000, 'vision': True},
 }
 MODELO_POR_DEFECTO = 'gpt-6-luna'
 # El esfuerzo de la sesión es el de OpenAI tal cual; `think: false` lo apaga.
@@ -306,7 +307,7 @@ class OpenAI(Proveedor):
         filas = []
         for m in nombres:
             ficha = self.ficha(m)
-            resumen = catalogo.resumen(ficha)
+            resumen = catalogo.resumen(ficha, self.id)
             # Ve imágenes: lo propio, lo del catálogo o «no se sabe» (None).
             resumen['vision'] = resumen.get('vision') if ficha else None
             if m in CATALOGO:

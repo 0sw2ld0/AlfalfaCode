@@ -300,8 +300,11 @@ def test_los_modelos_de_anthropic_salen_en_su_seccion():
     assert {f['proveedor'] for f in filas} == {'anthropic'}
     haiku = filas[0]
     assert haiku['nombre'] == 'Claude Haiku 5.5'
-    # La ventana propia (por debajo del tramo caro) manda; el precio es del catálogo.
-    assert haiku['ventana'] == 100000 and haiku['precio'] == {'entrada': 0.1, 'salida': 0.5}
+    # La ventana real (1M) y hasta dónde llega la tarifa barata; el precio es del catálogo.
+    assert haiku['ventana'] == 1000000 and haiku['precio'] == {'entrada': 0.1, 'salida': 0.5}
+    assert haiku['barato_hasta'] == 100000 and haiku['tarifa_larga'] == {'entrada': 5.0, 'salida': 5.0}
+    assert 'barato_hasta' not in filas[1]
+    assert anthropic.mostrar('claude-haiku-5-5')['model_info']['anthropic.context_length'] == 1000000
     assert proveedores.obtener('anthropic').precio('claude-haiku-5-5')['tramo']['desde'] == 100000
     configuracion.cambiar('anthropic', 'modelos', ['claude-fable-5-1'])
     assert [f['name'] for f in proveedores.obtener('anthropic').modelos()][-1] == 'anthropic/claude-fable-5-1'

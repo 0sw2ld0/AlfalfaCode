@@ -70,8 +70,9 @@ https://platform.claude.com/settings/keys), el uso se cobra en tu cuenta.
 - El prompt del sistema y las herramientas van en la caché de prompts, y la
   conversación usa la caché automática. El coste cuenta aparte lo leído y lo
   escrito en la caché.
-- Haiku 5.5 cobra cinco veces más una petición cuyo prompt pase de 100K tokens:
-  su ventana se queda en 100K para no entrar nunca en ese tramo.
+- Haiku 5.5 tiene una ventana de 1M, pero cobra cinco veces más una petición cuyo
+  prompt pase de 100K tokens: en modo Ahorro (el de por defecto) la sesión compacta
+  antes de llegar ahí (ver «Modelos que cobran más por contexto largo»).
 
 Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección del
 servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
@@ -324,6 +325,49 @@ El evento es un `evento` de sistema con `compactacion`
 Cerca del umbral, el pie del cuadro avisa de cuánto falta («12 % hasta compactar»).
 `compactacion` lleva también `composicion`: cuántos tokens había por tipo de
 mensaje (`tool.content`, `assistant.tool_calls`…), sin su texto.
+
+### Modelos que cobran más por contexto largo
+
+Algunos modelos cobran más toda la petición pasado un umbral: GPT-6 Luna, por
+encima de 272K tokens de entrada, 2× la entrada y la caché y 1,5× la salida (su
+ventana es de 1.050.000); Claude Haiku 5.5, si el prompt pasa de 100.000 tokens
+contando la caché, 5× (ventana de 1M). El umbral sale de los tramos de precio de
+models.dev (`tiers`, o `context_over_200k` en el formato antiguo), de una tabla
+propia comprobada en las páginas oficiales, o de lo que diga el proveedor
+(Alfalfa Cloud lo manda en `/api/show` como `alfalfa_tarifa`). `--modelos --json`
+lo da junto a la ventana (`barato_hasta`, y `tarifa_larga` con los multiplicadores),
+y el selector lo enseña: «1M · barato hasta 100K».
+
+Cada sesión elige cómo usarlo, y se guarda con ella:
+
+- **Ahorro** (por defecto): la compactación automática salta también al 90 % del
+  umbral. Al 80 % la conversación avisa («A partir de 100K tokens, Claude Haiku 5.5
+  cobra 5× toda la petición. Compactaré en unos 10K») con tres botones: **Compactar
+  ahora**, **Seguir con contexto completo** (no vuelve a preguntar en esa sesión) y
+  **Seguir en una sesión nueva**, que compacta y abre otra que empieza sólo con el
+  resumen (con un turno en marcha, espera a que termine; hereda los cambios del
+  agente pero no las incidencias, que señalan una conversación que ya no ve). Si una
+  salida de herramienta enorme llevaría una sola petición por encima del umbral, se
+  recorta antes de enviarla (por el medio, como las salidas viejas), empezando por
+  las que aún no están en la caché del proveedor, de la más nueva a la más vieja;
+  se guarda sólo hasta cuántos tokens se recortó, para que las peticiones siguientes
+  sean idénticas y la caché siga valiendo, y el historial completo no cambia. Si tras
+  compactar lo fijo (instrucciones, herramientas y resumen) sigue por encima del
+  umbral, lo dice una vez y no vuelve a compactar sola hasta que la conversación crezca.
+  Los agentes que usan el motor sin la compactación de Codex también compactan antes
+  del umbral, y los subagentes siguen el modo de la sesión que los lanza.
+- **Contexto completo**: usa la ventana entera y avisa una vez al pasar el umbral.
+
+Se cambia con `/contexto ahorro` o `/contexto completo`, en el panel de contexto,
+con `--contexto ahorro|completo` en la terminal, o con
+`{"tipo":"contexto","modo":"completo"}` por stdio (vale ya, también a mitad de
+turno). El evento `sesion` dice el modo (`contexto`), el `contexto` lleva `tarifa`
+(`desde`, `entrada`, `salida`, `modo`) y el aviso es un `evento` de sistema con
+`tarifa` (también en `--historial`, donde la app lo pinta ya contestado). El coste
+estimado cobra el tramo aunque models.dev no lo traiga (GPT-6 Luna). «Seguir en una sesión nueva» es `{"tipo":"continuar_en_nueva"}`: el
+motor responde `sesion_cambiada` con `continuada_de` y se cierra. Con un código de
+Alfalfa Cloud el servicio anuncia como ventana el umbral barato, salvo a los
+códigos con contexto completo, que reciben la ventana real y el umbral.
 
 Lo que lee el modelo tras compactar junta Codex y Claude Code, para que no rehaga
 lo que ya hizo ni tome por suyos cambios ajenos:
@@ -647,7 +691,7 @@ cerrar. Las que no valen en ese momento salen atenuadas, por ejemplo `/revisar`
 con un turno en marcha. También aceptan su nombre en inglés (`/model`, `/compact`,
 `/init`…).
 
-`/nuevo`, `/modelo`, `/esfuerzo`, `/compactar`, `/estado`, `/revisar`,
+`/nuevo`, `/modelo`, `/esfuerzo`, `/compactar`, `/contexto`, `/estado`, `/revisar`,
 `/inicializar` (crea un AGENTS.md, como `/init` de Codex), `/renombrar`, `/fijar`,
 `/bifurcar`, `/archivar`, `/copiar`, `/exportar` (la conversación en Markdown) y
 `/detener`. Lo que empieza por «/» y no es una orden, como una ruta, se envía como

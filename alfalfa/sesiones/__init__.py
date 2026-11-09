@@ -11,6 +11,10 @@ LICENSE y PROCEDENCIA.md de esta carpeta):
 - Bifurcar (`thread/fork`): copiar la sesión truncada al final de un turno, con
   un id nuevo y `bifurcada_de` = {sesion, turno}. La carpeta de trabajo no se
   copia: la bifurcación sigue en la misma, como en Codex.
+
+Propio de AlfalfaCode: `continuar` abre una sesión nueva que arranca sólo con el
+resumen de la última compactación de otra («Seguir en una sesión nueva» del aviso
+de tarifa), con `continuada_de` = {sesion}.
 """
 from __future__ import annotations
 
@@ -196,3 +200,63 @@ def bifurcar(sesiones, ident, turno=None):
         return nuevo
     finally:
         os.close(cerrojo)
+
+
+# Lo que una sesión continuada hereda de la de origen.
+HEREDADO = ('cwd', 'provider', 'runner', 'model', 'effort', 'modo', 'contexto_modo', 'objective', 'padre')
+# Lo que no hereda su estado nativo: las incidencias (y sus resoluciones) señalan operaciones de una
+# conversación que la nueva ya no ve, y el bucle le pediría resolverlas sin contexto; los avisos
+# ya dados y el detector de repeticiones son de la otra conversación. Sí hereda los cambios
+# (`changes`: qué archivos tocó el agente, para no tomar por suyos los ajenos), las operaciones y
+# comprobaciones que los respaldan, y el plan.
+NO_HEREDADO = ('context_usage', 'recortes_tarifa', 'review_steps', 'review_deadline', 'review_closing',
+               'length_recovery', 'unresolved', 'unresolved_records', 'resolution_records',
+               'legacy_unresolved_records', 'legacy_resolution_records', 'legacy_unresolved_index',
+               'resolutions_not_relevant', 'unresolved_nudged', 'verification_nudged', 'empty_nudges',
+               'tool_repeats', 'compactacion_sin_efecto', 'aviso_compactacion_sin_efecto')
+
+
+def continuar(sesiones, ident):
+    """Sesión nueva cuyo contexto es sólo el resumen de la última compactación de `ident`.
+
+    La llama el propio proceso de `ident` entre turnos (ya tiene su cerrojo), justo
+    después de compactar. Devuelve el id nuevo; la sesión de origen no cambia."""
+    origen = Path(sesiones) / ident
+    if not origen.is_dir() or origen.is_symlink():
+        raise ValueError('No existe esa sesión en el hogar de AlfalfaCode.')
+    task = json.loads((origen / 'task.json').read_text())
+    estado_origen = origen / 'native' / ident / 'session.json'
+    if not estado_origen.is_file():
+        raise ValueError('La sesión no tiene conversación que continuar.')
+    from ..proveedores.nativo import historial
+    estado = historial.leer(estado_origen)
+    punto = estado.get('checkpoint')
+    if not isinstance(punto, dict) or punto.get('estilo') != 'codex' or not isinstance(punto.get('text'), str):
+        raise ValueError('Compacta la sesión antes de seguir en una nueva: hace falta su resumen.')
+    nuevo = uuid4().hex[:16]
+    destino = _privada(Path(sesiones) / nuevo)
+    nativo = _privada(_privada(destino / 'native') / nuevo)
+    # Sólo las instrucciones de sistema (el motor las rehace en cada turno) y el resumen,
+    # como al compactar entre turnos: el último mensaje del usuario ya está contestado.
+    estado['messages'] = list(estado.get('messages') or [])[:1]
+    estado['pending'] = []
+    for clave in INDICES:
+        estado[clave] = []
+    estado['checkpoint'] = dict(punto, through=len(estado['messages']), entre_turnos=True)
+    for clave in NO_HEREDADO:
+        estado.pop(clave, None)
+    historial.escribir(nativo, estado)
+    for previa in estado_origen.parent.glob('before-*'):
+        if previa.is_file() and not previa.is_symlink():
+            shutil.copy2(previa, nativo / previa.name)
+    ahora = time.time()
+    fila = dict(role='system', time=ahora,
+                text='Sesión continuada de ' + ident + ': empieza con el resumen de su conversación.',
+                compactacion=dict(estado='hecha', motivo='continuacion', antes=punto.get('tokens_antes') or 0,
+                                  despues=0, resumen=punto['text']))
+    _escribir(destino / (nuevo + '.jsonl'), json.dumps(fila, ensure_ascii=False) + '\n')
+    nueva = {k: task[k] for k in HEREDADO if k in task}
+    nueva.update(id=nuevo, status='created', turnos=[], continuada_de=dict(sesion=ident), updated_at=ahora,
+                 meta=metadatos(nuevo, nueva.get('cwd', ''), nueva.get('model'), nueva.get('effort')))
+    _escribir(destino / 'task.json', json.dumps(nueva, ensure_ascii=False))
+    return nuevo

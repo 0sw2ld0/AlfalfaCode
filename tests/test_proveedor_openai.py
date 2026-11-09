@@ -94,7 +94,8 @@ def test_la_respuesta_vuelve_al_formato_de_ollama():
 def test_show_da_ventana_y_capacidades_de_nube():
     info = openai.mostrar('gpt-6-luna')
     assert {'tools', 'vision', 'thinking'} <= set(info['capabilities'])
-    assert info['model_info']['openai.context_length'] == 272000
+    # La ventana real: el modo Ahorro de la sesión compacta antes de los 272K del tramo caro.
+    assert info['model_info']['openai.context_length'] == 1_050_000
     from alfalfa.proveedores.nativo.runtime import is_cloud
     assert is_cloud('gpt-6-luna', info)
 
@@ -105,8 +106,10 @@ def test_sin_clave_openai_no_sale_en_la_lista_y_con_clave_si():
     filas = proveedores.obtener('openai').modelos()
     assert [{k: f[k] for k in ('name', 'model', 'proveedor', 'nombre')} for f in filas] == [
         {'name': 'openai/gpt-6-luna', 'model': 'openai/gpt-6-luna', 'proveedor': 'openai', 'nombre': 'GPT-6 Luna'}]
-    # La ventana propia (por debajo del tramo caro de OpenAI) manda sobre la del catálogo; el precio es del catálogo.
-    assert filas[0]['ventana'] == 272000
+    # La ventana propia manda sobre la del catálogo; el precio es del catálogo y el tramo caro, de los dos.
+    assert filas[0]['ventana'] == 1_050_000
+    assert filas[0]['barato_hasta'] == 272_000
+    assert filas[0]['tarifa_larga'] == {'entrada': 2.0, 'salida': 1.5}
     assert filas[0]['precio']['entrada'] > 0
     configuracion.cambiar('openai', 'modelos', ['gpt-6-sol'])
     assert [f['name'] for f in proveedores.obtener('openai').modelos()][-1] == 'openai/gpt-6-sol'

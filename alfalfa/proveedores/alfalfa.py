@@ -52,6 +52,19 @@ MAX_TEXTO = 8_000
 MAX_REGISTRO = 60_000
 
 
+def _ventanas(fila):
+    """La ventana que el servicio anuncia a este código y, si tiene contexto completo, hasta
+    dónde llega la tarifa barata (`barato_hasta`); los servicios anteriores no la mandan."""
+    datos = {}
+    for clave in ('ventana', 'barato_hasta'):
+        valor = fila.get(clave)
+        if type(valor) is int and 0 < valor <= 10_000_000:
+            datos[clave] = valor
+    if datos.get('barato_hasta') and datos['barato_hasta'] >= datos.get('ventana', 0):
+        datos.pop('barato_hasta')
+    return datos
+
+
 class ErrorDeAlfalfa(ValueError):
     """La activación o una consulta al servicio falló; el texto se puede enseñar tal cual."""
 
@@ -320,11 +333,12 @@ class Alfalfa(Proveedor):
 
     def modelos(self):
         filas = self._pedir('GET', '/api/tags').get('models') or []
-        return [{'name': 'alfalfa/' + f['name'], 'model': 'alfalfa/' + f['name'], 'proveedor': self.id,
-                 'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO,
-                 # El servicio dice sus capacidades; con uno anterior, la tabla o «no se sabe» (None).
-                 'vision': 'vision' in f['capabilities'] if isinstance(f.get('capabilities'), list)
-                 else VISION.get(f['name'])}
+        return [dict({'name': 'alfalfa/' + f['name'], 'model': 'alfalfa/' + f['name'], 'proveedor': self.id,
+                      'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO,
+                      # El servicio dice sus capacidades; con uno anterior, la tabla o «no se sabe» (None).
+                      'vision': 'vision' in f['capabilities'] if isinstance(f.get('capabilities'), list)
+                      else VISION.get(f['name'])},
+                     **_ventanas(f))
                 for f in filas if isinstance(f, dict) and f.get('name')]
 
     def cuota(self):

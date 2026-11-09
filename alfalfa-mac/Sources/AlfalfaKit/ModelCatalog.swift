@@ -56,10 +56,12 @@ public enum CatalogFormat {
         return decimal(usd, digits: 2, keepZeros: true) + " $"
     }
 
-    /// Lo que el selector añade al nombre: «256K · gratis», «1M · 0,25/2 $ por M».
+    /// Lo que el selector añade al nombre: «256K · gratis», «1M · barato hasta 100K · 0,1/0,5 $ por M».
     public static func detail(_ model: ModelInfo) -> String? {
         var parts: [String] = []
         if let context = model.context { parts.append(window(context)) }
+        // «1M · barato hasta 100K»: pasado eso, toda la petición cuesta más.
+        if let cheap = model.cheapUntil, cheap < (model.context ?? .max) { parts.append("barato hasta " + window(cheap)) }
         if let price = model.price { parts.append(Self.price(price)) }
         if model.missingKey != nil { parts.append("sin clave") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
