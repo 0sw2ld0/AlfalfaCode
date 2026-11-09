@@ -37,6 +37,7 @@ from .herramientas import (
     atomic_json,
     digest,
 )
+from .historial import Historial, Mensajes
 
 
 def is_cloud(model, info=None):
@@ -412,18 +413,23 @@ class NativeRuntime:
         self.directory = manager.directory / 'native' / task['id']
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = self.directory / 'session.json'
-        self.state = {'version': 2, 'messages': [], 'pending': [], 'plan': '', 'changes': []}
+        # La conversación y las fotos del espacio van en JSONL a los que sólo se
+        # añade (historial.py); session.json queda pequeño.
+        self.historial = Historial(self.directory)
+        self.state = {'version': 3, 'messages': Mensajes(), 'pending': [], 'plan': '', 'changes': []}
+        self.historial.empezar(self.state['messages'])
+        migrar = False
         if self.path.exists():
-            loaded = json.loads(self.path.read_text())
-            if not isinstance(loaded, dict) or loaded.get('version') not in (1, 2):
-                raise ValueError('Versión de sesión nativa desconocida.')
-            self.state = loaded
-            if self.state.get('version') == 1:
-                # Version 2 adds an append-only incident/resolution ledger. Keep
-                # every v1 field intact; RunEvidence enriches it on construction.
-                self.state['version'] = 2
+            self.state, migrar = self.historial.cargar(json.loads(self.path.read_text()))
+            # Version 2 added an append-only incident/resolution ledger and 3 moved
+            # the conversation out of session.json. Keep every older field intact;
+            # RunEvidence enriches it on construction.
+            self.state['version'] = 3
         self.tools = WorkspaceTools(self)
         self.evidence = RunEvidence(self)
+        if migrar:
+            # Formato viejo: se convierte ya, sin esperar al primer paso.
+            self._guardar_sesion()
         self.started = time.monotonic()
         self.espera_permisos = 0.0
         self.repeats = self.state.setdefault('tool_repeats', {})
@@ -664,12 +670,14 @@ class NativeRuntime:
         self.save()
         raise ValueError('Sesión deliberativa de solo lectura: herramienta rechazada y registrada.')
 
+    def _guardar_sesion(self):
+        # Sólo se añade lo nuevo a messages.jsonl y fotos.jsonl; session.json, ya
+        # pequeño, se reescribe entero. El razonamiento sólo vive en memoria para
+        # devolvérselo al modelo: nunca se escribe a disco.
+        atomic_json(self.path, self.historial.guardar(self.state))
+
     def save(self):
-        # El razonamiento sólo vive en memoria para devolvérselo al modelo:
-        # nunca se escribe a disco.
-        estado = dict(self.state, messages=[{k: v for k, v in m.items() if k != 'thinking'}
-                                            for m in self.state.get('messages', [])])
-        atomic_json(self.path, estado)
+        self._guardar_sesion()
         self.task['session_id'] = 'alfalfa-'+self.task['id']
         self.task['runtime_plan'] = self.state.get('plan', '')
         if self.state.get('plan_pasos'):

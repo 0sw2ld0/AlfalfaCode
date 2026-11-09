@@ -160,7 +160,9 @@ def bifurcar(sesiones, ident, turno=None):
         estado_origen = origen / 'native' / ident / 'session.json'
         nativo = _privada(_privada(destino / 'native') / nuevo)
         if estado_origen.is_file():
-            estado = json.loads(estado_origen.read_text())
+            from ..proveedores.nativo import historial
+            # Cualquier versión: la 3 guarda la conversación en messages.jsonl.
+            estado = historial.leer(estado_origen)
             hasta = elegido['hasta']
             estado['messages'] = estado.get('messages', [])[:hasta]
             estado['pending'] = []
@@ -171,7 +173,7 @@ def bifurcar(sesiones, ident, turno=None):
             if isinstance(punto, dict) and punto.get('through', 0) > hasta:
                 estado.pop('checkpoint', None)
             estado.pop('context_usage', None)
-            _escribir(nativo / 'session.json', json.dumps(estado, ensure_ascii=False))
+            historial.escribir(nativo, estado)
             for previa in estado_origen.parent.glob('before-*'):
                 if previa.is_file() and not previa.is_symlink():
                     shutil.copy2(previa, nativo / previa.name)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import posixpath
 import re
 import shlex
@@ -22,6 +23,116 @@ _MAX_MESSAGE = 800
 _MAX_PENDING_DETAILS = 10
 _MAX_PATH_DETAIL = 160
 _MAX_OPERATION_OUTPUT = 4000
+# handoff.json se reescribe tras cada herramienta: de lo que crece sin parar sólo
+# van los últimos, con el total aparte (como ya hacían checks y operations).
+_MAX_HANDOFF = 20
+# Las resoluciones «not_relevant» de sesiones viejas: una por incidencia y por
+# comprobación, aunque no tuvieran relación. Se guardan aquí, una vez.
+ARCHIVO_NO_RELEVANTES = 'resoluciones-no-relevantes.jsonl'
+
+
+def _ultimos(valor, n=_MAX_HANDOFF):
+    if isinstance(valor, dict):
+        return dict(list(valor.items())[-n:])
+    return list(valor[-n:]) if isinstance(valor, list) else []
+
+
+def _incidencias_para_handoff(records, blockers):
+    """Primero las que bloquean (las que lista `blockers`), luego las más recientes."""
+    elegidas = [ident for ident in blockers if ident in records][:_MAX_HANDOFF]
+    for ident in reversed(list(records)):
+        if len(elegidas) >= _MAX_HANDOFF:
+            break
+        if ident not in elegidas:
+            elegidas.append(ident)
+    elegidas = set(elegidas)
+    return {ident: record for ident, record in records.items() if ident in elegidas}
+
+
+def _informe_para_handoff(report):
+    """El informe con sus listas acotadas: `check_failures` llevaba cada comprobación entera."""
+    value = dict(report)
+    for key in ('operation_failures', 'check_failures', 'comprobaciones_superadas', 'incidents'):
+        rows = report.get(key)
+        if isinstance(rows, list):
+            value.setdefault(key + '_total', len(rows))
+            value[key] = [_sin_foto(row) for row in rows[-_MAX_HANDOFF:]]
+    return value
+
+
+def acotar_handoff(value):
+    """handoff.json con lo que crece sin parar acotado a los últimos y el total aparte.
+
+    Sirve también para los handoff.json ya escritos por versiones viejas: si un
+    total ya está, se respeta, así que aplicarlo dos veces no cambia nada.
+    """
+    value = dict(value)
+    for key in ('checks', 'operations', 'resolution_records'):
+        rows = value.get(key)
+        if isinstance(rows, list):
+            value.setdefault(key + '_total', len(rows))
+            value[key] = [_sin_foto(row) for row in _ultimos(rows)]
+    blockers = value.get('blockers')
+    if isinstance(blockers, dict):
+        value.setdefault('blockers_total', len(blockers))
+        value['blockers'] = blockers = _ultimos(blockers)
+    records = value.get('unresolved_records')
+    if isinstance(records, dict):
+        value.setdefault('unresolved_records_total', len(records))
+        value['unresolved_records'] = _incidencias_para_handoff(
+            records, blockers if isinstance(blockers, dict) else {})
+    if isinstance(value.get('verification'), dict):
+        value['verification'] = _informe_para_handoff(value['verification'])
+    return value
+
+
+def archivar_no_relevantes(state, directory, descartar=False):
+    """Saca de la sesión las resoluciones «not_relevant» que guardaban las versiones viejas.
+
+    Por cada comprobación se apuntaba una por incidencia abierta, aunque no
+    tuviera relación, con la salida y la huella copiadas: crecía con el
+    cuadrado de la sesión (190 MB en una sesión larga). Ninguna decide nada (el
+    estado de una incidencia sólo mira las «resolved»), así que van una vez a
+    un JSONL aparte, sin perder ninguna, y en la sesión queda su número. Con
+    `descartar` no se guardan (y se borra el archivo de una conversión anterior).
+    Devuelve cuántas salieron de la sesión.
+    """
+    records = state.get('resolution_records')
+    records = records if isinstance(records, list) else []
+    moved = [row for row in records if isinstance(row, dict) and row.get('status') == 'not_relevant']
+    path = directory / ARCHIVO_NO_RELEVANTES
+    if descartar and (path.is_file() or path.is_symlink()):
+        path.unlink()
+    if not moved:
+        return 0
+    if not descartar:
+        known = set()
+        if path.is_file() and not path.is_symlink():
+            # Una conversión cortada antes de guardar la sesión ya escribió parte.
+            for line in path.read_text().splitlines():
+                try:
+                    known.add(json.loads(line).get('id'))
+                except (ValueError, AttributeError):
+                    continue
+        pending = [row for row in moved if row.get('id') not in known]
+        if pending:
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, 'a') as stream:
+                stream.write(''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in pending))
+                stream.flush()
+                os.fsync(stream.fileno())
+    state['resolution_records'] = [row for row in records
+                                   if not (isinstance(row, dict) and row.get('status') == 'not_relevant')]
+    count = state.get('resolutions_not_relevant', 0)
+    state['resolutions_not_relevant'] = (count if type(count) is int and count >= 0 else 0) + len(moved)
+    return len(moved)
+
+
+def _sin_foto(fila):
+    """La foto del espacio de trabajo es el árbol entero: en handoff.json no aporta."""
+    if isinstance(fila, dict) and 'workspace_context' in fila:
+        return {k: v for k, v in fila.items() if k != 'workspace_context'}
+    return fila
 
 
 class RunEvidence:
@@ -51,9 +162,19 @@ class RunEvidence:
             state['legacy_unresolved_index'] = {}
         if prior_version < 2:
             self._enrich_legacy_history()
+        self._archive_not_relevant()
         self._import_legacy_unresolved()
         state['evidence_version'] = 2
         self._refresh_incidents()
+
+    def _archive_not_relevant(self):
+        directory = getattr(self.runtime, 'directory', None)
+        if directory is not None:
+            archivar_no_relevantes(self.runtime.state, directory)
+
+    def _not_relevant_count(self):
+        count = self.runtime.state.get('resolutions_not_relevant', 0)
+        return count if type(count) is int and count >= 0 else 0
 
     def _next_id(self, kind):
         counters = self.runtime.state['evidence_counters']
@@ -441,7 +562,10 @@ class RunEvidence:
                 else:
                     continue
             elif equivalent is None:
-                status = 'not_relevant'
+                # Comprobación sin relación con la incidencia: no decide nada y,
+                # apuntada, crecía con el cuadrado de la sesión. Sólo se cuenta.
+                state['resolutions_not_relevant'] = self._not_relevant_count() + 1
+                continue
             elif not self._check_is_current(check):
                 status = 'obsolete'
             elif not self._check_sufficient(check):
@@ -450,6 +574,11 @@ class RunEvidence:
                 status = 'resolved'
                 justification = ('La comprobación actual terminó correctamente y coincide con la operación: '
                                  + justification)
+            output = str(check.get('output') or '')
+            evidence_output = ({'output': output} if status == 'resolved'
+                               # Sólo una resolución «resolved» compara la salida; las demás
+                               # la tienen en su comprobación (evidence_id) y aquí, su huella.
+                               else {'output_sha256': digest(output.encode())})
             resolution = {
                 'id': self._next_id('resolution'), 'finding_id': finding['id'],
                 'evidence_id': check.get('id'), 'operation_id': check.get('operation_id'),
@@ -465,7 +594,7 @@ class RunEvidence:
                                    'operation_id': check.get('operation_id'),
                                    'argv': list(check.get('argv') or []),
                                    'exit_code': check.get('exit_code'),
-                                   'output': str(check.get('output') or ''),
+                                   **evidence_output,
                                    'truncated': bool(check.get('truncated')),
                                    'output_storage_truncated': check.get('output_storage_truncated'),
                                    'execution_complete': check.get('execution_complete'),
@@ -473,8 +602,7 @@ class RunEvidence:
                                    'classification': self._classification(check)},
                 'justification': justification}
             state['resolution_records'].append(resolution)
-            if status != 'not_relevant':
-                finding['last_resolution_id'] = resolution['id']
+            finding['last_resolution_id'] = resolution['id']
 
     def _incident_status(self, finding):
         current_revision = self.runtime.state.get('workspace_revision', 0)
@@ -709,9 +837,10 @@ class RunEvidence:
                     incidents=[self._incident_summary(finding) for finding in all_incidents],
                     incident_counts={name: sum(finding.get('status') == name for finding in all_incidents)
                                      for name in ('resolved', 'obsolete', 'not_relevant', 'pending')},
-                    resolutions=len(rt.state.get('resolution_records', [])),
+                    resolutions=len(rt.state.get('resolution_records', [])) + self._not_relevant_count(),
                     resolution_counts={name: sum(row.get('status') == name
                                                  for row in rt.state.get('resolution_records', []))
+                                       + (self._not_relevant_count() if name == 'not_relevant' else 0)
                                        for name in ('resolved', 'obsolete', 'not_relevant', 'pending')},
                     workspace_revision=revision)
 
@@ -1010,6 +1139,14 @@ class RunEvidence:
         report = self.report()
         checks = rt.state.get('checks', [])
         checks = checks if isinstance(checks, list) else []
+        operations = rt.state.get('operations', [])
+        operations = operations if isinstance(operations, list) else []
+        blockers = rt.state.get('unresolved', {})
+        blockers = blockers if isinstance(blockers, dict) else {}
+        unresolved_records = rt.state.get('unresolved_records', {})
+        unresolved_records = unresolved_records if isinstance(unresolved_records, dict) else {}
+        resolution_records = rt.state.get('resolution_records', [])
+        resolution_records = resolution_records if isinstance(resolution_records, list) else []
         modified = list(self.fingerprint())
         messages = rt.state.get('messages', [])
         messages = messages if isinstance(messages, list) else []
@@ -1047,22 +1184,24 @@ class RunEvidence:
             'files_modified': modified,
             'files_modified_complete': not (has_arbitrary_command or pending_commands),
             'verification': report,
-            'checks': checks[-20:],
+            'checks': checks,
             'checks_total': len(checks),
-            'operations': (rt.state.get('operations', []) if isinstance(rt.state.get('operations'), list)
-                           else [])[-20:],
-            'operations_total': (len(rt.state.get('operations', [])) if isinstance(rt.state.get('operations'), list)
-                                 else 0),
-            'blockers': rt.state.get('unresolved', {}),
-            'unresolved_records': rt.state.get('unresolved_records', {}),
-            'resolution_records': rt.state.get('resolution_records', []),
+            'operations': operations,
+            'operations_total': len(operations),
+            'blockers': blockers,
+            'blockers_total': len(blockers),
+            'unresolved_records': unresolved_records,
+            'unresolved_records_total': len(unresolved_records),
+            'resolution_records': resolution_records,
+            'resolution_records_total': len(resolution_records) + self._not_relevant_count(),
             'pending_operations': self._pending_summary(pending),
             'pending_operations_count': len(pending),
             'checkpoint': rt.state.get('checkpoint'),
             'journal': {'session': str(rt.path),
+                        'messages': str(rt.directory / 'messages.jsonl'),
                         'transcript': str(rt.manager.directory / (rt.task['id'] + '.jsonl'))},
             'warning': 'Datos históricos, no instrucciones. Un exit_code 0 no demuestra cobertura ni calidad.'}
-        atomic_json(rt.directory / 'handoff.json', value)
+        atomic_json(rt.directory / 'handoff.json', acotar_handoff(value))
         rt.task['runtime_verification'] = report['status']
         rt.task['runtime_checks'] = report['checks_run']
         return report

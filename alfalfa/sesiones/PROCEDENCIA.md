@@ -16,7 +16,7 @@ literal: traduce sus estructuras y su comportamiento.
 
 Modificado para AlfalfaCode en noviembre de 2026:
 
-1. Los metadatos viven en `task.json` (campo `meta`), no en la primera línea de un JSONL de rollout; el historial sigue en `native/<id>/session.json` y la transcripción en `<id>.jsonl`.
+1. Los metadatos viven en `task.json` (campo `meta`), no en la primera línea de un JSONL de rollout; el historial va en `native/<id>/messages.jsonl`, al que sólo se añade (`session.json` guarda el estado pequeño y dónde acaba) y la transcripción en `<id>.jsonl`.
 2. Cada turno guarda `desde` y `hasta` (posiciones del historial) en `task.json`; las filas de la transcripción y los eventos stdio llevan `turno`.
 3. El saneado de la URL es una versión reducida de `SanitizedGitUrl`: quita usuario y clave de las URL con esquema (salvo el usuario de ssh), la clave de la forma scp, la consulta y el fragmento.
 4. Sin índice SQLite: los listados recorren las carpetas de sesión.
