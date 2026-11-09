@@ -114,27 +114,59 @@ def _texto_bloque(texto):
 
 
 def _bloques_guardados(mensaje):
-    """Los bloques originales de una respuesta de Claude si siguen cuadrando con el mensaje; None si no."""
+    """Los bloques de una respuesta de Claude, rehechos con su orden y su razonamiento firmado; None si no cuadran.
+
+    `alfalfa_bloques` sólo guarda el razonamiento entero; el texto y las llamadas
+    son marcas (`{'type': 'text', 'largo': n}`, `{'type': 'tool_use', 'id': …}`) que
+    se rellenan con `content` y `tool_calls`. Así el contexto no lleva dos veces lo
+    mismo (un `write_file` grande duplicaba el tamaño medido). Si el motor cambió el
+    texto o las llamadas, no cuadra y se rehace sin el razonamiento.
+    """
     bloques = mensaje.get('alfalfa_bloques')
     if not isinstance(bloques, list) or not bloques:
         return None
-    validos = []
+    contenido = mensaje.get('content') if isinstance(mensaje.get('content'), str) else ''
+    llamadas = {c.get('id'): c.get('function') or {} for c in mensaje.get('tool_calls') or [] if isinstance(c, dict)}
+    validos, posicion = [], 0
     for bloque in bloques:
         if not isinstance(bloque, dict):
             return None
         tipo = bloque.get('type')
-        if tipo == 'text' and isinstance(bloque.get('text'), str) and bloque['text']:
-            validos.append(bloque)
+        if tipo == 'text':
+            texto = bloque.get('text')
+            if not isinstance(texto, str):
+                largo = bloque.get('largo')
+                if not isinstance(largo, int) or largo < 0:
+                    return None
+                texto = contenido[posicion:posicion + largo]
+            if contenido[posicion:posicion + len(texto)] != texto:
+                return None
+            posicion += len(texto)
+            if texto:
+                validos.append({'type': 'text', 'text': texto})
         elif tipo == 'thinking' and bloque.get('signature'):
             # Sin firma no se puede devolver: se queda fuera.
             validos.append(bloque)
         elif tipo == 'redacted_thinking' and bloque.get('data'):
             validos.append(bloque)
-        elif tipo == 'tool_use' and isinstance(bloque.get('input'), dict):
-            validos.append(bloque)
-    ids = [b.get('id') for b in validos if b['type'] == 'tool_use']
+        elif tipo == 'tool_use':
+            funcion = llamadas.get(bloque.get('id'))
+            if funcion is None:
+                return None
+            entrada = bloque.get('input') if isinstance(bloque.get('input'), dict) \
+                else _entrada(funcion.get('arguments'))
+            validos.append({'type': 'tool_use', 'id': bloque['id'],
+                            'name': str(bloque.get('name') or funcion.get('name') or ''), 'input': entrada})
+    ids = [b['id'] for b in validos if b['type'] == 'tool_use']
     pedidos = [c.get('id') for c in mensaje.get('tool_calls') or [] if isinstance(c, dict)]
-    return validos if validos and ids == pedidos else None
+    return validos if validos and ids == pedidos and posicion == len(contenido) else None
+
+
+def _llamada_en_texto(llamada):
+    funcion = llamada.get('function') or {}
+    argumentos = funcion.get('arguments')
+    return ('[Llamada a ' + str(funcion.get('name') or 'una herramienta') + ': '
+            + (argumentos if isinstance(argumentos, str) else json.dumps(argumentos, ensure_ascii=False)) + ']')
 
 
 def esquema_estricto(esquema):
@@ -191,6 +223,9 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
                                'content': '(sin resultado: la herramienta no llegó a ejecutarse)'})
         poner('user', resultados)
 
+    # Sin herramientas declaradas (la compactación, una conversación) la API no acepta
+    # bloques `tool_use` ni `tool_result`: las llamadas y sus resultados van como texto.
+    con_herramientas = bool(payload.get('tools'))
     for mensaje in payload.get('messages') or []:
         rol = mensaje.get('role')
         contenido = _texto(mensaje.get('content'))
@@ -198,14 +233,18 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
             nombre = mensaje.get('tool_name') or mensaje.get('name')
             indice = next((i for i, (_, n) in enumerate(pendientes) if n == nombre), 0 if pendientes else None)
             imagenes = _imagenes(mensaje.get('images'))
+            fallo = mensaje.get('alfalfa_fallo') is True
             if indice is None:
-                poner('user', [_texto_bloque('Resultado de ' + str(nombre or 'una herramienta') + ':\n'
+                poner('user', [_texto_bloque('Resultado de ' + str(nombre or 'una herramienta')
+                                             + (' (falló)' if fallo else '') + ':\n'
                                              + (contenido or '(vacío)'))] + imagenes)
                 continue
             ident, _ = pendientes.pop(indice)
             cuerpo = ([_texto_bloque(contenido)] if contenido else []) + imagenes
-            poner('user', [{'type': 'tool_result', 'tool_use_id': ident,
-                            'content': cuerpo or '(sin salida)'}])
+            resultado = {'type': 'tool_result', 'tool_use_id': ident, 'content': cuerpo or '(sin salida)'}
+            if fallo:
+                resultado['is_error'] = True
+            poner('user', [resultado])
             continue
         cerrar_pendientes()
         if rol == 'system':
@@ -217,6 +256,11 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
                     mensajes[-1]['content'].append(_texto_bloque(contenido))
                 else:
                     mensajes.append({'role': 'system', 'content': [_texto_bloque(contenido)]})
+        elif rol == 'assistant' and not con_herramientas and mensaje.get('tool_calls'):
+            partes = ([contenido] if contenido.strip() else []) + [_llamada_en_texto(c) for c in
+                                                                   mensaje.get('tool_calls') or []
+                                                                   if isinstance(c, dict)]
+            poner('assistant', [_texto_bloque('\n'.join(partes))] if partes else [])
         elif rol == 'assistant':
             bloques = _bloques_guardados(mensaje)
             if bloques is None:
@@ -320,7 +364,8 @@ def traducir_respuesta(datos, modelo, con_formato=False):
         if tipo == 'text':
             if bloque.get('text'):
                 textos.append(bloque['text'])
-                originales.append({'type': 'text', 'text': bloque['text']})
+                # Sólo una marca: el texto ya va en `content` (ver _bloques_guardados).
+                originales.append({'type': 'text', 'largo': len(bloque['text'])})
         elif tipo == 'thinking':
             if bloque.get('thinking'):
                 pensamiento.append(bloque['thinking'])
@@ -332,8 +377,7 @@ def traducir_respuesta(datos, modelo, con_formato=False):
             entrada = bloque.get('input')
             llamadas.append({'id': bloque.get('id'), 'function': {'name': bloque.get('name'),
                                                                   'arguments': entrada}})
-            originales.append({'type': 'tool_use', 'id': bloque.get('id'), 'name': bloque.get('name'),
-                               'input': entrada if isinstance(entrada, dict) else {}})
+            originales.append({'type': 'tool_use', 'id': bloque.get('id')})
     motivo = datos.get('stop_reason')
     contenido = ''.join(textos)
     if motivo == 'refusal':
@@ -364,7 +408,20 @@ def traducir_respuesta(datos, modelo, con_formato=False):
         respuesta['alfalfa_cache_escritura'] = partes[1] if isinstance(partes[1], int) else 0
     if isinstance(uso.get('output_tokens'), int):
         respuesta['eval_count'] = uso['output_tokens']
+    descartes = [t for t in datos.get('input_transformations') or []
+                 if isinstance(t, dict) and t.get('type') == 'thinking_dropped']
+    if descartes:
+        # La historia cambió (recorte o compactación): la API no usó ese razonamiento.
+        motivos = sorted({str(t.get('reason') or '?') for t in descartes})
+        respuesta['alfalfa_aviso'] = ('Anthropic descartó ' + str(len(descartes)) + ' bloque(s) de razonamiento '
+                                      'anterior (' + ', '.join(motivos) + ').')
     return respuesta
+
+
+# El estado HTTP de cada tipo de error de Anthropic, para un error que llega a mitad del stream.
+ESTADOS_DE_ERROR = {'invalid_request_error': 400, 'authentication_error': 401, 'permission_error': 403,
+                    'not_found_error': 404, 'request_too_large': 413, 'rate_limit_error': 429,
+                    'api_error': 500, 'overloaded_error': 529}
 
 
 class StreamCortado(ValueError):
@@ -424,8 +481,7 @@ async def juntar(lineas):
                                     **{k: v for k, v in valor['usage'].items() if v is not None}}
         elif tipo == 'error':
             error = valor.get('error') or {}
-            estado = 529 if error.get('type') == 'overloaded_error' else (
-                429 if error.get('type') == 'rate_limit_error' else 500)
+            estado = ESTADOS_DE_ERROR.get(error.get('type'), 500)
             raise StreamCortado(error.get('message') or 'error de Anthropic a mitad de la respuesta', estado)
         elif tipo == 'message_stop':
             return True
@@ -548,8 +604,12 @@ class Anthropic(Proveedor):
         return catalogo.ficha('anthropic', modelo)
 
     def precio(self, modelo):
-        """El del catálogo de models.dev si trae el modelo; si no, el propio."""
-        return (self.ficha(modelo) or {}).get('precio') or (CATALOGO.get(modelo) or {}).get('precio')
+        """El propio para los modelos de `CATALOGO`; para los demás, el del catálogo de models.dev.
+
+        El propio sale de la documentación de Anthropic y lleva el tramo largo de
+        Haiku 5.5; models.dev no siempre coincide (la caché leída de Sonnet 5.5).
+        """
+        return (CATALOGO.get(modelo) or {}).get('precio') or (self.ficha(modelo) or {}).get('precio')
 
     def configurado(self):
         return bool(self.clave())
@@ -590,6 +650,7 @@ class Anthropic(Proveedor):
             resumen = catalogo.resumen(ficha)
             if propia:
                 resumen['ventana'] = propia['ventana']
+                resumen['precio'] = {k: propia['precio'][k] for k in ('entrada', 'salida')}
             filas.append({'name': 'anthropic/' + m, 'model': 'anthropic/' + m, 'proveedor': self.id,
                           'nombre': propia.get('nombre') or (ficha or {}).get('nombre') or m, **resumen})
         return filas

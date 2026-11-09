@@ -356,7 +356,8 @@ class Subagentes:
                         if m.get('role') in ('user', 'assistant', 'tool')]
             while historia and historia[-1].get('role') == 'assistant' and historia[-1].get('tool_calls'):
                 historia.pop()  # la llamada que lanza este subagente aún no tiene resultado
-            sub.rt.state['messages'] = [{'role': 'system', 'content': ''}] + historia[-200:]
+            from .proveedores.nativo.historial import Mensajes
+            sub.rt.state['messages'] = Mensajes([{'role': 'system', 'content': ''}] + historia[-200:])
         self.agentes[ident] = sub
         self.gestor.event(principal, 'system', 'Subagente ' + ident + ' (' + nombre_tipo + ', ' + task['model']
                           + ') empezó: ' + nombre)

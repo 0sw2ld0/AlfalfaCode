@@ -126,7 +126,8 @@ def test_un_aviso_del_sistema_donde_no_cabe_va_dentro_del_turno_del_usuario():
 
 
 def test_una_llamada_sin_resultado_se_cierra_y_un_resultado_suelto_es_texto():
-    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-opus-5-5', 'think': False, 'messages': [
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-opus-5-5', 'think': False, 'tools': [
+        {'type': 'function', 'function': {'name': 'shell'}}], 'messages': [
         {'role': 'tool', 'tool_name': 'shell', 'content': 'suelto'},
         {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'call.raro/1',
                                                              'function': {'name': 'shell', 'arguments': '{}'}}]},
@@ -150,12 +151,15 @@ def test_el_razonamiento_firmado_vuelve_tal_cual():
                 {'role': 'assistant', 'content': 'Leo.', 'alfalfa_bloques': bloques,
                  'tool_calls': [{'id': 'toolu_1', 'function': {'name': 'read_file', 'arguments': {'path': 'a'}}}]},
                 {'role': 'tool', 'tool_name': 'read_file', 'content': 'hola'}]
-    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-sonnet-5-5', 'messages': historia})
+    herramientas = [{'type': 'function', 'function': {'name': 'read_file'}}]
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-sonnet-5-5', 'messages': historia,
+                                             'tools': herramientas})
     assert cuerpo['messages'][1]['content'] == bloques
     assert cuerpo['messages'][2]['content'][0]['tool_use_id'] == 'toolu_1'
     # Si el motor cambió las llamadas, los bloques ya no cuadran: se rehace sin el razonamiento.
     historia[1]['tool_calls'][0]['id'] = 'toolu_2'
-    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-sonnet-5-5', 'messages': historia})
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-sonnet-5-5', 'messages': historia,
+                                             'tools': herramientas})
     assert [b['type'] for b in cuerpo['messages'][1]['content']] == ['text', 'tool_use']
 
 
@@ -388,8 +392,10 @@ def test_un_turno_completo_con_herramientas_contra_claude(tmp_path, monkeypatch,
         assert m.task['coste_usd'] == pytest.approx(esperado)
         assert m.task['tokens_entrada'] == 4500 + 4560 and m.task['tokens_salida'] == 30
         # Los bloques firmados nunca se escriben a disco.
-        guardado = ''.join(p.read_text() for p in (tmp_path / 'home').rglob('*.json'))
-        assert 'firma-1' not in guardado and CLAVE not in guardado
+        guardado = ''.join(p.read_text() for patron in ('*.json', '*.jsonl')
+                           for p in (tmp_path / 'home').rglob(patron))
+        assert 'messages.jsonl' in [p.name for p in (tmp_path / 'home').rglob('*.jsonl')]
+        assert 'firma-1' not in guardado and 'Hay que leerlo.' not in guardado and CLAVE not in guardado
     finally:
         m.close()
 
@@ -418,3 +424,116 @@ def test_el_proveedor_por_defecto_elige_su_modelo(tmp_path, monkeypatch):
     assert modelo_por_defecto() == 'deepseek-v4.1-flash:cloud'
     llavero.guardar('anthropic', CLAVE)
     assert modelo_por_defecto() == 'anthropic/claude-sonnet-5-5'
+
+
+def test_sin_herramientas_declaradas_las_llamadas_van_como_texto():
+    # La compactación «codex» manda la historia con llamadas y resultados, pero sin `tools`.
+    historia = [{'role': 'system', 'content': 'Reglas.'},
+                {'role': 'user', 'content': 'Lee a.txt'},
+                {'role': 'assistant', 'content': 'Voy.', 'tool_calls': [
+                    {'id': 'toolu_1', 'function': {'name': 'read_file', 'arguments': {'path': 'a.txt'}}}],
+                 'alfalfa_bloques': [{'type': 'thinking', 'thinking': 'x', 'signature': 'firma'},
+                                     {'type': 'text', 'largo': 4}, {'type': 'tool_use', 'id': 'toolu_1'}]},
+                {'role': 'tool', 'tool_name': 'read_file', 'content': 'hola', 'alfalfa_fallo': True},
+                {'role': 'user', 'content': 'Resume la conversación.'}]
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-haiku-5-5', 'think': False, 'messages': historia})
+    assert 'tools' not in cuerpo
+    tipos = [b['type'] for m in cuerpo['messages'] for b in (m['content'] if isinstance(m['content'], list) else [])]
+    assert 'tool_use' not in tipos and 'tool_result' not in tipos and 'thinking' not in tipos
+    usuario, asistente, resto = cuerpo['messages']
+    assert asistente['content'] == [{'type': 'text', 'text': 'Voy.\n[Llamada a read_file: {"path": "a.txt"}]'}]
+    assert resto['content'][0]['text'] == 'Resultado de read_file (falló):\nhola'
+    assert resto['content'][1]['text'] == 'Resume la conversación.'
+
+
+def test_un_resultado_fallido_va_con_is_error():
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-haiku-5-5', 'tools': [
+        {'type': 'function', 'function': {'name': 'shell'}}], 'messages': [
+        {'role': 'user', 'content': 'Hola'},
+        {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'toolu_1', 'function': {'name': 'shell',
+                                                                                          'arguments': {}}}]},
+        {'role': 'tool', 'tool_name': 'shell', 'content': '{"error": "no"}', 'alfalfa_fallo': True}]})
+    resultado = cuerpo['messages'][-1]['content'][0]
+    assert resultado['type'] == 'tool_result' and resultado['is_error'] is True
+
+
+def test_el_precio_propio_manda_sobre_models_dev():
+    # models.dev dice 0,1 $/M para la caché leída de Sonnet 5.5; la documentación de Anthropic, 0,20.
+    assert catalogo.ficha('anthropic', 'claude-sonnet-5-5')['precio']['cache_lectura'] == 0.1
+    precio = proveedores.obtener('anthropic').precio('claude-sonnet-5-5')
+    assert precio['cache_lectura'] == 0.20 and precio['cache_escritura'] == 2.50
+    # Un modelo que no está en la tabla propia usa el de models.dev.
+    assert proveedores.obtener('anthropic').precio('claude-opus-5')['entrada'] == 5
+
+
+def test_los_bloques_guardados_no_duplican_el_contexto_y_vuelven_iguales():
+    grande = 'x' * 30000
+    originales = [{'type': 'thinking', 'thinking': 'Escribo el archivo.', 'signature': 'firma-1'},
+                  {'type': 'text', 'text': 'Voy '}, {'type': 'text', 'text': 'a escribir.'},
+                  {'type': 'tool_use', 'id': 'toolu_1', 'name': 'write_file',
+                   'input': {'path': 'a.txt', 'content': grande}}]
+    r = anthropic.traducir_respuesta({'content': originales, 'stop_reason': 'tool_use'}, 'claude-haiku-5-5')
+    mensaje = r['message']
+    sin = {k: v for k, v in mensaje.items() if k != 'alfalfa_bloques'}
+    # Lo que el motor mide (`len(json.dumps(messages))`) apenas crece: el texto y la llamada no van dos veces.
+    assert len(json.dumps(mensaje)) - len(json.dumps(sin)) < 300
+    historia = [{'role': 'user', 'content': 'Escribe a.txt'}, mensaje,
+                {'role': 'tool', 'tool_name': 'write_file', 'content': 'ok'}]
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-haiku-5-5', 'messages': historia, 'tools': [
+        {'type': 'function', 'function': {'name': 'write_file'}}]})
+    assert cuerpo['messages'][1]['content'] == originales
+
+
+def test_un_razonamiento_sin_texto_ni_llamadas_se_guarda_y_vuelve():
+    r = anthropic.traducir_respuesta({'content': [{'type': 'thinking', 'thinking': '', 'signature': 'firma-1'}],
+                                      'stop_reason': 'end_turn'}, 'claude-haiku-5-5')
+    assert r['done'] is True and r['done_reason'] == 'stop'
+    assert r['message']['content'] == '' and 'tool_calls' not in r['message'] and 'thinking' not in r['message']
+    assert r['message']['alfalfa_bloques'] == [{'type': 'thinking', 'thinking': '', 'signature': 'firma-1'}]
+    cuerpo, _ = anthropic.traducir_peticion({'model': 'claude-haiku-5-5', 'messages': [
+        {'role': 'user', 'content': 'Hola'}, r['message'], {'role': 'user', 'content': 'Sigue'}]})
+    assert cuerpo['messages'][1]['content'] == [{'type': 'thinking', 'thinking': '', 'signature': 'firma-1'}]
+
+
+def test_los_bloques_descartados_quedan_en_el_registro():
+    datos = {'content': [{'type': 'text', 'text': 'Hola'}], 'stop_reason': 'end_turn',
+             'input_transformations': [{'type': 'thinking_dropped', 'reason': 'prefix_binding_mismatch',
+                                        'path': 'messages.3.content.0'},
+                                       {'type': 'otra_cosa'}]}
+    r = anthropic.traducir_respuesta(datos, 'claude-haiku-5-5')
+    assert r['alfalfa_aviso'] == 'Anthropic descartó 1 bloque(s) de razonamiento anterior (prefix_binding_mismatch).'
+    assert 'alfalfa_aviso' not in anthropic.traducir_respuesta({'content': [], 'input_transformations': []}, 'm')
+
+
+@pytest.mark.parametrize('tipo, estado', [('invalid_request_error', 400), ('api_error', 500),
+                                          ('rate_limit_error', 429), ('tipo_nuevo', 500)])
+def test_un_error_a_mitad_del_stream_lleva_su_estado(tipo, estado):
+    async def lineas(cuerpo):
+        for linea in cuerpo.decode().split('\n'):
+            yield linea
+    eventos = [mensaje()[0], {'type': 'error', 'error': {'type': tipo, 'message': 'algo de ' + tipo}}]
+    with pytest.raises(anthropic.StreamCortado) as error:
+        asyncio.run(anthropic.juntar(lineas(sse(*eventos))))
+    assert error.value.estado == estado and tipo in str(error.value)
+
+
+def test_una_herramienta_que_falla_llega_con_is_error_y_el_descarte_queda_en_el_registro(tmp_path, monkeypatch,
+                                                                                         falso):
+    from alfalfa.terminal import TerminalManager
+    monkeypatch.chdir(tmp_path)
+    llavero.guardar('anthropic', CLAVE)
+    segunda = mensaje(('text', 'No existe.'), entrada=60, salida=5)
+    segunda[0]['message']['input_transformations'] = [{'type': 'thinking_dropped',
+                                                       'reason': 'prefix_binding_mismatch'}]
+    api = falso([(200, mensaje(('tool_use', 'toolu_X', 'read_file', {'path': 'no-existe.txt'}), stop='tool_use')),
+                 (200, segunda)])
+    m = TerminalManager('Lee no-existe.txt', home=tmp_path / 'home', model='anthropic/claude-haiku-5-5', auto=True)
+    try:
+        asyncio.run(asyncio.wait_for(m.run('Lee no-existe.txt'), 60))
+        resultado = next(b for x in api.cuerpos[1]['messages'] if x['role'] == 'user' for b in x['content']
+                         if b.get('type') == 'tool_result')
+        assert resultado['tool_use_id'] == 'toolu_X' and resultado['is_error'] is True
+        eventos = ''.join(p.read_text() for p in (tmp_path / 'home').rglob('*.jsonl'))
+        assert 'Anthropic descartó 1 bloque(s) de razonamiento' in eventos
+    finally:
+        m.close()

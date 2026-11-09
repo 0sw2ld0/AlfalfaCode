@@ -177,8 +177,8 @@ def importar(chat_id, cwd, home, modelo=None, esfuerzo='medium', base=None):
                 summary='Chat cargado desde la app de Ollama.', created_at=ahora, updated_at=ahora,
                 importada_de=dict(origen='ollama', chat=str(chat_id), mensajes=len(lista)),
                 meta=registro.metadatos(ident, cwd, modelo, esfuerzo))
-    atomic_json(nativo / 'session.json',
-                {'version': 2, 'messages': historial, 'pending': [], 'plan': '', 'changes': []})
+    from .proveedores.nativo import historial as sesion_nativa
+    sesion_nativa.escribir(nativo, {'version': 3, 'messages': historial, 'pending': [], 'plan': '', 'changes': []})
     descriptor = os.open(carpeta / (ident + '.jsonl'), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as salida:
         for fila in filas:
