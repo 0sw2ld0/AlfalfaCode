@@ -754,6 +754,9 @@ def history(ident):
                 evento['turno'] = row['turno']
             if isinstance(row.get('herramienta'), dict):
                 evento['herramienta'] = row['herramienta']
+            if isinstance(row.get('deshacer'), dict):
+                # Deshacer o rehacer el código: la app pinta su marca con «Rehacer».
+                evento['deshacer'] = row['deshacer']
             if isinstance(row.get('tarifa'), dict):
                 # El aviso de tarifa: la app lo pinta ya contestado (sin botones vivos).
                 evento['tarifa'] = row['tarifa']

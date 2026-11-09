@@ -3,14 +3,14 @@ import AppKit
 import SwiftUI
 
 /// Fila bajo cada mensaje del usuario, como en Claude: hace cuánto, copiar, volver a este
-/// punto (la conversación vuelve a antes del mensaje y su texto queda en el cuadro para
-/// cambiarlo) y bifurcar (una sesión nueva que llega hasta aquí). Los archivos no cambian.
+/// punto (con la conversación, el código o los dos; el texto queda en el cuadro para cambiarlo)
+/// y bifurcar (una sesión nueva que llega hasta aquí; los archivos no cambian).
 struct UserActions: View {
 
     // MARK: - Constantes
 
-    private static let goBackHelp = "Volver a este mensaje: la conversación sigue desde antes de él y su texto "
-        + "queda en el cuadro para cambiarlo. Los archivos no cambian."
+    private static let goBackHelp = "Volver a este mensaje: la conversación, el código o los dos vuelven a antes "
+        + "de él y su texto queda en el cuadro para cambiarlo."
     private static let forkHelp = "Bifurcar: una sesión nueva con la conversación hasta este mensaje y su respuesta"
 
     // MARK: - Propiedades
@@ -34,10 +34,13 @@ struct UserActions: View {
                 copied = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
             }
-            icon("arrow.counterclockwise", Self.goBackHelp, enabled: canBranch) { goBack() }
+            icon("arrow.counterclockwise", Self.goBackHelp, enabled: canBranch) { goingBack = goBackRequest }
             icon("arrow.triangle.branch", Self.forkHelp, enabled: canBranch) {
                 if let id = session.sessionID, let turn { app.fork(sessionID: id, turn: turn, draft: nil) }
             }
+        }
+        .sheet(isPresented: Binding(get: { goingBack != nil }, set: { if !$0 { goingBack = nil } })) {
+            if let goingBack { UndoSheet(request: goingBack, session: session) { self.goingBack = nil } }
         }
     }
 
@@ -45,6 +48,7 @@ struct UserActions: View {
 
     @EnvironmentObject private var app: AppModel
     @State private var copied = false
+    @State private var goingBack: UndoRequest?
 
     private var timeline: Timeline { session.timeline }
     private var turn: String? { timeline.userTurns[itemID] }
@@ -70,13 +74,10 @@ struct UserActions: View {
 
     // MARK: - Métodos privados
 
-    private func goBack() {
-        guard let id = session.sessionID, let before = timeline.turnBefore(user: itemID) else { return }
-        if let previous = before {
-            app.fork(sessionID: id, turn: previous, draft: text)
-        } else {
-            app.restart(in: session.cwd, with: text)
-        }
+    /// La hoja de volver: el turno del mensaje (su instantánea) y el anterior (donde sigue la conversación).
+    private var goBackRequest: UndoRequest? {
+        guard let turn, let before = timeline.turnBefore(user: itemID) else { return nil }
+        return .goBack(turn: turn, previous: before, draft: text)
     }
 
     private func icon(_ symbol: String, _ help: String, enabled: Bool, action: @escaping () -> Void) -> some View {

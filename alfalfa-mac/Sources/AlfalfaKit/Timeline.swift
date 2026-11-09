@@ -92,12 +92,14 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     case compaction(id: Int, Compaction)
     /// Aviso de tarifa por contexto largo; `answered` cuando ya se eligió (o se compactó).
     case priceWarning(id: Int, PriceWarning, answered: Bool)
+    /// El código se deshizo o se rehízo; `redone` cuando un rehacer posterior ya lo devolvió.
+    case undo(id: Int, UndoStep, redone: Bool)
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
              let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
-             let .priceWarning(id, _, _): return id
+             let .priceWarning(id, _, _), let .undo(id, _, _): return id
         }
     }
 }
@@ -285,6 +287,26 @@ public struct Timeline: Equatable, Sendable {
         return nil
     }
 
+    /// La marca de un deshacer o rehacer del código. Un rehacer deja sin botón el deshacer que devuelve.
+    public mutating func addUndo(_ step: UndoStep) {
+        if step.isRedo, let redone = step.redoOf {
+            for index in items.indices {
+                if case let .undo(id, previous, false) = items[index], previous.id == redone {
+                    items[index] = .undo(id: id, previous, redone: true)
+                }
+            }
+        }
+        items.append(.undo(id: nextID(), step, redone: false))
+    }
+
+    /// El deshacer que «Rehacer» devolvería ahora: el último sin rehacer.
+    public var redoableUndo: UndoStep? {
+        for item in items.reversed() {
+            if case let .undo(_, step, redone) = item, !step.isRedo { return redone ? nil : step }
+        }
+        return nil
+    }
+
     /// Quita la caja de cierre (la ✕ de la tarjeta).
     public mutating func dismissWrapUp(id: Int) {
         items.removeAll { if case .wrapUp(id, _, _) = $0 { return true } else { return false } }
@@ -338,6 +360,7 @@ public struct Timeline: Equatable, Sendable {
             case let .compaction(_, compaction):
                 parts.append("---\n\n*Conversación compactada.* Resumen para el modelo:\n\n" + compaction.summary)
             case let .priceWarning(_, warning, _): parts.append("> " + warning.text)
+            case let .undo(_, step, _): parts.append("> " + step.text)
             default: break
             }
         }
@@ -443,8 +466,9 @@ public struct Timeline: Equatable, Sendable {
             }
         case .continued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported:
+             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview:
             break
+        case let .undone(step): addUndo(step)
         }
     }
 
@@ -457,6 +481,10 @@ public struct Timeline: Equatable, Sendable {
     }
 
     private mutating func apply(_ event: AgentEvent) {
+        if let undo = event.undo {
+            addUndo(undo)
+            return
+        }
         if let warning = event.priceWarning {
             items.append(.priceWarning(id: nextID(), warning, answered: warning.mode == .full))
             return
