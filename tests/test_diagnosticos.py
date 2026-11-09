@@ -80,6 +80,11 @@ def simulados(tmp_path, monkeypatch):
                                        'type': tipo, 'path': str(carpeta.relative_to(paquete_)), 'sources': fuentes})
         return {'tools_version': '5.9', 'targets': objetivos_}
     monkeypatch.setattr(paquete, 'describir', describir)
+    # Ni xcrun ni swiftc de verdad: con la máquina cargada la primera llamada puede tardar segundos, y estas
+    # pruebas usan servidores simulados que no compilan nada.
+    monkeypatch.setattr(paquete, 'herramientas', lambda: {
+        'swift': '/usr/bin/swift', 'swiftc': '/usr/bin/swiftc', 'sdk': '/SDK', 'plataforma': '/Plataforma',
+        'triple': 'arm64-apple-macosx26.0'})
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
     monkeypatch.setenv('LSP_SIMULADO_REGISTRO', str(tmp_path / 'metodos.txt'))
     # Con la suite cargada (sourcekit-lsp de verdad en otras pruebas) los simulados pueden pasar de 3 s;
@@ -667,11 +672,13 @@ def test_sourcekit_pide_salir_del_sandbox_una_vez_por_raiz(sourcekit, sesion, pe
     assert 'diagnosticos' not in cuarto
 
 
-def test_sourcekit_en_omitir_permisos_no_pregunta(sourcekit, sesion):
+def test_sourcekit_en_omitir_permisos_no_pregunta(sourcekit, sesion, monkeypatch):
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', '30')   # holgado: aquí no se prueba el plazo
     raiz, rt = sesion
     rt.task['modo'] = 'omitir'
     resultado = editar(rt, 'a.swift', 'let a = ERROR\n')
-    assert resultado['diagnosticos']['errores'] == 1
+    assert resultado['diagnosticos']['errores'] == 1, resultado
+    assert resultado['diagnosticos']['revisado_con'] == ['sourcekit-lsp'], resultado
 
 
 def test_dos_paquetes_swift_en_un_parche(sourcekit, sesion, permisos):
@@ -708,9 +715,23 @@ def test_sourcekit_lsp_de_verdad(sesion, permisos, monkeypatch, tmp_path):
 
 @pytest.mark.skipif(SOURCEKIT is None, reason='sourcekit-lsp no está instalado')
 def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, monkeypatch, tmp_path):
+    """La primera edición de un paquete (que hay que preparar en el sandbox y donde sourcekit-lsp arranca) no
+    espera a los diagnósticos más del plazo que se le da, y la siguiente trae el error. Se mide lo que tarda
+    `tras_editar` frente a ese plazo, con margen para una máquina cargada, no un tiempo absoluto."""
+    plazo = 1.0   # más corto que preparar el paquete: si se esperara a la preparación, se notaría
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
-    monkeypatch.delenv('ALFALFA_DIAGNOSTICOS_ESPERA', raising=False)   # los 3 s de siempre
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', str(plazo))
     monkeypatch.setattr(linters, '_programa', lambda *a, **k: (None, False))
+    duraciones = []
+    original = Diagnosticos.tras_editar
+
+    async def cronometrada(self, *args, **kwargs):
+        inicio = time.monotonic()
+        try:
+            return await original(self, *args, **kwargs)
+        finally:
+            duraciones.append(time.monotonic() - inicio)
+    monkeypatch.setattr(Diagnosticos, 'tras_editar', cronometrada)
     raiz, rt = sesion
     (raiz / 'Sources' / 'Demo').mkdir(parents=True)
     (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
@@ -718,16 +739,19 @@ def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, mo
     ruta = 'Sources/Demo/Suma.swift'
 
     async def ediciones():
-        inicio = time.monotonic()
         primero = await escribir(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + 1\n}\n')
-        tardo = time.monotonic() - inicio
-        # Hasta que el paquete esté preparado y el servidor arrancado, cada edición dice que no contestó.
+        # Ya no se mide el plazo: hasta que el paquete esté preparado y el servidor arrancado, cada edición
+        # dice que no contestó; con un plazo holgado llega el error.
+        monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', '20')
         segundo = await hasta_que_conteste(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + "b"\n}\n')
         await rt.manager.cerrar_diagnosticos()
-        return primero, tardo, segundo
-    primero, tardo, segundo = asyncio.run(ediciones())
-    assert tardo < 3.8, 'la primera edición pasó del plazo de 3 s'
-    assert 'diagnosticos' in primero
+        return primero, segundo
+    primero, segundo = asyncio.run(ediciones())
+    assert duraciones[0] < plazo + 2.5, ('la primera edición esperó ' + str(round(duraciones[0], 2))
+                                         + ' s a los diagnósticos con un plazo de ' + str(plazo) + ' s')
+    diagnosticos = primero['diagnosticos']
+    assert 'errores' in diagnosticos and 'avisos' in diagnosticos, primero
+    assert diagnosticos.get('revisado_con') or 'no contestó en 1 s' in ' '.join(diagnosticos['sin_respuesta'])
     assert segundo['diagnosticos']['errores'] >= 1, segundo
     assert segundo['diagnosticos']['nuevos'][0].startswith(ruta + ':2:'), segundo
     assert not (raiz / '.build').exists() and not (raiz / '.swiftpm').exists(), 'nadie abrió el paquete con SwiftPM'

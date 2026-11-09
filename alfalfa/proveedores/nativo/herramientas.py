@@ -904,7 +904,8 @@ class WorkspaceTools:
                         self.root, cambios or [], self._contenido_previo, pedir=self._permiso_de_diagnosticos,
                         modo=modos.modo_de(self.runtime.task))
                 except Exception as exc:  # noqa: BLE001 — los diagnósticos nunca hacen fallar una edición hecha
-                    informe = {'nuevos': [], 'sin_respuesta': ['Los diagnósticos fallaron ('
+                    informe = {'nuevos': [], 'errores': 0, 'avisos': 0,
+                               'sin_respuesta': ['Los diagnósticos fallaron ('
                                                                + (str(exc) or type(exc).__name__)[:200] + ').'],
                                'nota': 'La edición se hizo. Sin diagnósticos: verifica con run_checks.'}
                 if informe:

@@ -657,12 +657,10 @@ class Diagnosticos:
         if not con and not sin_respuesta:
             return None
         todos_nuevos.sort(key=lambda d: (d['gravedad'] != 'error', d['path'], d['linea'], d['columna']))
-        informe = {'nuevos': [texto_de(d) for d in todos_nuevos[:MAX_NUEVOS]]}
+        # Siempre con sus cuentas, también a 0: lo que no se pudo mirar va en `sin_respuesta`.
         errores = sum(1 for d in todos_nuevos if d['gravedad'] == 'error')
-        if errores:
-            informe['errores'] = errores
-        if len(todos_nuevos) - errores:
-            informe['avisos'] = len(todos_nuevos) - errores
+        informe = {'nuevos': [texto_de(d) for d in todos_nuevos[:MAX_NUEVOS]], 'errores': errores,
+                   'avisos': len(todos_nuevos) - errores}
         if len(todos_nuevos) > MAX_NUEVOS:
             informe['omitidos'] = len(todos_nuevos) - MAX_NUEVOS
         if ya_habia:
@@ -688,7 +686,7 @@ class Diagnosticos:
         if plan['paquete'] is not None:
             preparacion = await asyncio.shield(self._preparado(plan))
         else:
-            preparacion = self._sueltos_preparados(plan, archivos)
+            preparacion = await self._sueltos_preparados(plan, archivos)
         cliente = self.servidores.get(plan['clave'])
         if cliente is not None and getattr(cliente, 'preparacion', None) != preparacion['clave']:
             # Otra base de datos: sourcekit-lsp no la relee, así que se arranca de nuevo.
@@ -714,7 +712,7 @@ class Diagnosticos:
                         + '; los diagnósticos que los usan quedan incompletos.')
         return await self._con_servidor(cliente, cubiertos, hasta) if cubiertos else []
 
-    def _sueltos_preparados(self, plan, archivos):
+    async def _sueltos_preparados(self, plan, archivos):
         """Archivos sin paquete: cada uno con su propia orden fija en la base de su caché."""
         from . import paquete as paquetes
         cache = str(plan['cache'])
@@ -722,7 +720,7 @@ class Diagnosticos:
         nuevos_ = {os.path.realpath(a['ruta']) for a in archivos} - sueltos
         if nuevos_ or not (Path(cache) / 'db' / 'compile_commands.json').exists():
             sueltos |= nuevos_
-            h = paquetes.herramientas()
+            h = await paquetes.herramientas_sin_bloquear()
             objetivos_ = [{'nombre': 'main', 'tipo': 'executable', 'carpeta': os.path.dirname(f), 'fuentes': [f],
                            'dependencias': []} for f in sorted(sueltos)]
             for objetivo in objetivos_:
@@ -779,8 +777,8 @@ class Diagnosticos:
         faltan = []
         if paquetes.dependencias_de_otros(objetivos_) and not modulos.is_dir():
             faltan = await paquetes.compilar_modulos(objetivos_, modulos, self.sandbox, self.env, version)
-        archivos = paquetes.escribir_base(Path(plan['cache']) / 'db', objetivos_, paquetes.herramientas(), version,
-                                          modulos)
+        archivos = paquetes.escribir_base(Path(plan['cache']) / 'db', objetivos_,
+                                          await paquetes.herramientas_sin_bloquear(), version, modulos)
         # Los módulos de preparaciones anteriores ya no los usa nadie.
         for viejo in (Path(plan['cache']) / 'paquete-modulos').glob('*'):
             if viejo.name != modulos.name and viejo.is_dir() and not viejo.is_symlink():
