@@ -40,6 +40,13 @@ Entradas (una línea por mensaje):
 {"tipo":"cancelar"}
 ```
 
+`{"tipo":"mantener_despierto","activo":false}` apaga (o, con `true`, enciende) ya la
+aserción que impide que el Mac se duerma por inactividad mientras trabaja un turno; al
+arrancar decide `--sin-mantener-despierto` o `ALFALFA_MANTENER_DESPIERTO=0` (por defecto,
+encendida). Cada vez que el arnés la toma o la suelta de verdad emite
+`{"version":2,"tipo":"despierto","activo":true|false}`; si macOS no la concede, no se
+emite nada. Siempre se suelta antes de `turno_terminado`.
+
 Novedad de la versión 2, `mensaje`: el texto del usuario se encola y entra en el
 historial justo antes de la siguiente llamada al modelo, después de registrar los
 resultados de las herramientas. No interrumpe la orden en curso ni responde a un

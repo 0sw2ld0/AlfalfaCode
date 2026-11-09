@@ -48,8 +48,10 @@ public enum Launcher {
     public static func stdioArguments(task: String?, resume: String?, model: String?,
                                       effort: String?, readOnly: Bool, images: [String] = [],
                                       mode: String? = nil, wait: Bool = false, parent: String? = nil,
-                                      title: String? = nil) -> [String] {
+                                      title: String? = nil, keepAwake: Bool = true) -> [String] {
         var arguments = ["--stdio"]
+        // Ajustes ▸ General ▸ Mantener el Mac despierto, apagado.
+        if !keepAwake { arguments.append("--sin-mantener-despierto") }
         // La sesión que la propuso: sólo al crearla, se guarda con ella.
         if let parent, resume == nil { arguments += ["--padre", parent] }
         // El título de la propuesta, para que la barra lateral no enseñe el principio del encargo.

@@ -44,6 +44,17 @@ extension AppModel {
         }
     }
 
+    /// Mantener el Mac despierto mientras trabaja un agente. Las sesiones abiertas lo aplican ya;
+    /// las nuevas lo reciben al arrancar (`--sin-mantener-despierto`).
+    var keepAwake: Bool {
+        get { preferences.keepAwake }
+        set {
+            objectWillChange.send()
+            preferences.keepAwake = newValue
+            for session in live { session.setKeepAwake(newValue) }
+        }
+    }
+
     /// El proveedor del modelo elegido, como lo pone el pie de la barra lateral.
     var currentProviderName: String {
         providerName(ModelProvider.id(of: model, in: models))

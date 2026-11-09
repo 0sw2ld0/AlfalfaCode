@@ -38,6 +38,8 @@ class Transport:
         self.secretos = set()
         # {"tipo":"detener_proceso","id":"p1"|"todos"}: lo conecta run() con el gestor.
         self.stop_process = None
+        # {"tipo":"mantener_despierto","activo":bool}: el interruptor de Ajustes, ya.
+        self.keep_awake = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
@@ -219,6 +221,11 @@ class Transport:
                 self.settings(value.get('modelo'), value.get('esfuerzo'), value.get('modo'))
             elif value.get('tipo') == 'compactar':
                 self.compact(value.get('instrucciones'))
+            elif value.get('tipo') == 'mantener_despierto':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.keep_awake is None:
+                    raise ValueError()
+                self.keep_awake(activo)
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -275,7 +282,7 @@ class Transport:
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager
+    from .terminal import TerminalManager, keep_awake
     manager = None
     reader_task = None
     pipe = None
@@ -289,7 +296,7 @@ async def run(args, transport):
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                                  wait=esperar, parent=getattr(args, 'padre', None))
+                                  wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -337,6 +344,7 @@ async def run(args, transport):
             asyncio.ensure_future(detener())
 
         transport.stop_process = detener_proceso
+        transport.keep_awake = manager.despierto.cambiar
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, transport.stop)

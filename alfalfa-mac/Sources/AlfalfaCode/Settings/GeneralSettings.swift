@@ -1,7 +1,8 @@
 import AlfalfaKit
 import SwiftUI
 
-/// Ajustes ▸ General: el nombre del pie, la carpeta de los encargos nuevos y el buscador web.
+/// Ajustes ▸ General: el nombre del pie, la carpeta de los encargos nuevos, el buscador web y
+/// si el Mac se mantiene despierto mientras trabaja un agente.
 struct GeneralSettings: View {
 
     // MARK: - Propiedades
@@ -39,6 +40,15 @@ struct GeneralSettings: View {
                           detail: "Con qué buscan y leen la web los agentes. La búsqueda sale de tu conexión desde "
                           + "AlfalfaCode; las órdenes siguen sin red. Si un buscador falla, se prueba el siguiente.") {
                 webSearchControls
+            }
+            SettingsBlock(title: "Mantener el Mac despierto",
+                          detail: "Mientras trabaja un agente (con sus subagentes, sus órdenes y la espera de un "
+                          + "permiso), el Mac no se duerme por inactividad. La pantalla se apaga igual. Con la tapa "
+                          + "cerrada y sin corriente se duerme de todos modos, salvo enchufado y con pantalla "
+                          + "externa.") {
+                Toggle("Impedir que el Mac se duerma mientras trabaja", isOn: $model.keepAwake)
+                    .toggleStyle(.switch)
+                    .accessibilityLabel("Mantener el Mac despierto mientras trabaja un agente")
             }
         }
         .task {

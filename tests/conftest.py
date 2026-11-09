@@ -4,6 +4,9 @@ import os
 # AlfalfaCode exporta su hogar, su Ollama y sus referencias.
 for _nombre in [n for n in os.environ if n.startswith(('ALFALFA_', 'OLLAMA_', 'OPENAI_'))]:
     del os.environ[_nombre]
+# Ni los procesos hijos de la suite (`alfalfa --stdio` de verdad) mantienen el Mac despierto:
+# test_mantener_despierto lo enciende donde lo prueba.
+os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
@@ -49,3 +52,10 @@ def _sin_internet_en_la_web(monkeypatch):
     monkeypatch.setattr(Motor, '_pedir', sin_red)
     monkeypatch.setattr(PageExtractor, '_extract_limited', lambda self, client, url: sin_lectura(self, url))
     monkeypatch.setattr(web, '_buscadores', {})
+
+
+@pytest.fixture(autouse=True)
+def _sin_asercion_de_energia(monkeypatch):
+    """Los turnos de la suite no toman la aserción de verdad: test_mantener_despierto la prueba aparte."""
+    from alfalfa import despierto
+    monkeypatch.setattr(despierto, '_asercion_del_sistema', lambda: None)

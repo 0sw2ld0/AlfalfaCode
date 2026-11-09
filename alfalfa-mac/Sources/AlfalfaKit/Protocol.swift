@@ -541,6 +541,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case plan(Plan)
     /// `subagente_evento`: un paso de un subagente; no entra en la conversación principal.
     case subagentEvent(agent: String, AgentEvent)
+    /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
+    /// se duerma por inactividad mientras trabaja un turno.
+    case keepingAwake(Bool)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -660,6 +663,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                 return PlanStep(text, PlanStep.Status(rawValue: row["estado"] as? String ?? "") ?? .pending)
             }
             return .plan(Plan(steps: steps, explanation: object["explicacion"] as? String))
+        case "despierto":
+            return bool(object["activo"]).map(Self.keepingAwake)
         case "subagente_evento":
             guard let agent = text(object["agente"]), let role = object["rol"] as? String,
                   let content = object["texto"] as? String else { return nil }
@@ -818,6 +823,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case stopProcess(String)
     /// Modelo y esfuerzo para los turnos siguientes.
     case settings(model: String?, effort: String?, mode: String? = nil)
+    /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
+    case keepAwake(Bool)
 
     public var line: String {
         let object: [String: Any]
@@ -832,6 +839,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
         case .redirect: object = ["tipo": "redirigir"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
+        case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
         case let .compact(instructions):
             object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
         case let .settings(model, effort, mode):

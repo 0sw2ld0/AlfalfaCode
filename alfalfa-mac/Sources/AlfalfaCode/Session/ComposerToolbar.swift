@@ -23,6 +23,7 @@ struct ComposerToolbar: View {
             subagentsHint
             processesHint
             compactionHint
+            awakeHint
             statusLabel
         }
         .font(.system(size: 12.5)).foregroundStyle(Theme.secondary).padding(.horizontal, 6)
@@ -92,6 +93,17 @@ struct ComposerToolbar: View {
             .buttonStyle(.plain)
             .help("Siguen abiertos aunque acabe el turno. /procesos los lista y /cerrar-procesos los cierra; "
                   + "también desde el panel.")
+        }
+    }
+
+    /// Mientras el arnés tiene de verdad la aserción de energía de macOS.
+    @ViewBuilder private var awakeHint: some View {
+        if session.timeline.keepingAwake {
+            Label("Mac despierto", systemImage: "cup.and.saucer")
+                .foregroundStyle(Theme.secondary)
+                .help("AlfalfaCode no deja que el Mac se duerma por inactividad mientras trabaja. Con la tapa "
+                      + "cerrada y sin corriente se duerme igual. Se cambia en Ajustes ▸ General.")
+                .accessibilityLabel("Manteniendo el Mac despierto mientras trabaja")
         }
     }
 

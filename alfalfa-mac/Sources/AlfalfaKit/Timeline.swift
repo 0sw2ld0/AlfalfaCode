@@ -158,6 +158,8 @@ public struct Timeline: Equatable, Sendable {
     public private(set) var contextDetails: ContextDetails?
     /// El motor está compactando la conversación (entre turnos o dentro de uno).
     public private(set) var compacting = false
+    /// El arnés mantiene el Mac despierto: sólo mientras trabaja un turno y con el ajuste encendido.
+    public private(set) var keepingAwake = false
     /// Órdenes en segundo plano de la sesión (juegos, apps, servidores).
     public private(set) var processes: [BackgroundProcess] = []
     public var liveProcesses: [BackgroundProcess] { processes.filter(\.alive) }
@@ -318,6 +320,7 @@ public struct Timeline: Equatable, Sendable {
         case let .turnFinished(outcome):
             runningPermission = nil
             compacting = false
+            keepingAwake = false
             // Los mensajes ya entregados sin turno conocido son de este turno.
             if let turn = outcome.turn {
                 for item in items {
@@ -341,6 +344,7 @@ public struct Timeline: Equatable, Sendable {
         case let .finished(outcome):
             runningPermission = nil
             compacting = false
+            keepingAwake = false
             totalTokens = outcome.tokens
             finish(outcome: outcome)
         case let .processes(list):
@@ -356,6 +360,7 @@ public struct Timeline: Equatable, Sendable {
             if steps.count > Self.subagentStepLimit { steps.removeFirst(steps.count - Self.subagentStepLimit) }
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
+        case let .keepingAwake(on): keepingAwake = on
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
              .ollamaChats:
             break
@@ -446,6 +451,8 @@ public struct Timeline: Equatable, Sendable {
     public mutating func processExited(code: Int32) {
         runningPermission = nil
         compacting = false
+        // macOS suelta la aserción con el proceso.
+        keepingAwake = false
         // Con el proceso de alfalfa se cierran sus órdenes en segundo plano.
         processes = processes.map { var row = $0; if row.alive { row.alive = false; row.stopped = true }; return row }
         denyPending(reason: "Sesión terminada")

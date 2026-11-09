@@ -95,7 +95,8 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 model: resumeID == nil || settingsChanged ? model : nil,
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
                                                 images: images.map(\.path), mode: mode, wait: wait,
-                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title)
+                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title,
+                                                keepAwake: Preferences().keepAwake)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -335,5 +336,16 @@ extension LiveSession {
         guard process != nil else { return }
         timeline.addUser(note, queued: true)
         process?.send(.message(note))
+    }
+}
+
+/// Ajustes ▸ General ▸ Mantener el Mac despierto.
+extension LiveSession {
+
+    // MARK: - Métodos públicos
+
+    /// El interruptor de Ajustes: el proceso abierto lo aplica ya, también a mitad de turno.
+    func setKeepAwake(_ on: Bool) {
+        process?.send(.keepAwake(on))
     }
 }

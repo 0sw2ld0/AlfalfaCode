@@ -167,8 +167,13 @@ class TerminalManager:
     TERMINADAS = {'completed', 'failed', 'interrupted', 'blocked'}
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
-                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None):
+                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None):
         self.transport = transport
+        # «Prevent sleep while running» de Codex: el Mac no se duerme por inactividad mientras
+        # trabaja un turno. None lee ALFALFA_MANTENER_DESPIERTO (encendido por defecto).
+        from .despierto import MantenerDespierto
+        self.despierto = MantenerDespierto(keep_awake, aviso=self._aviso_despierto)
+        self._despierto_dicho = False
         self.read_only = read_only
         # La app contesta los permisos: como en Codex, el de salir del sandbox no caduca.
         if transport is not None:
@@ -281,9 +286,20 @@ class TerminalManager:
             raise
 
     def close(self):
+        if getattr(self, 'despierto', None) is not None:
+            self.despierto.cerrar()
         if self._lock is not None:
             os.close(self._lock)
             self._lock = None
+
+    def _aviso_despierto(self, activo):
+        """La app pinta «Mac despierto» sólo mientras macOS tiene la aserción de verdad."""
+        if self.transport is not None:
+            self.transport.emit('despierto', activo=activo)
+        elif activo and not self._despierto_dicho:
+            self._despierto_dicho = True
+            print('AlfalfaCode · El Mac no se dormirá por inactividad mientras trabajo '
+                  '(ALFALFA_MANTENER_DESPIERTO=0 lo apaga).', flush=True)
 
     def save(self):
         self.task['updated_at'] = time.time()
@@ -490,6 +506,7 @@ class TerminalManager:
             rt = self.runtime()
         finally:
             self.mcp = mcp
+        self.despierto.empezar()
         try:
             await rt.compact_now(instructions)
             return True
@@ -506,6 +523,7 @@ class TerminalManager:
                 rt.state.update(self.transport.clean(rt.state))
             rt.save()
             self.save()
+            self.despierto.terminar()
 
     async def run(self, prompt, eco=False):
         """`eco`: el mensaje llegó del cliente entre turnos; se le devuelve como evento `user`
@@ -513,9 +531,13 @@ class TerminalManager:
         if self.transport is not None:
             self.transport.in_turn = True
             self.transport.redireccion.clear()
+        # Todo el turno: subagentes, órdenes y la espera de un permiso. Se suelta siempre,
+        # también al cancelar o fallar; si el proceso muere, macOS la suelta con él.
+        self.despierto.empezar()
         try:
             return await self._run(prompt, eco)
         finally:
+            self.despierto.terminar()
             if self.transport is not None:
                 self.transport.in_turn = False
 
@@ -662,12 +684,17 @@ def resolve_fork(args):
         raise ValueError('--turno sólo vale con --bifurcar.')
 
 
+def keep_awake(args):
+    """--sin-mantener-despierto lo apaga; si no, decide ALFALFA_MANTENER_DESPIERTO."""
+    return False if getattr(args, 'sin_mantener_despierto', False) else None
+
+
 async def execute(args):
     resolve_fork(args)
     manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                              parent=getattr(args, 'padre', None))
+                              parent=getattr(args, 'padre', None), keep_awake=keep_awake(args))
     loop = asyncio.get_running_loop()
     current = asyncio.current_task()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -707,6 +734,9 @@ def main(argv=None):
     parser.add_argument('--turno', metavar='TURNO', help='Turno de --bifurcar (por defecto, el último terminado)')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')
+    parser.add_argument('--sin-mantener-despierto', action='store_true',
+                        help='Dejar que el Mac se duerma por inactividad mientras trabaja un turno '
+                             '(también ALFALFA_MANTENER_DESPIERTO=0)')
     parser.add_argument('--stdio', action='store_true')
     parser.add_argument('--json', action='store_true')
     listing = parser.add_mutually_exclusive_group()

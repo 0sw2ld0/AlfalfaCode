@@ -13,6 +13,7 @@ public struct Preferences {
         public static let defaultModel = "ajustes.modelo"
         public static let defaultEffort = "ajustes.esfuerzo"
         public static let defaultMode = "ajustes.permisos"
+        public static let keepAwake = "ajustes.mantenerDespierto"
         public static let section = "ajustes.seccion"
     }
 
@@ -45,6 +46,12 @@ public struct Preferences {
     public var defaultMode: PermissionMode? {
         get { text(Key.defaultMode).flatMap(PermissionMode.init(rawValue:)) }
         nonmutating set { store(newValue?.rawValue, Key.defaultMode) }
+    }
+
+    /// Que el Mac no se duerma por inactividad mientras trabaja un agente. Encendido si nunca se tocó.
+    public var keepAwake: Bool {
+        get { defaults.object(forKey: Key.keepAwake) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.keepAwake) }
     }
 
     // MARK: - Inicializadores

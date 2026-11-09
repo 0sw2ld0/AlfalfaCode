@@ -137,8 +137,8 @@ proyecto y «Mostrar historial en Finder», la de la sesión en `$ALFALFA_HOME/s
 El botón de carpeta de la cabecera de una sesión también abre la del proyecto.
 
 La ventana de Ajustes (⌘,) guarda el nombre del pie de la barra lateral, la carpeta,
-el modelo, el esfuerzo y el modo de permisos de los encargos nuevos, los proveedores y
-la búsqueda de actualizaciones. Para revisarla sin clics, `ALFALFA_ABRIR_AJUSTES=modelo`
+el modelo, el esfuerzo y el modo de permisos de los encargos nuevos, los proveedores,
+si se mantiene el Mac despierto mientras trabaja y la búsqueda de actualizaciones. Para revisarla sin clics, `ALFALFA_ABRIR_AJUSTES=modelo`
 la abre en esa parte al arrancar (`general`, `proveedores`, `modelo` o
 `actualizaciones`).
 
@@ -274,6 +274,38 @@ En la app aparecen en la sección **Procesos** del panel (orden, cuánto lleva,
 `--stdio`: evento `procesos` y `{"tipo":"detener_proceso","id":"p1"|"todos"}`.
 Como en Codex, se cierran con la sesión; la app no la cierra al cambiar de chat
 mientras haya alguno abierto.
+
+## Mantener el Mac despierto
+
+Como «Prevent sleep while running» de Codex: mientras trabaja un turno, el Mac no se
+duerme por inactividad. Cuenta todo el turno: los subagentes, las órdenes que lanza el
+agente (también las de segundo plano mientras el turno sigue) y la espera de un permiso.
+Al terminar, cancelar o fallar el turno se suelta; entre turnos el Mac vuelve a dormirse
+como siempre, aunque quede abierto un proceso en segundo plano.
+
+El arnés lo hace él mismo, sin la app: toma una aserción de energía de macOS
+(`PreventUserIdleSystemSleep`, por IOKit) con el nombre «AlfalfaCode trabaja en un turno».
+La aserción es del proceso del arnés, así que macOS la suelta también si el proceso
+muere, aunque sea con `kill -9`: no queda ningún `caffeinate` huérfano. Se ve con:
+
+```bash
+pmset -g assertions | grep AlfalfaCode
+```
+
+Está **encendido por defecto**: sólo dura lo que dura un turno, no apaga ni enciende la
+pantalla y no hace nada cuando el agente no trabaja. Sin él, un encargo largo que dejas
+corriendo se para a la media hora porque el Mac se durmió. Para apagarlo:
+
+- en la terminal, `ALFALFA_MANTENER_DESPIERTO=0 alfalfa "…"` o `alfalfa --sin-mantener-despierto "…"`;
+- en la app, **Ajustes ▸ General ▸ Mantener el Mac despierto**. El cambio vale ya, también
+  en las sesiones que están trabajando.
+
+Mientras lo mantiene despierto, el pie de la sesión enseña «Mac despierto».
+
+Límite: no impide que el Mac se duerma al **cerrar la tapa**. Con la tapa cerrada y sin
+corriente se duerme igual. Sólo sigue despierto con la tapa cerrada si está enchufado y
+con una pantalla externa (modo «clamshell»). Tampoco usa `pmset` ni pide contraseña de
+administrador.
 
 ## Mensajes con el agente ocupado
 
