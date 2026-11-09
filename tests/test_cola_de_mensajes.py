@@ -202,3 +202,71 @@ def test_quitar_de_cola_antes_de_entrar_y_despues(tmp_path):
         assert eventos(cliente, 'user') == ['Céntrate en la prueba']
     finally:
         cliente.cerrar()
+
+
+# «Enviar ahora» con el id del mensaje en cola: va justo ese, aunque otro diga lo mismo, y si ya
+# entró no corta el turno ni se repite.
+
+def test_enviar_ahora_con_id_adelanta_justo_ese_mensaje():
+    t, salida = _transporte()
+    for ident, texto in (('a', 'igual'), ('b', 'otro'), ('c', 'igual')):
+        t.receive(json.dumps({'tipo': 'mensaje', 'texto': texto, 'id': ident}))
+    t.receive(json.dumps({'tipo': 'enviar_ahora', 'texto': 'igual', 'id': 'c'}))
+    assert [m.id for m in t.inbox] == ['c', 'a', 'b']
+    # Un id que ya no está en la cola no mueve nada; uno inválido es un error.
+    t.receive(json.dumps({'tipo': 'enviar_ahora', 'texto': 'otro', 'id': 'ya-entro'}))
+    assert [m.id for m in t.inbox] == ['c', 'a', 'b']
+    t.receive(json.dumps({'tipo': 'enviar_ahora', 'texto': 'otro', 'id': 7}))
+    assert [f['tipo'] for f in _filas(salida)] == ['error']
+
+
+def test_enviar_ahora_con_id_corta_el_turno_y_abre_el_siguiente_con_ese(tmp_path):
+    cliente = ClienteLento(tmp_path, 'Tarea LENTO')
+    try:
+        cliente.pensando()
+        cliente.enviar(tipo='mensaje', texto='Primero en cola', id='q1')
+        cliente.enviar(tipo='mensaje', texto='Para y haz esto', id='q2')
+        cliente.enviar(tipo='enviar_ahora', texto='Para y haz esto', id='q2')
+        cortado = cliente.tipo('turno_terminado')
+        assert cortado['estado'] == 'cortado' and cortado['resumen'] == 'Turno interrumpido por el usuario.'
+        # El siguiente turno lo abre q2, no el primero de la cola.
+        assert cliente.usuario()['texto'] == 'Para y haz esto'
+        assert cliente.tipo('turno_terminado')['estado'] == 'completed'
+        assert not [f for f in cliente.filas if f['tipo'] == 'fin']
+        # Cada mensaje entra una sola vez; q1 sigue su camino detrás.
+        assert eventos(cliente, 'user') == ['Para y haz esto', 'Primero en cola']
+        enviados = [m['content'] for m in cliente.peticiones()[-1] if m['role'] == 'user']
+        assert enviados.count('Para y haz esto') == 1 and enviados.count('Primero en cola') == 1
+        # Ya entró: otro «Enviar ahora» de q2 no abre ningún turno más.
+        cliente.enviar(tipo='enviar_ahora', texto='Para y haz esto', id='q2')
+        cliente.enviar(tipo='quitar_de_cola', id='q2')
+        assert cliente.tipo('quitado_de_cola')['motivo'] == 'entregado'
+        assert len([f for f in cliente.filas if f['tipo'] == 'turno_terminado']) == 2
+    finally:
+        cliente.cerrar()
+    assert eventos(cliente, 'user') == ['Para y haz esto', 'Primero en cola']
+
+
+def test_enviar_ahora_de_un_mensaje_que_ya_entro_no_corta_el_turno(tmp_path):
+    cliente = ClienteLento(tmp_path, 'Tarea LENTO')
+    try:
+        cliente.pensando()
+        cliente.enviar(tipo='mensaje', texto='Céntrate LENTO', id='q1')
+        cliente.enviar(tipo='redirigir')
+        assert cliente.usuario()['texto'] == 'Céntrate LENTO'
+        # Otro mensaje espera en cola: antes, «Enviar ahora» de q1 cortaba el turno por éste.
+        cliente.enviar(tipo='mensaje', texto='Y luego esto', id='q2')
+        cliente.enviar(tipo='enviar_ahora', texto='Céntrate LENTO', id='q1')
+        # quitar_de_cola responde en orden: el «Enviar ahora» ya se atendió.
+        cliente.enviar(tipo='quitar_de_cola', id='q1')
+        assert cliente.tipo('quitado_de_cola')['motivo'] == 'entregado'
+        assert not [f for f in cliente.filas if f['tipo'] == 'turno_terminado']
+        # q2 sigue en cola, sin enviar.
+        cliente.enviar(tipo='quitar_de_cola', id='q2')
+        assert cliente.tipo('quitado_de_cola')['quitado'] is True
+        cliente.enviar(tipo='interrumpir')
+        assert cliente.tipo('turno_terminado')['estado'] == 'cortado'
+    finally:
+        cliente.cerrar()
+    assert eventos(cliente, 'user') == ['Céntrate LENTO']
+    assert len([f for f in cliente.filas if f['tipo'] == 'turno_terminado']) == 1

@@ -1032,7 +1032,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case message(String, images: [String] = [], id: String? = nil)
     case cancel
     /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
-    case sendNow(String)
+    /// Con `id` va justo ese; si el modelo ya lo leyó, el motor no corta nada ni lo repite.
+    case sendNow(String, id: String? = nil)
     /// «Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno.
     case redirect
     /// «Quitar» o «Editar» de un mensaje en cola: el motor lo saca si aún no entró en el contexto
@@ -1068,7 +1069,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
             if let id { fields["id"] = id }
             object = fields
         case .cancel: object = ["tipo": "cancelar"]
-        case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
+        case let .sendNow(text, id):
+            object = id.map { ["tipo": "enviar_ahora", "texto": text, "id": $0] } ?? ["tipo": "enviar_ahora", "texto": text]
         case .redirect: object = ["tipo": "redirigir"]
         case let .unqueue(id): object = ["tipo": "quitar_de_cola", "id": id]
         case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]

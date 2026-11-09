@@ -152,8 +152,20 @@ class Transport:
         self.worker.cancel()
         return True
 
-    def enviar_ahora(self, text):
-        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente."""
+    def enviar_ahora(self, text, ident=None):
+        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
+        Con `ident` (el id de la app) va justo ese mensaje; si ya no está en la cola (el modelo
+        ya lo leyó) no se corta nada ni se vuelve a enviar."""
+        if ident is not None:
+            if not isinstance(ident, str) or not ident or len(ident) > MAX_ID_EN_COLA:
+                raise ValueError()
+            n = next((n for n, m in enumerate(self.inbox) if getattr(m, 'id', None) == ident), None)
+            if n is None:
+                return
+            self.inbox.insert(0, self.inbox.pop(n))
+            self.interrumpir_turno()
+            self.wake.set()
+            return
         if not isinstance(text, str) or not text.strip():
             raise ValueError()
         if text in self.inbox:
@@ -281,7 +293,7 @@ class Transport:
             elif value.get('tipo') == 'mensaje':
                 self.message(value.get('texto'), value.get('imagenes') or [], value.get('id'))
             elif value.get('tipo') == 'enviar_ahora':
-                self.enviar_ahora(value.get('texto'))
+                self.enviar_ahora(value.get('texto'), value.get('id'))
             elif value.get('tipo') == 'redirigir':
                 self.redirigir()
             elif value.get('tipo') == 'quitar_de_cola':

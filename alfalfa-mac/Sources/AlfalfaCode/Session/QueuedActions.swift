@@ -39,7 +39,7 @@ struct QueuedActions: View {
             }
             icon("xmark", Self.removeHelp, enabled: !unqueuing) { session.unqueue(item: itemID, action: .remove) }
             if running {
-                Button("Enviar ahora") { session.sendNow(text) }
+                Button("Enviar ahora") { session.sendNow(text, item: itemID) }
                     .font(.system(size: 12.5)).foregroundStyle(Theme.secondary)
                     .buttonStyle(.plain).help(Self.sendNowHelp).disabled(unqueuing)
             }

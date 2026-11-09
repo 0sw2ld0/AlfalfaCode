@@ -205,9 +205,10 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// «Enviar ahora» de un mensaje en cola, como en Claude Code: el turno en marcha se corta y
     /// este mensaje abre el siguiente. La sesión sigue abierta.
-    func sendNow(_ text: String) {
+    /// Con `item`, va el id con el que se encoló: el motor adelanta justo ese mensaje.
+    func sendNow(_ text: String, item: Int? = nil) {
         guard process != nil, timeline.status.isRunning else { return }
-        process?.send(.sendNow(text))
+        process?.send(.sendNow(text, id: item.flatMap { timeline.queueIDs[$0] }))
     }
 
     /// «Redirigir», como steer de Codex: el modelo deja lo que estaba pensando y lee ya los

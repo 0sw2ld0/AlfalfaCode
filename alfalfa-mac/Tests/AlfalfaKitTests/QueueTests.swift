@@ -8,6 +8,22 @@ final class QueueTests: XCTestCase {
         XCTAssertEqual(AlfalfaCommand.redirect.line, #"{"tipo":"redirigir"}"# + "\n")
     }
 
+    func testSendNowCarriesTheQueuedMessageID() {
+        var timeline = Timeline()
+        timeline.apply(.event(AgentEvent(role: "user", text: "primero", time: 1)))
+        _ = timeline.addUser("Igual", queued: true, queueID: "q1")
+        let second = timeline.addUser("Igual", queued: true, queueID: "q2")
+        // Dos mensajes con el mismo texto: «Enviar ahora» del segundo lleva su id, no el del primero.
+        let id = timeline.queueIDs[second]
+        XCTAssertEqual(id, "q2")
+        XCTAssertEqual(AlfalfaCommand.sendNow("Igual", id: id).line,
+                       #"{"id":"q2","texto":"Igual","tipo":"enviar_ahora"}"# + "\n")
+        // Ya entregado no tiene id de cola: «Enviar ahora» no tendría a quién adelantar.
+        timeline.apply(.event(AgentEvent(role: "user", text: "Igual", time: 2)))
+        timeline.apply(.event(AgentEvent(role: "user", text: "Igual", time: 3)))
+        XCTAssertNil(timeline.queueIDs[second])
+    }
+
     func testEchoDeliversTheQueuedReplyAndACutTurnLeavesTheSessionReady() {
         var timeline = Timeline()
         timeline.apply(.event(AgentEvent(role: "user", text: "primero", time: 1)))

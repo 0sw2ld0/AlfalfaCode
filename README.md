@@ -653,7 +653,9 @@ Por `--stdio`, cada `{"tipo":"mensaje"}` puede llevar un `id` propio. Con
 `{"tipo":"quitar_de_cola","id":…}` el motor lo saca de la cola y responde
 `{"tipo":"quitado_de_cola","id":…,"quitado":true}`. Si no lo saca, responde con
 `"quitado":false` y un `motivo`: `entregado` si el modelo ya lo tiene, `desconocido`
-si nunca llegó. Los mensajes sin `id` funcionan como antes, pero no se pueden quitar.
+si nunca llegó. `{"tipo":"enviar_ahora","id":…}` adelanta justo ese mensaje, aunque
+otro diga lo mismo. Si ya entró, no corta el turno ni lo vuelve a enviar. Los mensajes
+sin `id` funcionan como antes, pero no se pueden quitar.
 La terminal (`alfalfa "encargo"`) no tiene cola: cada orden es un solo encargo.
 
 Entre turnos, un mensaje (o un botón de la caja de cierre) abre el turno siguiente
