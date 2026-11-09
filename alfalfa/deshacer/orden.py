@@ -32,7 +32,8 @@ MOTIVOS = {'editado_despues': 'lo cambiaste después del turno', 'ajeno': 'no lo
            'sin_registro': 'no hay registro de cómo estaba'}
 # Los que se proponen restaurar: probablemente los cambió una orden del agente.
 PROPUESTOS = {'orden'}
-ACCIONES = {'restaurar': 'se restaura', 'recrear': 'se recrea', 'borrar': 'se borra'}
+ACCIONES = {'restaurar': 'se restaura', 'recrear': 'se recrea', 'borrar': 'se borra',
+            'permisos': 'vuelven sus permisos'}
 
 
 def argumentos(parser, grupo):

@@ -151,12 +151,20 @@ def _llamadas(mensajes):
 
 
 def _registrados(estado, datos):
-    """Las rutas que el agente apuntó en `changes` durante el turno, o None si no se sabe."""
+    """Las rutas que el agente apuntó en `changes` durante el turno, o None si no se sabe.
+
+    Las que adoptó al final una orden (`via: 'run_command'`) no cuentan: la huella se toma al
+    acabar la orden y puede llevar lo que tú cambiaste mientras corría (origen `orden`)."""
     desde, hasta = datos.get('cambios_desde'), datos.get('cambios_hasta')
     cambios = (estado or {}).get('changes')
     if not isinstance(desde, int) or not isinstance(hasta, int) or not isinstance(cambios, list):
         return None
-    return {c['path'] for c in cambios[desde:hasta] if isinstance(c, dict) and isinstance(c.get('path'), str)}
+    ultima = {}
+    for cambio in cambios[desde:hasta]:
+        if isinstance(cambio, dict) and isinstance(cambio.get('path'), str):
+            ultima[cambio['path']] = cambio.get('via')
+    # Cuenta la última fila de cada ruta: una escritura propia que luego adopta una orden ya no es segura.
+    return {ruta for ruta, via in ultima.items() if via != 'run_command'}
 
 
 def _pasos(task, estado, desde):
@@ -217,6 +225,39 @@ def _accion(objetivo, actual):
     return 'recrear' if actual is None else 'restaurar'
 
 
+def _solo_permisos(almacen, task, turno, pasos, antes, ahora, excluidos_antes, excluidos_ahora, objetivo):
+    """{ruta: (conflicto, entrada en `antes`)} de los archivos cuyo contenido no cambió pero sí sus
+    permisos (un `chmod 644` de una clave 0600). git no lo ve; lo dicen los modos de cada instantánea.
+
+    Van a conflicto: `orden` si algún turno tuvo órdenes, `ajeno` si no, y `editado_despues` si
+    cambiaron después del último turno."""
+    modos_antes = (excluidos_antes or {}).get('modos')
+    modos_ahora = (excluidos_ahora or {}).get('modos')
+    if not isinstance(modos_antes, dict) or not isinstance(modos_ahora, dict):
+        return {}
+    candidatos = sorted(r for r in set(modos_antes) | set(modos_ahora)
+                        if modos_antes.get(r) != modos_ahora.get(r) and r not in objetivo)
+    if not candidatos:
+        return {}
+    en_antes = almacen.entradas(antes, candidatos)
+    en_ahora = almacen.entradas(ahora, candidatos)
+    ultimo = next((t for t in reversed(_turnos(task)) if (t.get('instantanea') or {}).get('despues')
+                   and (t.get('inicio') or 0) >= (turno.get('inicio') or 0)), None)
+    final = almacen.excluidos(ultimo['instantanea']['despues']) if ultimo else None
+    modos_final = (final or {}).get('modos')
+    actua = any(paso['actua'] for paso in pasos)
+    salida = {}
+    for ruta in candidatos:
+        if en_antes.get(ruta) is None or en_antes.get(ruta) != en_ahora.get(ruta):
+            continue
+        if isinstance(modos_final, dict) and modos_final.get(ruta) != modos_ahora.get(ruta):
+            motivo = EDITADO
+        else:
+            motivo = ORDEN if actua else AJENO
+        salida[ruta] = ({'ruta': ruta, 'accion': 'permisos', 'motivo': motivo}, en_antes[ruta])
+    return salida
+
+
 def _creados(task, estado, turno):
     """Las rutas que el agente apuntó como nuevas (`before` vacío) desde el turno."""
     creados = set()
@@ -228,7 +269,7 @@ def _creados(task, estado, turno):
                 or not isinstance(desde, int) or not isinstance(hasta, int):
             continue
         creados.update(c['path'] for c in cambios[desde:hasta] if isinstance(c, dict)
-                       and isinstance(c.get('path'), str) and c.get('before') in (None, 'DELETED'))
+                       and isinstance(c.get('path'), str) and c.get('before') in (None, 'NEW', 'DELETED'))
     return creados
 
 
@@ -284,7 +325,8 @@ def vista_deshacer(hogar, task, estado, ident):
     excluidos_ahora = almacen.excluidos(ahora['commit'])
     objetivo = almacen.cambios(ahora['commit'], datos['antes'])
     actuales = almacen.cambios(datos['antes'], ahora['commit'])
-    dejado, origen, incompleto = _dejado(almacen, _pasos(task, estado, turno.get('inicio') or 0))
+    pasos = _pasos(task, estado, turno.get('inicio') or 0)
+    dejado, origen, incompleto = _dejado(almacen, pasos)
     ultimas = huella(estado)
     creados = _creados(task, estado, turno)
     no_cubiertos = _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes)
@@ -322,6 +364,11 @@ def vista_deshacer(hogar, task, estado, ident):
             vista['restaurables'].append(fila)
         else:
             vista['conflictos'].append(dict(fila, motivo=EDITADO if ruta in dejado else AJENO))
+    permisos = _solo_permisos(almacen, task, turno, pasos, datos['antes'], ahora['commit'], excluidos_antes,
+                              excluidos_ahora, objetivo)
+    for ruta, (fila, entrada) in permisos.items():
+        vista['conflictos'].append(fila)
+        objetivo[ruta] = entrada
     vista['no_cubiertos'] = [{'ruta': r, 'motivo': m} for r, m in sorted(no_cubiertos.items())]
     if no_cubiertos:
         vista['irreversibles'] = irreversibles.juntar(vista['irreversibles'], [irreversibles.no_cubiertos(

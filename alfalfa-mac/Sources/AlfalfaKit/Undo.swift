@@ -31,7 +31,7 @@ public enum UndoScope: String, CaseIterable, Identifiable, Sendable {
 /// Un archivo que se restaura, o que se queda como está y por qué.
 public struct UndoFile: Equatable, Hashable, Sendable {
     public var path: String
-    /// `restaurar`, `recrear` o `borrar`.
+    /// `restaurar`, `recrear`, `borrar` o `permisos` (sólo cambiaron sus permisos).
     public var action: String
     /// Por qué se queda (`editado_despues`, `ajeno`, `orden`, `grande`, `ignorado`, `repo_anidado`…);
     /// nil en los restaurables.
@@ -47,6 +47,7 @@ public struct UndoFile: Equatable, Hashable, Sendable {
         switch action {
         case "borrar": return "se borra"
         case "recrear": return "vuelve a estar"
+        case "permisos": return "vuelven sus permisos"
         default: return "se restaura"
         }
     }

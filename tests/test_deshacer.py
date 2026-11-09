@@ -144,11 +144,12 @@ def test_cubre_lo_que_cambian_las_ordenes(entorno):
 
     t1 = sesion.turno('genera', orden, llamadas=[['python', 'gen.py']])
     vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t1)
-    # app.py tiene huella del agente; lo demás lo hizo probablemente la orden: se propone, no se impone.
-    assert {(f['ruta'], f['accion']) for f in vista['restaurables']} == {('app.py', 'restaurar')}
+    # Todo lo hizo la orden (app.py lo adoptó con `via: 'run_command'`): se propone, no se impone.
+    assert vista['restaurables'] == []
     assert {(c['ruta'], c['accion'], c['motivo']) for c in vista['conflictos']} == {
-        ('generado.json', 'borrar', 'orden'), ('notas.md', 'recrear', 'orden')}
-    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, forzar=['generado.json', 'notas.md'], vista=vista)
+        ('app.py', 'restaurar', 'orden'), ('generado.json', 'borrar', 'orden'), ('notas.md', 'recrear', 'orden')}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, forzar=['app.py', 'generado.json', 'notas.md'],
+                      vista=vista)
     assert not (cwd / 'generado.json').exists()
     assert (cwd / 'notas.md').read_text() == 'notas\n'
     assert (cwd / 'app.py').read_text() == 'print(1)\n'
@@ -817,3 +818,139 @@ def test_una_edicion_del_usuario_durante_el_turno_en_el_mismo_archivo_no_se_pisa
     assert {(c['ruta'], c['motivo']) for c in vista['conflictos']} == {('app.py', 'editado_despues')}
     deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
     assert (cwd / 'app.py').read_text() == 'print(2)  # y lo mío\n'
+
+
+# MARK: - Tercera revisión del PR 22
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root lee cualquier carpeta')
+def test_una_carpeta_ilegible_con_apostrofo(entorno):
+    hogar, cwd = entorno
+    carpeta = cwd / "it's"
+    carpeta.mkdir()
+    (carpeta / 'f.txt').write_text('mío\n')
+    os.chmod(carpeta, 0)
+    try:
+        sesion = Sesion(hogar, cwd)
+        t = sesion.turno('uno', lambda c, e: os.chmod(c / "it's", 0o755), llamadas=[['chmod', '755', "it's"]])
+        datos = sesion.task['turnos'][0]['instantanea']
+        assert Almacen(hogar, cwd).excluidos(datos['antes'])['ilegibles'] == ["it's/"]
+        vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+        assert {(n['ruta'], n['motivo']) for n in vista['no_cubiertos']} == {("it's/f.txt", 'ilegible')}
+        deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=["it's/f.txt"], vista=vista)
+        assert (carpeta / 'f.txt').read_text() == 'mío\n'
+    finally:
+        os.chmod(carpeta, 0o755)
+
+
+def test_los_avisos_de_git_con_comillas_y_apostrofos():
+    from alfalfa.deshacer.instantaneas import _ilegible
+    assert _ilegible("warning: could not open directory 'it's/': Permission denied") == "it's/"
+    assert _ilegible('error: open("it\'s \'a\'.txt"): Permission denied') == "it's 'a'.txt"
+    assert _ilegible("error: unable to index file 'it's/x'") == "it's/x"
+    assert _ilegible('error: algo distinto') is None
+
+
+def test_con_ignorados_recortados_borra_lo_que_el_runtime_apunta_como_nuevo(entorno, monkeypatch):
+    hogar, cwd = entorno
+    monkeypatch.setattr(instantaneas, 'TOPE_EXCLUIDOS', 0)
+    (cwd / '.gitignore').write_text('*.log\n')
+    (cwd / 'a.log').write_text('x')
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        (c / 'nuevo.py').write_text('x\n')
+        e['changes'].append({'path': 'nuevo.py', 'before': 'NEW', 'after': sha('x\n')})  # como write_file
+    t = sesion.turno('uno', t1)
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert ('nuevo.py', 'borrar') in {(f['ruta'], f['accion']) for f in vista['restaurables']}
+
+
+def test_un_chmod_sin_cambiar_el_contenido_se_deshace(entorno):
+    import stat
+    hogar, cwd = entorno
+    clave = cwd / 'clave.pem'
+    clave.write_text('privada\n')
+    os.chmod(clave, 0o600)
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: os.chmod(c / 'clave.pem', 0o644), llamadas=[['chmod', '644', 'clave.pem']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {(c['ruta'], c['accion'], c['motivo']) for c in vista['conflictos']} == {
+        ('clave.pem', 'permisos', 'orden')}
+    paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['clave.pem'], vista=vista)
+    assert paso['restaurados'] == ['clave.pem']
+    assert stat.S_IMODE(os.stat(clave).st_mode) == 0o600 and clave.read_text() == 'privada\n'
+
+
+def test_un_archivo_0600_nunca_se_recrea_con_mas_permisos(entorno, monkeypatch):
+    hogar, cwd = entorno
+    clave = cwd / 'clave.pem'
+    clave.write_text('privada\n')
+    os.chmod(clave, 0o600)
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        (c / 'clave.pem').unlink()
+        e['changes'].append({'path': 'clave.pem', 'before': sha('privada\n'), 'after': 'DELETED'})
+    t = sesion.turno('uno', t1)
+    abiertos = []
+    original = os.open
+
+    def vigilado(path, flags, mode=0o777, *args, **kwargs):
+        if str(path).endswith('clave.pem') and flags & os.O_CREAT:
+            abiertos.append(mode)
+        return original(path, flags, mode, *args, **kwargs)
+    monkeypatch.setattr(instantaneas.os, 'open', vigilado)
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert abiertos == [0o600]
+
+
+def test_una_carpeta_0700_que_borra_el_agente_vuelve_0700(entorno):
+    import shutil
+    import stat
+    hogar, cwd = entorno
+    (cwd / 'secretos').mkdir(mode=0o700)
+    os.chmod(cwd / 'secretos', 0o700)
+    (cwd / 'secretos' / 'a.txt').write_text('a\n')
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        shutil.rmtree(c / 'secretos')
+        e['changes'].append({'path': 'secretos/a.txt', 'before': sha('a\n'), 'after': 'DELETED'})
+    t = sesion.turno('uno', t1)
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert stat.S_IMODE(os.stat(cwd / 'secretos').st_mode) == 0o700
+    assert (cwd / 'secretos' / 'a.txt').read_text() == 'a\n'
+
+
+def test_guardar_ref_espera_al_cerrojo(entorno):
+    import fcntl
+    import threading
+    hogar, cwd = entorno
+    almacen = Almacen(hogar, cwd)
+    commit = almacen.guardar('s1', 'uno')['commit']
+    fd = os.open(almacen.dir / 'cerrojo', os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    hilo = threading.Thread(target=almacen.guardar_ref, args=(commit, 's1', 'otra'))
+    hilo.start()
+    time.sleep(0.3)
+    assert hilo.is_alive(), 'update-ref no entra mientras otro tiene el cerrojo'
+    os.close(fd)
+    hilo.join(5)
+    assert 'refs/alfalfa/s1/otra' in almacen.git('for-each-ref', '--format=%(refname)').decode()
+
+
+def test_lo_que_adopta_una_orden_no_se_restaura_sin_preguntar(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        escribir(e, c, 'app.py', 'print(2)\n')
+        # Mientras corre una orden del agente, el usuario edita app.py; la orden lo adopta como suyo.
+        (c / 'app.py').write_text('print(2)  # del usuario\n')
+        e['changes'].append({'path': 'app.py', 'before': sha('print(2)\n'),
+                             'after': sha('print(2)  # del usuario\n'), 'via': 'run_command'})
+    t = sesion.turno('uno', t1, llamadas=[['make']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {(c['ruta'], c['motivo']) for c in vista['conflictos']} == {('app.py', 'orden')}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
+    assert (cwd / 'app.py').read_text() == 'print(2)  # del usuario\n'

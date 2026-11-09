@@ -86,6 +86,8 @@ final class UndoTests: XCTestCase {
             + #""ordenes":[".env","lib/x.py"]}]}"#
         guard case let .undoPreview(value)? = AlfalfaMessage.decode(line: line) else { return XCTFail("vista") }
         XCTAssertEqual(value.conflicts.first?.suggested, true)
+        XCTAssertEqual(UndoFile(path: "clave.pem", action: "permisos", reason: "orden").actionLabel,
+                       "vuelven sus permisos")
         XCTAssertEqual(value.untouched.map(\.path), [".env", "lib/x.py"])
         XCTAssertEqual(value.untouched.map(\.reasonLabel), ["Está ignorado: no se guarda",
                                                             "Está en un repositorio anidado: no se guarda"])

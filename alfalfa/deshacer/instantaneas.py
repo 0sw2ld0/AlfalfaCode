@@ -61,10 +61,25 @@ ATRIBUTOS = '* -text !eol -ident -filter !working-tree-encoding -crlf\n'
 AUTOR = {'GIT_AUTHOR_NAME': 'AlfalfaCode', 'GIT_AUTHOR_EMAIL': 'alfalfa@localhost',
          'GIT_COMMITTER_NAME': 'AlfalfaCode', 'GIT_COMMITTER_EMAIL': 'alfalfa@localhost'}
 _NOMBRE = re.compile(r'[^A-Za-z0-9._-]+')
-_ILEGIBLE = re.compile(r"^(?:error|warning): (?:open|read|unable to index file|could not open)\(?['\"]?(.+?)['\"]?\)?"
-                       r"(?::|$)")
+# Lo que git dice de un archivo que no puede leer. Las rutas pueden llevar comillas y
+# apóstrofos (it's/): cada patrón se ancla en lo que va después de la ruta, no en la comilla.
+_ILEGIBLES = (re.compile(r'^(?:error|warning): (?:open|read)\("(.+)"\): '),
+              re.compile(r"^(?:error|warning): unable to index file '(.+)'$"),
+              re.compile(r"^(?:error|warning): could not open '(.+)'(?:: |$)"))
 # git avisa así de una carpeta que no puede leer; se apunta con su barra final (un prefijo).
-_CARPETA_ILEGIBLE = re.compile(r"^(?:error|warning): could not open directory '(.+?)'")
+_CARPETA_ILEGIBLE = re.compile(r"^(?:error|warning): could not open directory '(.+)': ")
+
+
+def _ilegible(linea):
+    """La ruta de un aviso de git sobre algo que no pudo leer (carpeta con «/» final), o None."""
+    carpeta = _CARPETA_ILEGIBLE.match(linea)
+    if carpeta:
+        return carpeta.group(1).rstrip('/') + '/'
+    for patron in _ILEGIBLES:
+        hallado = patron.match(linea)
+        if hallado:
+            return hallado.group(1)
+    return None
 # Los modos que git ya guarda; cualquier otro (0600, 0700…) se apunta aparte.
 MODOS_GIT = (0o644, 0o755)
 
@@ -279,9 +294,9 @@ class Almacen:
         anidados = sorted(set(anidados) | set(enlazados))
         grandes, ilegibles = [], []
         for linea in avisos.splitlines():
-            carpeta = _CARPETA_ILEGIBLE.match(linea.strip())
-            if carpeta:
-                ilegibles.append(carpeta.group(1).rstrip('/') + '/')
+            ruta = _ilegible(linea.strip())
+            if ruta and ruta.endswith('/'):
+                ilegibles.append(ruta)
         for nombre_archivo in dict.fromkeys(n for n in nuevos if not n.endswith('/')):
             path = self.cwd / nombre_archivo
             try:
@@ -300,12 +315,9 @@ class Almacen:
                               sesion=sesion, tolerar=(0, 1),
                               entrada='\0'.join(especificacion).encode(errors='surrogateescape'))
         for linea in errores.splitlines():
-            carpeta = _CARPETA_ILEGIBLE.match(linea.strip())
-            hallado = _ILEGIBLE.match(linea.strip())
-            if carpeta:
-                ilegibles.append(carpeta.group(1).rstrip('/') + '/')
-            elif hallado:
-                ilegibles.append(hallado.group(1))
+            ruta = _ilegible(linea.strip())
+            if ruta:
+                ilegibles.append(ruta)
             elif linea.startswith(('error:', 'fatal:')):
                 raise SinInstantanea('git add: ' + linea[:300])
         arbol = self.git('write-tree', sesion=sesion).decode().strip()
@@ -315,7 +327,7 @@ class Almacen:
         ignorados = [n for n in ignorados.decode(errors='surrogateescape').split('\0') if n]
         excluidos = {'grandes': grandes, 'ilegibles': sorted(set(ilegibles)), 'anidados': anidados,
                      'ignorados': ignorados[:TOPE_EXCLUIDOS], 'recortado': len(ignorados) > TOPE_EXCLUIDOS,
-                     'modos': self._modos(sesion)}
+                     **self._modos(sesion)}
         (self.dir / 'excluidos' / commit).write_text(json.dumps(excluidos, ensure_ascii=False))
         fila = {'repo': self.clave, 'commit': commit, 'fecha': time.time()}
         if grandes:
@@ -323,8 +335,10 @@ class Almacen:
         return fila
 
     def _modos(self, sesion):
-        """{ruta: modo} de los archivos guardados con permisos que git no conserva (0600, 0700…)."""
-        modos = {}
+        """{'modos': {ruta: modo}, 'modos_carpetas': {carpeta: modo}}: los permisos que git no conserva
+        (archivos que no son 0644 ni 0755, carpetas que no son 0755)."""
+        modos, carpetas = {}, {}
+        vistas = set()
         for ruta in self.git('ls-files', '-z', sesion=sesion).decode(errors='surrogateescape').split('\0'):
             if not ruta:
                 continue
@@ -334,11 +348,35 @@ class Almacen:
                 continue
             if stat.S_ISREG(estado.st_mode) and stat.S_IMODE(estado.st_mode) not in MODOS_GIT:
                 modos[ruta] = stat.S_IMODE(estado.st_mode)
-        return modos
+            carpeta = str(Path(ruta).parent)
+            while carpeta not in ('.', '') and carpeta not in vistas:
+                vistas.add(carpeta)
+                try:
+                    modo = stat.S_IMODE(os.lstat(self.cwd / carpeta).st_mode)
+                except OSError:
+                    break
+                if modo != 0o755:
+                    carpetas[carpeta] = modo
+                carpeta = str(Path(carpeta).parent)
+        return {'modos': modos, 'modos_carpetas': carpetas}
 
     def guardar_ref(self, commit, sesion, nombre):
         """Otra ref para un commit que ya está (un rehacer no se pierde con la limpieza)."""
-        self.git('update-ref', 'refs/alfalfa/' + _seguro(sesion) + '/' + _seguro(nombre), commit)
+        with self.cerrojo():
+            self.git('update-ref', 'refs/alfalfa/' + _seguro(sesion) + '/' + _seguro(nombre), commit)
+
+    def entradas(self, commit, rutas):
+        """{ruta: (modo, blob)} de estas rutas en `commit` (las que estén)."""
+        if not rutas:
+            return {}
+        salida = self.git('ls-tree', '-z', '--full-tree', str(commit), '--', *rutas, literal=True)
+        filas = {}
+        for linea in salida.decode(errors='surrogateescape').split('\0'):
+            cabeza, _, ruta = linea.partition('\t')
+            if ruta:
+                modo, _tipo, blob = cabeza.split(' ')
+                filas[ruta] = (modo, blob)
+        return filas
 
     # MARK: - Leer
 
@@ -398,13 +436,16 @@ class Almacen:
         if padre != self.cwd and self.cwd not in padre.parents:
             raise OSError('queda fuera de la carpeta de trabajo')
 
-    def _carpetas(self, path):
-        """Crea las carpetas que faltan una a una, sin seguir enlaces."""
+    def _carpetas(self, path, modos=None):
+        """Crea las carpetas que faltan una a una, sin seguir enlaces, con el modo que tenían (`modos`)."""
         actual = self.cwd
         for parte in path.relative_to(self.cwd).parts[:-1]:
             actual = actual / parte
             if not actual.exists() and not actual.is_symlink():
-                actual.mkdir()
+                modo = (modos or {}).get(str(actual.relative_to(self.cwd)))
+                actual.mkdir(mode=modo if modo is not None else 0o777)
+                if modo is not None:
+                    os.chmod(actual, modo)
             elif actual.is_symlink() or not actual.is_dir():
                 raise OSError('la carpeta ' + str(actual.relative_to(self.cwd)) + ' es un enlace')
 
@@ -422,7 +463,9 @@ class Almacen:
             # En su sitio: conserva permisos, atributos extendidos, ACL y enlaces duros.
             fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
         else:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o777 if ejecutable else 0o666)
+            # Ya con el modo final (la umask sólo puede quitar): nunca existe con más permisos.
+            inicial = permisos if permisos is not None else (0o777 if ejecutable else 0o666)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, inicial)
         with os.fdopen(fd, 'wb') as salida:
             salida.write(datos)
         actual = stat.S_IMODE(os.lstat(path).st_mode)
@@ -445,6 +488,7 @@ class Almacen:
     def _restaurar(self, rutas, destino, creadas_desde, commit=None):
         excluidos = self.excluidos(commit) if commit else None
         modos = excluidos.get('modos') if isinstance(excluidos, dict) else None
+        modos_carpetas = excluidos.get('modos_carpetas') if isinstance(excluidos, dict) else None
         hechas, fallos = [], []
         for ruta in [r for r in rutas if r not in destino]:
             path = self.cwd / ruta
@@ -468,7 +512,7 @@ class Almacen:
                 if path.is_dir() and not path.is_symlink():
                     raise OSError('ahora es una carpeta')
                 datos = self.contenido(blob)
-                self._carpetas(path)
+                self._carpetas(path, modos_carpetas)
                 self._dentro(path)
                 permisos = None
                 if isinstance(modos, dict) and modo != '120000':
