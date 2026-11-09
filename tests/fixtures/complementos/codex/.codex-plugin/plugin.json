@@ -1,0 +1,12 @@
+{
+  "name": "demo-codex",
+  "version": "2.1.0",
+  "description": "Complemento de prueba con manifiesto de Codex.",
+  "author": {"name": "AlfalfaCode", "url": "https://example.invalid/alfalfa"},
+  "homepage": "https://example.invalid/demo-codex",
+  "keywords": ["pruebas", "codex"],
+  "skills": "./skills",
+  "commands": "./commands",
+  "mcpServers": "./.mcp.json",
+  "interface": {"displayName": "Demo Codex", "category": "Pruebas"}
+}

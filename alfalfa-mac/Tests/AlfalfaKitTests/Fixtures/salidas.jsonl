@@ -1,0 +1,11 @@
+{"version":2,"tipo":"sesion","id":"abc","cwd":"/repo","modelo":"deepseek-v4.1-flash:cloud","esfuerzo":"medium"}
+{"version":2,"tipo":"evento","rol":"assistant","texto":"Archivo corregido","hora":1793900000.0}
+{"version":2,"tipo":"permiso","id":"p1","argv":["touch","resultado"],"proposito":"Comprobar escritura"}
+{"version":2,"tipo":"permiso_resuelto","id":"p1","aprobado":true,"motivo":"Respuesta del cliente"}
+{"version":2,"tipo":"contexto","tokens":28400,"limite":262144}
+{"version":2,"tipo":"error","texto":"Mensaje inválido o id de permiso desconocido o repetido."}
+{"version":2,"tipo":"turno_terminado","estado":"completed","resumen":"Archivo corregido","codigo_salida":0,"tokens":100}
+{"version":2,"tipo":"fin","estado":"interrupted","resumen":"Sesión interrumpida; puedes reanudarla.","codigo_salida":130,"tokens":100}
+{"version":2,"tipo":"sesiones","sesiones":[{"id":"abc","encargo":"Corregir","cwd":"/repo","estado":"interrupted","modelo":"deepseek-v4.1-flash:cloud","esfuerzo":"medium","fecha":1793900000.0,"tokens":100},{"id":"bad","encargo":null,"cwd":null,"estado":"corrupta","modelo":null,"esfuerzo":null,"fecha":0,"tokens":0}]}
+{"version":2,"tipo":"modelos","modelos":[{"name":"deepseek-v4.1-flash:cloud"},{"name":"llama3.2:3b"}]}
+{"version":2,"tipo":"telemetria_futura","valor":1}

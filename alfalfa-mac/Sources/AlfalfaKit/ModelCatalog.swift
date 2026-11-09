@@ -1,0 +1,80 @@
+import Foundation
+
+/// Precio de un modelo en USD por millón de tokens, del catálogo de models.dev.
+public struct ModelPrice: Equatable, Sendable {
+    public var input: Double
+    public var output: Double
+    public var isFree: Bool { input == 0 && output == 0 }
+
+    public init(input: Double, output: Double) {
+        self.input = input
+        self.output = output
+    }
+}
+
+/// La clave que le falta a un proveedor compatible con OpenAI y dónde se consigue.
+public struct MissingKey: Equatable, Sendable {
+    /// `OPENROUTER_API_KEY`: el nombre con que el proveedor la llama.
+    public var variable: String
+    /// Página donde se consigue (la `doc` del catálogo o la conocida).
+    public var url: String?
+    /// La explicación completa que da `alfalfa`.
+    public var text: String
+
+    public init(variable: String, url: String? = nil, text: String) {
+        self.variable = variable
+        self.url = url
+        self.text = text
+    }
+}
+
+/// Cómo se enseñan ventanas, precios y costes en el selector y en el panel.
+public enum CatalogFormat {
+    /// Aviso que acompaña a cada modelo gratis.
+    public static let freeNotice = "Gratis: puede usar tus datos para entrenar"
+
+    /// «256K», «1M», «1,05M»: ventana de contexto.
+    public static func window(_ tokens: Int) -> String {
+        if tokens >= 1_000_000 {
+            let value = Double(tokens) / 1_000_000
+            return value == value.rounded() ? "\(Int(value))M" : decimal(value, digits: 2) + "M"
+        }
+        if tokens >= 1000 { return "\(Int((Double(tokens) / 1000).rounded()))K" }
+        return "\(tokens)"
+    }
+
+    /// «gratis» o «0,25/2 $ por M» (entrada/salida por millón de tokens).
+    public static func price(_ price: ModelPrice) -> String {
+        if price.isFree { return "gratis" }
+        return amount(price.input) + "/" + amount(price.output) + " $ por M"
+    }
+
+    /// Coste estimado: «0 $», «< 0,01 $», «0,37 $», «12,40 $».
+    public static func cost(_ usd: Double) -> String {
+        if usd <= 0 { return "0 $" }
+        if usd < 0.01 { return "< 0,01 $" }
+        return decimal(usd, digits: 2, keepZeros: true) + " $"
+    }
+
+    /// Lo que el selector añade al nombre: «256K · gratis», «1M · 0,25/2 $ por M».
+    public static func detail(_ model: ModelInfo) -> String? {
+        var parts: [String] = []
+        if let context = model.context { parts.append(window(context)) }
+        if let price = model.price { parts.append(Self.price(price)) }
+        if model.missingKey != nil { parts.append("sin clave") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static func amount(_ value: Double) -> String {
+        value >= 100 ? String(Int(value.rounded())) : decimal(value, digits: value < 1 ? 3 : 2)
+    }
+
+    private static func decimal(_ value: Double, digits: Int, keepZeros: Bool = false) -> String {
+        var text = String(format: "%.\(digits)f", value)
+        if !keepZeros, text.contains(".") {
+            while text.hasSuffix("0") { text.removeLast() }
+            if text.hasSuffix(".") { text.removeLast() }
+        }
+        return text.replacingOccurrences(of: ".", with: ",")
+    }
+}

@@ -1,0 +1,145 @@
+# Estilo de la app de Mac de AlfalfaCode.
+#
+# Parte de la guía de RedMadRobot (https://github.com/RedMadRobot/RMR-swift-style-guide)
+# y de su swiftlint.yml, adaptada a SwiftUI: sin las reglas de IBOutlet ni IBAction,
+# y con límites más cortos para que ningún archivo vuelva a crecer en sábanas.
+#
+# Uso: `cd alfalfa-mac && swiftlint`. Lo que sigue explica cada decisión.
+#
+# Los avisos que ya había en los archivos grandes (AppModel, SidePanel, Protocol,
+# Timeline…) están apuntados en .swiftlint-baseline.json: SwiftLint sólo enseña los
+# nuevos. Al partir uno de esos archivos, se corrigen sus avisos y se vuelve a escribir
+# la lista con `swiftlint --write-baseline .swiftlint-baseline.json`, que así sólo encoge.
+baseline: .swiftlint-baseline.json
+
+included:
+  - Sources
+  - Tests
+  - Package.swift
+
+excluded:
+  - .build
+  - Tests/AlfalfaKitTests/Fixtures
+
+disabled_rules:
+  # Como en la guía: no es una regla estricta.
+  - implicit_return
+  # Pide `String(bytes:encoding:)`, que devuelve nil si llega un byte que no es UTF-8.
+  # La app usa `String(decoding:as:)` a propósito: la salida de los procesos se lee
+  # entera y cambia los bytes rotos por «�» en vez de perder la línea.
+  - optional_data_string_conversion
+
+opt_in_rules:
+  # De la guía de RedMadRobot.
+  - closure_end_indentation
+  - closure_spacing
+  - empty_count
+  - explicit_init
+  - first_where
+  - operator_usage_whitespace
+  - redundant_nil_coalescing
+  - sorted_imports
+  - unneeded_parentheses_in_closure_argument
+  - unused_optional_binding
+  - vertical_parameter_alignment_on_call
+  # Orden de las partes de un tipo, como los `// MARK: -` de la guía (ver type_contents_order).
+  - type_contents_order
+  # Añadidas para SwiftUI.
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - empty_string
+  - last_where
+  - toggle_bool
+
+# --- Longitudes ------------------------------------------------------------------------
+
+# 120 columnas, como la guía. Los comentarios también cuentan: el texto largo se parte.
+line_length:
+  warning: 120
+  error: 160
+  ignores_urls: true
+
+# La guía avisa a las 1000 líneas; aquí a las 400 para que un archivo nuevo no se
+# convierta en otra sábana como el antiguo SessionView.swift.
+file_length:
+  warning: 400
+  error: 800
+  ignore_comment_only_lines: true
+
+# Un tipo (sin contar sus extensiones) avisa a las 250 líneas.
+type_body_length:
+  warning: 250
+  error: 500
+
+# Las vistas de SwiftUI encadenan modificadores: 60 líneas en vez de las 40 de la guía.
+function_body_length:
+  warning: 60
+  error: 120
+
+function_parameter_count:
+  warning: 6
+  error: 10
+
+cyclomatic_complexity:
+  warning: 12
+  error: 30
+  ignores_case_statements: true
+
+large_tuple:
+  warning: 3
+  error: 4
+
+identifier_name:
+  min_length: 1
+  max_length: 60
+
+type_name:
+  max_length:
+    warning: 60
+    error: 100
+
+nesting:
+  type_level: 2
+
+# --- Orden de las partes de un tipo ----------------------------------------------------
+#
+# El orden de la guía es: Types, Constants, Public Properties, Private Properties,
+# Initializers, métodos de la superclase, Public Methods, Private Methods. Con SwiftUI no
+# hay IBOutlet ni superclase: `body` es una propiedad más, y las vistas auxiliares
+# (`private var header: some View`) van con las propiedades, antes de los métodos.
+type_contents_order:
+  order:
+    - case
+    - [type_alias, associated_type, subtype]
+    - type_property
+    - instance_property
+    - initializer
+    - subscript
+    - [type_method, other_method]
+    - deinitializer
+
+# --- Reglas propias --------------------------------------------------------------------
+
+custom_rules:
+  # Como en la guía: `// MARK: - Nombre`, para que Xcode dibuje la línea divisoria.
+  mark_without_minus_sign:
+    name: "MARK con guion"
+    regex: '//\s*MARK:\s*[^-\s]'
+    match_kinds: comment
+    message: "Usa «// MARK: - Nombre»."
+    severity: warning
+
+  # La guía pide una extensión por protocolo. En SwiftUI la conformidad principal
+  # (View, el tipo crudo de un enum, la superclase) va en la cabecera, y también las
+  # marcas que no traen código propio (Equatable, Hashable, Sendable, Identifiable,
+  # Codable, CaseIterable). Un protocolo con métodos que implementar, como
+  # NSApplicationDelegate o LocalizedError, va en su `extension Tipo: Protocolo`.
+  conformance_in_extension:
+    name: "Una extensión por protocolo"
+    regex: '\b(?:struct|class|enum|actor)\s+\w+(?:<[^>{]*>)?\s*:\s*[\w.]+(?:\s*,\s*(?:Equatable|Hashable|Sendable|Identifiable|Codable|Decodable|Encodable|CaseIterable)\b)*\s*,\s*(?!(?:Equatable|Hashable|Sendable|Identifiable|Codable|Decodable|Encodable|CaseIterable)\b)[\w.]+'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "Deja una sola conformidad en la cabecera y pon las demás en extensiones."
+    severity: warning

@@ -1,0 +1,10 @@
+{"version":2,"tipo":"sesion","id":"s1","cwd":"/repo","modelo":"deepseek-v4.1-flash:cloud","esfuerzo":"low"}
+{"version":2,"tipo":"evento","rol":"tool","texto":"Inicio read_file · {'path': 'suma.py'}","hora":1.0}
+{"version":2,"tipo":"evento","rol":"tool","texto":"read_file\n{\"content\": \"def suma(a, b):\\n    return a - b\"}","hora":2.0}
+{"version":2,"tipo":"evento","rol":"agent","texto":"El error está en la línea 2.","hora":3.0}
+{"version":2,"tipo":"permiso","id":"p1","argv":["pytest","-q"],"proposito":"Ejecutar las pruebas"}
+{"version":2,"tipo":"evento","rol":"user","texto":"Hazlo también para resta","hora":4.0}
+{"version":2,"tipo":"permiso_resuelto","id":"p1","aprobado":false,"motivo":"Respuesta del cliente"}
+{"version":2,"tipo":"evento","rol":"system","texto":"Comando rechazado","hora":5.0}
+{"version":2,"tipo":"contexto","tokens":1000,"limite":4000}
+{"version":2,"tipo":"turno_terminado","estado":"completed","resumen":"Listo","codigo_salida":0,"tokens":321}

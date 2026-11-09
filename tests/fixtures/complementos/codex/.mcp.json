@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "local": {
+      "type": "stdio",
+      "command": "${PLUGIN_ROOT}/servidor.sh",
+      "args": ["--modo", "prueba"]
+    }
+  }
+}

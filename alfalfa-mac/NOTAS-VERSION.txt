@@ -1,0 +1,3 @@
+Se instala desde un DMG firmado y notarizado: arrastra AlfalfaCode a Aplicaciones y listo, sin nada más que instalar.
+Lleva dentro su propio Python, el motor, ripgrep y la búsqueda web desde tu conexión.
+Se actualiza sola: comprueba la firma de CuyCoders y la notarización de Apple antes de instalar.

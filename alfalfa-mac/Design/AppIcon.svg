@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>AlfalfaCode — ramita de alfalfa</title>
+  <desc>Tres hojas verdes sobre un squircle oscuro de 848 píxeles, con margen transparente de 88 píxeles y luz suave.</desc>
+  <defs>
+    <linearGradient id="background" x1="210" y1="100" x2="780" y2="924" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B4236"/><stop offset="0.48" stop-color="#2B2D28"/><stop offset="1" stop-color="#22231F"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="372" y1="270" x2="626" y2="603" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A2DB9C"/><stop offset="0.32" stop-color="#8FD08F"/><stop offset="0.72" stop-color="#6FBF73"/><stop offset="1" stop-color="#55A761"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="300" y1="100" x2="650" y2="924" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8E6E1" stop-opacity="0.16"/><stop offset="0.5" stop-color="#E8E6E1" stop-opacity="0.04"/><stop offset="1" stop-color="#E8E6E1" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
+  <!-- Compensación óptica: +2,9 % frente al recuadro original. -->
+  <g transform="translate(512 512) scale(1.0291262136) translate(-512 -512)">
+  <path id="squircle" d="M340 100H684C852 100 924 172 924 340V684C924 852 852 924 684 924H340C172 924 100 852 100 684V340C100 172 172 100 340 100Z" fill="url(#background)"/>
+  <path d="M340 101H684C851 101 923 173 923 340V684C923 851 851 923 684 923H340C173 923 101 851 101 684V340C101 173 173 101 340 101Z" stroke="url(#rim)" stroke-width="2"/>
+  <g id="sprig" transform="translate(512 512) scale(1.10) translate(-512 -512)">
+  <!-- La sombra corta separa las hojas del fondo sin añadir detalle pequeño. -->
+  <g transform="translate(0 9)" fill="#101A12" opacity="0.3">
+    <path d="M512 499C449 450 417 356 450 296C465 268 491 266 512 278C533 266 559 268 574 296C607 356 575 450 512 499Z"/>
+    <path transform="translate(-36 24)" d="M486 544C377 565 287 491 282 407C280 377 300 356 328 362C335 337 365 335 390 352C469 390 508 465 486 544Z"/>
+    <path transform="translate(36 24)" d="M538 544C647 565 737 491 742 407C744 377 724 356 696 362C689 337 659 335 634 352C555 390 516 465 538 544Z"/>
+  </g>
+  <path id="stem" d="M481 741C516 676 520 584 512 473M514 613L433 548M515 613L591 548" stroke="#6FBF73" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <g id="trifoliate-leaves" fill="url(#leaf)">
+    <path id="top-leaf" d="M512 499C449 450 417 356 450 296C465 268 491 266 512 278C533 266 559 268 574 296C607 356 575 450 512 499Z"/>
+    <path transform="translate(-36 24)" id="left-leaf" d="M486 544C377 565 287 491 282 407C280 377 300 356 328 362C335 337 365 335 390 352C469 390 508 465 486 544Z"/>
+    <path transform="translate(36 24)" id="right-leaf" d="M538 544C647 565 737 491 742 407C744 377 724 356 696 362C689 337 659 335 634 352C555 390 516 465 538 544Z"/>
+  </g>
+  <!-- Nervaduras discretas: volumen en grande sin recargar la silueta. -->
+  <g stroke="#326E40" stroke-opacity="0.18" stroke-width="7" stroke-linecap="round">
+    <path d="M512 463V334"/>
+    <path d="M428 537Q372 510 324 427"/>
+    <path d="M596 537Q652 510 700 427"/>
+  </g>
+  </g>
+  </g>
+</svg>

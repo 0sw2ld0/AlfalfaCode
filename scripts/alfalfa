@@ -1,0 +1,23 @@
+#!/bin/sh
+# Resolve the launcher, including a symlink in PATH, without changing caller cwd.
+source_path=$0
+while [ -L "$source_path" ]; do
+    source_dir=$(CDPATH= cd -- "$(dirname -- "$source_path")" && pwd)
+    link=$(readlink "$source_path")
+    case "$link" in
+        /*) source_path=$link ;;
+        *) source_path=$source_dir/$link ;;
+    esac
+done
+repo=$(CDPATH= cd -- "$(dirname -- "$source_path")/.." && pwd)
+python=$repo/.venv/bin/python
+if [ ! -x "$python" ]; then
+    # Worktrees share the environment of their repository, never system Python.
+    common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir) || exit 1
+    python=$(dirname -- "$common")/.venv/bin/python
+fi
+if [ ! -x "$python" ]; then
+    echo 'AlfalfaCode: falta el .venv del repositorio.' >&2
+    exit 1
+fi
+PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}" exec "$python" -m alfalfa.terminal "$@"
