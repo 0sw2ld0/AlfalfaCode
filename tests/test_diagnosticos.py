@@ -8,6 +8,7 @@ sourcekit-lsp de verdad si este Mac lo tiene. Lo que escribe sourcekit-lsp va a
 carpetas temporales, nunca a ~/Library/Caches.
 """
 import asyncio
+import contextlib
 import hashlib
 import io
 import json
@@ -45,15 +46,6 @@ def guion(carpeta, nombre, codigo):
     carpeta.mkdir(parents=True, exist_ok=True)
     ruta.write_text(codigo)
     return ruta
-
-
-@pytest.fixture(autouse=True)
-def _sin_cache_real(tmp_path_factory, monkeypatch):
-    """Ninguna prueba compila en ~/Library/Caches/alfalfa de quien corre la suite. Una carpeta temporal de
-    toda la suite, para que la caché de módulos del SDK de sourcekit-lsp se haga una sola vez."""
-    base = tmp_path_factory.getbasetemp() / 'cache-sourcekit-de-la-suite'
-    monkeypatch.setattr(modulo, 'carpeta_de_sourcekit',
-                        lambda raiz: base / hashlib.sha256(str(raiz).encode()).hexdigest()[:16])
 
 
 @pytest.fixture
@@ -1019,3 +1011,46 @@ def test_los_manifiestos_del_verificador_no_ejecutan_nada(sesion, permisos, monk
     assert not [n for n in nuevas if 'alfalfa' in n.lower() or 'evil' in n.lower() or 'marca' in n.lower()]
     de_sourcekit = [p for p in pedidas if p['motivo'] != 'edicion']   # Manual también pregunta cada edición
     assert len(de_sourcekit) == (0 if modo == 'omitir' else 1)
+
+
+@pytest.mark.skipif(SOURCEKIT is None or SWIFT is None, reason='sourcekit-lsp o swift no están instalados')
+@pytest.mark.parametrize('manifiesto', ['dlsym', 'silgen'])
+def test_control_los_manifiestos_atacan_si_sourcekit_los_evaluara(tmp_path, manifiesto):
+    """Control de la prueba anterior: con el diseño viejo (sourcekit-lsp en modo SwiftPM, que evalúa el
+    manifiesto) y un TMPDIR como el de producción (…/Library/Caches/alfalfa/sourcekit/…/tmp), evil SÍ se
+    ejecuta. Si un día deja de hacerlo (otra cadena de Swift, otro símbolo), la prueba anterior ya no
+    demostraría nada y hay que rehacer los manifiestos. Sólo escribe su marca en un temporal."""
+    raiz = tmp_path / 'paquete'
+    (raiz / 'Sources' / 'Demo').mkdir(parents=True)
+    (raiz / 'herr').mkdir()
+    marca = tmp_path / 'marca-de-evil'
+    (raiz / 'herr' / 'evil').write_text('#!/bin/sh\ntouch ' + str(marca) + '\nexit 1\n')
+    (raiz / 'herr' / 'evil').chmod(0o755)
+    (raiz / 'Package.swift').write_text((MANIFIESTOS_MALICIOSOS / (manifiesto + '.swift')).read_text()
+                                        .replace('EVIL', str(raiz / 'herr' / 'evil')))
+    fuente = raiz / 'Sources' / 'Demo' / 'a.swift'
+    texto = ('@freestanding(expression) public macro evil() -> Int = #externalMacro(module: "Evil", type: "Evil")\n'
+             'public let x: Int = #evil()\n')
+    fuente.write_text(texto)
+    cache = tmp_path / 'Library' / 'Caches' / 'alfalfa' / 'sourcekit' / 'control'
+    (cache / 'tmp').mkdir(parents=True)
+    entorno = dict(os.environ, TMPDIR=str(cache / 'tmp') + os.sep, CLANG_MODULE_CACHE_PATH=str(cache / 'modulos'),
+                   SWIFTPM_MODULECACHE_OVERRIDE=str(cache / 'modulos'))
+    assert 'alfalfa' in entorno['TMPDIR'] and 'alfalfa-paquete' not in entorno['TMPDIR']
+
+    async def con_el_diseno_viejo():
+        cliente = lsp.ClienteLSP('sourcekit-lsp', [SOURCEKIT], raiz, env=entorno, idioma_de=lambda r: 'swift',
+                                 opciones={'backgroundIndexing': False,
+                                           'swiftPM': {'scratchPath': str(cache / 'compilacion')}}, carga=True)
+        try:
+            await cliente.arrancar()
+            await cliente.abrir(fuente, texto)
+            fin = asyncio.get_running_loop().time() + 90
+            while not marca.exists() and asyncio.get_running_loop().time() < fin:
+                with contextlib.suppress(asyncio.TimeoutError, lsp.ServidorCaido):
+                    await cliente.diagnosticos(fuente, asyncio.get_running_loop().time() + 10)
+                await asyncio.sleep(0.5)
+        finally:
+            await cliente.cerrar()
+    asyncio.run(con_el_diseno_viejo())
+    assert marca.exists(), 'con el diseño viejo evil debería ejecutarse: el manifiesto de prueba ya no ataca'
