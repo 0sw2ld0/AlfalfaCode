@@ -23,6 +23,7 @@ from alfalfa.compactacion import (
     seleccionar_usuario,
     tokens_aprox,
 )
+from alfalfa.proveedores.nativo import historial
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager, main
@@ -145,7 +146,7 @@ class Sesion:
         return codigo
 
     def estado(self):
-        return json.loads((self.m.directory / 'native' / self.m.task['id'] / 'session.json').read_text())
+        return historial.leer(self.m.directory / 'native' / self.m.task['id'] / 'session.json')
 
     def filas(self, tipo):
         return [json.loads(linea) for linea in self.salida.getvalue().splitlines() if json.loads(linea)['tipo'] == tipo]
