@@ -43,10 +43,13 @@ struct WorkLog: View {
                 }
                 .padding(.top, 4)
             } else if let current {
-                HStack(spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     ProgressView().controlSize(.mini)
-                    Text(current.description + "…").font(.system(size: 13)).foregroundStyle(Theme.secondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(current.description + "…").font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                            .lineLimit(1)
+                        if let command = current.command { CommandText(command: command) }
+                    }
                 }
                 .padding(.vertical, 3)
                 .accessibilityElement(children: .combine)
@@ -79,22 +82,26 @@ struct ToolCallRow: View {
             Button { withAnimation(.easeOut(duration: 0.12)) { open.toggle() } } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.muted).frame(width: 14)
-                    Text(call.description).font(.system(size: 13)).foregroundStyle(Theme.secondary).lineLimit(1)
-                    if live {
-                        ProgressView().controlSize(.mini)
-                    } else if call.failed {
-                        Text(call.exitCode.map { "código \($0)" } ?? "falló")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.danger)
+                    // La descripción la escribe el modelo: el comando va siempre debajo, para que
+                    // una orden que se aprobó sola no se esconda tras una frase.
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(call.description).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                                .lineLimit(1)
+                            badge
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Theme.muted).rotationEffect(.degrees(open ? 90 : 0))
+                        }
+                        if let command = call.command, !open { CommandText(command: command) }
                     }
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.muted).rotationEffect(.degrees(open ? 90 : 0))
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 4).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(call.command.map { "$ " + $0 } ?? call.description)
-            .accessibilityLabel(call.description + (call.failed ? ", falló" : ""))
+            .accessibilityLabel(call.description + (call.command.map { ", orden " + $0 } ?? "")
+                                + (call.interrupted ? ", interrumpida" : call.failed ? ", falló" : ""))
             if open { detail.padding(.leading, 22).padding(.bottom, 6) }
         }
     }
@@ -102,6 +109,20 @@ struct ToolCallRow: View {
     // MARK: - Propiedades privadas
 
     @State private var open = false
+
+    /// En curso, interrumpida, fallida o con un código que el motor dio por bueno (en gris).
+    @ViewBuilder private var badge: some View {
+        if live {
+            ProgressView().controlSize(.mini)
+        } else if call.interrupted {
+            Text("interrumpida").font(.system(size: 11.5)).foregroundStyle(Theme.warning)
+        } else if call.failed {
+            Text(call.exitCode.map { "código \($0)" } ?? "falló").font(.system(size: 11.5)).foregroundStyle(Theme.danger)
+        } else if let code = call.exitCode, code != 0 {
+            Text("código \(code)").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                .help("El código no es 0, pero el resultado es el esperado")
+        }
+    }
 
     @ViewBuilder private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -173,5 +194,15 @@ private struct NoteRow: View {
                     .padding(.leading, 22)
             }
         }
+    }
+}
+
+/// La orden tal cual, pequeña y en monoespaciada, debajo de su descripción.
+private struct CommandText: View {
+    let command: String
+
+    var body: some View {
+        Text("$ " + command).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Theme.muted)
+            .lineLimit(1).truncationMode(.middle)
     }
 }

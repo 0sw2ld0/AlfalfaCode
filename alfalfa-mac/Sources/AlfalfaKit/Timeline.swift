@@ -219,6 +219,8 @@ public struct Timeline: Equatable, Sendable {
         }
         totalTokens = tokens
         totalCost = cost
+        // Una sesión guardada no está trabajando: lo que quedó sin resultado, quedó cortado.
+        closeOpenCalls()
         if let wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
         status = .idle
         compacting = false
@@ -330,6 +332,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            closeOpenCalls()
             // Los mensajes ya entregados sin turno conocido son de este turno.
             if let turn = outcome.turn {
                 for item in items {
@@ -357,6 +360,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            closeOpenCalls()
             totalTokens = outcome.tokens
             if let cost = outcome.cost { totalCost = cost }
             finish(outcome: outcome)
@@ -404,6 +408,9 @@ public struct Timeline: Equatable, Sendable {
         switch event.role {
         case "user":
             closeWrapUps()
+            // Un turno nuevo: lo que el anterior dejó sin resultado («Enviar ahora» durante una
+            // orden) ya no está corriendo.
+            closeOpenCalls()
             let id: Int
             if let index = items.firstIndex(where: { if case .user(_, event.text, true) = $0 { return true } else { return false } }),
                case let .user(existing, text, _) = items[index] {
@@ -428,9 +435,19 @@ public struct Timeline: Equatable, Sendable {
             // El resultado de una herramienta (no su «Inicio») cierra la orden en marcha.
             if event.role == "tool", !event.text.hasPrefix("Inicio ") { runningPermission = nil }
             let tool = ToolEvent(id: nextID(), role: event.role, text: event.text, time: event.time, tool: event.tool)
-            if let index = groupAwaiting(tool) {
-                // El resultado de una orden que pidió permiso vuelve a su grupo, encima de la tarjeta.
+            let info = tool.toolInfo
+            if let index = groupAwaiting(info?.phase == .start ? nil : info?.name ?? "") {
+                // El resultado de una orden que pidió permiso vuelve a su grupo, encima de la tarjeta,
+                // y un aviso que llega mientras espera (un hook, un proceso que terminó) no lo parte.
                 if case let .events(id, existing) = items[index] { items[index] = .events(id: id, existing + [tool]) }
+            } else if let info, info.phase == .end, let (index, position) = interruptedCall(named: info.name) {
+                // El resultado tardío de una llamada que la app dio por cortada («El proceso se
+                // interrumpió…» al empezar el turno siguiente) sustituye a ese cierre.
+                if case let .events(id, existing) = items[index] {
+                    var events = existing
+                    events[position] = tool
+                    items[index] = .events(id: id, events)
+                }
             } else if case let .events(id, existing)? = items.last {
                 items[items.count - 1] = .events(id: id, existing + [tool])
             } else {
@@ -443,21 +460,46 @@ public struct Timeline: Equatable, Sendable {
         }
     }
 
-    /// Grupo anterior a una tarjeta de permiso cuya última llamada espera este resultado.
-    /// Sólo se mira por encima de permisos y avisos: un mensaje del agente cierra el grupo.
-    private func groupAwaiting(_ event: ToolEvent) -> Int? {
-        guard let info = event.toolInfo, info.phase == .end else { return nil }
-        if case .events? = items.last { return nil }
+    /// Grupo cuya última llamada sigue esperando su resultado: el de `name` (un fin) o cualquiera
+    /// (`""`, un aviso del sistema). nil para un inicio. Se mira por encima de permisos, avisos y
+    /// grupos que sólo tienen avisos; un mensaje del agente o del usuario cierra el grupo.
+    private func groupAwaiting(_ name: String?) -> Int? {
+        guard let name else { return nil }
         for index in items.indices.reversed() {
             switch items[index] {
             case .permission, .notice: continue
             case let .events(_, events):
-                guard let open = ToolCalls.running(in: events), open.name == info.name else { return nil }
-                return index
+                if let open = ToolCalls.running(in: events), name.isEmpty || open.name == name { return index }
+                if ToolCalls.calls(from: events).isEmpty { continue }
+                return nil
             default: return nil
             }
         }
         return nil
+    }
+
+    /// El cierre puesto por la app (`ToolInfo.interruption`) más reciente de una llamada `name`.
+    private func interruptedCall(named name: String) -> (Int, Int)? {
+        for index in items.indices.reversed() {
+            guard case let .events(_, events) = items[index] else { continue }
+            if let position = events.lastIndex(where: { $0.tool?.interrupted == true && $0.tool?.name == name }) {
+                return (index, position)
+            }
+        }
+        return nil
+    }
+
+    /// Da por cortadas las llamadas que siguen sin resultado: el turno terminó o empezó otro.
+    private mutating func closeOpenCalls() {
+        for index in items.indices {
+            guard case let .events(id, events) = items[index] else { continue }
+            let open = ToolCalls.open(in: events)
+            guard !open.isEmpty else { continue }
+            let closings = open.map { call in
+                ToolEvent(id: nextID(), role: "tool", text: call.name, tool: .interruption(of: call.name))
+            }
+            items[index] = .events(id: id, events + closings)
+        }
     }
 
     private mutating func resolve(id: String, state: PermissionState) {
@@ -486,6 +528,7 @@ public struct Timeline: Equatable, Sendable {
     /// El proceso salió. Si no hubo `fin`, o salió con 130, la sesión queda interrumpida.
     public mutating func processExited(code: Int32) {
         runningPermission = nil
+        closeOpenCalls()
         compacting = false
         // macOS suelta la aserción con el proceso.
         keepingAwake = false

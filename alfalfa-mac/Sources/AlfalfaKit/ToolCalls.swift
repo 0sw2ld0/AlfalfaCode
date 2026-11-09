@@ -14,19 +14,30 @@ public struct ToolInfo: Equatable, Sendable {
     public var cwd: String?
     /// El archivo o la página de la llamada (`objetivo`).
     public var target: String?
+    /// Los archivos de un parche (`objetivos`).
+    public var targets: [String]
     public var exitCode: Int?
     public var failed: Bool
+    /// Cómo clasificó el motor el resultado (`clasificacion.disposition`): «pass» o «failure».
+    /// Manda sobre el código de salida: `rg` sin coincidencias esperadas sale con 1 y no falla.
+    public var disposition: String?
+    /// Cierre que pone la app cuando el turno acabó sin que llegara el resultado.
+    public var interrupted: Bool
 
     public init(name: String, phase: Phase, description: String? = nil, command: String? = nil, cwd: String? = nil,
-                target: String? = nil, exitCode: Int? = nil, failed: Bool = false) {
+                target: String? = nil, targets: [String] = [], exitCode: Int? = nil, failed: Bool = false,
+                disposition: String? = nil, interrupted: Bool = false) {
         self.name = name
         self.phase = phase
         self.description = description
         self.command = command
         self.cwd = cwd
         self.target = target
+        self.targets = targets
         self.exitCode = exitCode
         self.failed = failed
+        self.disposition = disposition
+        self.interrupted = interrupted
     }
 
     /// Lee `herramienta`; nil si falta o no tiene nombre y fase.
@@ -38,8 +49,17 @@ public struct ToolInfo: Equatable, Sendable {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         }
+        let targets = (object["objetivos"] as? [Any] ?? []).compactMap { $0 as? String }.filter { !$0.isEmpty }
+        let disposition = (object["clasificacion"] as? [String: Any])?["disposition"] as? String
         return ToolInfo(name: name, phase: phase, description: text("descripcion"), command: text("orden"),
-                        cwd: text("cwd"), target: text("objetivo"), exitCode: object["codigo"] as? Int, failed: object["error"] as? Bool ?? false)
+                        cwd: text("cwd"), target: text("objetivo"), targets: targets,
+                        exitCode: object["codigo"] as? Int, failed: object["error"] as? Bool ?? false,
+                        disposition: disposition)
+    }
+
+    /// Fin que pone la app a una llamada que se quedó sin resultado (turno cortado, proceso caído).
+    public static func interruption(of name: String) -> ToolInfo {
+        ToolInfo(name: name, phase: .end, failed: true, interrupted: true)
     }
 }
 
@@ -78,10 +98,14 @@ public struct ToolCall: Equatable, Identifiable, Sendable {
     public var request: String?
     /// Archivo o página a la que se refiere, para no contar dos veces el mismo al resumir.
     public var target: String?
+    /// Todos los archivos que toca (los de un parche); vacío si no se sabe.
+    public var targets: [String] = []
     public var output: String?
     public var exitCode: Int?
     public var failed = false
     public var finished = false
+    /// El turno acabó sin que llegara su resultado.
+    public var interrupted = false
 }
 
 /// Una fila del grupo: una llamada o un aviso del sistema entre llamadas.
@@ -114,6 +138,17 @@ public enum ToolCalls {
             switch info.phase {
             case .start:
                 entries.append(.call(start(event, info)))
+            case .end where info.interrupted:
+                // Sólo cierra una llamada abierta; si ya tiene resultado, no hay nada que cerrar.
+                if let index = entries.lastIndex(where: {
+                    if case let .call(call) = $0 { return !call.finished && call.name == info.name }
+                    return false
+                }), case var .call(call) = entries[index] {
+                    call.finished = true
+                    call.interrupted = true
+                    call.output = interruptedText
+                    entries[index] = .call(call)
+                }
             case .end:
                 if let index = entries.lastIndex(where: {
                     if case let .call(call) = $0 { return !call.finished && call.name == info.name }
@@ -141,6 +176,14 @@ public enum ToolCalls {
         calls(from: events).last { !$0.finished }
     }
 
+    /// Las llamadas sin resultado, para cerrarlas como interrumpidas cuando acaba el turno.
+    public static func open(in events: [ToolEvent]) -> [ToolCall] {
+        calls(from: events).filter { !$0.finished }
+    }
+
+    /// Lo que dice una llamada que se quedó sin resultado.
+    public static let interruptedText = "El turno terminó antes de que llegara el resultado."
+
     /// «Ejecutó 3 comandos, leyó 2 archivos, editó 1 archivo», en el orden en que aparecen.
     public static func summary(_ calls: [ToolCall]) -> String {
         var order: [ToolKind] = []
@@ -158,7 +201,11 @@ public enum ToolCalls {
 
     private static func phrase(_ kind: ToolKind, _ calls: [ToolCall]) -> String {
         let count = calls.count
-        let distinct = Set(calls.map { $0.target ?? "#\($0.id)" }).count
+        // Cada archivo una vez; una llamada sin archivo conocido cuenta por sí sola.
+        let distinct = Set(calls.flatMap { call -> [String] in
+            if !call.targets.isEmpty { return call.targets }
+            return [call.target ?? "#\(call.id)"]
+        }).count
         func n(_ value: Int, _ one: String, _ many: String) -> String { "\(value) \(value == 1 ? one : many)" }
         switch kind {
         case .command: return "ejecutó " + n(count, "comando", "comandos")
@@ -185,9 +232,10 @@ public enum ToolCalls {
         let description = info.description ?? pythonField("description", in: request)
             ?? pythonField("purpose", in: request) ?? fallbackDescription(info.name, path)
         let kind = ToolKind(tool: info.name)
+        let targets = info.targets.isEmpty && info.name == "apply_patch" ? patchFiles(in: request) : info.targets
         return ToolCall(id: event.id, name: info.name, kind: kind, description: description, command: command,
                         request: kind == .command && command != nil ? nil : request,
-                        target: path ?? pythonField("url", in: request))
+                        target: path ?? pythonField("url", in: request), targets: targets)
     }
 
     private static func finish(_ call: inout ToolCall, _ event: ToolEvent, _ info: ToolInfo) {
@@ -195,10 +243,18 @@ public enum ToolCalls {
         let body = event.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
         let raw = body.count > 1 ? String(body[1]) : ""
         var object = (raw.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any]
-        // Una salida demasiado larga llega envuelta: {"truncated": true, "text": "{…"}.
+        // Una salida demasiado larga llega envuelta: {"truncated": true, "text": "{…"}, con el JSON
+        // del resultado cortado dentro. Se saca de ahí la salida de verdad, no el JSON con sus \n.
         if let wrapped = object, wrapped["truncated"] as? Bool == true, let inner = wrapped["text"] as? String {
             object = nil
-            call.output = clip(inner)
+            if call.exitCode == nil { call.exitCode = info.exitCode ?? partialInt("exit_code", in: inner) }
+            if let error = partialString("error", in: inner) {
+                call.failed = true
+                call.output = clip(error)
+            } else {
+                call.output = clip((partialString("output", in: inner) ?? partialString("text", in: inner)
+                                    ?? inner) + "\n…")
+            }
         }
         if let object {
             if call.command == nil, let argv = object["argv"] as? [String] {
@@ -225,7 +281,13 @@ public enum ToolCalls {
             call.output = clip(raw)
         }
         if info.failed { call.failed = true }
-        if let code = call.exitCode, code != 0 { call.failed = true }
+        if let disposition = info.disposition {
+            // La clasificación del motor manda: un código distinto de 0 esperado no es un fallo.
+            if disposition == "failure" { call.failed = true }
+        } else if let code = call.exitCode ?? info.exitCode, code != 0 {
+            call.failed = true
+        }
+        if call.exitCode == nil { call.exitCode = info.exitCode }
         if call.kind == .command, call.request != nil, call.command != nil { call.request = nil }
     }
 
@@ -265,6 +327,55 @@ public enum ToolCalls {
             value.append(character)
         }
         return nil
+    }
+
+    /// Valor de texto de `"clave": "…` en un JSON cortado: se lee hasta la comilla de cierre o
+    /// hasta donde llegue, deshaciendo los escapes.
+    static func partialString(_ key: String, in text: String) -> String? {
+        guard let range = text.range(of: "\"\(key)\": \"") else { return nil }
+        var value = ""
+        var iterator = text[range.upperBound...].makeIterator()
+        while let character = iterator.next() {
+            if character == "\"" { return value }
+            guard character == "\\" else { value.append(character); continue }
+            guard let escaped = iterator.next() else { break }
+            switch escaped {
+            case "n": value.append("\n")
+            case "t": value.append("\t")
+            case "r": value.append("\r")
+            case "b", "f": break
+            case "u":
+                var hex = ""
+                while hex.count < 4, let digit = iterator.next() { hex.append(digit) }
+                if hex.count == 4, let code = UInt32(hex, radix: 16), let scalar = Unicode.Scalar(code) {
+                    value.unicodeScalars.append(scalar)
+                }
+            default: value.append(escaped)
+            }
+        }
+        return value
+    }
+
+    private static func partialInt(_ key: String, in text: String) -> Int? {
+        guard let range = text.range(of: "\"\(key)\": ") else { return nil }
+        let digits = text[range.upperBound...].prefix { $0 == "-" || $0.isNumber }
+        return Int(digits)
+    }
+
+    /// Archivos de un parche leídos del texto de inicio («*** Update File: a.py»), en motores
+    /// que no mandaban `objetivos`.
+    private static func patchFiles(in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"\*\*\* (?:Add|Update|Delete) File: (.+?)(?=\\n|\n|'|$)"#)
+        else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        var files: [String] = []
+        for match in regex.matches(in: text, range: range) {
+            if let r = Range(match.range(at: 1), in: text) {
+                let file = String(text[r]).trimmingCharacters(in: .whitespaces)
+                if !file.isEmpty, !files.contains(file) { files.append(file) }
+            }
+        }
+        return files
     }
 
     private static func shellQuoted(_ argument: String) -> String {

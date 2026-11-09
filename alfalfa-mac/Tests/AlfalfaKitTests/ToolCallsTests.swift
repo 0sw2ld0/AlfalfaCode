@@ -27,9 +27,10 @@ final class ToolCallsTests: XCTestCase {
         return ["rol": "tool", "texto": "Inicio \(name) · {}", "hora": 1, "herramienta": tool]
     }
 
-    private func end(_ name: String, _ result: String, code: Int? = nil) -> [String: Any] {
+    private func end(_ name: String, _ result: String, code: Int? = nil, disposition: String? = nil) -> [String: Any] {
         var tool: [String: Any] = ["nombre": name, "fase": "fin"]
         if let code { tool["codigo"] = code }
+        if let disposition { tool["clasificacion"] = ["disposition": disposition, "status": "x"] }
         return ["rol": "tool", "texto": name + "\n" + result, "hora": 2, "herramienta": tool]
     }
 
@@ -173,5 +174,101 @@ final class ToolCallsTests: XCTestCase {
         guard case let .events(_, grouped) = timeline.items[0] else { return XCTFail("grupo") }
         XCTAssertEqual(ToolCalls.calls(from: grouped).first?.command, "git diff")
         XCTAssertEqual(ToolCalls.calls(from: grouped).first?.description, "Ver qué cambió")
+    }
+
+    // MARK: - Revisión del PR
+
+    func testCutTurnClosesTheOpenCallAndTheLateResultJoinsIt() {
+        var timeline = Timeline()
+        apply(&timeline, [["rol": "user", "texto": "Instala"], start("run_command", "Instalar", command: "npm install")])
+        // «Enviar ahora»: el turno se corta sin el fin de la orden.
+        timeline.apply(.turnFinished(Outcome(state: "interrupted", summary: "", exitCode: 0, tokens: 0)))
+        guard case let .events(_, events) = timeline.items[1] else { return XCTFail("grupo") }
+        let call = ToolCalls.calls(from: events)[0]
+        XCTAssertTrue(call.finished && call.interrupted)
+        XCTAssertNil(ToolCalls.running(in: events))
+        // El turno siguiente empieza por el resultado «El proceso se interrumpió…» sin inicio.
+        apply(&timeline, [["rol": "user", "texto": "Sigue"],
+                          end("run_command", #"{"error": "El proceso se interrumpió durante esta herramienta."}"#)])
+        XCTAssertEqual(timeline.items.count, 3, "el resultado no abre otro grupo")
+        guard case let .events(_, joined) = timeline.items[1] else { return XCTFail("grupo") }
+        let calls = ToolCalls.calls(from: joined)
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls[0].description, "Instalar")
+        XCTAssertFalse(calls[0].interrupted)
+        XCTAssertEqual(calls[0].output, "El proceso se interrumpió durante esta herramienta.")
+    }
+
+    func testNewUserMessageAndSavedHistoryCloseOpenCalls() {
+        var timeline = Timeline()
+        apply(&timeline, [start("run_checks", "Pasar las pruebas"), ["rol": "user", "texto": "Para"]])
+        guard case let .events(_, events) = timeline.items[0] else { return XCTFail("grupo") }
+        XCTAssertNil(ToolCalls.running(in: events))
+        XCTAssertTrue(ToolCalls.calls(from: events)[0].interrupted)
+        let saved = Timeline(history: [AgentEvent(role: "tool", text: "Inicio read_file · {'path': 'a.py'}", time: 1)],
+                             wrapUp: nil)
+        guard case let .events(_, old) = saved.items[0] else { return XCTFail("grupo") }
+        XCTAssertNil(ToolCalls.running(in: old))
+    }
+
+    func testSystemNoticeDoesNotSplitACallFromItsResult() {
+        var timeline = Timeline()
+        apply(&timeline, [start("run_command", "Instalar dependencias", command: "npm install")])
+        timeline.apply(.permission(PermissionRequest(id: "p1", argv: ["npm", "install"], purpose: "")))
+        timeline.apply(.permissionResolved(id: "p1", approved: true, reason: "", session: false))
+        apply(&timeline, [["rol": "system", "texto": "El proceso p1 terminó."],
+                          end("run_command", #"{"output": "ok", "exit_code": 0}"#, code: 0)])
+        XCTAssertEqual(timeline.items.count, 2, "el aviso y el resultado van al grupo de la llamada")
+        guard case let .events(_, events) = timeline.items[0] else { return XCTFail("grupo") }
+        let entries = ToolCalls.entries(from: events)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(ToolCalls.calls(from: events).first?.output, "ok")
+        XCTAssertNil(ToolCalls.running(in: events))
+    }
+
+    func testEngineClassificationDecidesFailure() {
+        var timeline = Timeline()
+        apply(&timeline, [
+            start("run_command", "Comprobar que ya no queda ningún TODO", command: "rg TODO"),
+            end("run_command", #"{"output": "", "exit_code": 1}"#, code: 1, disposition: "pass"),
+            start("run_checks", "Pasar las pruebas", command: "pytest"),
+            end("run_checks", #"{"output": "1 failed", "exit_code": 1}"#, code: 1, disposition: "failure"),
+            start("run_command", "Ver el estado", command: "git status"),
+            end("run_command", #"{"output": "", "exit_code": 0}"#, code: 0, disposition: "failure"),
+        ])
+        guard case let .events(_, events) = timeline.items[0] else { return XCTFail("grupo") }
+        let calls = ToolCalls.calls(from: events)
+        XCTAssertFalse(calls[0].failed)
+        XCTAssertEqual(calls[0].exitCode, 1)
+        XCTAssertTrue(calls[1].failed)
+        XCTAssertTrue(calls[2].failed)
+    }
+
+    func testTruncatedOutputIsUnwrapped() {
+        let inner = #"{"exit_code": 2, "output": "línea 1\nlínea \"2\"\n\u00e9xito"#
+        let wrapped = try! JSONSerialization.data(withJSONObject: ["truncated": true, "text": inner])
+        let events = [ToolEvent(id: 1, role: "tool", text: "Inicio run_command · {}",
+                                tool: ToolInfo(name: "run_command", phase: .start, command: "make")),
+                      ToolEvent(id: 2, role: "tool", text: "run_command\n" + String(data: wrapped, encoding: .utf8)!)]
+        let call = ToolCalls.calls(from: events)[0]
+        XCTAssertEqual(call.output, "línea 1\nlínea \"2\"\néxito\n…")
+        XCTAssertEqual(call.exitCode, 2)
+        XCTAssertTrue(call.failed)
+    }
+
+    func testPatchCountsItsFiles() {
+        var timeline = Timeline()
+        var patch = start("apply_patch", "Editar 2 archivos")
+        var tool = patch["herramienta"] as! [String: Any]
+        tool["objetivos"] = ["a.py", "b.py"]
+        patch["herramienta"] = tool
+        apply(&timeline, [patch, end("apply_patch", "{}"), start("edit_file", "Editar a.py", target: "a.py"),
+                          end("edit_file", "{}")])
+        guard case let .events(_, events) = timeline.items[0] else { return XCTFail("grupo") }
+        XCTAssertEqual(ToolCalls.summary(ToolCalls.calls(from: events)), "Editó 2 archivos")
+        // Motores anteriores: los archivos se leen del texto del parche.
+        let old = [ToolEvent(id: 1, role: "tool",
+                             text: "Inicio apply_patch · {'input': '*** Begin Patch\\n*** Update File: x.py\\n@@\\n*** Add File: y.py\\n+z\\n*** End Patch'}")]
+        XCTAssertEqual(ToolCalls.calls(from: old)[0].targets, ["x.py", "y.py"])
     }
 }

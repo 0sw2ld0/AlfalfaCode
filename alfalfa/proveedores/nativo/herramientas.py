@@ -811,6 +811,10 @@ class WorkspaceTools:
         for alias, real in ALIAS_DE_ARGUMENTOS.get(name, {}).items():
             if alias in normalizados and real not in normalizados:
                 normalizados[real] = normalizados.pop(alias)
+        # `description` sólo sirve para enseñarla: un null o un número no tumban la orden.
+        if 'description' in normalizados and not isinstance(normalizados['description'], str) \
+                and name in ('run_command', 'run_checks'):
+            normalizados.pop('description')
         desconocidos = sorted(set(normalizados) - set(spec['properties']))
         faltan = sorted(set(spec['required']) - set(normalizados))
         if desconocidos or faltan:

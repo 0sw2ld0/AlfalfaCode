@@ -548,6 +548,8 @@ class TerminalManager:
         if self.transport is not None:
             self.transport.in_turn = True
             self.transport.redireccion.clear()
+        # Un turno nuevo (también «Reanudar» sin mensaje) puede repetir la respuesta del anterior.
+        self._ultima_respuesta = None
         # Todo el turno: subagentes, órdenes y la espera de un permiso. Se suelta siempre,
         # también al cancelar o fallar; si el proceso muere, macOS la suelta con él.
         self.despierto.empezar()

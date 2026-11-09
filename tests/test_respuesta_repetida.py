@@ -58,3 +58,58 @@ def test_la_misma_respuesta_seguida_se_enseña_una_vez(tmp_path):
     registro = next((tmp_path / 'home').rglob(sesion + '.jsonl'))
     guardadas = [json.loads(linea) for linea in registro.read_text().splitlines()]
     assert [g['text'] for g in guardadas if g['role'] == 'agent'] == respuestas
+
+
+DOS_TURNOS = '''
+import sys
+from unittest.mock import patch
+from alfalfa.terminal import main
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
+async def inference(self, client, endpoint, payload, **kwargs):
+    if endpoint == '/api/show':
+        return {'capabilities': ['tools']}
+    return dict(message=dict(role='assistant', content='Listo.', tool_calls=[]),
+                done=True, done_reason='stop', prompt_eval_count=1, eval_count=1)
+with patch.object(NativeRuntime, 'request', inference):
+    sys.exit(main(sys.argv[1:]))
+'''
+
+
+def test_la_misma_respuesta_en_otro_turno_si_se_enseña(tmp_path):
+    raiz = str(Path(__file__).resolve().parents[1])
+    env = dict(os.environ, PYTHONPATH=raiz, ALFALFA_HOME=str(tmp_path / 'home'))
+    proc = subprocess.Popen([sys.executable, '-c', DOS_TURNOS, '--stdio', 'Primero'], cwd=tmp_path, env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    filas, turnos = [], 0
+    try:
+        while turnos < 2:
+            assert select.select([proc.stdout], [], [], 20)[0], 'stdout timeout'
+            fila = json.loads(proc.stdout.readline())
+            filas.append(fila)
+            if fila['tipo'] == 'turno_terminado':
+                turnos += 1
+                if turnos == 1:
+                    proc.stdin.write(json.dumps(dict(tipo='mensaje', texto='Segundo')) + '\n')
+                    proc.stdin.flush()
+        proc.stdin.close()
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    respuestas = [f['texto'] for f in filas if f['tipo'] == 'evento' and f['rol'] == 'agent']
+    assert respuestas == ['Listo.', 'Listo.']
+
+
+def test_reanudar_sin_mensaje_no_hereda_la_ultima_respuesta(tmp_path):
+    from alfalfa.terminal import TerminalManager
+    gestor = TerminalManager.__new__(TerminalManager)
+    gestor._ultima_respuesta = 'Listo.'
+    gestor.transport, gestor.despierto = None, type('D', (), {'empezar': lambda s: None,
+                                                              'terminar': lambda s: None})()
+
+    async def _run(prompt, eco=False):
+        return gestor._ultima_respuesta
+    gestor._run = _run
+    import asyncio
+    assert asyncio.run(gestor.run('')) is None

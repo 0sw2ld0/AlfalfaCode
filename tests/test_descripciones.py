@@ -117,7 +117,8 @@ def test_description_viaja_en_los_eventos_y_en_el_historial(tmp_path):
     assert herramientas[2] == {'nombre': 'run_command', 'fase': 'inicio',
                                'descripcion': 'Comprobar que Python suma bien',
                                'orden': sys.executable + " -c 'print(40 + 2)'"}
-    assert herramientas[3] == {'nombre': 'run_command', 'fase': 'fin', 'codigo': 0}
+    assert herramientas[3] == {'nombre': 'run_command', 'fase': 'fin', 'codigo': 0,
+                               'clasificacion': {'disposition': 'pass', 'status': 'passed'}}
     # El texto de siempre sigue igual para las apps anteriores.
     textos = [f['texto'] for f in filas if f['tipo'] == 'evento' and f['rol'] == 'tool']
     assert textos[2].startswith('Inicio run_command · ') and textos[3].startswith('run_command\n')
@@ -130,3 +131,48 @@ def test_description_viaja_en_los_eventos_y_en_el_historial(tmp_path):
     fila = json.loads(historial.stdout.splitlines()[-1])
     guardadas = [e['herramienta'] for e in fila['eventos'] if e['rol'] == 'tool']
     assert guardadas == herramientas
+
+
+def test_description_que_no_es_texto_no_tumba_la_orden():
+    for valor in (None, 7, ['a'], {'x': 1}, True):
+        args = WorkspaceTools.validate('run_command', {'argv': ['ls'], 'purpose': 'Listar', 'description': valor})
+        assert args == {'argv': ['ls'], 'purpose': 'Listar'}
+        assert descripcion('run_command', {'argv': ['ls'], 'purpose': 'Listar', 'description': valor}) == 'Listar'
+
+
+def test_el_parche_dice_sus_archivos():
+    parche = ('*** Begin Patch\n*** Update File: a.py\n@@\n-x\n+y\n*** Add File: b/c.py\n+z\n'
+              '*** Update File: a.py\n@@\n-y\n+w\n*** End Patch')
+    assert datos_de_inicio('apply_patch', {'input': parche})['objetivos'] == ['a.py', 'b/c.py']
+    assert 'objetivos' not in datos_de_inicio('apply_patch', {'input': 'basura'})
+
+
+def test_la_clasificacion_viaja_en_el_fin():
+    # rg sin coincidencias que el propósito esperaba: código 1, pero no es un fallo.
+    resultado = {'exit_code': 1, 'output': '', 'classification': {
+        'status': 'expected_absence', 'disposition': 'pass', 'cause': 'rg_no_matches_expected', 'message': 'x'}}
+    assert datos_de_fin('run_command', resultado) == {
+        'nombre': 'run_command', 'fase': 'fin', 'codigo': 1,
+        'clasificacion': {'disposition': 'pass', 'status': 'expected_absence'}}
+    assert 'clasificacion' not in datos_de_fin('run_command', {'exit_code': 0, 'classification': {'x': 1}})
+
+
+def test_herramienta_pasa_por_la_limpieza_de_secretos(tmp_path):
+    import io
+
+    from alfalfa.stdio import Transport
+    from alfalfa.terminal import TerminalManager
+    salida = io.StringIO()
+    transporte = Transport(salida)
+    transporte.secretos.add('sk-muy-secreto-123')
+    gestor = TerminalManager.__new__(TerminalManager)
+    gestor.transport, gestor.directory, gestor.mcp = transporte, tmp_path, None
+    tarea = {'id': 't1'}
+    args = {'argv': ['curl', '-H', 'Authorization: Bearer sk-muy-secreto-123', 'https://x'], 'purpose': 'p',
+            'description': 'Probar la clave sk-muy-secreto-123'}
+    gestor.tool_event(tarea, 'Inicio run_command · ' + str(args), datos_de_inicio('run_command', args))
+    emitido = json.loads(salida.getvalue())
+    guardado = json.loads((tmp_path / 't1.jsonl').read_text())
+    for fila in (emitido['herramienta'], guardado['herramienta'], emitido['texto'], guardado['text']):
+        assert 'sk-muy-secreto-123' not in json.dumps(fila)
+    assert '[REDACTADO]' in emitido['herramienta']['orden'] and '[REDACTADO]' in emitido['herramienta']['descripcion']

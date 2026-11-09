@@ -59,9 +59,12 @@ struct SessionView: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 let items = session.timeline.items
-                // Sólo el último grupo de acciones es el que está trabajando ahora.
-                let liveWork = session.timeline.status.isRunning
-                    ? items.lastIndex { if case .events = $0 { return true } else { return false } } : nil
+                // Sólo el último grupo de acciones es el que está trabajando ahora, y sólo si es de
+                // este turno: el de antes del último mensaje ya no corre.
+                let lastUser = items.lastIndex { if case .user = $0 { return true } else { return false } }
+                let lastEvents = items.lastIndex { if case .events = $0 { return true } else { return false } }
+                let liveWork = session.timeline.status.isRunning && (lastEvents ?? -1) > (lastUser ?? -1)
+                    ? lastEvents : nil
                 LazyVStack(alignment: .leading, spacing: 22) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         ItemView(item: item, session: session,

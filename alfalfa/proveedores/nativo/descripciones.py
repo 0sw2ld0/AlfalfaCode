@@ -127,6 +127,11 @@ def datos_de_inicio(nombre, args):
     objetivo = args.get('path') or args.get('url') if isinstance(args, dict) else None
     if isinstance(objetivo, str) and objetivo.strip():
         datos['objetivo'] = objetivo[:500]
+    if nombre == 'apply_patch' and isinstance(args, dict):
+        # Un parche toca varios archivos: el resumen cuenta archivos, no parches.
+        archivos = list(dict.fromkeys(a.strip()[:500] for a in _archivos_del_parche(args.get('input'))))[:100]
+        if archivos:
+            datos['objetivos'] = archivos
     if nombre in ORDENES and isinstance(args, dict):
         orden = orden_legible(args.get('argv'))
         if orden:
@@ -144,4 +149,12 @@ def datos_de_fin(nombre, resultado):
             datos['codigo'] = resultado['exit_code']
         if 'error' in resultado:
             datos['error'] = True
+        # Cómo clasificó el motor el resultado: `rg` sin coincidencias buscadas sale con
+        # código 1 y no es un fallo. La app pinta en rojo sólo lo que es `failure`.
+        clasificacion = resultado.get('classification')
+        if isinstance(clasificacion, dict):
+            valores = {k: clasificacion[k][:100] for k in ('disposition', 'status')
+                       if isinstance(clasificacion.get(k), str)}
+            if valores:
+                datos['clasificacion'] = valores
     return datos
