@@ -55,6 +55,19 @@ historial se emite `evento` con `rol: "user"`. `texto` debe ser una cadena con
 algún carácter no blanco y como máximo 20 000 caracteres (puntos de código);
 lo contrario produce `error` y la sesión sigue utilizable.
 
+Un mensaje que abriría un turno con imágenes (`imagenes`) para un modelo que no las ve,
+sin visión delegada que las describa, no abre turno: llega `error` con
+`motivo: "sin_vision"`, `rechazado` (`texto` tal como lo escribió el usuario, sin etiquetas
+y vacío si sólo traía imágenes, e `imagenes`, para devolverlo al cuadro) y `con_vision`
+(`modelo` y `nombre` de los que sí las ven; vacío si la lista de modelos no llegó en 3 s),
+y la sesión espera el siguiente mensaje. Si llega con un turno en marcha cuyo modelo no
+las ve, no entra en ese turno: espera en la cola y abre el siguiente, ya con el modelo que
+se haya elegido entretanto, y ahí se comprueba:
+
+```json
+{"version":2,"tipo":"error","texto":"El modelo glm-5.3:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como qwen3-vl:8b, o quita las imágenes.","motivo":"sin_vision","rechazado":{"texto":"¿Qué falla?","imagenes":["/ruta/captura.png"]},"con_vision":[{"modelo":"qwen3-vl:8b","nombre":"qwen3-vl:8b"}]}
+```
+
 Cada turno acaba con `turno_terminado` (mismos campos que `fin`) y el proceso
 **sigue abierto**: un `mensaje` válido reanuda la sesión como un turno nuevo, con
 el historial completo, tanto en una sesión nueva como en una de `--reanudar`.
@@ -103,7 +116,9 @@ de Ollama) y `nombre` el visible.
 Si un proveedor no responde, los demás se listan igual y su fallo va en `fallos`.
 Del catálogo de models.dev cada fila puede traer `ventana`, `salida_max`, `precio`
 (`entrada` y `salida` en USD por millón de tokens), `razona`, `esfuerzos`,
-`herramientas` y `vision`. Los gratis ahora llegan aunque su proveedor no tenga
+`herramientas` y `vision`. Toda fila lleva `vision`: true si ve imágenes, false si no y
+null si no se sabe (sale de `/api/show` en Ollama, del propio proveedor, del servicio
+Alfalfa o del catálogo). Los gratis ahora llegan aunque su proveedor no tenga
 clave, con `gratis: true`, el `aviso` de datos, `nombre_proveedor` y, si falta la
 clave, `falta_clave` (`variable`, `donde`, `texto`).
 

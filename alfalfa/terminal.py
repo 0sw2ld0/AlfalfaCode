@@ -482,7 +482,7 @@ class TerminalManager:
                 # El motor pide el contexto justo antes de cada inferencia, con
                 # los resultados de herramientas ya registrados: los mensajes
                 # del cliente entran en el siguiente turno sin cortar ninguna.
-                received = self.transport.take_messages()
+                received = self._aplazar_imagenes(rt, self.transport.take_messages())
                 for text in received:
                     rt.user_message(text)
                 if received:
@@ -541,6 +541,40 @@ class TerminalManager:
             rt.save()
             self.save()
             self.despierto.terminar()
+
+    def _aplazar_imagenes(self, rt, recibidos):
+        """Los mensajes que entran ya en el turno en marcha. Desde el primero con imágenes que el
+        modelo de este turno no ve (sin visión delegada que las describa), vuelven a la cola:
+        abren el turno siguiente, ya con el modelo que se haya elegido y pasando por
+        `sin_vision`. Si no se sabe si las ve, entran como al empezar un turno."""
+        from . import ajustes, imagenes
+        corte = next((n for n, texto in enumerate(recibidos) if imagenes.rutas_etiquetadas(texto)), None)
+        if corte is None or getattr(rt, 'vision_del_turno', None) is not False or ajustes.vision_delegada():
+            return recibidos
+        aplazados = recibidos[corte:]
+        self.transport.inbox[:0] = aplazados
+        # Un «Redirigir» de estos mensajes no tiene nada que meter ya en el turno.
+        self.transport.redireccion.clear()
+        avisados = self.__dict__.setdefault('_aplazados_avisados', set())
+        if any(texto not in avisados for texto in aplazados):
+            avisados.update(aplazados)
+            self.event(self.task, 'system', 'Tu mensaje con imágenes espera a que acabe este turno: el modelo '
+                       + str(self.task.get('model') or 'de la sesión') + ' no ve imágenes. Al empezar el '
+                       'siguiente se comprueba con el modelo que tengas entonces.')
+        return recibidos[:corte]
+
+    async def sin_vision(self, prompt):
+        """Antes de empezar un turno: si el mensaje trae imágenes y el modelo de la sesión no
+        las ve, ni hay visión delegada que las describa, el texto del rechazo y los modelos
+        que sí las ven [(id, nombre)]. None si se puede seguir (también si no se sabe)."""
+        from . import ajustes, imagenes
+        if not imagenes.rutas_etiquetadas(prompt) or ajustes.vision_delegada():
+            return None
+        modelo = self.task.get('model')
+        if await proveedores.vision_del_modelo(modelo) is not False:
+            return None
+        sugeridos = await asyncio.to_thread(proveedores.con_vision, modelo)
+        return proveedores.texto_sin_vision(modelo, sugeridos), sugeridos or []
 
     async def run(self, prompt, eco=False):
         """`eco`: el mensaje llegó del cliente entre turnos; se le devuelve como evento `user`
@@ -722,6 +756,10 @@ async def execute(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
+        rechazo = await manager.sin_vision(args.encargo or '')
+        if rechazo:
+            print('AlfalfaCode · Error: ' + rechazo[0], file=sys.stderr)
+            return 1
         return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas '
                                                  'antes de actuar.')
     finally:

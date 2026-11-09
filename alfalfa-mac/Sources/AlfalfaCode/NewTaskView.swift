@@ -13,6 +13,8 @@ struct NewTaskView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var focused: Bool
     @State private var importingOllama = false
+    /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
+    @State private var askingAboutImages = false
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -115,24 +117,29 @@ struct NewTaskView: View {
 
     private var composer: some View {
         VStack(spacing: 10) {
-            AttachmentStrip(images: $model.draftImages).frame(maxWidth: .infinity, alignment: .leading)
+            AttachmentStrip(images: $model.draftImages, blocked: !allowsImages)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ImageNoticeLine(notice: model.newImageNotice)
             HStack(spacing: 10) {
                 Button { ImagePicker.choose(into: &model.draftImages) } label: {
-                    Image(systemName: "plus").foregroundStyle(Theme.secondary).frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                    Image(systemName: allowsImages ? "plus" : "eye.slash").foregroundStyle(Theme.secondary)
+                        .frame(width: 22, height: 22).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).help("Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)")
-                .accessibilityLabel("Adjuntar imágenes")
+                .buttonStyle(.plain)
+                .help(allowsImages ? "Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)" : ImageSupport.notice)
+                .accessibilityLabel(allowsImages ? "Adjuntar imágenes" : ImageSupport.notice)
+                .disabled(!allowsImages)
                 TextField("Describe una tarea o haz una pregunta", text: $model.draft, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(1...5).focused($focused)
                     .accessibilityLabel("Encargo")
                     .onChange(of: model.draft) { old, new in
                         guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
                         model.draft = dropped.text
+                        guard allowsImages else { model.newImageNotice.show(); return }
                         ImagePicker.add(dropped.images, to: &model.draftImages)
                     }
-                    .onSubmit { model.startTask() }
-                Button { model.startTask() } label: {
+                    .onSubmit(start)
+                Button(action: start) {
                     Image(systemName: "arrow.up").fontWeight(.bold).foregroundStyle(Theme.dark)
                         .frame(width: 30, height: 30)
                         .background(canStart ? Theme.alfalfa : Theme.muted.opacity(0.5), in: Circle())
@@ -142,7 +149,22 @@ struct NewTaskView: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
-            .onDrop(of: [.fileURL], isTargeted: nil) { ImagePicker.drop($0, into: $model.draftImages) }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                guard allowsImages else { model.newImageNotice.show(); return true }
+                return ImagePicker.drop(providers, into: $model.draftImages)
+            }
+            .confirmationDialog(ImageChoiceButtons.title, isPresented: $askingAboutImages) {
+                ImageChoiceButtons(alternatives: model.imageAlternatives(to: model.model)) { choice in
+                    model.model = choice.model
+                    model.startTask()
+                } dropImages: {
+                    model.draftImages = []
+                    model.startTask()
+                }
+            } message: {
+                Text(ImageChoiceButtons.message(model: model.label(for: model.model),
+                                                alternatives: model.imageAlternatives(to: model.model)))
+            }
 
             HStack(spacing: 16) {
                 Chip {
@@ -159,6 +181,19 @@ struct NewTaskView: View {
         }
         .frame(maxWidth: 720)
         .padding(.horizontal, 32).padding(.bottom, 24)
+    }
+
+    /// Con un modelo que se sabe que no ve imágenes no se adjuntan; si no se sabe, sí.
+    private var allowsImages: Bool { model.allowsImages(model.model) }
+
+    /// Empezar; con imágenes que el modelo elegido no ve, antes se pregunta qué hacer.
+    private func start() {
+        guard canStart else { return }
+        if !model.draftImages.isEmpty, !allowsImages {
+            askingAboutImages = true
+            return
+        }
+        model.startTask()
     }
 
     private var canStart: Bool {

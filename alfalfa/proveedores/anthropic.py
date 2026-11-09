@@ -524,6 +524,9 @@ def mostrar(modelo):
         ficha['salida'] = propia['salida']
     if ficha:
         info['catalogo'] = ficha
+    if modelo not in CATALOGO and not externa:
+        # Un modelo que el usuario añadió y nadie describe: no se sabe si ve imágenes.
+        info['vision_conocida'] = False
     return info
 
 
@@ -651,6 +654,8 @@ class Anthropic(Proveedor):
             if propia:
                 resumen['ventana'] = propia['ventana']
                 resumen['precio'] = {k: propia['precio'][k] for k in ('entrada', 'salida')}
+            # Ve imágenes: lo propio, lo del catálogo o, sin ficha, «no se sabe» (None).
+            resumen['vision'] = propia['vision'] if propia else resumen.get('vision') if ficha else None
             filas.append({'name': 'anthropic/' + m, 'model': 'anthropic/' + m, 'proveedor': self.id,
                           'nombre': propia.get('nombre') or (ficha or {}).get('nombre') or m, **resumen})
         return filas

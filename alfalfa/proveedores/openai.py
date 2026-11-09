@@ -46,6 +46,10 @@ def _mime(dato):
     return 'image/png'
 
 
+def _imagen(dato):
+    return {'type': 'input_image', 'detail': 'auto', 'image_url': 'data:' + _mime(dato) + ';base64,' + dato}
+
+
 def _texto(valor):
     return valor if isinstance(valor, str) else ('' if valor is None else json.dumps(valor, ensure_ascii=False))
 
@@ -75,15 +79,20 @@ def traducir_peticion(payload, esfuerzo=None, identificador=None):
     for mensaje in payload.get('messages') or []:
         rol = mensaje.get('role')
         contenido = _texto(mensaje.get('content'))
+        imagenes = [_imagen(i) for i in mensaje.get('images') or [] if isinstance(i, str) and i]
         if rol == 'tool':
             nombre = mensaje.get('tool_name') or mensaje.get('name')
             indice = next((i for i, (_, n) in enumerate(pendientes) if n == nombre), 0 if pendientes else None)
             if indice is None:
-                entrada.append({'role': 'user', 'content': 'Resultado de ' + str(nombre or 'una herramienta')
-                                + ':\n' + contenido})
+                texto = 'Resultado de ' + str(nombre or 'una herramienta') + ':\n' + contenido
+                entrada.append({'role': 'user', 'content': [{'type': 'input_text', 'text': texto}, *imagenes]
+                                if imagenes else texto})
                 continue
             ident, _ = pendientes.pop(indice)
-            entrada.append({'type': 'function_call_output', 'call_id': ident, 'output': contenido})
+            # La Responses API admite en `output` una lista de input_text e input_image.
+            salida = ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes \
+                if imagenes else contenido
+            entrada.append({'type': 'function_call_output', 'call_id': ident, 'output': salida})
             continue
         cerrar_pendientes()
         if rol == 'system':
@@ -103,10 +112,7 @@ def traducir_peticion(payload, esfuerzo=None, identificador=None):
                                 'arguments': _argumentos(funcion.get('arguments'))})
                 pendientes.append((ident, nombre))
         else:
-            partes = [{'type': 'input_text', 'text': contenido}] if contenido else []
-            for imagen in mensaje.get('images') or []:
-                partes.append({'type': 'input_image', 'detail': 'auto',
-                               'image_url': 'data:' + _mime(imagen) + ';base64,' + imagen})
+            partes = ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes
             entrada.append({'role': 'user', 'content': partes or [{'type': 'input_text', 'text': ''}]})
     cerrar_pendientes()
 
@@ -194,6 +200,9 @@ def mostrar(modelo):
     capacidades = ['completion', 'tools', 'thinking'] + (['vision'] if ficha.get('vision') else [])
     info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'gpt'}, 'model_info': {'openai.context_length': ficha['ventana']}}
+    if modelo not in CATALOGO and not externa:
+        # Un modelo que el usuario añadió y nadie describe: no se sabe si ve imágenes.
+        info['vision_conocida'] = False
     if externa:
         info['catalogo'] = externa
     return info
@@ -296,9 +305,13 @@ class OpenAI(Proveedor):
         from .. import catalogo
         filas = []
         for m in nombres:
-            resumen = catalogo.resumen(self.ficha(m))
+            ficha = self.ficha(m)
+            resumen = catalogo.resumen(ficha)
+            # Ve imágenes: lo propio, lo del catálogo o «no se sabe» (None).
+            resumen['vision'] = resumen.get('vision') if ficha else None
             if m in CATALOGO:
                 resumen['ventana'] = CATALOGO[m]['ventana']
+                resumen['vision'] = CATALOGO[m]['vision']
             filas.append({'name': 'openai/' + m, 'model': 'openai/' + m, 'proveedor': self.id,
                           'nombre': CATALOGO.get(m, {}).get('nombre', m), **resumen})
         return filas

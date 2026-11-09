@@ -41,6 +41,11 @@ FIRMAR_SEGUNDOS = 15
 NOMBRES = {'gpt-6-luna': 'GPT-6 Luna', 'claude-haiku-5-5': 'Claude Haiku 5.5', 'glm-5.3-flash': 'GLM 5.3 Flash',
            'deepseek-v4.1-flash': 'DeepSeek v4.1 Flash'}
 SUFIJO = ' - Alfalfa'
+# Qué modelos del servicio ven imágenes, para un Alfalfa Cloud anterior a 0.8.2, que no
+# manda `capabilities` en /api/tags (su /api/show sí, y es lo que decide el rechazo). Es la
+# tabla `MODELOS` de alfalfa_cloud/precios.py: GLM 5.3 Flash ve; GLM 5.3 y DeepSeek v4 Pro no.
+VISION = {'gpt-6-luna': True, 'claude-haiku-5-5': True, 'glm-5.3-flash': True, 'deepseek-v4.1-flash': True,
+          'kimi-k3': True, 'kimi-k3.1-pro': True, 'gemma4:31b': True, 'glm-5.3': False, 'deepseek-v4-pro': False}
 # Adonde va un reporte de error cuando no hay servicio Alfalfa o el servicio no lo acepta.
 SOPORTE = 'soporte@cuycoders.dev'
 MAX_TEXTO = 8_000
@@ -316,7 +321,10 @@ class Alfalfa(Proveedor):
     def modelos(self):
         filas = self._pedir('GET', '/api/tags').get('models') or []
         return [{'name': 'alfalfa/' + f['name'], 'model': 'alfalfa/' + f['name'], 'proveedor': self.id,
-                 'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO}
+                 'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO,
+                 # El servicio dice sus capacidades; con uno anterior, la tabla o «no se sabe» (None).
+                 'vision': 'vision' in f['capabilities'] if isinstance(f.get('capabilities'), list)
+                 else VISION.get(f['name'])}
                 for f in filas if isinstance(f, dict) and f.get('name')]
 
     def cuota(self):

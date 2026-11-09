@@ -1,6 +1,7 @@
 """Ollama, local o Ollama Cloud: el formato del motor sin traducir."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import httpx
@@ -8,6 +9,8 @@ import httpx
 from . import Proveedor, cliente_de_lista
 
 LOCALES = ('localhost', '127.0.0.1', '::1')
+# Si `/api/tags` no dice qué ve cada modelo (Ollama anterior), se pregunta a `/api/show` de varios a la vez.
+A_LA_VEZ = 8
 
 
 def validar_url(value, variable='ALFALFA_OLLAMA_URL', nombre='Ollama'):
@@ -70,8 +73,10 @@ class Ollama(Proveedor):
             respuesta = cliente.get(self.url() + '/api/tags', headers=self.cabeceras())
             respuesta.raise_for_status()
             filas = respuesta.json()['models']
+            with ThreadPoolExecutor(max_workers=A_LA_VEZ) as hilos:
+                visiones = list(hilos.map(lambda f: self._vision(cliente, f), filas))
         resultado = []
-        for fila in filas:
+        for fila, vision in zip(filas, visiones):
             nombre = fila.get('name', '')
             # Ollama Cloud se paga con su plan: del catálogo sólo se toma la ventana.
             resumen = {k: v for k, v in catalogo.resumen(self.ficha(nombre)).items() if k != 'precio'}
@@ -80,9 +85,27 @@ class Ollama(Proveedor):
                 else None
             if type(propia) is int and propia > 0:
                 resumen['ventana'] = propia
+            # Lo que declara `/api/show` manda; si no respondió, el catálogo o «no se sabe» (None).
+            resumen['vision'] = vision if vision is not None else resumen.get('vision')
             resultado.append(dict(fila, name=con_prefijo(self.id, nombre), proveedor=self.id, nombre=nombre,
                                   **resumen))
         return resultado
+
+    def _vision(self, cliente, fila):
+        """¿Ve imágenes? `vision` en sus capacidades (las de `/api/tags` o, si no las trae, las de
+        `/api/show`); None si no se pudieron leer."""
+        if isinstance(fila.get('capabilities'), list):
+            return 'vision' in fila['capabilities']
+        nombre = fila.get('name')
+        if not nombre:
+            return None
+        try:
+            respuesta = cliente.post(self.url() + '/api/show', json={'model': nombre}, headers=self.cabeceras())
+            respuesta.raise_for_status()
+            capacidades = respuesta.json().get('capabilities')
+        except Exception:
+            return None
+        return 'vision' in capacidades if isinstance(capacidades, list) else None
 
     def estado(self):
         from .. import ajustes

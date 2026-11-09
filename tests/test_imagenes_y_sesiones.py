@@ -1,4 +1,5 @@
 """Imágenes adjuntas como en Codex y órdenes de la app sobre sesiones guardadas."""
+import asyncio
 import base64
 import io
 import json
@@ -59,16 +60,18 @@ def test_reduce_las_grandes_y_no_amplia_las_pequenas(tmp_path, foto):
     assert pequeña.read_bytes() == PNG
 
 
-def test_el_mensaje_lleva_la_imagen_en_base64_a_ollama(m, foto):
+def test_el_mensaje_lleva_la_imagen_en_base64_a_ollama(m, foto, monkeypatch):
+    from alfalfa import proveedores
+    monkeypatch.setattr(proveedores, 'con_vision', lambda modelo=None, limite=3: [])
     rt = NativeRuntime(m, m.task)
     rt.user_message(imagenes.con_etiquetas('Mira', [str(foto)]))
     guardado = rt.state['messages'][-1]
     assert Path(guardado['imagenes'][0]).parent == rt.directory / 'imagenes'
     assert 'images' not in guardado  # en disco sólo la ruta, no los bytes
-    enviado = NativeRuntime._con_imagenes(rt.state['messages'], {'capabilities': ['vision']})[-1]
+    enviado = asyncio.run(rt._con_imagenes(rt.state['messages'], {'capabilities': ['vision']}))[-1]
     assert enviado['images'] == [base64.b64encode(PNG).decode()] and 'imagenes' not in enviado
-    with pytest.raises(ValueError, match='no admite imágenes'):
-        NativeRuntime._con_imagenes(rt.state['messages'], {'capabilities': ['tools']})
+    with pytest.raises(ValueError, match='no ve imágenes'):
+        asyncio.run(rt._con_imagenes(rt.state['messages'], {'capabilities': ['tools']}))
 
 
 def test_una_imagen_que_falta_se_explica_sin_cortar_el_turno(m, tmp_path):

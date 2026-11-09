@@ -14,6 +14,8 @@ from .permisos.terminal import solo_lectura
 
 VERSION = 2
 MAX_MENSAJE = 20000
+# El texto de un mensaje que sólo trae imágenes (también lo usa la app de Mac).
+SOLO_IMAGENES = 'Mira la imagen adjunta.'
 # Campos opcionales del evento `permiso` (política on-request); los clientes v2
 # anteriores los ignoran.
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
@@ -167,7 +169,7 @@ class Transport:
             self.emit('error', texto='`imagenes` tiene que ser una lista de rutas.')
             return
         if images and isinstance(text, str) and not text.strip():
-            text = 'Mira la imagen adjunta.'
+            text = SOLO_IMAGENES
         if not isinstance(text, str) or not text.strip() or len(text) > MAX_MENSAJE:
             self.emit('error', texto='El mensaje debe ser texto no vacío de hasta 20000 caracteres.')
             return
@@ -377,6 +379,19 @@ async def run(args, transport):
                 manager.save()
                 transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                                modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'])
+            # Imágenes para un modelo que no las ve: se rechaza el mensaje sin empezar el turno.
+            # La app lo quita de la conversación y lo devuelve al cuadro (`rechazado`).
+            rechazo = await manager.sin_vision(prompt)
+            if rechazo:
+                from .imagenes import rutas_etiquetadas
+                transport.emit('error', texto=rechazo[0], motivo='sin_vision',
+                               rechazado={'texto': _texto_escrito(prompt), 'imagenes': rutas_etiquetadas(prompt)},
+                               con_vision=[{'modelo': ident, 'nombre': nombre} for ident, nombre in rechazo[1]])
+                if not eco:
+                    code = 0  # el encargo inicial rechazado no es un fallo; un turno anterior manda
+                eco = True
+                prompt = await transport.next_message()
+                continue
             transport.turno_cortado = False
             transport.worker = asyncio.create_task(manager.run(prompt, eco=eco))
             try:
@@ -481,6 +496,14 @@ def sessions():
 # Lo que la app de Mac cambia de una sesión sin tocar su task.json, que el motor
 # reescribe mientras trabaja: título propio, fijada y archivada.
 MARCAS = {'titulo': str, 'fijada': bool, 'archivada': bool}
+
+
+def _texto_escrito(texto):
+    """Lo que escribió el usuario: sin etiquetas de imagen ni el relleno de un mensaje que
+    sólo traía imágenes (la app pintó su burbuja sin texto y lo devuelve al cuadro tal cual)."""
+    from .imagenes import CIERRE, ETIQUETA
+    limpio = ETIQUETA.sub('', texto).replace(CIERRE, '').strip()
+    return '' if limpio == SOLO_IMAGENES else limpio
 
 
 def _sin_etiquetas(texto):
