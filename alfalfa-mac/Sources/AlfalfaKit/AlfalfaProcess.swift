@@ -63,12 +63,13 @@ public enum Launcher {
                                       mode: String? = nil, wait: Bool = false, parent: String? = nil,
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
-                                      monthlyBudget: Double? = nil) -> [String] {
+                                      monthlyBudget: Double? = nil, diagnostics: Bool = true) -> [String] {
         var arguments = ["--stdio"]
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
         if browser { arguments.append("--navegador") }
-        // Ajustes ▸ General ▸ Mantener el Mac despierto, apagado.
-        if !keepAwake { arguments.append("--sin-mantener-despierto") }
+        // Ajustes ▸ General ▸ Mantener el Mac despierto y Ver los errores al editar, apagados.
+        arguments += [(keepAwake, "--sin-mantener-despierto"), (diagnostics, "--sin-diagnosticos")]
+            .filter { !$0.0 }.map(\.1)
         // Ajustes ▸ General ▸ Presupuesto: los topes en dólares de la sesión y del mes.
         if let budget, budget > 0 { arguments += ["--presupuesto", BudgetFormat.argument(budget)] }
         if let monthlyBudget, monthlyBudget > 0 { arguments += ["--presupuesto-mes", BudgetFormat.argument(monthlyBudget)] }

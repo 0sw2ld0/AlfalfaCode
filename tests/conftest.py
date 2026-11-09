@@ -12,6 +12,8 @@ os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
 # Ni las configuraciones de OpenCode, Codex y Claude Code de quien corre la suite (alfalfa/importadas),
 # tampoco en los procesos hijos.
 os.environ['ALFALFA_IMPORTAR_CASA'] = tempfile.mkdtemp(prefix='casa-ajena-')
+# Ni lanzan servidores de lenguaje ni linters tras cada edición: test_diagnosticos los enciende.
+os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)

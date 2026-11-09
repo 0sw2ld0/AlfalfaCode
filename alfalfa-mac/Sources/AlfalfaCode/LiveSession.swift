@@ -105,7 +105,8 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 parent: parentSessionID, title: parentSessionID == nil ? nil : title,
                                                 keepAwake: Preferences().keepAwake, browser: true,
                                                 budget: Preferences().sessionBudget,
-                                                monthlyBudget: Preferences().monthlyBudget)
+                                                monthlyBudget: Preferences().monthlyBudget,
+                                                diagnostics: Preferences().diagnostics)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -431,6 +432,11 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Presupuesto: los topes nuevos valen ya, también a mitad de turno.
     func setBudget(session: Double?, month: Double?) {
         process?.send(.budget(session: session, month: month))
+    }
+
+    /// Ajustes ▸ General ▸ Ver los errores al editar: vale desde la siguiente edición.
+    func setDiagnostics(_ on: Bool) {
+        process?.send(.diagnostics(on))
     }
 }
 

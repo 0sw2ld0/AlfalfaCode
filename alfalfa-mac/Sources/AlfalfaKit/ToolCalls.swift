@@ -1,5 +1,37 @@
 import Foundation
 
+/// Los errores y avisos nuevos que vio un servidor de lenguaje tras una edición (`diagnosticos`
+/// del fin de `write_file`, `edit_file` o `apply_patch`). Orientan; no son una comprobación.
+public struct EditDiagnostics: Equatable, Sendable {
+    public var errors: Int
+    public var warnings: Int
+    /// Algún servidor no contestó a tiempo: puede haber más.
+    public var incomplete: Bool
+
+    /// «2 errores · 1 aviso» para la fila, con «incompleto» si algún servidor no contestó;
+    /// nil si no hay nada nuevo y todo contestó.
+    public var label: String? {
+        var parts: [String] = []
+        if errors > 0 { parts.append("\(errors) \(errors == 1 ? "error" : "errores")") }
+        if warnings > 0 { parts.append("\(warnings) \(warnings == 1 ? "aviso" : "avisos")") }
+        if incomplete { parts.append(parts.isEmpty ? "diagnósticos incompletos" : "incompleto") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    public init(errors: Int = 0, warnings: Int = 0, incomplete: Bool = false) {
+        self.errors = errors
+        self.warnings = warnings
+        self.incomplete = incomplete
+    }
+
+    static func parse(_ value: Any?) -> EditDiagnostics? {
+        guard let object = value as? [String: Any] else { return nil }
+        func count(_ key: String) -> Int { max(0, object[key] as? Int ?? 0) }
+        return EditDiagnostics(errors: count("errores"), warnings: count("avisos"),
+                               incomplete: object["incompleto"] as? Bool ?? false)
+    }
+}
+
 /// Datos de una llamada a herramienta que manda el motor en `herramienta` del evento:
 /// su nombre, si abre o cierra la llamada y, al abrir, qué hace dicho para la persona.
 public struct ToolInfo: Equatable, Sendable {
@@ -23,10 +55,12 @@ public struct ToolInfo: Equatable, Sendable {
     public var disposition: String?
     /// Cierre que pone la app cuando el turno acabó sin que llegara el resultado.
     public var interrupted: Bool
+    /// Lo que vio el servidor de lenguaje tras una edición.
+    public var diagnostics: EditDiagnostics?
 
     public init(name: String, phase: Phase, description: String? = nil, command: String? = nil, cwd: String? = nil,
                 target: String? = nil, targets: [String] = [], exitCode: Int? = nil, failed: Bool = false,
-                disposition: String? = nil, interrupted: Bool = false) {
+                disposition: String? = nil, interrupted: Bool = false, diagnostics: EditDiagnostics? = nil) {
         self.name = name
         self.phase = phase
         self.description = description
@@ -38,6 +72,7 @@ public struct ToolInfo: Equatable, Sendable {
         self.failed = failed
         self.disposition = disposition
         self.interrupted = interrupted
+        self.diagnostics = diagnostics
     }
 
     /// Lee `herramienta`; nil si falta o no tiene nombre y fase.
@@ -54,7 +89,7 @@ public struct ToolInfo: Equatable, Sendable {
         return ToolInfo(name: name, phase: phase, description: text("descripcion"), command: text("orden"),
                         cwd: text("cwd"), target: text("objetivo"), targets: targets,
                         exitCode: object["codigo"] as? Int, failed: object["error"] as? Bool ?? false,
-                        disposition: disposition)
+                        disposition: disposition, diagnostics: EditDiagnostics.parse(object["diagnosticos"]))
     }
 
     /// Fin que pone la app a una llamada que se quedó sin resultado (turno cortado, proceso caído).
@@ -107,6 +142,8 @@ public struct ToolCall: Equatable, Identifiable, Sendable {
     public var finished = false
     /// El turno acabó sin que llegara su resultado.
     public var interrupted = false
+    /// Errores y avisos nuevos tras una edición, según el servidor de lenguaje.
+    public var diagnostics: EditDiagnostics?
 }
 
 /// Una fila del grupo: una llamada o un aviso del sistema entre llamadas.
@@ -290,27 +327,12 @@ public enum ToolCalls {
             call.failed = true
         }
         if call.exitCode == nil { call.exitCode = info.exitCode }
+        call.diagnostics = info.diagnostics
         if call.kind == .command, call.request != nil, call.command != nil { call.request = nil }
         // Lo que se escribió en un campo de contraseña no se enseña, aunque un motor antiguo lo mandara.
         if call.name == "browser_type", object?["valor"] as? String == "(oculto)" || raw.contains("campo de contraseña") {
             call.request = call.request.map(hidingTypedText)
         }
-    }
-
-    /// `'text': '…'` del inicio de browser_type, cambiado por «••••».
-    static func hidingTypedText(_ request: String) -> String {
-        guard let range = request.range(of: "'text': ") else { return request }
-        let rest = request[range.upperBound...]
-        guard let quote = rest.first, quote == "'" || quote == "\"" else { return request }
-        var end = rest.index(after: rest.startIndex)
-        var escaped = false
-        while end < rest.endIndex {
-            let character = rest[end]
-            if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == quote { break }
-            end = rest.index(after: end)
-        }
-        let close = end < rest.endIndex ? rest.index(after: end) : end
-        return String(request[..<range.upperBound]) + "'••••'" + String(request[close...])
     }
 
     /// Lo que se dice si el motor no mandó descripción (motores anteriores, sesiones guardadas).
@@ -438,5 +460,25 @@ extension ToolEvent {
         }
         let name = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
         return name.isEmpty || name.contains(" ") ? nil : ToolInfo(name: name, phase: .end)
+    }
+}
+
+/// Lo que se escribió en un campo de contraseña del navegador propio.
+extension ToolCalls {
+
+    /// `'text': '…'` del inicio de browser_type, cambiado por «••••».
+    static func hidingTypedText(_ request: String) -> String {
+        guard let range = request.range(of: "'text': ") else { return request }
+        let rest = request[range.upperBound...]
+        guard let quote = rest.first, quote == "'" || quote == "\"" else { return request }
+        var end = rest.index(after: rest.startIndex)
+        var escaped = false
+        while end < rest.endIndex {
+            let character = rest[end]
+            if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == quote { break }
+            end = rest.index(after: end)
+        }
+        let close = end < rest.endIndex ? rest.index(after: end) : end
+        return String(request[..<range.upperBound]) + "'••••'" + String(request[close...])
     }
 }

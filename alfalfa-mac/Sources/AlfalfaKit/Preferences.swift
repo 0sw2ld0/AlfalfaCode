@@ -16,6 +16,7 @@ public struct Preferences {
         public static let keepAwake = "ajustes.mantenerDespierto"
         public static let sessionBudget = "ajustes.presupuestoSesion"
         public static let monthlyBudget = "ajustes.presupuestoMes"
+        public static let diagnostics = "ajustes.diagnosticos"
         public static let section = "ajustes.seccion"
     }
 
@@ -66,6 +67,13 @@ public struct Preferences {
     public var monthlyBudget: Double? {
         get { budget(Key.monthlyBudget) }
         nonmutating set { storeBudget(newValue, Key.monthlyBudget) }
+    }
+
+    /// Ver los errores al editar: tras cada edición del agente, el servidor de lenguaje y el linter
+    /// del proyecto miran los archivos tocados. Encendido si nunca se tocó.
+    public var diagnostics: Bool {
+        get { defaults.object(forKey: Key.diagnostics) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.diagnostics) }
     }
 
     // MARK: - Inicializadores

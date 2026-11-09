@@ -121,6 +121,13 @@ struct ToolCallRow: View {
         } else if let code = call.exitCode, code != 0 {
             Text("código \(code)").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 .help("El código no es 0, pero el resultado es el esperado")
+        } else if let diagnostics = call.diagnostics, let label = diagnostics.label {
+            // Lo vio el servidor de lenguaje al editar: el agente lo tiene en el resultado.
+            Text(label).font(.system(size: 11.5))
+                .foregroundStyle(diagnostics.errors > 0 ? Theme.warning : Theme.muted)
+                .help(diagnostics.incomplete
+                      ? "Algún servidor de lenguaje no contestó a tiempo: puede haber más. No es una comprobación."
+                      : "Diagnósticos nuevos tras la edición. Orientan, pero no son una comprobación.")
         }
     }
 

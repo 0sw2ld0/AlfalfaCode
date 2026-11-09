@@ -50,6 +50,10 @@ cualquier ambigüedad se rechaza sin editar. Añade contexto para hacerlo único
 apply_patch recibe input con un parche (*** Begin Patch … *** End Patch): varios
 archivos en una llamada, sin números de línea ni SHA256; si un bloque no encaja
 no se escribe nada.
+Tras editar, el resultado puede traer diagnosticos: los errores y avisos nuevos del
+servidor de lenguaje y del linter del proyecto, con archivo:línea:columna. Corrige
+los errores que introdujiste antes de seguir. No son una comprobación: verifica
+igualmente con run_checks.
 Emplea argv literal en run_command y run_checks, sin shell: una ruta con espacios
 va entera en un elemento, sin comillas ni barras.
 Las órdenes corren en un sandbox Seatbelt: escriben sólo en la carpeta, $TMPDIR y
@@ -215,7 +219,7 @@ class TerminalManager:
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
-                 navegador=False, budget=None, monthly_budget=None):
+                 navegador=False, budget=None, monthly_budget=None, diagnosticos=None):
         self.transport = transport
         # El navegador propio de la app (`--navegador`): sólo con la app al otro lado.
         self.navegador = None
@@ -290,6 +294,10 @@ class TerminalManager:
                     raise ValueError('Modo desconocido: ' + str(mode))
                 self.task['modo'] = mode
             self.task.setdefault('modo', modos.AUTO)
+            # Los errores de lo que acaba de editar, en el resultado de la edición (alfalfa/diagnosticos).
+            # None decide ALFALFA_DIAGNOSTICOS o los ajustes.json del proyecto y del usuario.
+            from .diagnosticos import Diagnosticos
+            self.diagnosticos = None if read_only else Diagnosticos(self.task['cwd'], base, forzado=diagnosticos)
             self.tasks = {ident: self.task}
             self.runners, self.processes, self.native_approvals = {}, {}, {}
             # Juegos, servidores y apps lanzados con background: siguen vivos entre turnos.
@@ -353,6 +361,8 @@ class TerminalManager:
     def close(self):
         if getattr(self, 'despierto', None) is not None:
             self.despierto.cerrar()
+        if getattr(self, 'diagnosticos', None) is not None:
+            self.diagnosticos.matar()  # lo que no cerró cerrar_diagnosticos
         if self._lock is not None:
             os.close(self._lock)
             self._lock = None
@@ -578,6 +588,11 @@ class TerminalManager:
     async def close_mcp(self):
         if getattr(self, 'mcp', None) is not None:
             await self.mcp.cerrar()
+
+    async def cerrar_diagnosticos(self):
+        """Los servidores de lenguaje de la sesión terminan con ella."""
+        if getattr(self, 'diagnosticos', None) is not None:
+            await self.diagnosticos.cerrar()
 
     def conversation_task_error(self, task):
         return 'La terminal no admite sesiones deliberativas.'
@@ -966,6 +981,11 @@ def keep_awake(args):
     return False if getattr(args, 'sin_mantener_despierto', False) else None
 
 
+def diagnostics(args):
+    """--sin-diagnosticos los apaga; si no, deciden ALFALFA_DIAGNOSTICOS y los ajustes.json."""
+    return False if getattr(args, 'sin_diagnosticos', False) else None
+
+
 async def execute(args):
     resolve_fork(args)
     manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
@@ -973,7 +993,8 @@ async def execute(args):
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                               budget=getattr(args, 'presupuesto', None),
-                              monthly_budget=getattr(args, 'presupuesto_mes', None))
+                              monthly_budget=getattr(args, 'presupuesto_mes', None),
+                              diagnosticos=diagnostics(args))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -993,6 +1014,7 @@ async def execute(args):
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
         await manager.close_mcp()
+        await manager.cerrar_diagnosticos()
         manager.close()
 
 
@@ -1032,6 +1054,9 @@ def main(argv=None):
     parser.add_argument('--presupuesto-mes', metavar='USD',
                         help='Tope de gasto del mes en este Mac, todas las sesiones (también '
                              'ALFALFA_PRESUPUESTO_MES; 0 lo quita)')
+    parser.add_argument('--sin-diagnosticos', action='store_true',
+                        help='No consultar servidores de lenguaje ni linters tras cada edición '
+                             '(también ALFALFA_DIAGNOSTICOS=0 o {"diagnosticos": false} en .alfalfa/ajustes.json)')
     parser.add_argument('--stdio', action='store_true')
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
