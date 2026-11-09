@@ -28,6 +28,7 @@ Formatos, según su documentación pública:
 """
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import shutil
@@ -59,18 +60,28 @@ class Lugar:
         return 'usuario' if self.proyecto is None else 'proyecto'
 
 
-def _dentro(ruta, carpeta):
+def _misma(a, b):
+    """¿La misma carpeta? Con el sistema de archivos: en APFS sin distinción de mayúsculas `H` y `h`
+    lo son aunque las rutas difieran."""
     try:
-        Path(ruta).relative_to(carpeta)
+        return os.path.samefile(a, b)
+    except OSError:
+        return str(a).casefold() == str(b).casefold()
+
+
+def _dentro(ruta, carpeta):
+    ruta, carpeta = Path(ruta), Path(carpeta)
+    try:
+        ruta.relative_to(carpeta)
         return True
     except ValueError:
-        return False
+        return any(_misma(c, carpeta) for c in (ruta, *ruta.parents))
 
 
 def _es_carpeta_git(ruta):
     """Una carpeta `.git` o un repositorio desnudo (HEAD, objects y refs): sus hooks corren fuera del
     sandbox en el siguiente `git commit`."""
-    return ruta.name == '.git' or all((ruta / n).exists() for n in ('HEAD', 'objects', 'refs'))
+    return ruta.name.casefold() == '.git' or all((ruta / n).exists() for n in ('HEAD', 'objects', 'refs'))
 
 
 def carpeta_segura(ruta, lugar):
@@ -81,17 +92,18 @@ def carpeta_segura(ruta, lugar):
     real = pedida.resolve()
     hogar, casa = lugar.hogar.resolve(), lugar.casa.resolve()
     # Se mira la ruta tal como se pidió y la real: un enlace no esconde un `.git`.
-    if '.git' in pedida.parts or '.git' in real.parts or any(_es_carpeta_git(c) for c in (real, *real.parents)):
+    partes = [p.casefold() for p in (*pedida.parts, *real.parts)]
+    if '.git' in partes or any(_es_carpeta_git(c) for c in (real, *real.parents)):
         raise Invalido('la carpeta ' + str(real) + ' está dentro de un .git (sus hooks corren fuera del '
                        'sandbox); no se usa')
     if _dentro(hogar, real) or _dentro(real, hogar):
         raise Invalido('la carpeta ' + str(real) + ' contiene la configuración de AlfalfaCode o está dentro de '
                        'ella; no se usa')
-    if real == casa or _dentro(casa, real):
+    if _misma(real, casa) or _dentro(casa, real):
         raise Invalido('la carpeta ' + str(real) + ' es tu carpeta personal o la contiene; no se usa')
     if lugar.proyecto is not None:
         proyecto = lugar.proyecto.resolve()
-        if proyecto == casa or _dentro(casa, proyecto):
+        if _misma(proyecto, casa) or _dentro(casa, proyecto):
             raise Invalido('el proyecto es tu carpeta personal o la contiene; no se usa una carpeta suya')
         if not _dentro(real, proyecto):
             raise Invalido('la carpeta ' + str(real) + ' sale del proyecto; no se usa')
@@ -285,12 +297,11 @@ def _valores(mapa, oculto, ambitos=None, lugar=None):
         de_usuario = (ambitos or {}).get(nombre, lugar.ambito if lugar else 'usuario') == 'usuario'
         if oculto and de_usuario and not referencia:
             valor = OCULTO
-        filas.append(str(nombre) + '=' + sin_tokens(valor))
+        filas.append(str(nombre) + '=' + valor)
     return filas
 
 
 MAX_ORDEN = 8000
-URL_EN_TEXTO = re.compile(r'https?://[^\s\'"]+')
 
 
 def visible(texto):
@@ -298,13 +309,22 @@ def visible(texto):
     return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in str(texto))
 
 
-def sin_tokens(texto):
-    """Tapa lo que en una URL suele ser una credencial (/s/<token>/mcp, ?key=…)."""
-    secretos = {secreto for url in URL_EN_TEXTO.findall(texto) for secreto in configuracion_mcp._secretos_de_url(url)
-                if len(secreto) >= configuracion_mcp.MIN_SECRETO}
-    for secreto in sorted(secretos, key=len, reverse=True):  # el más largo primero: no deja restos
-        texto = texto.replace(secreto, OCULTO)
-    return texto
+def tapar_argumentos(orden):
+    """La orden de un servidor del usuario con sus credenciales tapadas, argumento a argumento:
+    sólo valores que son claramente un secreto (`--token=…`, el que sigue a `--api-key`,
+    `Authorization: Bearer …`, la contraseña, la consulta, el fragmento o un tramo con forma de
+    token de una URL bien formada). Lo de un servidor del proyecto nunca se tapa: lo que se ve es
+    lo que se ejecuta."""
+    tapada, anterior = [], None
+    for argumento in orden:
+        secretos = [v for v in configuracion_mcp.secretos_de_argumento(argumento, anterior)
+                    if len(v) >= configuracion_mcp.MIN_SECRETO]
+        texto = argumento
+        for secreto in sorted(set(secretos), key=len, reverse=True):  # el más largo primero: no deja restos
+            texto = texto.replace(secreto, OCULTO)
+        tapada.append(texto)
+        anterior = argumento
+    return tapada
 
 
 def _ejecutable(nombre, entorno, carpeta):
@@ -314,7 +334,8 @@ def _ejecutable(nombre, entorno, carpeta):
         return (Path(carpeta) / Path(nombre).expanduser()).resolve(), False
     ruta = (entorno or {}).get('PATH') if isinstance(entorno, dict) else None
     if isinstance(ruta, str) and ruta:
-        tramos = [t if Path(t).is_absolute() else str(Path(carpeta) / t) for t in ruta.split(':') if t]
+        # Un tramo vacío es la carpeta actual, como en execvp: `:/usr/bin` busca primero en `.`.
+        tramos = [t if Path(t).is_absolute() else str(Path(carpeta) / (t or '.')) for t in ruta.split(':')]
         encontrado = shutil.which(nombre, path=':'.join(tramos))
         return (Path(encontrado).resolve() if encontrado else None), True
     encontrado = shutil.which(nombre)
@@ -348,8 +369,10 @@ def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None,
     if orden:
         orden = [_texto(p) for p in orden]
         fila['transporte'] = 'stdio'
-        # Entera, sin recortar (lo que pase de MAX_ORDEN no se usa), con los tokens de URL tapados.
-        fila['orden'] = sin_tokens(shlex.join(orden))
+        # Entera y sin recortar; el tope (MAX_ORDEN) se mide sobre la orden cruda. Sólo en la de un
+        # servidor del usuario se tapan sus credenciales; la del proyecto se ve tal cual se ejecuta.
+        fila['largo'] = len(shlex.join(orden))
+        fila['orden'] = shlex.join(tapar_argumentos(orden) if lugar.ambito == 'usuario' else orden)
         real, con_path = _ejecutable(orden[0], entorno, carpeta or cwd or lugar.base)
         fila['ejecutable'] = (str(real) if real else orden[0] + ' (no está en el PATH)') + (
             ' (con el PATH de la definición)' if con_path else '')

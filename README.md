@@ -579,11 +579,15 @@ sigue yendo primero.
 Como los complementos, lo que viene de una configuración ajena no se activa hasta
 que lo autorizas. La lista enseña de qué herramienta y de qué archivo viene cada
 uno y su definición sin resolver. De un servidor stdio enseña la orden entera con
-sus argumentos, sin recortar; una de más de 8000 caracteres no se usa. Los tokens de
-las URL que lleve se tapan y los caracteres de control salen escritos. También
-enseña la ruta del ejecutable, buscada con el PATH de la propia definición si declara
-uno y avisando si es del repositorio, la carpeta que podrá escribir, si tendrá
-internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
+sus argumentos, sin recortar; una de más de 8000 caracteres (contados en crudo) no se
+usa. La de un servidor del proyecto se ve tal cual se ejecutará. En la de uno tuyo se
+tapan sólo los valores que son claramente una credencial: `--token=…`, el valor que
+sigue a `--api-key`, `Authorization: Bearer …`, y de una URL bien formada la
+contraseña, la consulta, el fragmento o un tramo con forma de token. Los caracteres
+de control salen escritos. También enseña la ruta del ejecutable, avisando si es del
+repositorio. Si la definición declara un PATH, se busca con él, y un tramo vacío
+cuenta como la carpeta del proceso. Por último, la carpeta que podrá escribir, si
+tendrá internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
 Al empezar una sesión, un aviso dice qué queda sin autorizar.
 
 ```bash
@@ -618,8 +622,9 @@ autorizar». Otro proyecto con un servidor del mismo nombre no hereda la autoriz
   personal (dotfiles), dentro de la carpeta de trabajo. Ninguna puede ser tu carpeta
   personal ni una que la contenga. Tampoco puede estar dentro de `~/.alfalfa` ni
   contenerla, ni estar dentro de un `.git` o de un repositorio desnudo, cuyos hooks
-  correrían fuera del sandbox. Si lo es, el servidor no se usa. El sandbox tampoco
-  abre para escribir una carpeta de trabajo que esté dentro de un `.git`.
+  correrían fuera del sandbox. Las comparaciones no distinguen mayúsculas, como el
+  disco del Mac (`.GIT`, `~/.ALFALFA`). Si lo es, el servidor no se usa. El sandbox
+  tampoco abre para escribir una carpeta de trabajo que esté dentro de un `.git`.
 - `mcp.json` y los complementos ganan. Las capas de OpenCode se fusionan campo a
   campo como en OpenCode: la más cercana gana, así que `{"gh": {"disabled": true}}`
   en el proyecto apaga el `gh` del usuario. Luego va lo del proyecto (de la carpeta

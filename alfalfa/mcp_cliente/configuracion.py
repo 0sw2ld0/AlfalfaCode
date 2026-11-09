@@ -117,24 +117,70 @@ class Servidor:
                 if partes:
                     valores.append(partes[-1].strip())
         valores += list(self.secretos_extra) + _secretos_de_url(self.url)
-        # También las URL que van en los argumentos (`mcp-remote https://…/s/<token>/mcp`).
+        # También lo que en los argumentos es claramente una credencial (`--token=…`, una URL con
+        # `/s/<token>/`, `Authorization: Bearer …`).
+        anterior = None
         for argumento in self.argumentos:
-            for url in re.findall(r'https?://[^\s\'"]+', argumento if isinstance(argumento, str) else ''):
-                valores += _secretos_de_url(url)
+            valores += secretos_de_argumento(argumento, anterior)
+            anterior = argumento
         return {v for v in valores if isinstance(v, str) and len(v) >= MIN_SECRETO}
 
 
+# Un valor con forma de credencial: sólo caracteres de token, sin espacios ni órdenes de shell.
+_VALOR_TOKEN = re.compile(r'[A-Za-z0-9._~+/=-]{8,}')
+_TRAMO_TOKEN = re.compile(r'[A-Za-z0-9_-]{16,}')
+_SECRETO = r'(?:token|key|secret|password|passwd|pass|auth|bearer|credential)'
+_BANDERA = re.compile(r'--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*', re.IGNORECASE)
+_BANDERA_CON_VALOR = re.compile(r'(--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*)=(?P<valor>.+)', re.IGNORECASE)
+_CABECERA_EN_ARGUMENTO = re.compile(r'\s*(?:proxy-)?authorization\s*:\s*(?:(?:bearer|basic|token)\s+)?(?P<valor>\S+)\s*'
+                                    r'|\s*[A-Za-z0-9-]*' + _SECRETO + r'[A-Za-z0-9-]*\s*:\s*(?P<otro>\S+)\s*',
+                                    re.IGNORECASE)
+URL_EN_TEXTO = re.compile(r'https?://[^\s\'"]+')
+
+
 def _secretos_de_url(url):
-    """Lo que en una URL suele ser una credencial: los valores de la consulta y los tramos de la
-    ruta con pinta de token (largos y con letras y cifras, como /api/mcp/s/<token>/mcp)."""
+    """Lo que en una URL bien formada es claramente una credencial: la contraseña de
+    usuario:contraseña@, los valores de la consulta y el fragmento con forma de token, y los
+    tramos de la ruta con pinta de token (largos, con letras y cifras: /api/mcp/s/<token>/mcp).
+    Nunca un trozo con espacios u órdenes de shell."""
     if not isinstance(url, str) or not url:
         return []
-    from urllib.parse import parse_qsl
-    partes = urlparse(url)
-    valores = [v for _, v in parse_qsl(partes.query, keep_blank_values=False)]
-    valores += [t for t in partes.path.split('/') if len(t) >= 16 and re.search(r'\d', t)
+    from urllib.parse import parse_qsl, urlsplit
+    try:
+        partes = urlsplit(url)
+        valido = partes.scheme in ('http', 'https') and bool(partes.hostname)
+        contrasena = partes.password
+    except ValueError:
+        return []
+    if not valido:
+        return []
+    valores = [contrasena] if contrasena else []
+    valores += [v for _, v in parse_qsl(partes.query, keep_blank_values=False) if _VALOR_TOKEN.fullmatch(v)]
+    if _VALOR_TOKEN.fullmatch(partes.fragment or ''):
+        valores.append(partes.fragment)
+    valores += [t for t in partes.path.split('/') if _TRAMO_TOKEN.fullmatch(t) and re.search(r'\d', t)
                 and re.search(r'[A-Za-z]', t)]
     return valores
+
+
+def secretos_de_argumento(argumento, anterior=None):
+    """Lo que un argumento lleva que es claramente una credencial: el valor de `--token=…` o el
+    que sigue a `--api-key`, el de `Authorization: Bearer …` y los de sus URL."""
+    if not isinstance(argumento, str):
+        return []
+    valores = []
+    if (isinstance(anterior, str) and _BANDERA.fullmatch(anterior) and argumento
+            and not argumento.startswith('-')):
+        valores.append(argumento)
+    bandera = _BANDERA_CON_VALOR.fullmatch(argumento)
+    if bandera:
+        valores.append(bandera.group('valor'))
+    cabecera = _CABECERA_EN_ARGUMENTO.fullmatch(argumento)
+    if cabecera:
+        valores.append(cabecera.group('valor') or cabecera.group('otro'))
+    for url in URL_EN_TEXTO.findall(argumento):
+        valores += _secretos_de_url(url)
+    return [v for v in valores if v]
 
 
 class _Invalido(ValueError):

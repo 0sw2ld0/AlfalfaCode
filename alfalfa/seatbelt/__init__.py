@@ -157,7 +157,9 @@ class SeatbeltSandbox:
         # La expresión que protege `.git` se ancla en la carpeta de trabajo: si ésta ya está dentro
         # de un `.git` (p. ej. `.git/hooks`), no lo cubriría y un hook escrito aquí correría fuera
         # del sandbox en el siguiente commit. Esa carpeta no se abre para escribir.
-        if any(parte in PROTECTED_METADATA for parte in Path(root).parts + Path(str(self.root)).parts):
+        # En APFS sin distinción de mayúsculas `.GIT` es el mismo `.git`.
+        protegidos = {nombre.casefold() for nombre in PROTECTED_METADATA}
+        if any(parte.casefold() in protegidos for parte in Path(root).parts + Path(str(self.root)).parts):
             raise SandboxUnavailable('La carpeta de trabajo está dentro de un .git; no se abre para escribir: '
                                      + root)
         roots = [root]

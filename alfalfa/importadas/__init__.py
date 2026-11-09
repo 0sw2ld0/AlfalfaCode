@@ -318,7 +318,7 @@ class Importadas:
         # proyecto que acota la carpeta de un servidor es la carpeta de trabajo, no ~.
         limite = self.raiz
         casa = self.casa.resolve()
-        if limite == casa or traduccion._dentro(casa, limite):
+        if traduccion._misma(limite, casa) or traduccion._dentro(casa, limite):
             limite = self.cwd
         return traduccion.Lugar(base=Path(base), proyecto=limite if ambito == 'proyecto' else None,
                                 casa=self.casa, hogar=self.hogar)
@@ -349,7 +349,7 @@ class Importadas:
                                                             carpeta=cwd or self.cwd, entorno=resuelto)
         except (TypeError, ValueError, OSError):
             elemento.definicion = {}
-        if len(elemento.definicion.get('orden', '')) > traduccion.MAX_ORDEN:
+        if elemento.definicion.get('largo', 0) > traduccion.MAX_ORDEN:
             # No se recorta lo que hay que revisar: lo que no cabe entero no se usa.
             elemento.problema = ('la orden ocupa más de ' + str(traduccion.MAX_ORDEN) + ' caracteres y no se puede '
                                  'revisar entera; no se usa')
