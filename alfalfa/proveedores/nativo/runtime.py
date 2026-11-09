@@ -28,6 +28,7 @@ from ...evidencia.registro import RunEvidence
 
 # Vive en el arnés para que la evidencia no tenga que importar el runtime.
 from ...reintentos.fallos import _CREDENCIALES, _sin_credenciales  # noqa: F401
+from .descripciones import datos_de_fin, datos_de_inicio
 from .herramientas import (
     COMPLEMENTOS_TOOLS,
     IMAGE_EXTENSIONS,
@@ -1351,6 +1352,15 @@ class NativeRuntime:
         self.save()
         self.manager.event(self.task,'system','Contexto compactado; el historial completo sigue guardado.')
 
+    def _tool_event(self, text, datos):
+        """Evento de herramienta con su descripción para la app (`herramienta`).
+        Un gestor sin `tool_event` (los de prueba) recibe sólo el texto."""
+        aviso = getattr(self.manager, 'tool_event', None)
+        if aviso is None:
+            self.manager.event(self.task, 'tool', text)
+        else:
+            aviso(self.task, text, datos)
+
     def _compaction_event(self, text, datos):
         """Evento de sistema con los datos de la compactación (la marca de la conversación).
         Un gestor sin `compaction_event` (los de prueba) recibe sólo el texto."""
@@ -1792,7 +1802,7 @@ class NativeRuntime:
                 self.task['activity'] = name
                 shown = (self.mcp.para_mostrar(args) if self.mcp is not None and self.mcp.es_propia(name)
                          else args)
-                self.manager.event(self.task, 'tool', 'Inicio '+str(name)+' · '+str(shown)[:1000])
+                self._tool_event('Inicio '+str(name)+' · '+str(shown)[:1000], datos_de_inicio(name, shown))
                 if self._hooks_activos() and not self.task.get('review'):
                     result, executed, hook_notes = await self._call_with_hooks(call, name, args)
                 else:
@@ -1825,7 +1835,7 @@ class NativeRuntime:
             call['status'] = 'done'
             self.evidence.handoff()
             self.save()
-            self.manager.event(self.task, 'tool', str(name)+'\n'+output)
+            self._tool_event(str(name)+'\n'+output, datos_de_fin(name, result))
         self.state['pending'] = []
         self.save()
 

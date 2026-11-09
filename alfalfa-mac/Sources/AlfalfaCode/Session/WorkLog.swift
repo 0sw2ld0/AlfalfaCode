@@ -1,8 +1,12 @@
 import AlfalfaKit
 import SwiftUI
 
-/// Lo que hizo el agente entre mensajes, como en Codex: «Trabajó durante 54 s ›» con una
-/// línea debajo; al abrirlo, cada acción en una fila.
+/// Las llamadas seguidas del agente en una fila plegada, como en la app de Claude:
+/// «Ejecutó 3 comandos, leyó 2 archivos ›». Al abrirla, una fila por llamada con su
+/// descripción; al abrir una fila, el comando con su `$` y la salida.
+///
+/// Mientras trabaja, el grupo sigue plegado y debajo se ve la llamada en curso con su
+/// descripción: así lo hace Claude, y la conversación no salta con cada salida larga.
 struct WorkLog: View {
 
     // MARK: - Propiedades
@@ -12,74 +16,86 @@ struct WorkLog: View {
     @Binding var expanded: Bool
 
     var body: some View {
+        let entries = ToolCalls.entries(from: events)
+        let calls = entries.compactMap { if case let .call(call) = $0 { return call } else { return nil } }
+        let current = running ? calls.last { !$0.finished } : nil
         VStack(alignment: .leading, spacing: 0) {
             Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: {
                 HStack(spacing: 6) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(title(now: running ? context.date.timeIntervalSince1970 : nil))
-                            .font(.system(size: 14)).foregroundStyle(Theme.muted).monospacedDigit()
-                    }
+                    Text(title(calls: calls, entries: entries))
+                        .font(.system(size: 14)).foregroundStyle(Theme.muted).lineLimit(1)
                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.muted).rotationEffect(.degrees(expanded ? 90 : 0))
                 }
                 .padding(.vertical, 6).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).accessibilityLabel(title(now: nil))
-            Divider().overlay(Theme.border)
+            .buttonStyle(.plain)
+            .accessibilityLabel(title(calls: calls, entries: entries))
+            .accessibilityHint(expanded ? "Plegar las llamadas" : "Ver cada llamada")
             if expanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(events.filter { !$0.text.isEmpty }) { event in
-                        EventRow(event: event)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(entries) { entry in
+                        switch entry {
+                        case let .call(call): ToolCallRow(call: call, live: running && !call.finished)
+                        case let .note(event): NoteRow(event: event)
+                        }
                     }
                 }
-                .padding(.top, 12)
+                .padding(.top, 4)
+            } else if let current {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.mini)
+                    Text(current.description + "…").font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.vertical, 3)
+                .accessibilityElement(children: .combine)
             }
         }
     }
 
     // MARK: - Métodos privados
 
-    /// Con `now`, mientras trabaja, el tiempo va hasta ahora y no hasta el último evento.
-    private func title(now: Double?) -> String {
-        let actions = events.filter { $0.text.hasPrefix("Inicio ") }.count
-        let actionsText = "\(actions) \(actions == 1 ? "acción" : "acciones")"
-        let count = actions == 0 ? "" : " · " + actionsText
-        if let now, let first = events.map(\.time).filter({ $0 > 0 }).min(), now > first {
-            return "Trabajando " + ToolEvent.durationText(now - first) + count
+    private func title(calls: [ToolCall], entries: [WorkEntry]) -> String {
+        if !calls.isEmpty { return ToolCalls.summary(calls) }
+        // Sólo avisos del sistema (un proceso en segundo plano terminó, un reintento).
+        if case let .note(event)? = entries.first {
+            return entries.count == 1 ? event.title : event.title + " · y \(entries.count - 1) más"
         }
-        if let seconds = ToolEvent.duration(of: events) {
-            return "\(running ? "Trabajando" : "Trabajó durante") \(ToolEvent.durationText(seconds))\(count)"
-        }
-        if running { return "Trabajando…" }
-        return actions == 0 ? "\(events.count) eventos" : actionsText
+        return running ? "Trabajando…" : "Sin acciones"
     }
 }
 
-/// Una acción del registro: su título y, al pulsarla, la salida completa.
-struct EventRow: View {
+/// Una llamada: su descripción y, al pulsarla, el comando y la salida.
+struct ToolCallRow: View {
 
     // MARK: - Propiedades
 
-    let event: ToolEvent
+    let call: ToolCall
+    let live: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { open.toggle() } label: {
+            Button { withAnimation(.easeOut(duration: 0.12)) { open.toggle() } } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.muted).frame(width: 14)
-                    Text(event.title).font(.system(size: 13)).foregroundStyle(Theme.secondary).lineLimit(1)
+                    Text(call.description).font(.system(size: 13)).foregroundStyle(Theme.secondary).lineLimit(1)
+                    if live {
+                        ProgressView().controlSize(.mini)
+                    } else if call.failed {
+                        Text(call.exitCode.map { "código \($0)" } ?? "falló")
+                            .font(.system(size: 11.5)).foregroundStyle(Theme.danger)
+                    }
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.muted).rotationEffect(.degrees(open ? 90 : 0))
                     Spacer(minLength: 0)
                 }
-                .contentShape(Rectangle())
+                .padding(.vertical, 4).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if open {
-                Text(event.text.count > 4000 ? String(event.text.prefix(4000)) + "…" : event.text)
-                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
-                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.field, in: RoundedRectangle(cornerRadius: 10))
-            }
+            .help(call.command.map { "$ " + $0 } ?? call.description)
+            .accessibilityLabel(call.description + (call.failed ? ", falló" : ""))
+            if open { detail.padding(.leading, 22).padding(.bottom, 6) }
         }
     }
 
@@ -87,13 +103,75 @@ struct EventRow: View {
 
     @State private var open = false
 
+    @ViewBuilder private var detail: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(header).font(Theme.mono).foregroundStyle(Theme.text).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            if let output = call.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Divider().overlay(Theme.border)
+                ScrollView {
+                    Text(output).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 220)
+            } else if !call.finished {
+                Divider().overlay(Theme.border)
+                Text("Sin salida todavía").font(.system(size: 12)).foregroundStyle(Theme.muted).padding(10)
+            }
+        }
+        .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+    }
+
+    /// `$ git status` en las órdenes; en lo demás, la llamada tal como la pidió el modelo.
+    private var header: String {
+        if let command = call.command { return "$ " + command }
+        return call.request ?? call.name
+    }
+
     private var icon: String {
-        let title = event.title
-        if title.hasPrefix("run_") { return "terminal" }
-        if title.hasPrefix("read_file") || title.hasPrefix("list_files") { return "doc.text" }
-        if title.hasPrefix("search") || title.hasPrefix("web_search") { return "magnifyingglass" }
-        if ["edit_file", "write_file", "apply_patch"].contains(where: title.hasPrefix) { return "pencil" }
-        if title.hasPrefix("wrap_up") { return "checkmark.circle" }
-        return event.role == "system" ? "info.circle" : "circle"
+        switch call.kind {
+        case .command: return "terminal"
+        case .read, .list: return "doc.text"
+        case .search: return "magnifyingglass"
+        case .edit: return "pencil"
+        case .web: return "globe"
+        case .image: return "photo"
+        case .app: return "macwindow"
+        case .agent: return "person.2"
+        case .plan: return "checklist"
+        case .tools: return "wrench.and.screwdriver"
+        case .other: return call.name == "wrap_up" ? "checkmark.circle" : "circle"
+        }
+    }
+}
+
+/// Un aviso del sistema entre llamadas; al pulsarlo, el texto entero.
+private struct NoteRow: View {
+    let event: ToolEvent
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { open.toggle() } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.muted).frame(width: 14)
+                    Text(event.title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open {
+                Text(event.text.count > 4000 ? String(event.text.prefix(4000)) + "…" : event.text)
+                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
+                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.leading, 22)
+            }
+        }
     }
 }

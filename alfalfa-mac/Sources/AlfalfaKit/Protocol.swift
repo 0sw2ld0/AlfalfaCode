@@ -20,6 +20,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var turn: String?
     /// Datos de una compactación (`compactacion`): la conversación pinta su marca.
     public var compaction: Compaction?
+    /// Llamada a herramienta (`herramienta`): nombre, fase y descripción; nil en motores anteriores.
+    public var tool: ToolInfo? = nil
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -608,7 +610,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         case "evento":
             guard let role = object["rol"] as? String, let text = object["texto"] as? String else { return nil }
             return .event(AgentEvent(role: role, text: text, time: number(object["hora"]) ?? 0, turn: Self.text(object["turno"]),
-                                     compaction: compaction(object["compactacion"])))
+                                     compaction: compaction(object["compactacion"]),
+                                     tool: ToolInfo.parse(object["herramienta"])))
         case "permiso":
             guard let id = object["id"] as? String, let argv = object["argv"] as? [String] else { return nil }
             let reason = (object["motivo"] as? String).flatMap(PermissionReason.init(rawValue:))
@@ -642,7 +645,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
             let events = rows.compactMap { row -> AgentEvent? in
                 guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
                 return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
-                                  compaction: compaction(row["compactacion"]))
+                                  compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]))
             }
             var saved: SavedContext?
             if let context = object["contexto"] as? [String: Any], let tokens = context["tokens"] as? Int,

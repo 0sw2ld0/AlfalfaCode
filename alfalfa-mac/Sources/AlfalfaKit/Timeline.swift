@@ -53,6 +53,8 @@ public struct ToolEvent: Equatable, Identifiable, Sendable {
     public var text: String
     /// Hora del evento (segundos desde 1970); 0 si no se conoce.
     public var time: Double = 0
+    /// Lo que el motor dice de la llamada (`herramienta`); nil en motores anteriores.
+    public var tool: ToolInfo? = nil
 
     /// Segundos entre el primer y el último evento de un grupo, o nil si no hay horas.
     public static func duration(of events: [ToolEvent]) -> Double? {
@@ -422,8 +424,11 @@ public struct Timeline: Equatable, Sendable {
         default:
             // El resultado de una herramienta (no su «Inicio») cierra la orden en marcha.
             if event.role == "tool", !event.text.hasPrefix("Inicio ") { runningPermission = nil }
-            let tool = ToolEvent(id: nextID(), role: event.role, text: event.text, time: event.time)
-            if case let .events(id, existing)? = items.last {
+            let tool = ToolEvent(id: nextID(), role: event.role, text: event.text, time: event.time, tool: event.tool)
+            if let index = groupAwaiting(tool) {
+                // El resultado de una orden que pidió permiso vuelve a su grupo, encima de la tarjeta.
+                if case let .events(id, existing) = items[index] { items[index] = .events(id: id, existing + [tool]) }
+            } else if case let .events(id, existing)? = items.last {
                 items[items.count - 1] = .events(id: id, existing + [tool])
             } else {
                 items.append(.events(id: nextID(), [tool]))
@@ -433,6 +438,23 @@ public struct Timeline: Equatable, Sendable {
             if event.role == "system" && (status == .idle || status == .blocked) { return }
             if status == .idle || status == .blocked || status == .starting { status = .working }
         }
+    }
+
+    /// Grupo anterior a una tarjeta de permiso cuya última llamada espera este resultado.
+    /// Sólo se mira por encima de permisos y avisos: un mensaje del agente cierra el grupo.
+    private func groupAwaiting(_ event: ToolEvent) -> Int? {
+        guard let info = event.toolInfo, info.phase == .end else { return nil }
+        if case .events? = items.last { return nil }
+        for index in items.indices.reversed() {
+            switch items[index] {
+            case .permission, .notice: continue
+            case let .events(_, events):
+                guard let open = ToolCalls.running(in: events), open.name == info.name else { return nil }
+                return index
+            default: return nil
+            }
+        }
+        return nil
     }
 
     private mutating func resolve(id: String, state: PermissionState) {

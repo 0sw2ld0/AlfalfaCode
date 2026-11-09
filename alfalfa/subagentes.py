@@ -237,6 +237,10 @@ class _GestorDeSubagente:
     def compaction_event(self, task, text, datos):
         self.event(task, 'system', text)
 
+    def tool_event(self, task, text, datos):
+        """Los pasos de un subagente van a su registro, nunca a la conversación principal."""
+        self.event(task, 'tool', text)
+
     def context(self, task, tokens, limit):
         task['context_tokens'], task['context_limit'] = tokens, limit
 

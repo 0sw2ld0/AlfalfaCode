@@ -305,13 +305,19 @@ class TerminalManager:
         self.task['updated_at'] = time.time()
         atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
 
-    def event(self, task, role, text, emitir=True):
-        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó."""
+    def event(self, task, role, text, emitir=True, herramienta=None):
+        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó.
+        `herramienta`: nombre, fase y descripción de la llamada, para que la app la agrupe."""
         if self.transport:
             text = self.transport.clean(text)
+            herramienta = self.transport.clean(herramienta)
         if getattr(self, 'mcp', None) is not None:
             text = self.mcp.limpiar(text)
+            if herramienta:
+                herramienta = self.mcp.limpiar(herramienta)
         row = dict(role=role, text=text, time=time.time())
+        if herramienta:
+            row['herramienta'] = herramienta
         if task.get('turno_actual'):
             row['turno'] = task['turno_actual']
         path = self.directory / (task['id'] + '.jsonl')
@@ -322,9 +328,14 @@ class TerminalManager:
             return
         if self.transport:
             self.transport.emit('evento', rol=role, texto=text, hora=row['time'],
-                                **({'turno': row['turno']} if 'turno' in row else {}))
+                                **({'turno': row['turno']} if 'turno' in row else {}),
+                                **({'herramienta': herramienta} if herramienta else {}))
         else:
             print('AlfalfaCode · ' + role + ': ' + text, flush=True)
+
+    def tool_event(self, task, text, datos):
+        """Evento de una herramienta con su descripción (`herramienta`)."""
+        self.event(task, 'tool', text, herramienta=datos if isinstance(datos, dict) else None)
 
     def plan(self, task, pasos, explicacion=None):
         """`plan`: la lista de tareas del agente, como la de Codex; la app la enseña."""
