@@ -957,6 +957,11 @@ class WorkspaceTools:
             if name == 'app_state':
                 return await control.estado(args)
             return await control.accion(args)
+        if name.startswith('browser_'):
+            navegador = getattr(self.runtime.manager, 'navegador', None)
+            if navegador is None:
+                raise ValueError('El navegador propio sólo existe dentro de la app de AlfalfaCode.')
+            return await navegador.llamar(self.runtime, name, args)
         if name in ('spawn_agent', 'wait_agent', 'send_input', 'close_agent', 'list_agents'):
             subagentes = getattr(self.runtime.manager, 'subagentes', None)
             if subagentes is None:

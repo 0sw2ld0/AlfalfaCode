@@ -123,11 +123,17 @@ herramienta ni otra forma de la misma orden.'''
 WEB = ('web_search', 'read_web')
 
 
+def navegador_manual():
+    from .navegador import MANUAL as NAVEGADOR
+    return NAVEGADOR
+
+
 def excluidas():
     from .proveedores.nativo import web
     return () if web.disponible() else WEB
 
-ESCRITURA = ('write_file', 'edit_file', 'run_command', 'run_checks', 'apply_patch', 'app_action')
+ESCRITURA = ('write_file', 'edit_file', 'run_command', 'run_checks', 'apply_patch', 'app_action',
+             'browser_click', 'browser_type', 'browser_download')
 
 
 def engine_text(effort):
@@ -167,8 +173,14 @@ class TerminalManager:
     TERMINADAS = {'completed', 'failed', 'interrupted', 'blocked'}
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
-                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None):
+                 read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
+                 navegador=False):
         self.transport = transport
+        # El navegador propio de la app (`--navegador`): sólo con la app al otro lado.
+        self.navegador = None
+        if navegador and transport is not None:
+            from .navegador import Navegador
+            self.navegador = Navegador(transport.pedir_navegador)
         # «Prevent sleep while running» de Codex: el Mac no se duerme por inactividad mientras
         # trabaja un turno. None lee ALFALFA_MANTENER_DESPIERTO (encendido por defecto).
         from .despierto import MantenerDespierto
@@ -430,7 +442,8 @@ class TerminalManager:
                              engine_text=engine_text,
                              manual=lambda model: MANUAL + SUBAGENTES_MANUAL + self.subagentes.descripcion_de_tipos()
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
-                             + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else ''),
+                             + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else '')
+                             + (navegador_manual() if self.navegador is not None else ''),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
                              excluded_tools=excluidas() + (ESCRITURA
                                                          if self.read_only or modos.solo_lee(modos.modo_de(self.task))
@@ -448,6 +461,9 @@ class TerminalManager:
                              project_docs=self.project_docs(), hooks=self.hooks,
                              # Compactación de Codex: 90 % de la ventana o --compactar-en, y a mano.
                              compaction='codex', compact_limit=self.compact_limit)
+        if self.navegador is not None:
+            from .navegador import TOOLS as HERRAMIENTAS_DEL_NAVEGADOR
+            rt.tool_specs = list(rt.tool_specs) + HERRAMIENTAS_DEL_NAVEGADOR
         if self.mcp is not None:
             self.mcp.vincular(rt)
         if self.transport:
@@ -741,6 +757,8 @@ def main(argv=None):
                         help='Dejar que el Mac se duerma por inactividad mientras trabaja un turno '
                              '(también ALFALFA_MANTENER_DESPIERTO=0)')
     parser.add_argument('--stdio', action='store_true')
+    parser.add_argument('--navegador', action='store_true',
+                        help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--json', action='store_true')
     listing = parser.add_mutually_exclusive_group()
     listing.add_argument('--sesiones', action='store_true')

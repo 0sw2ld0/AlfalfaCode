@@ -1,7 +1,7 @@
 import AlfalfaKit
 import SwiftUI
 
-/// Pantalla de sesión: conversación, composición y, a la derecha, el panel de detalles o la terminal.
+/// Pantalla de sesión: conversación, composición y, a la derecha, el navegador, la terminal o el panel de detalles.
 struct SessionView: View {
 
     // MARK: - Propiedades
@@ -19,10 +19,12 @@ struct SessionView: View {
             }
             .frame(maxWidth: .infinity)
             Divider().overlay(Theme.border)
-            SessionSidePane(terminals: terminals) {
-                SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
-                          timeline: session.timeline, canCompact: session.canCompact,
-                          onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) })
+            SessionBrowserSlot(browser: session.browser, terminals: terminals) {
+                SessionSidePane(terminals: terminals) {
+                    SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
+                              timeline: session.timeline, canCompact: session.canCompact,
+                              onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) })
+                }
             }
         }
     }
@@ -98,6 +100,7 @@ struct SessionView: View {
             Spacer()
             if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
             if session.isDormant { dormantHint }
+            BrowserToggle(browser: session.browser, terminals: terminals)
             TerminalToggle(terminals: terminals)
             folderButton
         }
