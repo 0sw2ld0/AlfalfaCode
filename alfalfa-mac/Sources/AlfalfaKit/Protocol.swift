@@ -673,6 +673,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case budget(BudgetStatus, cache: CacheSavings?)
     /// `navegador`: el agente pide algo al navegador propio de la app (BrowserEngine).
     case browser(BrowserRequest)
+    /// `quitado_de_cola`: respuesta a «Quitar» o «Editar» de un mensaje en cola. `removed` si se
+    /// quitó; si no, `reason` es `entregado` (el modelo ya lo leyó) o `desconocido`.
+    case unqueued(id: String, removed: Bool, reason: String?)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -709,18 +712,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),
                             details: details(object))
         case "error":
-            if let rejected = object["rechazado"] as? [String: Any] {
-                let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
-                    guard let model = text(row["modelo"]) else { return nil }
-                    return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
-                }
-                return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
-                                                         reason: text(object["motivo"]),
-                                                         text: rejected["texto"] as? String ?? "",
-                                                         images: rejected["imagenes"] as? [String] ?? [],
-                                                         alternatives: alternatives))
-            }
-            return .error(object["texto"] as? String ?? "")
+            return error(object)
         case "turno_terminado":
             return outcome(object).map { .turnFinished($0) }
         case "fin":
@@ -825,6 +817,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
+        case "quitado_de_cola":
+            guard let id = text(object["id"]), let removed = bool(object["quitado"]) else { return nil }
+            return .unqueued(id: id, removed: removed, reason: text(object["motivo"]))
         case "presupuesto":
             return BudgetStatus(object: object).map { .budget($0, cache: CacheSavings(object: object["cache"])) }
         case "subagente_evento":
@@ -1004,6 +999,20 @@ public enum AlfalfaMessage: Equatable, Sendable {
 
     private static func wrapUp(_ value: Any?) -> WrapUp? { WrapUp(cierre: value) }
 
+    /// `error`; con `rechazado`, el mensaje que no abrió turno y vuelve al cuadro.
+    private static func error(_ object: [String: Any]) -> AlfalfaMessage {
+        guard let rejected = object["rechazado"] as? [String: Any] else { return .error(object["texto"] as? String ?? "") }
+        let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
+            guard let model = text(row["modelo"]) else { return nil }
+            return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
+        }
+        return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
+                                                 reason: text(object["motivo"]),
+                                                 text: rejected["texto"] as? String ?? "",
+                                                 images: rejected["imagenes"] as? [String] ?? [],
+                                                 alternatives: alternatives))
+    }
+
     private static func summary(_ row: [String: Any]) -> SessionSummary? {
         guard let id = row["id"] as? String, let state = row["estado"] as? String else { return nil }
         return SessionSummary(id: id, task: row["encargo"] as? String, cwd: row["cwd"] as? String, state: state,
@@ -1019,12 +1028,16 @@ public enum AlfalfaMessage: Equatable, Sendable {
 public enum AlfalfaCommand: Equatable, Sendable {
     /// `session`: aprobar también lo mismo durante el resto de la sesión.
     case permission(id: String, approved: Bool, session: Bool = false)
-    case message(String, images: [String] = [])
+    /// `id`: el del mensaje en cola, para poder quitarlo después (`unqueue`).
+    case message(String, images: [String] = [], id: String? = nil)
     case cancel
     /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
     case sendNow(String)
     /// «Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno.
     case redirect
+    /// «Quitar» o «Editar» de un mensaje en cola: el motor lo saca si aún no entró en el contexto
+    /// y responde con `quitado_de_cola`.
+    case unqueue(String)
     /// Compactar (`/compactar`, «Compactar sesión»): ya entre turnos, o antes de la siguiente
     /// respuesta del modelo si hay uno en marcha. Las instrucciones centran el resumen.
     case compact(instructions: String? = nil)
@@ -1049,12 +1062,15 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .permission(id, approved, session):
             object = approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
                 : ["tipo": "permiso", "id": id, "aprobado": approved]
-        case let .message(text, images):
-            object = images.isEmpty ? ["tipo": "mensaje", "texto": text]
-                : ["tipo": "mensaje", "texto": text, "imagenes": images]
+        case let .message(text, images, id):
+            var fields: [String: Any] = ["tipo": "mensaje", "texto": text]
+            if !images.isEmpty { fields["imagenes"] = images }
+            if let id { fields["id"] = id }
+            object = fields
         case .cancel: object = ["tipo": "cancelar"]
         case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
         case .redirect: object = ["tipo": "redirigir"]
+        case let .unqueue(id): object = ["tipo": "quitar_de_cola", "id": id]
         case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]
         case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]

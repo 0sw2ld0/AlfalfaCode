@@ -66,26 +66,13 @@ struct ItemView: View {
                         .background(Theme.bubble, in: RoundedRectangle(cornerRadius: 20))
                 }
                 if queued {
-                    queuedActions(text: text)
+                    QueuedActions(text: text, itemID: itemID, session: session)
                 } else {
                     UserActions(text: ImageTags.split(text).text, itemID: itemID, session: session)
                 }
             }
             .opacity(queued ? 0.7 : 1)
         }
-    }
-
-    private func queuedActions(text: String) -> some View {
-        HStack(spacing: 12) {
-            Text("en cola").foregroundStyle(Theme.muted)
-            if session.timeline.status.isRunning {
-                Button("Redirigir") { session.redirect() }
-                    .help("Que lo lea ya, sin cortar lo que está haciendo (descarta lo que estaba pensando)")
-                Button("Enviar ahora") { session.sendNow(text) }
-                    .help("Detener el turno en marcha y enviar este mensaje")
-            }
-        }
-        .font(.system(size: 11.5)).buttonStyle(.plain).foregroundStyle(Theme.secondary)
     }
 
     private func info(title: String, rows: [InfoRow]) -> some View {

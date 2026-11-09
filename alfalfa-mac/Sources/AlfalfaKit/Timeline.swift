@@ -78,6 +78,24 @@ public struct ToolEvent: Equatable, Identifiable, Sendable {
     }
 }
 
+/// Qué se hace con un mensaje en cola al quitarlo: tirarlo («Quitar») o devolverlo al cuadro («Editar»).
+public enum UnqueueAction: Equatable, Sendable {
+    case remove
+    case edit
+}
+
+/// «Quitar» o «Editar» pedido al motor: el elemento y para qué.
+struct Unqueuing: Equatable, Sendable {
+    var item: Int
+    var action: UnqueueAction
+}
+
+/// Un mensaje que salió de la cola sin llegar al modelo: su texto, con las etiquetas de imagen.
+public struct Unqueued: Equatable, Sendable {
+    public var text: String
+    public var action: UnqueueAction
+}
+
 public enum TimelineItem: Equatable, Identifiable, Sendable {
     case user(id: Int, text: String, queued: Bool)
     case agent(id: Int, text: String)
@@ -194,6 +212,8 @@ public struct Timeline: Equatable, Sendable {
         return nil
     }
     public static let subagentStepLimit = 200
+    /// Lo que se dice cuando el motor ya no puede quitar un mensaje de la cola.
+    public static let alreadyRead = "Ya lo leyó el agente: el mensaje sigue en la conversación."
     public private(set) var totalTokens = 0
     /// Coste estimado de la sesión en USD (precios de models.dev); nil si el modelo no cobra por token.
     public private(set) var totalCost: Double?
@@ -205,6 +225,10 @@ public struct Timeline: Equatable, Sendable {
     /// Hora y turno de cada mensaje del usuario, por id de elemento: «Hace 12 minutos», volver y bifurcar.
     public private(set) var userTimes: [Int: Double] = [:]
     public private(set) var userTurns: [Int: String] = [:]
+    /// El id que comparten la app y el motor de cada mensaje en cola, por id de elemento.
+    public private(set) var queueIDs: [Int: String] = [:]
+    /// «Quitar» o «Editar» que esperan la respuesta del motor, por id de la cola.
+    private var unqueuing: [String: Unqueuing] = [:]
     /// Orden aprobada que aún no ha devuelto resultado, y desde cuándo (segundos desde 1970).
     /// Una compilación o un script largo tarda: la tarjeta lo enseña en vez de parecer colgada.
     public private(set) var runningPermission: RunningCommand?
@@ -246,11 +270,54 @@ public struct Timeline: Equatable, Sendable {
     private mutating func nextID() -> Int { counter += 1; return counter }
 
     /// Mensaje local del usuario: se muestra en cola hasta que el agente lo incorpora.
-    public mutating func addUser(_ text: String, queued: Bool) {
+    /// `queueID`: el id con el que se envió al motor, para poder quitarlo de la cola.
+    @discardableResult
+    public mutating func addUser(_ text: String, queued: Bool, queueID: String? = nil) -> Int {
         closeWrapUps()
         let id = nextID()
         items.append(.user(id: id, text: text, queued: queued))
         userTimes[id] = Date().timeIntervalSince1970
+        if queued, let queueID { queueIDs[id] = queueID }
+        return id
+    }
+
+    /// Se pidió quitar o editar este mensaje y el motor aún no ha respondido.
+    public func isUnqueuing(item id: Int) -> Bool {
+        queueIDs[id].map { unqueuing[$0] != nil } ?? false
+    }
+
+    /// «Quitar» o «Editar» de un mensaje en cola: el id que hay que pedir al motor que saque.
+    /// nil si ya no está en cola, se envió sin id o ya se pidió.
+    public mutating func requestUnqueue(item id: Int, action: UnqueueAction) -> String? {
+        guard queuedIndex(of: id) != nil, let queueID = queueIDs[id], unqueuing[queueID] == nil else { return nil }
+        unqueuing[queueID] = Unqueuing(item: id, action: action)
+        return queueID
+    }
+
+    /// La respuesta del motor (`quitado_de_cola`). Si lo quitó, o nunca llegó a su cola, sale de
+    /// la conversación y se devuelve su texto. Si el modelo ya lo leyó, se queda con un aviso.
+    public mutating func unqueued(id queueID: String, removed: Bool, reason: String?) -> Unqueued? {
+        guard let pending = unqueuing.removeValue(forKey: queueID) else { return nil }
+        if removed || reason == "desconocido" {
+            return removeQueued(item: pending.item).map { Unqueued(text: $0, action: pending.action) }
+        }
+        items.append(.notice(id: nextID(), text: Self.alreadyRead))
+        return nil
+    }
+
+    /// Quita un mensaje que sigue en cola y devuelve su texto. Sin proceso no hay cola en el
+    /// motor: «Quitar» y «Editar» lo hacen directamente.
+    @discardableResult
+    public mutating func removeQueued(item id: Int) -> String? {
+        guard let index = queuedIndex(of: id), case let .user(_, text, _) = items[index] else { return nil }
+        items.remove(at: index)
+        userTimes[id] = nil
+        if let queueID = queueIDs.removeValue(forKey: id) { unqueuing[queueID] = nil }
+        return text
+    }
+
+    private func queuedIndex(of id: Int) -> Int? {
+        items.firstIndex { if case .user(id, _, true) = $0 { return true } else { return false } }
     }
 
     /// El mensaje rechazado sale de la conversación (vuelve al cuadro) y queda el aviso. Sin turno
@@ -442,6 +509,8 @@ public struct Timeline: Equatable, Sendable {
                                      + (which == .session ? "de esta sesión." : "del mes en este Mac.")))
             }
         case .continued: break
+        // Lo resuelve `unqueued(id:removed:reason:)`, que devuelve el texto quitado a la sesión.
+        case .unqueued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
              .ollamaChats, .browser, .firstRun, .connecting, .connected:
             break
@@ -484,6 +553,8 @@ public struct Timeline: Equatable, Sendable {
             if let index = items.firstIndex(where: { if case .user(_, event.text, true) = $0 { return true } else { return false } }),
                case let .user(existing, text, _) = items[index] {
                 items[index] = .user(id: existing, text: text, queued: false)
+                // Ya no está en cola; un «Quitar» pedido antes recibirá «entregado».
+                queueIDs[existing] = nil
                 id = existing
             } else {
                 id = nextID()
@@ -597,6 +668,8 @@ public struct Timeline: Equatable, Sendable {
     /// El proceso salió. Si no hubo `fin`, o salió con 130, la sesión queda interrumpida.
     public mutating func processExited(code: Int32) {
         runningPermission = nil
+        // Sin proceso nadie responderá: «Quitar» y «Editar» vuelven a valer (y ya quitan aquí).
+        unqueuing.removeAll()
         closeOpenCalls()
         compacting = false
         // macOS suelta la aserción con el proceso.
