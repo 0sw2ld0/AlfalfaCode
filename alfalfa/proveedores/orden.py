@@ -2,6 +2,7 @@
 
     alfalfa --proveedores [--json]            estado, sin secretos
     alfalfa --guardar-clave openai            lee la clave por la entrada estándar
+    alfalfa --guardar-clave anthropic         (la de Claude)
     alfalfa --guardar-clave openrouter        (o cualquier compatible con OpenAI del catálogo)
     alfalfa --borrar-clave openai
     alfalfa --catalogo [--json]               estado del catálogo de models.dev y los gratis ahora
@@ -27,7 +28,7 @@ from .compatible import es_compatible
 from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.
-CON_CLAVE = ('ollama', 'openai')
+CON_CLAVE = ('ollama', 'openai', 'anthropic')
 CON_URL = ('ollama', 'alfalfa')
 
 
@@ -229,8 +230,8 @@ def _diagnostico():
 def argumentos(grupo):
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
     grupo.add_argument('--guardar-clave', metavar='PROVEEDOR',
-                       help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai '
-                            'o un compatible con OpenAI del catálogo, como openrouter u opencode)')
+                       help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai, '
+                            'anthropic o un compatible con OpenAI del catálogo, como openrouter u opencode)')
     grupo.add_argument('--borrar-clave', metavar='PROVEEDOR',
                        help='Borrar del Llavero una clave o el código de cortesía')
     grupo.add_argument('--proveedor-por-defecto', metavar='PROVEEDOR',

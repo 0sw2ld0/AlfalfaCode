@@ -734,8 +734,8 @@ async def execute(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o '
-                                                                 'Alfalfa')
+    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI, '
+                                                                 'Anthropic o Alfalfa')
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)

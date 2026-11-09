@@ -98,7 +98,7 @@ alfalfa --modelos --json
 ```
 
 `modelos` junta los de cada proveedor configurado: `name` es el que se guarda en la
-sesión (con prefijo `openai/`, `alfalfa/` o el del compatible, `openrouter/…`, fuera
+sesión (con prefijo `openai/`, `anthropic/`, `alfalfa/` o el del compatible, `openrouter/…`, fuera
 de Ollama) y `nombre` el visible.
 Si un proveedor no responde, los demás se listan igual y su fallo va en `fallos`.
 Del catálogo de models.dev cada fila puede traer `ventana`, `salida_max`, `precio`

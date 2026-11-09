@@ -249,7 +249,7 @@ def es_compatible(ident):
     """¿`ident` es un proveedor compatible del catálogo (o uno de los conocidos)?"""
     if ident in CONOCIDOS:
         return True
-    if not isinstance(ident, str) or ident in ('ollama', 'openai', 'alfalfa'):
+    if not isinstance(ident, str) or ident in ('ollama', 'openai', 'anthropic', 'alfalfa'):
         return False
     datos = catalogo.proveedor(ident)
     return bool(datos and catalogo.compatible(datos))

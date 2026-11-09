@@ -178,5 +178,7 @@ final class ProtocolTests: XCTestCase {
         let both = ["OLLAMA_API_KEY": "ollama-secreto", "OPENAI_API_KEY": "sk-openai-secreto"]
         XCTAssertEqual(Redactor.clean("a ollama-secreto b sk-openai-secreto", environment: both),
                        "a [REDACTADO] b [REDACTADO]")
+        let claude = ["ANTHROPIC_API_KEY": "sk-ant-secreto"]
+        XCTAssertEqual(Redactor.clean("x sk-ant-secreto y", environment: claude), "x [REDACTADO] y")
     }
 }

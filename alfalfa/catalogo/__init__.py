@@ -131,6 +131,14 @@ def _precio(valor):
         numero = _numero(valor.get(origen))
         if numero is not None:
             precio[destino] = numero
+    # Un tramo por longitud del prompt (Claude Haiku 5.5 cobra más toda la petición si pasa de 100K).
+    for tramo in (valor.get('tiers') if isinstance(valor.get('tiers'), list) else [])[:4]:
+        limite = tramo.get('tier') if isinstance(tramo, dict) and isinstance(tramo.get('tier'), dict) else {}
+        desde = _entero(limite.get('size'))
+        caro = _precio({k: v for k, v in tramo.items() if k != 'tiers'}) if limite.get('type') == 'context' else None
+        if desde and caro:
+            precio['tramo'] = dict(caro, desde=desde)
+            break
     return precio
 
 
@@ -279,9 +287,7 @@ def _revalidar(proveedores):
                 'limit': {'context': ficha.get('ventana'), 'input': ficha.get('entrada'),
                           'output': ficha.get('salida')},
                 'reasoning_options': [{'type': 'effort', 'values': ficha.get('esfuerzos') or []}],
-                'cost': None if precio is None else {'input': precio.get('entrada'), 'output': precio.get('salida'),
-                                                     'cache_read': precio.get('cache_lectura'),
-                                                     'cache_write': precio.get('cache_escritura')},
+                'cost': None if precio is None else _coste_crudo(precio),
                 'open_weights': ficha.get('abiertos'), 'release_date': ficha.get('fecha'),
                 'knowledge': ficha.get('conocimiento'), 'status': ficha.get('estado'),
                 'provider': {'npm': ficha.get('paquete'), 'api': ficha.get('api')}}
@@ -291,6 +297,18 @@ def _revalidar(proveedores):
     if not limpios:
         raise CatalogoInvalido('Catálogo guardado vacío.')
     return limpios
+
+
+def _coste_crudo(precio):
+    """El precio reducido otra vez con los nombres de models.dev, para volver a validarlo."""
+    crudo = {'input': precio.get('entrada'), 'output': precio.get('salida'),
+             'cache_read': precio.get('cache_lectura'), 'cache_write': precio.get('cache_escritura')}
+    tramo = precio.get('tramo')
+    if isinstance(tramo, dict):
+        crudo['tiers'] = [{'input': tramo.get('entrada'), 'output': tramo.get('salida'),
+                           'cache_read': tramo.get('cache_lectura'), 'cache_write': tramo.get('cache_escritura'),
+                           'tier': {'type': 'context', 'size': tramo.get('desde')}}]
+    return crudo
 
 
 def _guardar(proveedores, fecha):
@@ -431,13 +449,25 @@ def gratis_ahora(red=False):
     return filas
 
 
-def coste(precio, entrada, salida, cache=0):
-    """USD de una llamada con los precios por millón del catálogo; None sin precio."""
+def coste(precio, entrada, salida, cache=0, escrita=0):
+    """USD de una llamada con los precios por millón del catálogo; None sin precio.
+
+    `entrada` es el prompt entero; `cache`, lo leído de la caché y `escrita`, lo
+    escrito en ella (Anthropic lo cobra a 1,25 veces la entrada si el catálogo no
+    dice otra cosa). Con un tramo por longitud, un prompt más largo que el tramo
+    paga toda la petición a su precio.
+    """
     if not precio or not isinstance(entrada, int) or not isinstance(salida, int):
         return None
+    tramo = precio.get('tramo')
+    if isinstance(tramo, dict) and isinstance(tramo.get('desde'), int) and entrada > tramo['desde']:
+        precio = tramo
     cache = cache if isinstance(cache, int) and 0 <= cache <= entrada else 0
+    escrita = escrita if isinstance(escrita, int) and 0 <= escrita <= entrada - cache else 0
     lectura = precio.get('cache_lectura', precio['entrada'])
-    return ((entrada - cache) * precio['entrada'] + cache * lectura + salida * precio['salida']) / 1_000_000
+    escritura = precio.get('cache_escritura', precio['entrada'] * 1.25)
+    return ((entrada - cache - escrita) * precio['entrada'] + cache * lectura + escrita * escritura
+            + salida * precio['salida']) / 1_000_000
 
 
 def resumen(ficha_modelo):

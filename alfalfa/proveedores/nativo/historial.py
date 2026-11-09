@@ -6,7 +6,7 @@ cambios, uso, punto de control, lo que no crece del registro de evidencia y
 dónde acaba cada archivo que sólo crece.
 
 - `messages.jsonl`: la conversación, `messages[1:]`, un mensaje por línea y sin
-  `thinking` (el razonamiento nunca se escribe a disco). `messages[0]` es el de
+  `thinking` ni `alfalfa_bloques` (el razonamiento nunca se escribe a disco). `messages[0]` es el de
   sistema, que el motor sustituye en cada turno: va en session.json como
   `primer_mensaje`, así cambiarlo no obliga a tocar el historial.
 - `fotos.jsonl`: las fotos del espacio de trabajo (`workspace_context`) de cada
@@ -146,8 +146,14 @@ class Mensajes(Lista):
     _PRIMERO_APARTE = True
 
 
+# Lo que sólo vive en memoria para devolvérselo al modelo: el razonamiento y los
+# bloques firmados de Claude (`alfalfa_bloques`).
+SOLO_EN_MEMORIA = ('thinking', 'alfalfa_bloques')
+
+
 def _sin_razonamiento(mensaje):
-    return {k: v for k, v in mensaje.items() if k != 'thinking'} if isinstance(mensaje, dict) else mensaje
+    return ({k: v for k, v in mensaje.items() if k not in SOLO_EN_MEMORIA}
+            if isinstance(mensaje, dict) else mensaje)
 
 
 def _linea(valor):

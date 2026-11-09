@@ -2,7 +2,7 @@ import Foundation
 
 /// Cómo arranca una pestaña de la terminal integrada: la shell de inicio del usuario, en la
 /// carpeta de la sesión y con un entorno limpio. No hereda el entorno de la app: ahí pueden
-/// ir claves de proveedores (OPENAI_API_KEY, OLLAMA_API_KEY…) y variables del arnés que no
+/// ir claves de proveedores (OPENAI_API_KEY, ANTHROPIC_API_KEY…) y variables del arnés que no
 /// tienen por qué llegar a cada orden que se escriba. La shell de inicio pone el PATH.
 public struct TerminalLaunch: Equatable {
 

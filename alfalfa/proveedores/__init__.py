@@ -1,4 +1,4 @@
-"""Proveedores de modelos: Ollama, OpenAI, el servicio Alfalfa y los compatibles con OpenAI.
+"""Proveedores de modelos: Ollama, OpenAI, Anthropic, el servicio Alfalfa y los compatibles con OpenAI.
 
 El bucle de `NativeRuntime` habla el formato de Ollama (`/api/chat` con
 herramientas, `/api/show` para la ventana y las capacidades, `/api/tags` para la
@@ -7,7 +7,7 @@ cual, y los demás traduciendo por dentro hacia su propia API y de vuelta. Así 
 bucle no cambia según con quién hable.
 
 El modelo de una sesión dice su proveedor con un prefijo: `openai/gpt-6-luna`,
-`alfalfa/glm-5.3-flash`, `openrouter/google/gemma-4-31b-it:free`. Sin prefijo (o
+`anthropic/claude-sonnet-5-5`, `alfalfa/glm-5.3-flash`, `openrouter/google/gemma-4-31b-it:free`. Sin prefijo (o
 con `ollama/`) es de Ollama, como hasta ahora. Los prefijos de los compatibles con
 OpenAI salen del catálogo de models.dev (`alfalfa.catalogo`); un modelo de Ollama
 cuyo espacio de nombres coincida con uno de ellos se guarda con `ollama/` delante.
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import httpx
 
-PREFIJOS = ('ollama', 'openai', 'alfalfa')
+PREFIJOS = ('ollama', 'openai', 'anthropic', 'alfalfa')
 TIEMPO_DE_LISTA = 10
 
 
@@ -114,6 +114,9 @@ def obtener(ident):
     if ident == 'openai':
         from .openai import OpenAI
         return OpenAI()
+    if ident == 'anthropic':
+        from .anthropic import Anthropic
+        return Anthropic()
     if ident == 'alfalfa':
         from .alfalfa import Alfalfa
         return Alfalfa()
@@ -157,7 +160,7 @@ def secretos():
     """Todas las claves conocidas, para sanear lo que se escribe o se emite."""
     from .. import ajustes
     valores = []
-    for leer in (ajustes.ollama_clave, ajustes.openai_clave, ajustes.alfalfa_codigo,
+    for leer in (ajustes.ollama_clave, ajustes.openai_clave, ajustes.anthropic_clave, ajustes.alfalfa_codigo,
                  *[(lambda i=i: ajustes.clave_compatible(i)) for i in _compatibles_para_secretos()]):
         try:
             valores.append(leer())

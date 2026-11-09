@@ -3,7 +3,7 @@
     python scripts/catalogo_minimo.py [api.json]
 
 Sin argumento baja https://models.dev/api.json. Guarda sólo los proveedores que
-AlfalfaCode usa sin configurar nada más (OpenAI, Ollama Cloud, OpenRouter,
+AlfalfaCode usa sin configurar nada más (OpenAI, Anthropic, Ollama Cloud, OpenRouter,
 OpenCode Zen y NVIDIA) y, de ellos, los modelos vigentes que llaman
 herramientas. Basta para el primer arranque sin internet; con red, el catálogo
 completo la sustituye en `~/.alfalfa/catalogo/`.
@@ -20,7 +20,7 @@ sys.path.insert(0, str(RAIZ))
 
 from alfalfa import catalogo  # noqa: E402
 
-PROVEEDORES = ('openai', 'ollama-cloud', 'openrouter', 'opencode', 'nvidia')
+PROVEEDORES = ('openai', 'anthropic', 'ollama-cloud', 'openrouter', 'opencode', 'nvidia')
 # De OpenRouter, con cientos de modelos, sólo los gratis.
 SOLO_GRATIS = ('openrouter', 'nvidia')
 
