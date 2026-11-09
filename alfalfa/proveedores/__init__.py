@@ -14,12 +14,48 @@ cuyo espacio de nombres coincida con uno de ellos se guarda con `ollama/` delant
 """
 from __future__ import annotations
 
+import re
 import threading
 
 import httpx
 
 PREFIJOS = ('ollama', 'openai', 'anthropic', 'alfalfa')
 TIEMPO_DE_LISTA = 10
+# Los esfuerzos de razonamiento de menos a más, con los nombres de OpenAI y Anthropic.
+ORDEN_ESFUERZOS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')
+# Una instantánea con fecha de otro modelo: `gpt-4o-2024-08-06`, `claude-haiku-4-5-20251001`.
+_INSTANTANEA = re.compile(r'^(.+)-(?:\d{4}-\d{2}-\d{2}|\d{8})$')
+
+
+def elegir_esfuerzo(admitidos, deseado):
+    """El esfuerzo que se pide de entre los que admite el modelo: `deseado` si está; si no, el
+    más cercano por debajo y, si no hay, el más bajo que no apaga el razonamiento. None sin admitidos."""
+    admitidos = [e for e in admitidos or [] if e in ORDEN_ESFUERZOS]
+    if not admitidos:
+        return None
+    deseado = deseado if deseado in ORDEN_ESFUERZOS else 'medium'
+    if deseado in admitidos:
+        return deseado
+    orden = ORDEN_ESFUERZOS.index(deseado)
+    debajo = [e for e in admitidos if e != 'none' and ORDEN_ESFUERZOS.index(e) <= orden]
+    if debajo:
+        return max(debajo, key=ORDEN_ESFUERZOS.index)
+    encendidos = [e for e in admitidos if e != 'none']
+    return min(encendidos, key=ORDEN_ESFUERZOS.index) if encendidos else None
+
+
+def sin_instantaneas(ids):
+    """Los ids sin las instantáneas con fecha de un modelo que también está (`gpt-4o-2024-08-06` si
+    está `gpt-4o`): el selector enseña el alias, que sigue al modelo."""
+    presentes = set(ids)
+    return [i for i in ids if not ((m := _INSTANTANEA.match(i)) and m.group(1) in presentes)]
+
+
+def ordenar_por_fecha(ids, fecha):
+    """Los más nuevos primero (`fecha(id)` da «AAAA-MM-DD» o None); sin fecha, al final por nombre."""
+    # Por nombre y luego, estable, por fecha: los del mismo día quedan en orden alfabético.
+    fechados = sorted(sorted(i for i in ids if fecha(i)), key=fecha, reverse=True)
+    return fechados + sorted(i for i in ids if not fecha(i))
 
 
 class ErrorDeProveedor(RuntimeError):

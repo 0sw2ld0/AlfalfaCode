@@ -488,12 +488,16 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
     public var missingKey: MissingKey?
     /// Si ve imágenes: true, false o nil cuando no se sabe (entonces se deja adjuntar).
     public var vision: Bool?
+    /// OpenAI y Anthropic con clave: true para los recomendados, false para «Más modelos»; nil los demás.
+    public var recommended: Bool?
     public var id: String { name }
 
     public init(name: String, label: String? = nil, provider: String = "ollama", providerName: String? = nil,
                 context: Int? = nil, price: ModelPrice? = nil, free: Bool = false, notice: String? = nil,
-                missingKey: MissingKey? = nil, vision: Bool? = nil, cheapUntil: Int? = nil) {
+                missingKey: MissingKey? = nil, vision: Bool? = nil, cheapUntil: Int? = nil,
+                recommended: Bool? = nil) {
         self.cheapUntil = cheapUntil
+        self.recommended = recommended
         self.name = name
         self.label = label ?? name
         self.provider = provider
@@ -698,7 +702,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                  providerName: text(row["nombre_proveedor"]), context: integer(row["ventana"]),
                                  price: modelPrice(row["precio"]), free: bool(row["gratis"]) ?? false,
                                  notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]),
-                                 vision: bool(row["vision"]), cheapUntil: integer(row["barato_hasta"]))
+                                 vision: bool(row["vision"]), cheapUntil: integer(row["barato_hasta"]),
+                                 recommended: bool(row["recomendado"]))
             })
         case "proveedores":
             guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }

@@ -38,6 +38,23 @@ def _catalogo_sin_red(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _lista_de_modelos_sin_red(monkeypatch):
+    """`GET /v1/models` de OpenAI y Anthropic nunca sale a la red: sin copia guardada, models.dev.
+    Las pruebas de la lista ponen su propio transporte falso."""
+    import httpx
+
+    from alfalfa.proveedores import lista_api
+
+    def sin_red(peticion):
+        raise httpx.ConnectError('sin red en las pruebas', request=peticion)
+
+    monkeypatch.setattr(lista_api, '_transporte', httpx.MockTransport(sin_red))
+    lista_api.olvidar()
+    yield
+    lista_api.olvidar()
+
+
+@pytest.fixture(autouse=True)
 def _sin_habilidades_del_usuario(tmp_path_factory, monkeypatch):
     """Las habilidades sueltas de ~/.claude/skills y ~/.codex/skills de quien corre la suite no entran."""
     from alfalfa.complementos import cargador
