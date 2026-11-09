@@ -4,10 +4,10 @@
 #
 # No compila nada: usa el motor que ya va dentro de la app del DMG (un Python 3.13 propio
 # con alfalfa y sus dependencias fijadas, y los ayudantes Swift compilados). Es lo mismo
-# que instala `curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh`.
+# que instala `curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh`.
 class Alfalfa < Formula
   desc "Arnés de agentes de programación: Ollama, OpenAI, Anthropic y modelos gratis"
-  homepage "https://cuycoders.dev/alfalfa"
+  homepage "https://alfalfacode.cuycoders.dev"
   url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.1/AlfalfaCode-0.99.1.dmg"
   sha256 "26d0897b1ab8f31cf877709c10ca2006c46b74afe948d3cf77e117b71018541e"
   license "MIT"

@@ -27,7 +27,7 @@ brew install 0sw2ld0/tap/alfalfa              # la CLI
 o, sólo la CLI y sin Homebrew ni sudo:
 
 ```bash
-curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 ```
 
 También vale bajar el DMG de la
@@ -58,7 +58,7 @@ Para desinstalar:
 
 ```bash
 brew uninstall alfalfa && brew uninstall --cask alfalfacode
-curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
 ```
 
 Ninguna de las dos borra `~/.alfalfa`, donde viven tus sesiones y ajustes.
