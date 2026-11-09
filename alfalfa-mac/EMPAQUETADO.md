@@ -64,6 +64,12 @@ validación de bibliotecas: todas sus extensiones van firmadas por el mismo equi
 `publicar.sh` sigue el modelo de CuyCleaner: notariza y grapa la app, hace el DMG con un acceso
 a Aplicaciones, lo firma, lo notariza, lo grapa y lo comprueba con `spctl`. La credencial de
 notarytool se guarda una vez en el llavero con el nombre `AlfalfaCode`.
+En el Mac de publicación esa credencial no existe todavía. Hoy se notariza con la de
+CuyCleaner, que es del mismo equipo:
+
+```bash
+PERFIL=CuyCleaner ./publicar.sh
+```
 
 ## Qué necesita el motor del Mac de quien lo usa
 
@@ -221,7 +227,8 @@ ejecuta nada.
 
 ### Orden al publicar
 
-1. `./publicar.sh` y la orden `gh release create` que enseña: DMG, `version.json` y bottle.
+1. `PERFIL=CuyCleaner ./publicar.sh` (mientras no exista la credencial `AlfalfaCode`) y la
+   orden `gh release create` que enseña: DMG, `version.json` y bottle.
 2. El workflow `tap.yml` pone el tap en esa versión, o lo haces a mano con
    `actualizar-tap.sh`.
 3. Si `alfalfa/instalar.sh` cambió, cópialo a la web (`cuycoders.dev/alfalfa/instalar.sh`).

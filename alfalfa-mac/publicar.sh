@@ -11,6 +11,7 @@
 #
 # Uso:  ./publicar.sh             → dist/AlfalfaCode-<versión>.dmg firmado y notarizado
 #       PERFIL=otro ./publicar.sh → si guardaste la credencial con otro nombre
+#                                   (hoy: PERFIL=CuyCleaner, la del mismo equipo; «AlfalfaCode» aún no existe)
 #       ./publicar.sh --local     → DMG con firma ad hoc y sin notarizar, sólo para probar en este Mac
 #                                   (en otro Mac Gatekeeper no lo deja abrir)
 #
