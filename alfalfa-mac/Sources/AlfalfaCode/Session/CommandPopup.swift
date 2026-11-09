@@ -9,6 +9,8 @@ struct CommandSuggestion {
     enum Action {
         case command(SlashCommand)
         case argument(SlashCommand, String)
+        /// Una orden del proyecto (OpenCode, Claude Code): se manda como mensaje y el motor la expande.
+        case project(String)
     }
 
     // MARK: - Propiedades

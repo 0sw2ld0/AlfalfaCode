@@ -143,6 +143,14 @@ def cargar_tipos(cwd, hogar):
                 'instrucciones': cuerpo[:MAX_MENSAJE], 'solo_lectura': False, 'herramientas': herramientas,
                 'modelo': modelo, 'esfuerzo': datos.get('effort') or datos.get('reasoning_effort') or None,
                 'origen': str(archivo)}
+    # Los de OpenCode que el usuario autorizó (alfalfa/importadas); no tapan a los de arriba.
+    try:
+        from .importadas import Importadas
+        for nombre, tipo in Importadas(cwd, hogar).agentes().items():
+            if nombre not in tipos and len(tipos) < MAX_TIPOS:
+                tipos[nombre] = tipo
+    except Exception as exc:  # noqa: BLE001 - una configuración ajena rota no deja sin subagentes
+        avisos.append('Agentes importados: ' + type(exc).__name__)
     return tipos, avisos
 
 
@@ -388,6 +396,7 @@ class Subagentes:
         excluidas = list(terminal.excluidas()) + list(HERRAMIENTAS_DEL_PRINCIPAL)
         if solo_lee:
             excluidas += list(terminal.ESCRITURA)
+        excluidas += list(tipo.get('excluidas') or [])
         if tipo.get('herramientas'):
             from .proveedores.nativo.herramientas import COMPLEMENTOS_TOOLS, ON_REQUEST_TOOLS
             permitidas = set(tipo['herramientas']) | set(SIEMPRE)
@@ -406,7 +415,8 @@ class Subagentes:
                            excluded_tools=tuple(dict.fromkeys(excluidas)),
                            working_text='Subagente trabajando…',
                            process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
-                                        'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1'},
+                                        'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
+                                        'ALFALFA_SESION': sub.task['id']},
                            process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False),
                            command_policy=OnRequestPolicy(gestor.reglas), tolerant_edit=True,
                            complementos=gestor.complementos, project_docs=gestor.project_docs(),

@@ -148,11 +148,14 @@ def test_writable_roots_resolve_symlinks_and_ignore_wide_tmpdir(tmp_path):
 
 
 def test_protected_metadata_regex_matches_codex_and_nested_git():
-    assert protected_metadata_name_regex('/a.b/', '.git', nested=False) == r'^/a\.b/\.git(/.*)?$'
-    assert protected_metadata_name_regex('/', '.git', nested=False) == r'^/\.git(/.*)?$'
+    # Como Codex, pero el nombre sin distinguir mayúsculas: en APFS `.GIT` es el mismo `.git`.
+    assert protected_metadata_name_regex('/a.b/', '.git', nested=False) == r'^/a\.b/\.[gG][iI][tT](/.*)?$'
+    assert protected_metadata_name_regex('/', '.git', nested=False) == r'^/\.[gG][iI][tT](/.*)?$'
     root = '/p/' + RARO
     rx = re.compile(protected_metadata_name_regex(root, '.git'))
     for path in ('/.git', '/.git/hooks', '/.git/hooks/pre-commit', '/sub/.git', '/sub/x/.git/config'):
+        assert rx.match(root + path), path
+    for path in ('/.GIT/hooks', '/sub/.Git/config'):
         assert rx.match(root + path), path
     for path in ('/.gitignore', '/.github/x', '/x.git', '/sub/.gitmodules'):
         assert not rx.match(root + path), path
@@ -587,3 +590,20 @@ def test_real_network_connection_is_blocked(tmp_path):
         assert code != 0, output
     finally:
         server.close()
+
+
+@real
+def test_real_git_with_other_case_stays_protected(tmp_path):
+    """Seatbelt no media el renombrado que sólo cambia mayúsculas (`mv .git .GIT`): ninguna regla
+    lo niega, ni `literal` ni `subpath`. Por eso la protección no depende del nombre exacto: con
+    `.GIT` los hooks siguen sin poder escribirse y la carpeta sigue sin poder salir de su sitio."""
+    root = tmp_path / 'ws'
+    (root / '.git' / 'hooks').mkdir(parents=True)
+    sandbox = SeatbeltSandbox(str(root))
+    sandboxed(sandbox, ['/bin/mv', '.git', '.GIT'], root)  # puede cambiar el nombre visible
+    for argv in (['/bin/sh', '-c', 'echo x > .GIT/hooks/pre-commit'], ['/bin/sh', '-c', 'echo x > .git/hooks/x'],
+                 ['/bin/mv', '.GIT', 'fuera'], ['/bin/mv', '.git', 'fuera'], ['/bin/rm', '-rf', '.GIT/hooks']):
+        code, output = sandboxed(SeatbeltSandbox(str(root)), argv, root)
+        assert code != 0, (argv, output)
+    assert [p.name.casefold() for p in root.iterdir()] == ['.git']
+    assert (root / '.git' / 'hooks').is_dir() and not any((root / '.git' / 'hooks').iterdir())

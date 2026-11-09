@@ -13,7 +13,8 @@
 Modificado para AlfalfaCode en noviembre de 2026:
 
 1. Traducción de Rust a Python sobre el sistema de archivos local, sin el sistema de archivos remoto ni los entornos múltiples de Codex.
-2. Sin `project_root_markers` ni `project_doc_fallback_filenames` configurables: los marcadores son `.git` y los nombres, `AGENTS.override.md` y `AGENTS.md`.
+2. Sin `project_root_markers` configurables: el marcador es `.git`. `project_doc_fallback_filenames` sale de `~/.codex/config.toml` y `.codex/config.toml` cuando existen (alfalfa/importadas), detrás de `AGENTS.override.md` y `AGENTS.md`.
 3. Las instrucciones del usuario salen de `$ALFALFA_HOME` en vez de `$CODEX_HOME`, con el mismo tope.
 4. Sin la noción de proyecto no confiable: AlfalfaCode ya trata las instrucciones del proyecto como datos que no cambian sus reglas, y así lo dice el texto que las presenta al modelo.
 5. Mensajes y avisos en español.
+6. Para abrir sin cambios proyectos de otras herramientas, se añaden en el mismo tope los `developer_instructions` de Codex (delante), los CLAUDE.md, `.claude/CLAUDE.md` y CLAUDE.local.md de Claude Code de cada carpeta y los archivos de `instructions` de OpenCode (detrás), sin repetir un archivo ni un texto ya cargados.

@@ -51,6 +51,7 @@ struct Composer: View {
 
             ComposerToolbar(session: session)
         }
+        .task(id: session.cwd) { imported = await app.importedConfig(in: session.cwd).config }
         .frame(maxWidth: Theme.column)
         .padding(.horizontal, 40).padding(.bottom, 24)
         .frame(maxWidth: .infinity)
@@ -64,6 +65,8 @@ struct Composer: View {
     @State private var selection = 0
     /// Al enviar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
+    /// Lo que trae la carpeta de OpenCode, Codex y Claude Code: sus órdenes «/» salen en el menú.
+    @State private var imported: ImportedConfig?
 
     /// Con un modelo que se sabe que no ve imágenes no se adjuntan; si no se sabe, sí.
     private var allowsImages: Bool { app.allowsImages(session.model) }
@@ -214,6 +217,17 @@ private extension Composer {
             if !enabled { detail += running ? " · espera a que acabe el turno" : " · continúa la sesión primero" }
             return CommandSuggestion(id: command.name, symbol: command.symbol, title: "/" + command.name,
                                      detail: detail, enabled: enabled, action: .command(command))
+        } + projectCommands(input.name)
+    }
+
+    /// Las órdenes «/» de OpenCode y Claude Code de la carpeta (`alfalfa --importar`).
+    func projectCommands(_ prefix: String) -> [CommandSuggestion] {
+        (imported?.commands(matching: prefix) ?? []).map { item in
+            let authorized = item.state == "autorizado"
+            let detail = [item.detail, item.tool + " · " + item.place].filter { !$0.isEmpty }.joined(separator: " · ")
+            return CommandSuggestion(id: "proyecto:" + item.name, symbol: "text.badge.star", title: "/" + item.name,
+                                     detail: authorized ? detail : detail + " · sin autorizar: Ajustes ▸ Importar",
+                                     enabled: authorized, action: .project(item.name))
         }
     }
 
@@ -255,6 +269,7 @@ private extension Composer {
         switch option.action {
         case let .command(command): text = "/" + command.name + (command.takesArgument ? " " : "")
         case let .argument(command, value): text = "/" + command.name + " " + value
+        case let .project(name): text = "/" + name + " "
         }
     }
 
@@ -269,6 +284,9 @@ private extension Composer {
             }
         case let .argument(command, value):
             run(command, value)
+        case let .project(name):
+            // Detrás van sus argumentos; ↩ lo manda como mensaje y el motor pone su plantilla.
+            text = "/" + name + " "
         }
     }
 

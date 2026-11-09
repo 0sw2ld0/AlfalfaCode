@@ -321,6 +321,13 @@ class TerminalManager:
             anteriores = [] if self.mcp is None else list(self.mcp.servidores.values())
             servidores_plugin = [] if read_only else self.complementos.servidores_mcp(anteriores)
             diagnosticos_plugin = [] if read_only else self.complementos.diagnosticos_mcp()
+            # Los de OpenCode, Codex y Claude Code que el usuario autorizó (alfalfa/importadas).
+            from .importadas import Importadas
+            self.importadas = Importadas(self.task['cwd'], base)
+            if not read_only:
+                servidores_plugin += self.importadas.servidores_mcp(anteriores + servidores_plugin)
+                diagnosticos_plugin += [d for d in self.importadas.diagnosticos_mcp()
+                                        if d.codigo != 'IMPORTADA-PENDIENTE']
             if servidores_plugin or (diagnosticos_plugin and self.mcp is not None):
                 diagnosticos = [] if self.mcp is None else list(self.mcp.diagnosticos)
                 self.mcp = McpManager(self, anteriores + servidores_plugin,
@@ -618,7 +625,9 @@ class TerminalManager:
                              # Sin bytecode: `python3 uso.py` en run_checks creaba __pycache__ en un
                              # repo sin .gitignore y la comprobación quedaba «el workspace cambió».
                              process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
-                                          'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1'},
+                                          'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
+                                          # `alfalfa --importar --autorizar` no autoriza desde aquí.
+                                          'ALFALFA_SESION': self.task['id']},
                              # Red cerrada: sólo un permiso «red» de la política
                              # on-request abre la variante con red para ese intento.
                              process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False),
@@ -782,12 +791,29 @@ class TerminalManager:
         # Sin evento propio (el contrato v2 no cambia): el id viaja en cada
         # `evento` y en `turno_terminado`.
         self.save()
+        if not getattr(self, '_importadas_avisadas', False):
+            # Una vez por sesión: lo que trae el proyecto de OpenCode, Codex o Claude Code sin autorizar.
+            self._importadas_avisadas = True
+            pendientes = self.importadas.autorizables()
+            if pendientes:
+                self.event(self.task, 'system', 'Importar · ' + ', '.join(
+                    e.tipo + ' ' + e.nombre + ' (' + e.herramienta + ')' for e in pendientes[:6])
+                    + (' y ' + str(len(pendientes) - 6) + ' más' if len(pendientes) > 6 else '')
+                    + ' sin autorizar: no se activan hasta que los autorices con alfalfa --importar '
+                    'o en Ajustes ▸ Importar.')
         if self.hooks is not None and not self._hooks_avisados:
             self._hooks_avisados = True
             for diagnostico in self.hooks.motor.diagnosticos:
                 self.event(self.task, 'system', 'Hooks · ' + diagnostico.texto)
         try:
-            await rt.run(prompt)
+            # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
+            expandido = self.importadas.expandir(prompt)
+            pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
+            if pendiente is not None:
+                self.event(self.task, 'system', 'La orden /' + pendiente.nombre + ' del proyecto ('
+                           + pendiente.herramienta + ') no está autorizada: se manda tal cual. Autorízala en '
+                           'Ajustes ▸ Importar o con alfalfa --importar.')
+            await rt.run(expandido or prompt)
             if self.task['status'] == 'running':
                 if (rt.evidence.handoff().get('status') in ('failed', 'stale', 'changed_externally')
                         or rt.state.get('unresolved') or self.approval.denied
@@ -1023,6 +1049,9 @@ def main(argv=None):
                          help='Chats de la app de Ollama que se pueden cargar (títulos, sin su contenido)')
     listing.add_argument('--importar-ollama', metavar='CHAT',
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
+    listing.add_argument('--importar', action='store_true',
+                         help='Servidores MCP, agentes, órdenes «/» e instrucciones de OpenCode, Codex y Claude Code '
+                              'en esta carpeta, y su autorización')
     listing.add_argument('--aligerar-sesiones', action='store_true',
                          help='Pasar todas las sesiones guardadas al formato ligero y decir cuánto se libera')
     parser.add_argument('--solo-clave', action='store_true',
@@ -1033,7 +1062,13 @@ def main(argv=None):
                          help='Crear la sesión bifurcada sin lanzarla y decir su id (JSON)')
     from .proveedores import orden as orden_de_proveedores
     orden_de_proveedores.argumentos(listing)
+    from .importadas import orden as orden_de_importadas
+    orden_de_importadas.argumentos(parser)
     args = parser.parse_args(argv)
+    if (args.autorizar or args.retirar or args.sin_internet) and not args.importar:
+        parser.error('--autorizar, --retirar y --sin-internet sólo valen con --importar')
+    if args.importar:
+        return orden_de_importadas.orden(args, home_dir())
     if orden_de_proveedores.pedida(args):
         return orden_de_proveedores.orden(args)
     if args.descartar_no_relevantes and not args.aligerar_sesiones:

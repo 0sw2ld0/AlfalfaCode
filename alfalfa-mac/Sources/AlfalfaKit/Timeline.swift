@@ -443,7 +443,7 @@ public struct Timeline: Equatable, Sendable {
             }
         case .continued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats, .browser, .firstRun, .connecting, .connected:
+             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported:
             break
         }
     }

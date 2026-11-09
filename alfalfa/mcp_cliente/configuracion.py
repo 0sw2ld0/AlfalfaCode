@@ -97,6 +97,9 @@ class Servidor:
     procedencia: str | None = None
     complemento: str | None = None
     nombre_original: str | None = None
+    # Valores que salieron de variables del usuario al importar una configuración ajena
+    # (alfalfa/importadas): se redactan igual que el entorno y las cabeceras.
+    secretos_extra: frozenset = frozenset()
 
     def habilitada(self, original):
         """deshabilitadas prevalece; habilitadas None significa todas."""
@@ -113,7 +116,121 @@ class Servidor:
                 partes = valor.split(None, 1)
                 if partes:
                     valores.append(partes[-1].strip())
+        valores += list(self.secretos_extra) + _secretos_de_url(self.url)
+        # También lo que en los argumentos es claramente una credencial (`--token=…`, una URL con
+        # `/s/<token>/`, `Authorization: Bearer …`).
+        anterior = None
+        for argumento in self.argumentos:
+            valores += secretos_de_argumento(argumento, anterior)
+            anterior = argumento
         return {v for v in valores if isinstance(v, str) and len(v) >= MIN_SECRETO}
+
+
+# Un valor con forma de credencial: sólo caracteres de token (también %-codificados), sin
+# espacios ni órdenes de shell.
+_VALOR_TOKEN = re.compile(r'[A-Za-z0-9._~+/=%-]{8,}')
+_TRAMO_TOKEN = re.compile(r'[A-Za-z0-9_%-]{16,}')
+_SECRETO = r'(?:token|key|secret|password|passwd|pass|auth|bearer|credential)'
+_BANDERA = re.compile(r'--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*', re.IGNORECASE)
+_BANDERA_CON_VALOR = re.compile(r'(--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*)=(?P<valor>.+)', re.IGNORECASE)
+# NOMBRE=valor sin guion, como `docker run -e GITHUB_PERSONAL_ACCESS_TOKEN=…`.
+_VARIABLE_CON_VALOR = re.compile(r'[A-Za-z0-9_]*' + _SECRETO + r'[A-Za-z0-9_]*=(?P<valor>.+)', re.IGNORECASE)
+# Una cabecera, sola, tras `--header=`/`--header ` o pegada a `-H`.
+_PREFIJO_CABECERA = re.compile(r'(?:--header[= ]|-H\s*)', re.IGNORECASE)
+_CABECERA_EN_ARGUMENTO = re.compile(r'\s*(?:proxy-)?authorization\s*:\s*(?:(?:bearer|basic|token)\s+)?(?P<valor>\S+)\s*'
+                                    r'|\s*[A-Za-z0-9-]*' + _SECRETO + r'[A-Za-z0-9-]*\s*:\s*(?P<otro>\S+)\s*',
+                                    re.IGNORECASE)
+URL_EN_TEXTO = re.compile(r'(?:https?|wss?)://[^\s\'"]+', re.IGNORECASE)
+_ESQUEMAS = ('http', 'https', 'ws', 'wss')
+
+
+def _consulta(query):
+    """Valores con forma de token de una consulta: los de `clave=valor` y los sueltos (`?ghp_…`)."""
+    valores = []
+    for parte in re.split(r'[&;]', query or ''):
+        valor = parte.split('=', 1)[1] if '=' in parte else parte
+        if _VALOR_TOKEN.fullmatch(valor) and (re.search(r'\d', valor) or '=' in parte):
+            valores.append(valor)
+    return valores
+
+
+def _secretos_de_url(url):
+    """Lo que en una URL es claramente una credencial: la contraseña de usuario:contraseña@, los
+    valores de la consulta y el fragmento con forma de token, y los tramos de la ruta con pinta de
+    token (largos, con letras y cifras: /api/mcp/s/<token>/mcp). Nunca un trozo con espacios u
+    órdenes de shell. Una URL mal formada se mira con expresiones, con las mismas formas."""
+    if not isinstance(url, str) or not url:
+        return []
+    from urllib.parse import urlsplit
+    try:
+        partes = urlsplit(url)
+        bien = partes.scheme.lower() in _ESQUEMAS and bool(partes.hostname)
+        contrasena = partes.password if bien else None
+        consulta, fragmento, ruta = partes.query, partes.fragment, partes.path
+    except ValueError:
+        bien = False
+    if not bien:
+        cuerpo = re.sub(r'^[A-Za-z]+://', '', url)
+        contrasena = (re.match(r'[^/@\s:]*:([^/@\s]+)@', cuerpo) or [None, None])[1]
+        cuerpo = re.sub(r'^[^/?#]*', '', cuerpo)
+        ruta, _, resto = cuerpo.partition('?')
+        consulta, _, fragmento = resto.partition('#')
+        if '#' in ruta:
+            ruta, _, fragmento = ruta.partition('#')
+    valores = [contrasena] if contrasena else []
+    valores += _consulta(consulta)
+    if _VALOR_TOKEN.fullmatch(fragmento or ''):
+        valores.append(fragmento)
+    valores += [t for t in (ruta or '').split('/') if _TRAMO_TOKEN.fullmatch(t) and re.search(r'\d', t)
+                and re.search(r'[A-Za-z]', t)]
+    return valores
+
+
+def _secretos_de_json(texto):
+    """Un argumento que es JSON (`{"Authorization": "Bearer …", "apiKey": "…"}`): los valores de
+    sus claves con nombre de credencial, a cualquier profundidad."""
+    if not texto.lstrip().startswith(('{', '[')):
+        return []
+    try:
+        datos = json.loads(texto)
+    except ValueError:
+        return []
+    valores, pendientes = [], [datos]
+    while pendientes and len(valores) < 100:
+        actual = pendientes.pop()
+        pares = actual.items() if isinstance(actual, dict) else enumerate(actual) if isinstance(actual, list) else ()
+        for clave, valor in pares:
+            if isinstance(valor, (dict, list)):
+                pendientes.append(valor)
+            elif isinstance(valor, str) and isinstance(clave, str) and re.search(_SECRETO, clave, re.IGNORECASE):
+                valores.append(re.sub(r'(?i)^(bearer|basic|token)\s+', '', valor.strip()))
+            elif isinstance(valor, str):
+                valores += secretos_de_argumento(valor)
+    return valores
+
+
+def secretos_de_argumento(argumento, anterior=None):
+    """Lo que un argumento lleva que es claramente una credencial: el valor de `--token=…`, de
+    `NOMBRE_TOKEN=…` o el que sigue a `--api-key`, el de una cabecera (sola, tras `--header=` o
+    pegada a `-H`), las claves de un JSON y lo de sus URL."""
+    if not isinstance(argumento, str):
+        return []
+    valores = []
+    if (isinstance(anterior, str) and _BANDERA.fullmatch(anterior) and argumento
+            and not argumento.startswith('-')):
+        valores.append(argumento)
+    for patron in (_BANDERA_CON_VALOR, _VARIABLE_CON_VALOR):
+        encontrado = patron.fullmatch(argumento)
+        if encontrado:
+            valores.append(encontrado.group('valor'))
+    cabecera = _CABECERA_EN_ARGUMENTO.fullmatch(_PREFIJO_CABECERA.sub('', argumento, count=1)
+                                                if _PREFIJO_CABECERA.match(argumento) else argumento)
+    if cabecera:
+        valores.append(cabecera.group('valor') or cabecera.group('otro'))
+    valores += _secretos_de_json(argumento)
+    for url in URL_EN_TEXTO.findall(argumento):
+        valores += _secretos_de_url(url)
+    return [v for v in valores if v]
 
 
 class _Invalido(ValueError):
