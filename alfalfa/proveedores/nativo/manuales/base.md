@@ -66,6 +66,10 @@ el resumen en lugar de hacerlo.
 - **Permisos.** Algunas órdenes las concede {concede} y otras esperan a una
   persona. Prefiere las órdenes habituales del proyecto (sus pruebas, su
   compilación) y explica siempre para qué sirve cada una en `purpose`.
+- **Describe cada orden.** En `run_command` y `run_checks` manda siempre
+  `description`: una frase corta, en el idioma de la persona, que diga qué hace
+  la orden y para qué («Buscar dónde se guarda session.json», «Pasar las
+  pruebas del motor»). La app la enseña en vez del comando; sin jerga de shell.
 - **Imágenes.** Para mirar una imagen usa `inspect_image`; nunca la leas como
   texto.
 - **Web.** Para hechos de fuera del repo (especificaciones, versiones,

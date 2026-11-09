@@ -102,7 +102,7 @@ def test_policy_is_enabled_only_by_terminal_manager_and_integrators_keep_their_c
     assert integrador.command_policy is None and integrador.process_sandbox is None and integrador.tool_specs is TOOLS
     run = next(t for t in TOOLS if t['function']['name'] == 'run_command')['function']
     # cwd y timeout_seconds son de ambos (test_run_checks_carpeta.py); lo on-request no.
-    assert set(run['parameters']['properties']) == {'argv', 'purpose', 'cwd', 'timeout_seconds'}
+    assert set(run['parameters']['properties']) == {'argv', 'purpose', 'description', 'cwd', 'timeout_seconds'}
     assert run['description'].startswith('Request user approval for exact argv')
     with pytest.raises(ValueError, match='Sobran: needs_network'):
         asyncio.run(integrador.tools.call('run_command', dict(argv=['pwd'], purpose='x', needs_network=True)))
