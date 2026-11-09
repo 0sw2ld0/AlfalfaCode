@@ -21,6 +21,8 @@ Adaptaciones respecto a Codex, todas en este módulo (los .sbpl son copia exacta
   grande para recorrerlo, eso vale para toda la carpeta de trabajo.
 - Las raíces se resuelven con realpath en lugar de rechazar enlaces: la
   política nombra el destino real, que es lo que Seatbelt compara.
+- El hogar del entorno y el de la sesión siguen de solo lectura dentro de una raíz
+  escribible. Se anclan sus antecesores y se rechazan los hardlinks preexistentes.
 - Sin proxy gestionado ni sockets Unix: la red queda cerrada salvo la
   variante explícita `network=True`, que equivale a la red completa de Codex.
 """
@@ -28,7 +30,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import stat
 import sys
+import unicodedata
 from pathlib import Path
 
 from ..procesos import comunicar
@@ -40,6 +44,8 @@ PROTECTED_METADATA = ('.git',)
 PREFLIGHT_SECONDS = 10.0
 # Entradas que se recorren buscando `.git` anidados antes de rendirse.
 SCAN_LIMIT = 200_000
+# Independiente del recorrido del workspace: agotar aquél sella directorios; éste debe comprobarse entero.
+HOME_SCAN_LIMIT = 200_000
 
 _HERE = Path(__file__).resolve().parent
 BASE_POLICY = (_HERE / 'seatbelt_base_policy.sbpl').read_text()
@@ -66,7 +72,16 @@ def _sin_mayusculas(texto):
     la protección no depende de cómo compare Seatbelt. Seatbelt no media el renombrado que sólo
     cambia mayúsculas (`mv .git .GIT` sale bien con cualquier regla), pero con este patrón el
     `.GIT` resultante sigue igual de protegido: ni sus hooks se escriben ni sale de su sitio."""
-    return ''.join('[' + c.lower() + c.upper() + ']' if c.lower() != c.upper() else regex_escape(c) for c in texto)
+    partes = []
+    for c in texto:
+        minuscula, mayuscula = c.lower(), c.upper()
+        if minuscula == mayuscula:
+            partes.append(regex_escape(c))
+        elif len(minuscula) == len(mayuscula) == 1:
+            partes.append('[' + minuscula + mayuscula + ']')
+        else:
+            partes.append('(' + '|'.join(regex_escape(v) for v in dict.fromkeys((c, minuscula, mayuscula))) + ')')
+    return ''.join(partes)
 
 
 def protected_metadata_name_regex(root, name, nested=True):
@@ -102,6 +117,61 @@ def _checked(path, what):
 
 def _contains(parent, child):
     return child == parent or child.startswith(parent.rstrip('/') + '/')
+
+
+def hogar_por_defecto():
+    """Ruta del hogar del entorno, sin leer su contenido."""
+    return os.path.realpath(os.path.expanduser(os.environ.get('ALFALFA_HOME') or '~/.alfalfa'))
+
+
+def hogares_protegidos(rutas=()):
+    return tuple(dict.fromkeys([hogar_por_defecto()] + [
+        os.path.realpath(os.path.expanduser(str(p))) for p in rutas if p is not None]))
+
+
+def ruta_comparable(ruta):
+    """APFS puede identificar mayúsculas y formas Unicode distintas como la misma ruta."""
+    return unicodedata.normalize('NFD', str(ruta)).casefold()
+
+
+def regex_hogar(ruta, *, nested=True):
+    variantes = dict.fromkeys(unicodedata.normalize(forma, str(ruta)) for forma in ('NFC', 'NFD'))
+    final = '(/.*)?$' if nested else '$'
+    return '(' + '|'.join('^' + _sin_mayusculas(p.rstrip('/')) + final for p in variantes) + ')'
+
+
+def antecesores_del_hogar(hogar, raiz):
+    while ruta_comparable(hogar) != ruta_comparable(raiz) and _contains(
+            ruta_comparable(raiz), ruta_comparable(hogar)):
+        yield hogar
+        hogar = os.path.dirname(hogar)
+
+
+def comprobar_enlaces_del_hogar(hogares):
+    """Seatbelt compara rutas: un hardlink anterior al sandbox podría tener otro nombre.
+
+    Sólo se examinan metadatos, nunca contenidos. Sin un recorrido completo no se asegura
+    el aislamiento; tampoco se permite un hogar que ya comparta archivos con otras rutas.
+    """
+    def error(exc):
+        raise exc
+
+    for hogar in hogares:
+        if not os.path.lexists(hogar):
+            continue
+        vistos = 0
+        try:
+            for carpeta, dirs, archivos in os.walk(hogar, followlinks=False, onerror=error):
+                vistos += len(dirs) + len(archivos)
+                if vistos > HOME_SCAN_LIMIT:
+                    raise SandboxUnavailable('El hogar de AlfalfaCode es demasiado grande para comprobar sus enlaces.')
+                for nombre in archivos:
+                    datos = os.stat(os.path.join(carpeta, nombre), follow_symlinks=False)
+                    if stat.S_ISREG(datos.st_mode) and datos.st_nlink > 1:
+                        raise SandboxUnavailable('El hogar de AlfalfaCode contiene archivos con enlaces duros; '
+                                                 'no se puede aislar por rutas.')
+        except OSError as exc:
+            raise SandboxUnavailable('No se pudieron comprobar los enlaces del hogar de AlfalfaCode.') from exc
 
 
 def _ancestors(path, stop):
@@ -154,8 +224,9 @@ class SeatbeltSandbox:
     un permiso «red» aprobado, y sólo para ese intento.
     """
 
-    def __init__(self, root, *, network=False, tmpdir=None, home=None, executable=SANDBOX_EXEC):
+    def __init__(self, root, *, network=False, tmpdir=None, home=None, executable=SANDBOX_EXEC, protegidas=()):
         self.root = root
+        self.protegidas = hogares_protegidos(protegidas)
         self.network = network is True
         self.tmpdir = tmpdir
         self.home = home
@@ -190,6 +261,7 @@ class SeatbeltSandbox:
     def policy(self):
         """(texto de la política, [(clave, ruta)]) en el orden de Codex."""
         roots = self.writable_roots()
+        comprobar_enlaces_del_hogar(self.protegidas)
         workspace = roots[0]
         protected = [_policy_regex(protected_metadata_name_regex(workspace, name)) for name in PROTECTED_METADATA]
         params, components, anchors = [], [], []
@@ -219,6 +291,14 @@ class SeatbeltSandbox:
             anchors.append('(deny file-write-unlink (require-all (subpath (param "' + key + '"))'
                            ' (vnode-type DIRECTORY)))')
         outer = [p for root in roots[1:] for p in _ancestors(os.path.dirname(workspace), root)]
+        # También si la sesión se abre dentro del propio hogar: esa raíz queda de solo lectura.
+        hogares = [h for h in self.protegidas if any(
+            _contains(ruta_comparable(root), ruta_comparable(h))
+            or _contains(ruta_comparable(h), ruta_comparable(root)) for root in roots)]
+        # Ni el hogar ni sus antecesores se pueden mover fuera de la protección.
+        for path in sorted({p for h in hogares for root in roots for p in antecesores_del_hogar(h, root)}):
+            anchors.append('(deny file-write-unlink (require-all (regex '
+                           + _policy_regex(regex_hogar(path, nested=False)) + ') (vnode-type DIRECTORY)))')
         for index, path in enumerate(sorted(set(nested + outer))):
             key = 'PROTECTED_ANCESTOR_' + str(index)
             params.append((key, path))
@@ -239,6 +319,11 @@ class SeatbeltSandbox:
         # Las reglas posteriores prevalecen: ninguna raíz que contenga la carpeta
         # de trabajo (p. ej. $TMPDIR) puede reabrir su .git.
         sections.extend('(deny file-write* (regex ' + rx + '))' for rx in protected)
+        for index, hogar in enumerate(hogares):
+            key = 'ALFALFA_HOME_' + str(index)
+            params.append((key, hogar))
+            sections.append('(deny file-write* (subpath (param "' + key + '")) (regex '
+                            + _policy_regex(regex_hogar(hogar)) + '))')
         sections.append('(deny system-fcntl (fcntl-command 80 110))')
         return '\n'.join(sections), params
 

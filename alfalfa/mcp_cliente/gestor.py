@@ -158,7 +158,8 @@ class McpManager:
             self._evento(('Aviso ' if not diagnostico.grave else 'Error ') + diagnostico.codigo
                          + (' [' + diagnostico.servidor + ']' if diagnostico.servidor else '') + ': '
                          + diagnostico.texto)
-        conexiones = {i: Conexion(s, self.cwd, self.limpiar) for i, s in self.servidores.items()}
+        conexiones = {i: Conexion(s, self.cwd, self.limpiar, protegidas=(getattr(self.terminal, 'home', None),))
+                      for i, s in self.servidores.items()}
         resultados = await asyncio.gather(*(c.iniciar() for c in conexiones.values()), return_exceptions=True)
         for (ident, conexion), resultado in zip(conexiones.items(), resultados):
             if isinstance(resultado, BaseException):

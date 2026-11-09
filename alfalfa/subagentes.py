@@ -417,7 +417,7 @@ class Subagentes:
                            process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
                                         'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
                                         'ALFALFA_SESION': sub.task['id']},
-                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False),
+                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False, protegidas=(gestor.home,)),
                            command_policy=OnRequestPolicy(gestor.reglas), tolerant_edit=True,
                            complementos=gestor.complementos, project_docs=gestor.project_docs(),
                            compaction='codex', compact_limit=gestor.compact_limit)

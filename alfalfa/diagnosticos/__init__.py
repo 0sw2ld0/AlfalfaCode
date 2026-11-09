@@ -335,8 +335,9 @@ def texto_de(d):
 class Sandbox:
     """El prefijo de sandbox-exec del proyecto, calculado una vez por sesión. Sin sandbox no se lanza nada."""
 
-    def __init__(self, raiz):
+    def __init__(self, raiz, *, protegidas=()):
         self.raiz = str(raiz)
+        self.protegidas = protegidas
         self._prefijo = None
         self.disponible = sys.platform == 'darwin' and os.access('/usr/bin/sandbox-exec', os.X_OK)
 
@@ -345,7 +346,8 @@ class Sandbox:
         if not self.disponible:
             raise SandboxUnavailable('no hay sandbox Seatbelt en este sistema')
         if self._prefijo is None:
-            orden = await asyncio.to_thread(SeatbeltSandbox(self.raiz, network=False).command_args, ['true'])
+            orden = await asyncio.to_thread(SeatbeltSandbox(
+                self.raiz, network=False, protegidas=self.protegidas).command_args, ['true'])
             self._prefijo = orden[:-1]
         return self._prefijo + list(argv)
 
@@ -358,7 +360,7 @@ class Diagnosticos:
         self.hogar = Path(hogar)
         self.forzado = forzado
         self._env = env
-        self.sandbox = sandbox if sandbox is not None else Sandbox(self.raiz)
+        self.sandbox = sandbox if sandbox is not None else Sandbox(self.raiz, protegidas=(self.hogar,))
         self.servidores = {}       # (lenguaje, raíz) -> ClienteLSP
         self._cache = {}           # (fuente, raíz, ruta, sha) -> diagnósticos de ese contenido
         self._dichos = set()       # avisos que ya se dieron en la sesión

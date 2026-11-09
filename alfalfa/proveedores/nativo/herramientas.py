@@ -691,6 +691,14 @@ class WorkspaceTools:
     def __init__(self, runtime):
         self.runtime = runtime
         self.root = Path(runtime.task['cwd']).resolve()
+        from ...seatbelt import hogares_protegidos, ruta_comparable
+        self._hogares = tuple(ruta_comparable(h) for h in hogares_protegidos(
+            (getattr(runtime.manager, 'home', None),)))
+
+    def _en_el_hogar(self, ruta):
+        from ...seatbelt import ruta_comparable
+        texto = ruta_comparable(ruta)
+        return any(texto == h or texto.startswith(h.rstrip('/') + '/') for h in self._hogares)
 
     def path(self, value='.'):
         if not isinstance(value, str) or not value or '\0' in value:
@@ -709,6 +717,11 @@ class WorkspaceTools:
         resolved = candidate.resolve()
         if not resolved.is_relative_to(self.root):
             raise ValueError('La ruta sale del workspace.')
+        if self._en_el_hogar(resolved):
+            raise ValueError('Es el hogar de AlfalfaCode (ajustes, claves, hooks y complementos): '
+                             'las herramientas no lo tocan.')
+        if resolved.is_file() and resolved.stat().st_nlink > 1:
+            raise ValueError('Archivo con enlaces duros: puede compartir contenido con el hogar de AlfalfaCode.')
         return resolved
 
     def files(self, value='.'):
@@ -717,7 +730,8 @@ class WorkspaceTools:
             raise ValueError('Se esperaba un directorio.')
         count = 0
         for directory, dirs, names in os.walk(base, followlinks=False):
-            dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(directory)/d).is_symlink())
+            dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(directory)/d).is_symlink()
+                             and not self._en_el_hogar(Path(directory).resolve() / d))
             for name in sorted(names):
                 count += 1
                 if count > 5000:

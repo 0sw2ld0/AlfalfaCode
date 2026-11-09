@@ -624,6 +624,13 @@ en cualquier momento; vale desde el siguiente turno.
 | `plan` | Sólo lee (sin herramientas de escritura ni órdenes) y propone un plan |
 | `omitir` | Aprueba todo sin preguntar, también fuera del sandbox; las reglas `prohibida` siguen mandando. La app pide confirmación |
 
+El hogar de AlfalfaCode (`ALFALFA_HOME`, por defecto `~/.alfalfa`) queda fuera de las
+herramientas de archivos y de las escrituras del sandbox, incluso al abrir una sesión
+en `~` o dentro del propio hogar. La protección se conserva en hooks, servidores MCP
+locales, diagnósticos y subagentes. Antes de iniciar el sandbox se comprueban los
+metadatos del hogar: si contiene archivos con enlaces duros o no se puede completar
+el recorrido, se rechaza el arranque para evitar escrituras por otro nombre.
+
 ## Permitir en esta sesión
 
 Como «Yes, and don't ask again for this command» de Codex, la tarjeta de permiso

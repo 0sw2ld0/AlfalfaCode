@@ -349,7 +349,7 @@ class TerminalManager:
             if not read_only:
                 motor = motor_de_sesion(base, self.task['cwd'],
                                         fuentes_complementos=self.complementos.fuentes_hooks(),
-                                        sandbox=lambda raiz: SeatbeltSandbox(raiz, network=False))
+                                        sandbox=lambda raiz: SeatbeltSandbox(raiz, network=False, protegidas=(base,)))
                 if motor.activo() or motor.diagnosticos:
                     self.hooks = HooksDeSesion(motor, self, self.task, reanudada=bool(resume))
             private_directory(private_directory(self.directory / 'native') / ident)
@@ -645,7 +645,8 @@ class TerminalManager:
                                           'ALFALFA_SESION': self.task['id']},
                              # Red cerrada: sólo un permiso «red» de la política
                              # on-request abre la variante con red para ese intento.
-                             process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False),
+                             process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False,
+                                                             protegidas=(self.home,)),
                              command_policy=OnRequestPolicy(self.reglas),
                              tolerant_edit=True, mcp=self.mcp, complementos=self.complementos,
                              project_docs=self.project_docs(), hooks=self.hooks,
