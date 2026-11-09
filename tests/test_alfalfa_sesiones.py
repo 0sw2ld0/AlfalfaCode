@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from alfalfa import sesiones as registro
+from alfalfa.proveedores.nativo import historial
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.sesiones import bifurcar, url_sin_credenciales
 from alfalfa.stdio import Transport, sessions
@@ -113,7 +114,7 @@ def test_cada_turno_tiene_id_tramo_y_estado(proyecto):
         assert t1['id'] != t2['id'] and len(t1['id']) == 16
         assert (t1['mensaje'], t1['estado'], t2['mensaje'], t2['estado']) \
             == ('Primero.', 'completed', 'Segundo.', 'completed')
-        mensajes = json.loads((m.directory / 'native' / m.task['id'] / 'session.json').read_text())['messages']
+        mensajes = historial.leer(m.directory / 'native' / m.task['id'] / 'session.json')['messages']
         assert t1['desde'] == 0 and t1['hasta'] == t2['desde'] and t2['hasta'] == len(mensajes)
         assert mensajes[t2['desde']] == {'role': 'user', 'content': 'Segundo.'}
         assert 'turno_actual' not in m.task
@@ -161,7 +162,7 @@ def test_bifurcar_desde_un_turno_y_seguir(proyecto):
     task = json.loads((base / nuevo / 'task.json').read_text())
     assert task['bifurcada_de'] == {'sesion': ident, 'turno': t1} and task['status'] == 'created'
     assert [t['id'] for t in task['turnos']] == [t1] and task['meta']['id'] == nuevo
-    estado = json.loads((base / nuevo / 'native' / nuevo / 'session.json').read_text())
+    estado = historial.leer(base / nuevo / 'native' / nuevo / 'session.json')
     assert [m['content'] for m in estado['messages'] if m['role'] != 'system'] == ['Primero.', 'Respuesta uno.']
     filas = [json.loads(linea) for linea in (base / nuevo / (nuevo + '.jsonl')).read_text().splitlines()]
     assert filas and all(f.get('turno') == t1 for f in filas if 'turno' in f)
