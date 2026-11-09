@@ -1531,12 +1531,16 @@ class WorkspaceTools:
     def _record_command_result(self, args, result, revision, verification, cwd, *,
                                prohibited=False, exception=False, timed_out=False, context=None, guard=None):
         if context is not None:
-            from ...evidencia.espacio import cambio_sin_trabajo, for_mutation_watch, matches
+            from ...evidencia.espacio import cambio_sin_trabajo, con_caches, for_mutation_watch, matches
             result['workspace_context'] = context
             try:
-                # Una orden que sólo creó una caché (.pytest_cache/) no cambió el trabajo.
                 result['workspace_stable'] = (matches(for_mutation_watch(context)) and guard is not None
-                                              and (not guard.changed() or cambio_sin_trabajo(context, guard)))
+                                              and not guard.changed())
+                if not result['workspace_stable'] and cambio_sin_trabajo(context, guard):
+                    # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo;
+                    # la foto las incluye para que la comprobación no caduque por ellas.
+                    result['workspace_stable'] = True
+                    result['workspace_context'] = con_caches(context, guard)
             except OSError:
                 result['workspace_stable'] = False
         output = str(result.get('output') or '')
