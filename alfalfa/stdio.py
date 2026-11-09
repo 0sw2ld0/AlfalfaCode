@@ -407,8 +407,9 @@ async def run(args, transport):
 
         transport.stop_process = detener_proceso
         transport.keep_awake = manager.despierto.cambiar
-        if manager.diagnosticos is not None:
-            transport.diagnostics = manager.diagnosticos.cambiar
+        # En solo lectura no hay diagnósticos, pero el interruptor de la app se acepta igual.
+        transport.diagnostics = (manager.diagnosticos.cambiar if manager.diagnosticos is not None
+                                 else (lambda activo: None))
 
         def cambiar_contexto(modo):
             try:

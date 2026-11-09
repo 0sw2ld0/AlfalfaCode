@@ -8,11 +8,13 @@ public struct EditDiagnostics: Equatable, Sendable {
     /// Algún servidor no contestó a tiempo: puede haber más.
     public var incomplete: Bool
 
-    /// «2 errores · 1 aviso» para la fila; nil si no hay nada nuevo.
+    /// «2 errores · 1 aviso» para la fila, con «incompleto» si algún servidor no contestó;
+    /// nil si no hay nada nuevo y todo contestó.
     public var label: String? {
         var parts: [String] = []
         if errors > 0 { parts.append("\(errors) \(errors == 1 ? "error" : "errores")") }
         if warnings > 0 { parts.append("\(warnings) \(warnings == 1 ? "aviso" : "avisos")") }
+        if incomplete { parts.append(parts.isEmpty ? "diagnósticos incompletos" : "incompleto") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

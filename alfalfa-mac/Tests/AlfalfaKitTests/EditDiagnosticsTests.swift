@@ -38,7 +38,8 @@ final class EditDiagnosticsTests: XCTestCase {
         XCTAssertEqual(endInfo?.diagnostics, EditDiagnostics(errors: 2, warnings: 1, incomplete: true))
         let end = ToolEvent(id: 2, role: "tool", text: "edit_file\n{\"path\": \"a.py\"}", time: 0, tool: endInfo)
         let call = ToolCalls.calls(from: [start, end]).first
-        XCTAssertEqual(call?.diagnostics?.label, "2 errores · 1 aviso")
+        XCTAssertEqual(call?.diagnostics?.label, "2 errores · 1 aviso · incompleto")
+        XCTAssertEqual(EditDiagnostics(incomplete: true).label, "diagnósticos incompletos")
         XCTAssertEqual(call?.failed, false, "un error de tipo no hace fallar la edición")
         XCTAssertNil(EditDiagnostics(errors: 0, warnings: 0).label)
         XCTAssertEqual(EditDiagnostics(errors: 1).label, "1 error")

@@ -897,12 +897,36 @@ class WorkspaceTools:
             # (alfalfa/diagnosticos). Sólo con un gestor que los ofrece: la terminal y la app.
             diagnosticos = getattr(self.runtime.manager, 'diagnosticos', None)
             if diagnosticos is not None and not self.runtime.task.get('review'):
+                from ...permisos import modos
                 cambios = result.get('changes') if name == 'apply_patch' else [result]
-                informe = await diagnosticos.tras_editar(self.root, cambios or [], self._contenido_previo)
+                try:
+                    informe = await diagnosticos.tras_editar(
+                        self.root, cambios or [], self._contenido_previo, pedir=self._permiso_de_diagnosticos,
+                        modo=modos.modo_de(self.runtime.task))
+                except Exception as exc:  # noqa: BLE001 — los diagnósticos nunca hacen fallar una edición hecha
+                    informe = {'nuevos': [], 'sin_respuesta': ['Los diagnósticos fallaron ('
+                                                               + (str(exc) or type(exc).__name__)[:200] + ').'],
+                               'nota': 'La edición se hizo. Sin diagnósticos: verifica con run_checks.'}
                 if informe:
                     # Copia: el resultado de edit_file es la misma fila que guarda state['changes'].
                     result = dict(result, diagnosticos=informe)
         return result
+
+    async def _permiso_de_diagnosticos(self, argv, proposito, sin_sandbox):
+        """Pide al usuario lanzar un servidor de lenguaje o linter; ValueError si no lo da.
+
+        Fuera del sandbox es el mismo permiso que una orden sin sandbox; dentro, el de
+        Manual y «Aceptar ediciones». En Omitir permisos lo concede la aprobación sola.
+        """
+        from ...permisos import bajo_demanda, modos
+        motivo = bajo_demanda.SALIR if sin_sandbox else modos.MOTIVO_MODO
+        peticion = {'argv': [str(a) for a in argv], 'purpose': proposito, 'motivo': motivo, 'motivos': [motivo]}
+        if sin_sandbox:
+            peticion['sin_sandbox'] = proposito
+        plazo = getattr(self.runtime.manager, 'unsandboxed_approval_seconds', UNSANDBOXED_APPROVAL_SECONDS)
+        if plazo is None:
+            return await self.runtime.approve(peticion)
+        return await asyncio.wait_for(self.runtime.approve(peticion), plazo)
 
     def _contenido_previo(self, sha):
         """El contenido anterior a una edición, de su copia privada `before-<sha>`, o None."""

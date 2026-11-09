@@ -125,7 +125,9 @@ struct ToolCallRow: View {
             // Lo vio el servidor de lenguaje al editar: el agente lo tiene en el resultado.
             Text(label).font(.system(size: 11.5))
                 .foregroundStyle(diagnostics.errors > 0 ? Theme.warning : Theme.muted)
-                .help("Diagnósticos nuevos tras la edición. Orientan, pero no son una comprobación.")
+                .help(diagnostics.incomplete
+                      ? "Algún servidor de lenguaje no contestó a tiempo: puede haber más. No es una comprobación."
+                      : "Diagnósticos nuevos tras la edición. Orientan, pero no son una comprobación.")
         }
     }
 

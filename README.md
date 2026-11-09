@@ -499,8 +499,13 @@ administrador.
 
 Como OpenCode, el agente ve los errores de lo que acaba de editar sin pedirlos: tras cada
 `write_file`, `edit_file` o `apply_patch`, el resultado de esa misma llamada trae los
-diagnósticos **nuevos** de los archivos tocados (los que no estaban antes de editar),
-con archivo, línea y columna, como mucho 20, primero los errores:
+diagnósticos **nuevos** de los archivos tocados, con archivo, línea y columna, como
+mucho 20, primero los errores. «Nuevo» se decide alineando con difflib las líneas de
+antes y de después de la edición: un error viejo que bajó porque se añadieron líneas
+encima no cuenta, y uno igual a otro que se arregló en otro sitio sí. En un parche de
+varios archivos, lo de antes de cada uno se calcula con los demás también como antes.
+Ningún documento queda abierto en el servidor entre ediciones, así que lo que cambie
+una orden en disco se vuelve a leer.
 
 ```json
 {"path": "Sources/Demo/Suma.swift", "before": "…", "after": "…",
@@ -514,11 +519,13 @@ Usa lo que ya está instalado; no instala nada:
 | Archivos | Servidor de lenguaje | Si no hay |
 |---|---|---|
 | Swift | `sourcekit-lsp` (viene con Xcode) | — |
-| Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff, los errores de sintaxis del propio Python |
-| TypeScript/JavaScript | `typescript-language-server` (del proyecto o del PATH) | — |
+| Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff (o si falla), los errores de sintaxis del propio Python |
+| TypeScript/JavaScript | `typescript-language-server` (el del PATH antes que el de `node_modules`) | — |
 
 Además, si el proyecto tiene su linter configurado (`ruff.toml` o `[tool.ruff]`,
 la configuración de ESLint, `.swiftlint.yml`), se pasa sólo sobre los archivos tocados.
+Un linter que sale con un código que no es de «sin avisos» o «con avisos» (configuración
+rota, regla que no existe) cuenta como fallido, nunca como limpio.
 
 - Los servidores arrancan la primera vez que hacen falta, siguen vivos durante la sesión
   (también para sus subagentes) y se cierran con ella.
@@ -526,25 +533,41 @@ la configuración de ESLint, `.swiftlint.yml`), se pasa sólo sobre los archivos
   (`ALFALFA_DIAGNOSTICOS_ESPERA`). Lo que no contesta a tiempo se queda fuera y el
   resultado lo dice en `sin_respuesta` («sourcekit-lsp no contestó en 3 s (sigue
   arrancando…)»); un servidor que arranca sigue arrancando y sirve en la siguiente
-  edición. `sourcekit-lsp` tarda unos 2,5 s la primera vez en un paquete SwiftPM y
-  centésimas después.
+  edición. Uno que no termina de arrancar en 90 s se da por perdido en la sesión.
+  `sourcekit-lsp` tarda unos 2,5 s la primera vez en un paquete SwiftPM y centésimas
+  después. Si se cancela el turno, no queda nada corriendo.
+- Un fallo de los diagnósticos nunca hace fallar la edición: la edición se hizo y el
+  resultado lo dice.
 - **No son una comprobación**: la evidencia sólo cuenta `run_checks`, y el resultado lo
   recuerda en `nota`. Que no haya diagnósticos nuevos no verifica nada.
-- **Aislamiento**: ESLint, `typescript-language-server`, pyright y los linters corren en
-  el mismo sandbox Seatbelt que las órdenes del agente (sin red, escribiendo sólo en el
-  proyecto y en las carpetas temporales), porque cargan código del proyecto (la
-  configuración de ESLint, los plugins de tsserver). Sin Seatbelt, los que ejecutan código
-  del proyecto no se lanzan. `sourcekit-lsp` es la excepción: su sourcekitd es un servicio
-  XPC de Xcode que Seatbelt bloquea, así que corre fuera y `Package.swift` queda en el
-  sandbox propio de SwiftPM, como cuando Xcode abre un paquete; compila en una carpeta
-  temporal, no en `.build`.
-- En la app, la fila de la edición enseña «2 errores · 1 aviso».
+- **Aislamiento y permisos**, porque estos programas cargan código del proyecto:
+  - pyright, `typescript-language-server`, ESLint, ruff y SwiftLint corren en el mismo
+    sandbox Seatbelt que las órdenes del agente (sin red, escribiendo sólo en el proyecto
+    y en las carpetas temporales). Sin Seatbelt no se lanzan.
+  - En **Manual** y **Aceptar ediciones**, donde apruebas cada orden, los que ejecutan
+    código del proyecto (pyright con el intérprete de su configuración, tsserver con sus
+    plugins, ESLint con su configuración JS) piden permiso una vez por sesión. Un programa
+    de `node_modules/.bin` lo pide en cualquier modo. ruff y SwiftLint sólo leen y no lo
+    piden. Un «no» también vale para toda la sesión.
+  - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
+    el sandbox bloquea), así que pide el permiso de **orden fuera del sandbox**, una vez
+    por paquete y sesión (Omitir permisos lo concede solo). `Package.swift` queda en el
+    sandbox propio de SwiftPM, sin plugins, y compila en `~/Library/Caches/alfalfa/sourcekit`,
+    donde el sandbox de las órdenes no escribe (ni en `.build` ni en `$TMPDIR`).
+  - `sourcekit-lsp` **no se lanza** si el proyecto trae algo que le haría ejecutar órdenes
+    o cambiar su configuración (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`,
+    `compile_commands.json`, `compile_flags.txt`, también en `build/`), desde la carpeta
+    del archivo hasta la raíz, ni en un paquete con dependencias (tendría que resolverlas).
+    Si uno de esos archivos aparece con el servidor en marcha, se cierra.
+- En la app, la fila de la edición enseña «2 errores · 1 aviso» y «incompleto» si algún
+  servidor no contestó.
 
 Está **encendido por defecto**. Para apagarlo:
 
 - en la terminal, `ALFALFA_DIAGNOSTICOS=0 alfalfa "…"` o `alfalfa --sin-diagnosticos "…"`;
-- en un proyecto, `{"diagnosticos": false}` en `.alfalfa/ajustes.json`;
-- para el usuario, `{"diagnosticos": false}` en `~/.alfalfa/ajustes.json` (el del proyecto manda);
+- para el usuario, `{"diagnosticos": false}` en `~/.alfalfa/ajustes.json`;
+- en un proyecto, `{"diagnosticos": false}` en `.alfalfa/ajustes.json`. El proyecto sólo
+  puede apagarlo: nunca enciende lo que el usuario apagó;
 - en la app, **Ajustes ▸ General ▸ Ver los errores al editar**. Vale desde la siguiente
   edición, también en las sesiones abiertas. Por `--stdio`:
   `{"tipo":"diagnosticos","activo":false}`.

@@ -1,7 +1,7 @@
 """Servidor de lenguaje simulado para test_diagnosticos.
 
 Cada línea con «ERROR» es un error y cada «TODO» un aviso, en esa línea.
-Variables: LSP_SIMULADO_MODO = pull (por defecto) | push | caida;
+Variables: LSP_SIMULADO_MODO = pull (por defecto) | push | caida | mudo (nunca da diagnósticos);
 LSP_SIMULADO_RETRASO = segundos antes de contestar a initialize;
 LSP_SIMULADO_REGISTRO = archivo donde apunta cada método que recibe.
 """
@@ -71,6 +71,8 @@ while True:
                     'params': {'uri': documento['uri'], 'version': documento['version'],
                                'diagnostics': diagnosticos(texto)}})
     elif metodo == 'textDocument/diagnostic':
+        if MODO == 'mudo':
+            continue
         if MODO == 'push':
             enviar({'id': mensaje['id'], 'error': {'code': -32601, 'message': 'Unhandled method'}})
         else:
