@@ -293,10 +293,12 @@ class Almacen:
                      entrada='\0'.join(enlazados).encode(errors='surrogateescape'))
         anidados = sorted(set(anidados) | set(enlazados))
         grandes, ilegibles = [], []
-        for linea in avisos.splitlines():
-            ruta = _ilegible(linea.strip())
-            if ruta and ruta.endswith('/'):
-                ilegibles.append(ruta)
+        # Si git avisa de algo, las carpetas que no se pueden leer se buscan a mano: su aviso no es
+        # fiable (un nombre con salto de línea lo parte en dos). Lo que no se entienda deja la lista
+        # de excluidos marcada como incompleta.
+        incompleta = any(_ilegible(linea.strip()) is None for linea in avisos.splitlines() if linea.strip())
+        if avisos.strip():
+            ilegibles += self._carpetas_ilegibles()
         for nombre_archivo in dict.fromkeys(n for n in nuevos if not n.endswith('/')):
             path = self.cwd / nombre_archivo
             try:
@@ -316,10 +318,14 @@ class Almacen:
                               entrada='\0'.join(especificacion).encode(errors='surrogateescape'))
         for linea in errores.splitlines():
             ruta = _ilegible(linea.strip())
-            if ruta:
+            if ruta and not ruta.endswith('/'):
                 ilegibles.append(ruta)
-            elif linea.startswith(('error:', 'fatal:')):
+            elif ruta is None and linea.startswith('fatal:'):
                 raise SinInstantanea('git add: ' + linea[:300])
+            elif ruta is None and linea.strip():
+                incompleta = True
+        if errores.strip() and not avisos.strip():
+            ilegibles += self._carpetas_ilegibles()
         arbol = self.git('write-tree', sesion=sesion).decode().strip()
         commit = self.git('commit-tree', arbol, '-m', (mensaje or nombre)[:200]).decode().strip()
         self.git('update-ref', 'refs/alfalfa/' + _seguro(sesion) + '/' + _seguro(nombre), commit)
@@ -327,12 +333,42 @@ class Almacen:
         ignorados = [n for n in ignorados.decode(errors='surrogateescape').split('\0') if n]
         excluidos = {'grandes': grandes, 'ilegibles': sorted(set(ilegibles)), 'anidados': anidados,
                      'ignorados': ignorados[:TOPE_EXCLUIDOS], 'recortado': len(ignorados) > TOPE_EXCLUIDOS,
-                     **self._modos(sesion)}
+                     'incompleta': incompleta, **self._modos(sesion),
+                     'modos_ignorados': self._modos_de(n for n in ignorados[:TOPE_EXCLUIDOS] if not n.endswith('/'))}
         (self.dir / 'excluidos' / commit).write_text(json.dumps(excluidos, ensure_ascii=False))
         fila = {'repo': self.clave, 'commit': commit, 'fecha': time.time()}
         if grandes:
             fila['grandes'] = grandes[:20]
         return fila
+
+    def _carpetas_ilegibles(self):
+        """Las carpetas (con «/» final) que no se pueden abrir, buscadas sin pasar por el texto de git."""
+        ilegibles, pendientes = [], [self.cwd]
+        saltar = {'.git', *(p.rstrip('/') for p in PESADAS)}
+        while pendientes:
+            carpeta = pendientes.pop()
+            try:
+                with os.scandir(carpeta) as entradas:
+                    for entrada in entradas:
+                        if entrada.name not in saltar and entrada.is_dir(follow_symlinks=False):
+                            pendientes.append(Path(entrada.path))
+            except PermissionError:
+                ilegibles.append(str(carpeta.relative_to(self.cwd)) + '/')
+            except OSError:
+                continue
+        return ilegibles
+
+    def _modos_de(self, rutas):
+        """{ruta: modo} de estos archivos cuando no son 0644 ni 0755."""
+        modos = {}
+        for ruta in rutas:
+            try:
+                estado = os.lstat(self.cwd / ruta)
+            except OSError:
+                continue
+            if stat.S_ISREG(estado.st_mode) and stat.S_IMODE(estado.st_mode) not in MODOS_GIT:
+                modos[ruta] = stat.S_IMODE(estado.st_mode)
+        return modos
 
     def _modos(self, sesion):
         """{'modos': {ruta: modo}, 'modos_carpetas': {carpeta: modo}}: los permisos que git no conserva
@@ -436,18 +472,30 @@ class Almacen:
         if padre != self.cwd and self.cwd not in padre.parents:
             raise OSError('queda fuera de la carpeta de trabajo')
 
-    def _carpetas(self, path, modos=None):
-        """Crea las carpetas que faltan una a una, sin seguir enlaces, con el modo que tenían (`modos`)."""
+    def _carpetas(self, path):
+        """Crea las carpetas que faltan una a una, sin seguir enlaces, y devuelve las creadas.
+
+        Se crean 0700 (abiertas para escribir dentro, cerradas a los demás); su modo final se
+        pone al terminar de restaurar, de dentro hacia fuera (una 0555 no impediría escribir)."""
+        creadas = []
         actual = self.cwd
         for parte in path.relative_to(self.cwd).parts[:-1]:
             actual = actual / parte
             if not actual.exists() and not actual.is_symlink():
-                modo = (modos or {}).get(str(actual.relative_to(self.cwd)))
-                actual.mkdir(mode=modo if modo is not None else 0o777)
-                if modo is not None:
-                    os.chmod(actual, modo)
+                actual.mkdir(mode=0o700)
+                creadas.append(actual)
             elif actual.is_symlink() or not actual.is_dir():
                 raise OSError('la carpeta ' + str(actual.relative_to(self.cwd)) + ' es un enlace')
+        return creadas
+
+    def permisos_de_carpeta(self, ruta, modo):
+        """Pone a una carpeta el modo que tenía, sin seguir enlaces."""
+        with self.cerrojo():
+            path = self.cwd / ruta.rstrip('/')
+            self._dentro(path)
+            if path.is_symlink() or not path.is_dir():
+                raise OSError('no es una carpeta')
+            os.chmod(path, modo)
 
     def _escribir(self, path, modo, datos, permisos=None):
         """`permisos`: el modo real que apuntó la instantánea; sin él, los de ahora con el bit x de git."""
@@ -489,7 +537,7 @@ class Almacen:
         excluidos = self.excluidos(commit) if commit else None
         modos = excluidos.get('modos') if isinstance(excluidos, dict) else None
         modos_carpetas = excluidos.get('modos_carpetas') if isinstance(excluidos, dict) else None
-        hechas, fallos = [], []
+        hechas, fallos, creadas = [], [], []
         for ruta in [r for r in rutas if r not in destino]:
             path = self.cwd / ruta
             try:
@@ -512,7 +560,7 @@ class Almacen:
                 if path.is_dir() and not path.is_symlink():
                     raise OSError('ahora es una carpeta')
                 datos = self.contenido(blob)
-                self._carpetas(path, modos_carpetas)
+                creadas += self._carpetas(path)
                 self._dentro(path)
                 permisos = None
                 if isinstance(modos, dict) and modo != '120000':
@@ -522,6 +570,12 @@ class Almacen:
                 hechas.append(ruta)
             except (OSError, SinInstantanea) as exc:
                 fallos.append({'ruta': ruta, 'error': str(exc)[:200]})
+        for carpeta in sorted(set(creadas), key=lambda c: len(c.parts), reverse=True):
+            modo = (modos_carpetas or {}).get(str(carpeta.relative_to(self.cwd)), 0o755)
+            try:
+                os.chmod(carpeta, modo)
+            except OSError:
+                pass
         return hechas, fallos
 
     def _limpiar_carpetas(self, carpeta, destino, creadas_desde):

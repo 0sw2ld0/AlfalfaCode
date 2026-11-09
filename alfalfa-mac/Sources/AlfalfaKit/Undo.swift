@@ -60,6 +60,7 @@ public struct UndoFile: Equatable, Hashable, Sendable {
         case "editado_despues": return "Lo cambiaste después del turno"
         case "ajeno": return "No lo cambió el agente"
         case "orden": return "Lo cambió una orden del agente, sin huella propia"
+        case "adoptado": return "Una orden lo tomó como del agente: puede llevar lo que cambiaste mientras corría"
         case "grande": return "Demasiado grande para guardarlo"
         case "ignorado": return "Está ignorado: no se guarda"
         case "repo_anidado": return "Está en un repositorio anidado: no se guarda"

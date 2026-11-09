@@ -27,6 +27,7 @@ from . import SinInstantanea, deshacer, publica, rehacer, turno_anterior, turno_
 ALCANCES = ('todo', 'conversacion', 'codigo')
 MOTIVOS = {'editado_despues': 'lo cambiaste después del turno', 'ajeno': 'no lo cambió el agente',
            'orden': 'lo cambió algo durante un turno con órdenes, sin huella del agente',
+           'adoptado': 'una orden del agente tomó su huella al acabar: puede llevar lo que cambiaste mientras corría',
            'grande': 'es demasiado grande para compararlo', 'ignorado': 'ahora está ignorado',
            'repo_anidado': 'está en un repositorio anidado', 'ilegible': 'no se puede leer',
            'sin_registro': 'no hay registro de cómo estaba'}
