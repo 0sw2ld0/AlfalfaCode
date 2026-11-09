@@ -14,6 +14,8 @@ public struct Preferences {
         public static let defaultEffort = "ajustes.esfuerzo"
         public static let defaultMode = "ajustes.permisos"
         public static let keepAwake = "ajustes.mantenerDespierto"
+        public static let sessionBudget = "ajustes.presupuestoSesion"
+        public static let monthlyBudget = "ajustes.presupuestoMes"
         public static let section = "ajustes.seccion"
     }
 
@@ -54,6 +56,18 @@ public struct Preferences {
         nonmutating set { defaults.set(newValue, forKey: Key.keepAwake) }
     }
 
+    /// Tope en dólares de cada sesión (con sus subagentes); nil sin tope.
+    public var sessionBudget: Double? {
+        get { budget(Key.sessionBudget) }
+        nonmutating set { storeBudget(newValue, Key.sessionBudget) }
+    }
+
+    /// Tope en dólares del mes en este Mac, todas las sesiones; nil sin tope.
+    public var monthlyBudget: Double? {
+        get { budget(Key.monthlyBudget) }
+        nonmutating set { storeBudget(newValue, Key.monthlyBudget) }
+    }
+
     // MARK: - Inicializadores
 
     public init(defaults: UserDefaults = .standard) {
@@ -88,6 +102,21 @@ public struct Preferences {
 
     private func text(_ key: String) -> String? {
         Self.clean(defaults.string(forKey: key))
+    }
+
+    private func budget(_ key: String) -> Double? {
+        guard let value = (defaults.object(forKey: key) as? NSNumber)?.doubleValue, value.isFinite, value > 0 else {
+            return nil
+        }
+        return value
+    }
+
+    private func storeBudget(_ value: Double?, _ key: String) {
+        if let value, value.isFinite, value > 0 {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private func store(_ value: String?, _ key: String) {

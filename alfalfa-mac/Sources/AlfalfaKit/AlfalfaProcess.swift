@@ -62,12 +62,16 @@ public enum Launcher {
                                       effort: String?, readOnly: Bool, images: [String] = [],
                                       mode: String? = nil, wait: Bool = false, parent: String? = nil,
                                       title: String? = nil, keepAwake: Bool = true,
-                                      browser: Bool = false) -> [String] {
+                                      browser: Bool = false, budget: Double? = nil,
+                                      monthlyBudget: Double? = nil) -> [String] {
         var arguments = ["--stdio"]
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
         if browser { arguments.append("--navegador") }
         // Ajustes ▸ General ▸ Mantener el Mac despierto, apagado.
         if !keepAwake { arguments.append("--sin-mantener-despierto") }
+        // Ajustes ▸ General ▸ Presupuesto: los topes en dólares de la sesión y del mes.
+        if let budget, budget > 0 { arguments += ["--presupuesto", BudgetFormat.argument(budget)] }
+        if let monthlyBudget, monthlyBudget > 0 { arguments += ["--presupuesto-mes", BudgetFormat.argument(monthlyBudget)] }
         // La sesión que la propuso: sólo al crearla, se guarda con ella.
         if let parent, resume == nil { arguments += ["--padre", parent] }
         // El título de la propuesta, para que la barra lateral no enseñe el principio del encargo.

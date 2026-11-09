@@ -23,6 +23,7 @@ from .mcp_cliente import BUSCAR, McpManager
 from .permisos import modos
 from .permisos.bajo_demanda import OnRequestPolicy
 from .permisos.terminal import TerminalApproval
+from .presupuesto import PresupuestoAgotado
 from .proveedores.nativo.herramientas import atomic_json
 from .proveedores.nativo.runtime import SIN_EFECTOS, NativeRuntime
 from .seatbelt import SeatbeltSandbox
@@ -179,7 +180,7 @@ class TerminalManager:
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
-                 navegador=False):
+                 navegador=False, budget=None, monthly_budget=None):
         self.transport = transport
         # El navegador propio de la app (`--navegador`): sólo con la app al otro lado.
         self.navegador = None
@@ -261,6 +262,11 @@ class TerminalManager:
             self.fondo = ProcesosEnSegundoPlano(self.directory / 'procesos', aviso=self._aviso_de_procesos,
                                                 evento=lambda texto: self.event(self.task, 'system', texto))
             self.vision_slots = asyncio.Semaphore(1)
+            # Topes en dólares de la sesión y del mes (--presupuesto, ALFALFA_PRESUPUESTO…): sus
+            # subagentes usan este mismo, así que lo que gastan cuenta para ella.
+            from .presupuesto import Presupuesto
+            self.presupuesto = Presupuesto(base, self.task, sesion=budget, mes=monthly_budget,
+                                           aviso=self._aviso_presupuesto)
             from .subagentes import Subagentes
             self.subagentes = Subagentes(self)
             self.approval = TerminalApproval(self.task['cwd'], auto)
@@ -317,6 +323,19 @@ class TerminalManager:
             self._despierto_dicho = True
             print('AlfalfaCode · El Mac no se dormirá por inactividad mientras trabajo '
                   '(ALFALFA_MANTENER_DESPIERTO=0 lo apaga).', flush=True)
+
+    def _aviso_presupuesto(self, texto, datos):
+        """El aviso del 80 % y el corte: en la conversación y, para la app, el evento `presupuesto`."""
+        self.event(self.task, 'system', texto)
+        if self.transport is not None:
+            self.transport.emit('presupuesto', **datos)
+
+    def cambiar_presupuesto(self, **topes):
+        """Ajustes ▸ Presupuesto de la app ({sesion, mes}; None quita el tope): vale ya, también a
+        mitad de turno."""
+        self.presupuesto.cambiar(**topes)
+        if self.transport is not None:
+            self.transport.emit('presupuesto', **self.presupuesto.estado())
 
     def save(self):
         self.task['updated_at'] = time.time()
@@ -741,6 +760,10 @@ class TerminalManager:
         except asyncio.CancelledError:
             self.task.update(status='interrupted', summary='Sesión interrumpida; puedes reanudarla.')
             return 130
+        except PresupuestoAgotado as exc:
+            # Un corte limpio, no un fallo: la sesión sigue lista para cuando suba el tope.
+            self.task.update(status='blocked', summary=str(exc))
+            return 1
         except (ValueError, OSError, httpx.HTTPError) as exc:
             self.task.update(status='failed', summary=str(exc))
             return 1
@@ -761,8 +784,25 @@ class TerminalManager:
                 self.context(self.task, self.task['context_tokens'], self.task['context_limit'])
             rt.save()
             print('AlfalfaCode · ' + self.task['status'] + ': ' + self.task.get('summary', ''), flush=True)
+            if self.transport is None:
+                gasto_texto = texto_del_gasto(self.task)
+                if gasto_texto:
+                    print('AlfalfaCode · ' + gasto_texto, flush=True)
             if self.transport is None and self.task.get('cierre'):
                 print(texto_del_cierre(self.task['cierre']), flush=True)
+
+
+def texto_del_gasto(task):
+    """«Coste estimado: 0,37 $ · Caché: ahorró 0,12 $ (…)», o '' sin precio ni caché."""
+    from .presupuesto import dolares, resumen_cache, texto_cache
+    partes = []
+    coste = task.get('coste_usd')
+    if isinstance(coste, (int, float)) and not isinstance(coste, bool):
+        partes.append('Coste estimado: ' + dolares(coste))
+    cache = texto_cache(resumen_cache(task))
+    if cache:
+        partes.append(cache)
+    return ' · '.join(partes)
 
 
 def desglose_de(task):
@@ -859,7 +899,9 @@ async def execute(args):
     manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                              parent=getattr(args, 'padre', None), keep_awake=keep_awake(args))
+                              parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
+                              budget=getattr(args, 'presupuesto', None),
+                              monthly_budget=getattr(args, 'presupuesto_mes', None))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -911,6 +953,12 @@ def main(argv=None):
     parser.add_argument('--sin-mantener-despierto', action='store_true',
                         help='Dejar que el Mac se duerma por inactividad mientras trabaja un turno '
                              '(también ALFALFA_MANTENER_DESPIERTO=0)')
+    parser.add_argument('--presupuesto', metavar='USD',
+                        help='Tope de gasto de la sesión en dólares, con sus subagentes; al llegar, el turno se '
+                             'detiene (también ALFALFA_PRESUPUESTO; 0 lo quita)')
+    parser.add_argument('--presupuesto-mes', metavar='USD',
+                        help='Tope de gasto del mes en este Mac, todas las sesiones (también '
+                             'ALFALFA_PRESUPUESTO_MES; 0 lo quita)')
     parser.add_argument('--stdio', action='store_true')
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
@@ -963,6 +1011,12 @@ def main(argv=None):
         return check_command(args.comprobar_orden)
     if args.reanudar and args.bifurcar:
         parser.error('--reanudar y --bifurcar no van juntos')
+    from .presupuesto import importe
+    for opcion in ('presupuesto', 'presupuesto_mes'):
+        try:
+            importe(getattr(args, opcion))
+        except ValueError as exc:
+            parser.error('--' + opcion.replace('_', '-') + ': ' + str(exc))
     if args.imagen:
         if not args.encargo:
             parser.error('--imagen necesita un encargo')

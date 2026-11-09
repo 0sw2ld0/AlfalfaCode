@@ -22,7 +22,7 @@ from uuid import uuid4
 
 import httpx
 
-from ... import empaquetado
+from ... import empaquetado, presupuesto
 from ...admision.despacho import check_task, inference_stream, resolved_model_aliases
 from ...evidencia.registro import RunEvidence
 
@@ -1377,9 +1377,32 @@ class NativeRuntime:
         escrita = escrita if type(escrita) is int else 0
         self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
         self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
-        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache, escrita)
+        precio = getattr(self, '_precio', None)
+        coste = catalogo.coste(precio, entrada, salida, cache, escrita)
+        # Lo que habría costado sin caché, para enseñar lo que ahorra (Ollama no la da).
+        sin_cache = catalogo.coste(precio, entrada, salida) if coste is not None and (cache or escrita) else None
+        datos_cache = {'leidos': cache, 'escritos': escrita, 'sin_cache': sin_cache,
+                       'con_cache': coste if sin_cache is not None else None} if cache or escrita else None
+        if datos_cache:
+            presupuesto.sumar_cache(self.task, **datos_cache)
         if coste is not None:
             self.task['coste_usd'] = (self.task.get('coste_usd') or 0.0) + coste
+            cuenta = self._presupuesto()
+            if cuenta is not None:
+                # Un subagente suma a la sesión que lo lanzó y a sus topes.
+                cuenta.sumar(self.task, coste, datos_cache)
+
+    def _presupuesto(self):
+        """El presupuesto de la sesión (también el de la sesión de un subagente), o None."""
+        cuenta = getattr(self.manager, 'presupuesto', None)
+        return cuenta if isinstance(cuenta, presupuesto.Presupuesto) else None
+
+    def _comprobar_presupuesto(self):
+        """Antes de pedir otra respuesta: si se llegó al tope, el turno se detiene. Un modelo sin
+        precio (local, plan, cortesía) no gasta y sigue."""
+        cuenta = self._presupuesto()
+        if cuenta is not None and getattr(self, '_precio', None):
+            cuenta.comprobar(decir=self.task is cuenta.task)
 
     def _record_response_usage(self, response, payload, attempt=0, purpose='chat'):
         if isinstance(response.get('alfalfa_aviso'), str):
@@ -1785,7 +1808,7 @@ class NativeRuntime:
                 + self._nombre_del_modelo() + ' cobra ' + catalogo.veces(tarifa)
                 + '. Vuelve a pedir sólo la parte que necesites.]')
 
-    def _recorte(self, original, tope):
+    def _recorte(self, original, tope):  # noqa: F811 — el de fallos.py es otro, sólo se reexporta
         """La salida recortada a `tope` tokens con su nota: lo mismo cada vez para el mismo original."""
         from ...compactacion import recortar_medio
         return recortar_medio(original, tope) + self._nota_de_recorte()
@@ -2628,6 +2651,8 @@ class NativeRuntime:
                 limite = TIEMPO.get(self.task.get('effort'), 3600)
                 if self.presupuesto_agotado(limite):
                     raise ValueError('Presupuesto de '+str(limite//60)+' minutos agotado; la sesión se conserva.')
+                # El tope en dólares: antes de pedir otra respuesta, nunca a mitad de una herramienta.
+                self._comprobar_presupuesto()
                 if not review and self.espera_permisos > espera_contada:
                     session_deadline += self.espera_permisos - espera_contada
                     espera_contada = self.espera_permisos

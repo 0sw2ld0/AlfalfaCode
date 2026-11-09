@@ -425,6 +425,8 @@ public struct Outcome: Equatable, Sendable {
     /// Tokens y coste estimado del turno que terminó.
     public var turnTokens: Int?
     public var turnCost: Double?
+    /// Lo que ahorró la caché de prompts en la sesión; nil sin caché (Ollama) o sin tokens de caché.
+    public var cache: CacheSavings? = nil
 }
 
 /// Respuesta de `alfalfa --buscar-actualizacion --json` y `--actualizar --json`.
@@ -621,6 +623,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
     /// se duerma por inactividad mientras trabaja un turno.
     case keepingAwake(Bool)
+    /// `presupuesto`: topes y gasto de la sesión y del mes, el aviso del 80 % y el corte, y la caché.
+    case budget(BudgetStatus, cache: CacheSavings?)
     /// `navegador`: el agente pide algo al navegador propio de la app (BrowserEngine).
     case browser(BrowserRequest)
 
@@ -755,6 +759,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
+        case "presupuesto":
+            return BudgetStatus(object: object).map { .budget($0, cache: CacheSavings(object: object["cache"])) }
         case "subagente_evento":
             guard let agent = text(object["agente"]), let role = object["rol"] as? String,
                   let content = object["texto"] as? String else { return nil }
@@ -899,7 +905,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         return Outcome(state: state, summary: object["resumen"] as? String ?? "",
                        exitCode: object["codigo_salida"] as? Int ?? 1, tokens: object["tokens"] as? Int ?? 0,
                        wrapUp: wrapUp(object["cierre"]), turn: text(object["turno"]), cost: amount(object["coste"]),
-                       turnTokens: integer(object["tokens_turno"]), turnCost: amount(object["coste_turno"]))
+                       turnTokens: integer(object["tokens_turno"]), turnCost: amount(object["coste_turno"]),
+                       cache: CacheSavings(object: object["cache"]))
     }
 
     /// Un importe en USD no negativo y finito; nil si no llega o no lo es.
@@ -965,6 +972,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case settings(model: String?, effort: String?, mode: String? = nil)
     /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
     case keepAwake(Bool)
+    /// Ajustes ▸ General ▸ Presupuesto: los topes en dólares (nil, sin tope). Vale ya, también a mitad de turno.
+    case budget(session: Double?, month: Double?)
     /// La respuesta del navegador propio a una petición `navegador`.
     case browserReply(BrowserReply)
 
@@ -984,6 +993,9 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
         case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
+        case let .budget(session, month):
+            object = ["tipo": "presupuesto", "sesion": session.map { $0 as Any } ?? NSNull(),
+                      "mes": month.map { $0 as Any } ?? NSNull()]
         case let .browserReply(reply): object = reply.object
         case let .compact(instructions):
             object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]

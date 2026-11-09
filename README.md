@@ -196,6 +196,41 @@ proveedor.
   no cuesta nada; Ollama Cloud y el servicio Alfalfa se pagan con su plan o su
   cuota.
 - Es una estimación, no la factura del proveedor.
+- Lo que gastan los subagentes cuenta para la sesión que los lanzó.
+
+### Caché de prompts
+
+Anthropic y OpenAI sirven de su caché la parte del prompt que ya vieron, a un
+precio menor. Por cada sesión, AlfalfaCode suma los tokens leídos de la caché (y los
+escritos, en Anthropic) y compara lo que habrían costado esas peticiones sin caché
+con lo que costaron.
+
+- La app lo enseña en el panel de la sesión («Caché: ahorró 0,42 $», con el detalle
+  al pasar el ratón) y en `/estado`; la terminal, al acabar cada turno.
+- En Anthropic escribir en la caché cuesta 1,25× la entrada: al principio de una
+  sesión puede costar más de lo que ahorra, y se dice así («aún cuesta … más»).
+- Con Ollama no aplica.
+
+### Presupuesto
+
+Dos topes en dólares, los dos opcionales:
+
+- **por sesión**: lo que lleva la sesión, con sus subagentes;
+- **al mes**: lo gastado este mes natural por todas las sesiones de este Mac.
+
+Al 80 % de un tope AlfalfaCode avisa una vez en la conversación. Al llegar al 100 %
+el turno se detiene limpio antes de pedir otra respuesta al modelo, nunca a mitad de
+una herramienta, y dice cuánto se gastó y cómo subir el tope. La sesión queda lista
+para seguir.
+
+- Sólo cuenta lo que tiene precio: un modelo local, de plan o del servicio Alfalfa
+  con cortesía no gasta, y puede seguir aunque el tope se haya alcanzado.
+- Se configura en la app, en **Ajustes ▸ General ▸ Presupuesto**, y vale ya para
+  las sesiones abiertas. En la terminal, `alfalfa --presupuesto 5 --presupuesto-mes 40 "…"`
+  o `ALFALFA_PRESUPUESTO=5 ALFALFA_PRESUPUESTO_MES=40`. Con `0` se quita el tope.
+- El gasto del mes vive en `~/.alfalfa/gasto/AAAA-MM.jsonl`, una línea por
+  petición con coste. Ese archivo sólo crece y se lee por el final, así que
+  sobrevive a los reinicios sin engordar las sesiones.
 
 ## Usar
 

@@ -127,6 +127,25 @@ estimados de la sesión con los precios del catálogo) cuando el modelo tiene pr
 `turno_terminado` trae también `tokens_turno` y `coste_turno`. Sin precio conocido
 no aparece ningún coste: 0 sería «gratis», no «no se sabe».
 
+Con caché de prompts (Anthropic, OpenAI), esos mismos eventos añaden `cache`:
+`leidos` y `escritos` (tokens) y, con precio, `sin_cache`, `con_cache` y `ahorro`
+(USD de la sesión; `ahorro` es negativo mientras escribir en la caché cueste más de lo
+que ahorra leerla).
+
+Presupuesto: `--presupuesto USD` y `--presupuesto-mes USD` (o `ALFALFA_PRESUPUESTO` y
+`ALFALFA_PRESUPUESTO_MES`) ponen los topes de la sesión y del mes en este Mac.
+`{"tipo":"presupuesto","sesion":5,"mes":null}` los cambia ya, también a mitad de turno
+(null o 0 quitan el tope; sin la clave, ese tope no cambia). El arnés emite
+
+```json
+{"version":2,"tipo":"presupuesto","sesion":{"tope":5.0,"gastado":4.1},"mes":{"tope":null,"gastado":12.3,"mes":"2026-11"},"aviso":"sesion"}
+```
+
+al abrir la sesión y al acabar cada turno si hay un tope, gasto este mes o caché; al
+cambiar los topes; con `aviso` al pasar del 80 %, y con `agotado` cuando un tope
+detiene el turno. Ese turno termina con `estado: "blocked"` y el motivo en `resumen`.
+También lleva `cache` si la hay.
+
 Proveedores (las claves y el código se leen por la entrada estándar, nunca en los
 argumentos):
 

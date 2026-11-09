@@ -55,6 +55,31 @@ extension AppModel {
         }
     }
 
+    /// Topes en dólares de Ajustes ▸ General ▸ Presupuesto. Las sesiones abiertas los aplican ya;
+    /// las nuevas los reciben al arrancar (`--presupuesto`, `--presupuesto-mes`).
+    var sessionBudget: Double? {
+        get { preferences.sessionBudget }
+        set {
+            objectWillChange.send()
+            preferences.sessionBudget = newValue
+            sendBudget()
+        }
+    }
+
+    var monthlyBudget: Double? {
+        get { preferences.monthlyBudget }
+        set {
+            objectWillChange.send()
+            preferences.monthlyBudget = newValue
+            sendBudget()
+        }
+    }
+
+    /// Lo gastado este mes en este Mac, según la última sesión abierta que lo dijo; nil si ninguna.
+    var monthSpent: BudgetStatus.Limit? {
+        live.compactMap { $0.timeline.budget?.month }.max { $0.spent < $1.spent }
+    }
+
     /// El proveedor del modelo elegido, como lo pone el pie de la barra lateral.
     var currentProviderName: String {
         providerName(ModelProvider.id(of: model, in: models))
@@ -69,6 +94,11 @@ extension AppModel {
         if let value = saved.defaultModel { model = value }
         if let value = saved.defaultEffort { effort = value }
         if let value = saved.defaultMode { mode = value.rawValue }
+    }
+
+    private func sendBudget() {
+        let saved = preferences
+        for session in live { session.setBudget(session: saved.sessionBudget, month: saved.monthlyBudget) }
     }
 
     func chooseDefaultFolder() {

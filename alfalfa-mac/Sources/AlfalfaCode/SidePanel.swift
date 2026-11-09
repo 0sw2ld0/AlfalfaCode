@@ -118,6 +118,15 @@ struct SidePanel: View {
                     stat("Último turno", compact(tokens) + " tokens"
                          + (timeline.lastTurnCost.map { " · " + CatalogFormat.cost($0) } ?? ""))
                 }
+                if let cache = timeline.cacheSavings {
+                    // Lo que habrían costado sin caché frente a lo que costaron (Anthropic y OpenAI).
+                    stat("Caché", cache.savedText ?? compact(cache.read) + " tokens leídos")
+                        .help(cache.detail)
+                }
+                if let budget = timeline.budget {
+                    if budget.session.cap != nil { stat("Presupuesto de la sesión", budget.session.text) }
+                    if budget.month.cap != nil { stat("Presupuesto del mes", budget.month.text) }
+                }
             }
             .padding(.top, 2)
         }

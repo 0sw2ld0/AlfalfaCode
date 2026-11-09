@@ -165,6 +165,10 @@ public struct Timeline: Equatable, Sendable {
     public private(set) var compacting = false
     /// El arnés mantiene el Mac despierto: sólo mientras trabaja un turno y con el ajuste encendido.
     public private(set) var keepingAwake = false
+    /// Topes en dólares de la sesión y del mes y lo gastado (`presupuesto`); nil en motores anteriores.
+    public private(set) var budget: BudgetStatus?
+    /// Lo que ahorró la caché de prompts en la sesión; nil sin caché.
+    public private(set) var cacheSavings: CacheSavings?
     /// Órdenes en segundo plano de la sesión (juegos, apps, servidores).
     public private(set) var processes: [BackgroundProcess] = []
     public var liveProcesses: [BackgroundProcess] { processes.filter(\.alive) }
@@ -392,6 +396,7 @@ public struct Timeline: Equatable, Sendable {
             if let cost = outcome.cost { totalCost = cost }
             lastTurnTokens = outcome.turnTokens
             lastTurnCost = outcome.turnCost
+            if let cache = outcome.cache { cacheSavings = cache }
             if outcome.exitCode == 130 || outcome.state == "interrupted" {
                 status = .interrupted
             } else if outcome.state == "blocked" {
@@ -411,6 +416,7 @@ public struct Timeline: Equatable, Sendable {
             closeOpenCalls()
             totalTokens = outcome.tokens
             if let cost = outcome.cost { totalCost = cost }
+            if let cache = outcome.cache { cacheSavings = cache }
             finish(outcome: outcome)
         case let .processes(list):
             processes = list
@@ -426,6 +432,15 @@ public struct Timeline: Equatable, Sendable {
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
         case let .keepingAwake(on): keepingAwake = on
+        case let .budget(status, cache):
+            budget = status
+            if let cache { cacheSavings = cache }
+            // El 80 %, a la vista: el aviso entero va también al registro del turno.
+            if let which = status.warning {
+                let limit = which == .session ? status.session : status.month
+                items.append(.notice(id: nextID(), text: "Llevas " + limit.text + " del presupuesto "
+                                     + (which == .session ? "de esta sesión." : "del mes en este Mac.")))
+            }
         case .continued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
              .ollamaChats, .browser:
