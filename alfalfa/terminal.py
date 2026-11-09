@@ -305,13 +305,25 @@ class TerminalManager:
         self.task['updated_at'] = time.time()
         atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
 
-    def event(self, task, role, text, emitir=True):
-        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó."""
+    def event(self, task, role, text, emitir=True, herramienta=None):
+        """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó.
+        `herramienta`: nombre, fase y descripción de la llamada, para que la app la agrupe."""
         if self.transport:
             text = self.transport.clean(text)
+            herramienta = self.transport.clean(herramienta)
         if getattr(self, 'mcp', None) is not None:
             text = self.mcp.limpiar(text)
+            if herramienta:
+                herramienta = self.mcp.limpiar(herramienta)
+        # Al recordarle una operación sin resolver, el modelo suele repetir la misma respuesta:
+        # la segunda vez no se apunta ni se enseña. Los avisos del sistema no la separan.
+        if role == 'agent' and text == getattr(self, '_ultima_respuesta', None):
+            return
+        if role != 'system':
+            self._ultima_respuesta = text if role == 'agent' else None
         row = dict(role=role, text=text, time=time.time())
+        if herramienta:
+            row['herramienta'] = herramienta
         if task.get('turno_actual'):
             row['turno'] = task['turno_actual']
         path = self.directory / (task['id'] + '.jsonl')
@@ -322,9 +334,14 @@ class TerminalManager:
             return
         if self.transport:
             self.transport.emit('evento', rol=role, texto=text, hora=row['time'],
-                                **({'turno': row['turno']} if 'turno' in row else {}))
+                                **({'turno': row['turno']} if 'turno' in row else {}),
+                                **({'herramienta': herramienta} if herramienta else {}))
         else:
             print('AlfalfaCode · ' + role + ': ' + text, flush=True)
+
+    def tool_event(self, task, text, datos):
+        """Evento de una herramienta con su descripción (`herramienta`)."""
+        self.event(task, 'tool', text, herramienta=datos if isinstance(datos, dict) else None)
 
     def plan(self, task, pasos, explicacion=None):
         """`plan`: la lista de tareas del agente, como la de Codex; la app la enseña."""
@@ -614,6 +631,8 @@ class TerminalManager:
         if self.transport is not None:
             self.transport.in_turn = True
             self.transport.redireccion.clear()
+        # Un turno nuevo (también «Reanudar» sin mensaje) puede repetir la respuesta del anterior.
+        self._ultima_respuesta = None
         # Todo el turno: subagentes, órdenes y la espera de un permiso. Se suelta siempre,
         # también al cancelar o fallar; si el proceso muere, macOS la suelta con él.
         self.despierto.empezar()
@@ -804,8 +823,8 @@ async def execute(args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI o '
-                                                                 'Alfalfa')
+    parser = argparse.ArgumentParser(prog='alfalfa', description='AlfalfaCode con NativeRuntime: Ollama, OpenAI, '
+                                                                 'Anthropic o Alfalfa')
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)

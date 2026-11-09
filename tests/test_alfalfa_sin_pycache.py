@@ -6,13 +6,13 @@ por insuficiente («workspace_changed_during_check») y la sesión terminaba
 bloqueada aunque todo estaba bien (prueba real de apply_patch, 06/11).
 """
 import asyncio
-import json
 import subprocess
 import sys
 from unittest.mock import patch
 
 import pytest
 
+from alfalfa.proveedores.nativo import historial
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.terminal import TerminalManager
 
@@ -37,7 +37,8 @@ def test_run_checks_con_python_no_crea_pycache_y_la_comprobacion_vale(tmp_path, 
     try:
         with patch.object(NativeRuntime, 'request', request):
             codigo = asyncio.run(asyncio.wait_for(m.run('Comprueba uso.py.'), 120))
-        estado = json.loads((m.directory / 'native' / m.task['id'] / 'session.json').read_text())
+        # Desde la v4, las comprobaciones van en checks.jsonl: historial.leer las junta.
+        estado = historial.leer(m.directory / 'native' / m.task['id'] / 'session.json')
         check, = estado['checks']
         assert check['exit_code'] == 0 and '5' in check['output']
         assert check['verification_status'] == 'sufficient'

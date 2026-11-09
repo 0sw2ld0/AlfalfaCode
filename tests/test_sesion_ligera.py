@@ -93,7 +93,7 @@ def test_una_sesion_larga_crece_en_linea_y_no_se_reescribe(proyecto, monkeypatch
         # (Antes cada guardado escribía la conversación entera: el turno 4 escribía 4 veces el 1.)
         assert por_turno[-1] < 2 * por_turno[0]
         guardado = json.loads((carpeta / 'session.json').read_text())
-        assert guardado['version'] == 3 and 'messages' not in guardado
+        assert guardado['version'] == historial.VERSION and 'messages' not in guardado
         assert 'línea 1000 ' not in (carpeta / 'session.json').read_text()
         assert guardado['historial']['bytes'] == len(anterior)
         estado = historial.leer(carpeta / 'session.json')
@@ -216,8 +216,11 @@ def test_las_sesiones_viejas_se_convierten_sin_perder_nada(proyecto):
         assert conteo['not_relevant'] == 40 and conteo['pending'] == 1
         # En disco, ya en el formato nuevo y sin esperar al primer paso.
         guardado = json.loads((directorio / 'session.json').read_text())
-        assert guardado['version'] == 3 and 'messages' not in guardado
-        assert all(set(c['workspace_context']) == {'$foto'} for c in guardado['checks'] + guardado['operations'])
+        assert guardado['version'] == historial.VERSION and 'messages' not in guardado
+        assert not {'checks', 'operations', 'unresolved_records', 'resolution_records'} & set(guardado)
+        filas = [json.loads(x) for campo in historial.CON_FOTO
+                 for x in (directorio / historial.LISTAS[campo]).read_text().splitlines()]
+        assert len(filas) == 6 and all(set(c['workspace_context']) == {'$foto'} for c in filas)
         assert guardado['checkpoint'] == {'through': 2, 'text': 'r'}
         assert (directorio / 'session.json').stat().st_size < tamaño_viejo / 3
         # Cada foto ocupa en fotos.jsonl lo que cambió respecto de la anterior.
@@ -311,7 +314,7 @@ def test_bifurcar_e_importar_escriben_el_formato_nuevo(proyecto, tmp_path):
     nuevo = bifurcar(base, m.task['id'], t1['id'])
     carpeta = base / nuevo / 'native' / nuevo
     guardado = json.loads((carpeta / 'session.json').read_text())
-    assert guardado['version'] == 3 and 'messages' not in guardado
+    assert guardado['version'] == historial.VERSION and 'messages' not in guardado
     estado = historial.leer(carpeta / 'session.json')
     assert len(estado['messages']) == t1['hasta']
     assert [x['content'] for x in estado['messages'] if x['role'] == 'user'] == ['Primero.']
@@ -361,8 +364,9 @@ def test_aligerar_todas_las_sesiones_de_una_vez(proyecto, tmp_path, capsys):
     finally:
         os.close(en_marcha)
     guardado = json.loads((vieja / 'session.json').read_text())
-    assert guardado['version'] == 3 and 'messages' not in guardado and guardado['resolution_records'] == []
-    assert historial.leer(vieja / 'session.json')['messages'] == mensajes
+    assert guardado['version'] == historial.VERSION and not {'messages', 'resolution_records'} & set(guardado)
+    completo = historial.leer(vieja / 'session.json')
+    assert completo['messages'] == mensajes and completo['resolution_records'] == []
     archivadas = (vieja / registro.ARCHIVO_NO_RELEVANTES).read_text().splitlines()
     assert [json.loads(x) for x in archivadas] == no_relevantes
     entrega = json.loads((vieja / 'handoff.json').read_text())
@@ -384,3 +388,395 @@ def test_aligerar_todas_las_sesiones_de_una_vez(proyecto, tmp_path, capsys):
     assert json.loads((vieja / 'session.json').read_text())['resolutions_not_relevant'] == 300
     with pytest.raises(SystemExit):
         main(['--descartar-no-relevantes'])
+
+
+def comprobar(rt, n, root, exit_code=0, argv=None):
+    """Una comprobación como las de run_checks: salida al tope y la foto del espacio."""
+    return rt.evidence.record_check(
+        {'argv': argv or ['pytest', '-q', f'tests/test_{n}.py'], 'purpose': 'Comprobar.'},
+        {'exit_code': exit_code, 'output': f'salida {n} ' + 'o' * 4000, 'workspace_context': foto(root, n),
+         'workspace_stable': True, 'execution_complete': True}, rt.state.get('workspace_revision', 0))
+
+
+def test_session_json_no_crece_con_las_comprobaciones(proyecto):
+    """operations, checks y unresolved_records van en JSONL: session.json no crece con ellos.
+
+    Antes cada registro (hasta 4.000 caracteres de salida) quedaba en session.json, que
+    se reescribe varias veces por paso: de 0,65 a 1,3 MB en 3 turnos de 60 pasos.
+    """
+    m = TerminalManager('x')
+    try:
+        rt = NativeRuntime(m, m.task)
+        root = str(proyecto.resolve())
+        # Dos que fallan: dos incidencias, que luego se resuelven al pasar.
+        for n in (1, 2):
+            comprobar(rt, n, root, exit_code=1, argv=['pytest', '-q', f'tests/test_{n}.py'])
+            rt.save()
+        assert {f['status'] for f in rt.state['unresolved_records'].values()} == {'pending'}
+        # El trabajo cambia: las incidencias pasan a obsoletas, cambiándolas por dentro.
+        rt.state['workspace_revision'] = 1
+        tamaños, diarios = [], {}
+        for n in range(3, 203):
+            # Una de cada dos repite la que falló: queda un intento de resolver la incidencia.
+            comprobar(rt, n, root, argv=['pytest', '-q', 'tests/test_1.py'] if n % 2 else None)
+            rt.save()
+            if n in (22, 202):
+                tamaños.append(rt.path.stat().st_size)
+            if n == 102:
+                diarios = {nombre: (rt.directory / nombre).read_bytes()
+                           for nombre in (*historial.LISTAS.values(), historial.ARCHIVO_INCIDENCIAS)}
+        assert {f['status'] for f in rt.state['unresolved_records'].values()} == {'obsolete'}
+        rt.state['unresolved_records']['finding-000001']['nota'] = 'vista'
+        rt.save()
+        tamaños.append(rt.path.stat().st_size)
+        # 200 comprobaciones más (800 KB de salida) y session.json sigue igual.
+        assert tamaños[2] < tamaños[0] + 1_000 and tamaños[2] < 10_000, tamaños
+        texto = rt.path.read_text()
+        assert 'salida 150 ' not in texto and 'salida 1 ' not in texto
+        guardado = json.loads(texto)
+        assert not {'checks', 'operations', 'unresolved_records', 'resolution_records'} & set(guardado)
+        assert guardado['historial']['checks']['filas'] == 202
+        # Sólo se añade: lo de antes sigue igual al principio de cada JSONL.
+        for nombre, antes in diarios.items():
+            assert (rt.directory / nombre).read_bytes().startswith(antes), nombre
+        # Una incidencia se escribe entera una vez; después, sólo lo que cambió (su estado,
+        # su último intento de resolverla): una línea pequeña por cambio, no una por guardado.
+        lineas = [json.loads(x) for x in
+                  (rt.directory / historial.ARCHIVO_INCIDENCIAS).read_text().splitlines()]
+        assert sum('=' in x for x in lineas) == 2 and len(lineas) < 110
+        assert all(len(json.dumps(x)) < 200 for x in lineas if '~' in x)
+        # Las fotos, una vez cada una, aunque la operación y su comprobación la compartan.
+        assert len((rt.directory / historial.FOTOS).read_text().splitlines()) == 202
+        # Cada comprobación relacionada con una incidencia abierta deja un intento de resolverla.
+        assert len(rt.state['resolution_records']) >= 100
+        en_memoria = {campo: rt.state[campo] for campo in (*historial.LISTAS, 'unresolved_records')}
+        # Lo que sobra tras un corte (antes de escribir session.json) se ignora y se recorta.
+        with open(rt.directory / historial.LISTAS['checks'], 'ab') as salida:
+            salida.write(b'{"id": "check-a medias')
+    finally:
+        m.close()
+    m = TerminalManager('Sigue.', resume=m.task['id'])
+    try:
+        rt = NativeRuntime(m, m.task)
+        for campo, valor in en_memoria.items():
+            assert rt.state[campo] == valor, campo
+        assert rt.state['checks'][5]['workspace_context'] == foto(root, 6)
+        assert rt.state['unresolved_records']['finding-000001']['nota'] == 'vista'
+        comprobar(rt, 400, root)
+        rt.save()
+        assert b'a medias' not in (rt.directory / historial.LISTAS['checks']).read_bytes()
+        assert len(historial.leer(rt.path)['checks']) == 203
+        # Quien juzga la sesión desde fuera (Chiyo) no carga la conversación ni las fotos.
+        evidencia = historial.leer_evidencia(rt.path)
+        assert 'messages' not in evidencia and len(evidencia['operations']) == 203
+        assert evidencia['checks'][0]['workspace_context'] == {'$foto': 0}
+        assert evidencia['unresolved_records'] == rt.state['unresolved_records']
+        assert historial.leer_evidencia(rt.path, fotos=True)['checks'][-1]['workspace_context'] == foto(root, 400)
+    finally:
+        m.close()
+
+
+def test_anotar_un_intento_guardado_se_ve_al_reabrir(proyecto):
+    """bajo_demanda anota el intento en el sandbox ya guardado: sustituye el registro."""
+    from alfalfa.permisos.bajo_demanda import OnRequestPolicy
+    m = TerminalManager('x')
+    try:
+        rt = NativeRuntime(m, m.task)
+        root = str(proyecto.resolve())
+        for n in range(1, 6):
+            comprobar(rt, n, root)
+        rt.save()
+        ruta = rt.directory / historial.LISTAS['operations']
+        antes = ruta.read_bytes()
+        objetivo = rt.state['operations'][3]
+        OnRequestPolicy._annotate(rt, {'operation_id': objetivo['id']}, reintento='rechazado')
+        assert rt.state['operations'][3]['reintento'] == 'rechazado'
+        # El archivo no se reescribe: se añade «vuelve a tener 3» y los dos últimos.
+        despues = ruta.read_bytes()
+        assert despues.startswith(antes)
+        nuevas = [json.loads(x) for x in despues[len(antes):].decode().splitlines()]
+        assert nuevas[0] == {'$hasta': 3} and [x['id'] for x in nuevas[1:]] == [
+            rt.state['operations'][3]['id'], rt.state['operations'][4]['id']]
+        operaciones = historial.leer(rt.path)['operations']
+        assert len(operaciones) == 5 and operaciones[3]['reintento'] == 'rechazado'
+        assert operaciones[3]['workspace_context'] == foto(root, 4)
+        # Quitar también se ve.
+        del rt.state['operations'][0]
+        rt.save()
+        assert [x['id'] for x in historial.leer(rt.path)['operations']] == [
+            x['id'] for x in rt.state['operations']]
+    finally:
+        m.close()
+
+
+def sesion_v3(directorio, root, ident):
+    """Una sesión v3 (AlfalfaCode con #11): la evidencia aún dentro de session.json."""
+    directorio.mkdir(parents=True, exist_ok=True)
+    fotos = [foto(root, n) for n in range(2)]
+    lineas_fotos = [json.dumps({'n': 0, 'base': None, 'cambios': historial.diferencia({}, fotos[0])}),
+                    json.dumps({'n': 1, 'base': 0, 'cambios': historial.diferencia(fotos[0], fotos[1])})]
+    (directorio / historial.FOTOS).write_text(''.join(x + '\n' for x in lineas_fotos))
+    mensajes = [{'role': 'user', 'content': 'Hola.'}, {'role': 'assistant', 'content': 'Hola.'}]
+    (directorio / historial.MENSAJES).write_text(''.join(json.dumps(x) + '\n' for x in mensajes))
+    operaciones = [{'id': f'operation-{n:06d}', 'argv': ['true'], 'cwd': root, 'purpose': 'p', 'revision': 0,
+                    'exit_code': 0, 'output': 'ok' * 1000, 'session_id': ident, 'project': '',
+                    'tool': 'run_checks', 'workspace_context': {'$foto': n}} for n in range(2)]
+    comprobaciones = [dict(o, id=f'check-{n:06d}', operation_id=o['id']) for n, o in enumerate(operaciones)]
+    incidencias = {'finding-000001': {'id': 'finding-000001', 'status': 'obsolete', 'source': 'tool',
+                                      'summary': 'falló', 'original': {'cause': 'x', 'output': 'mal'}}}
+    v3 = {'version': 3, 'evidence_version': 2, 'pending': [], 'plan': 'Plan.', 'changes': [],
+          'primer_mensaje': {'role': 'system', 'content': 's'},
+          'operations': operaciones, 'checks': comprobaciones, 'unresolved_records': incidencias,
+          'resolution_records': [],
+          'historial': {'archivo': historial.MENSAJES, 'mensajes': 3,
+                        'bytes': (directorio / historial.MENSAJES).stat().st_size,
+                        'fotos_archivo': historial.FOTOS, 'fotos': 2,
+                        'fotos_bytes': (directorio / historial.FOTOS).stat().st_size}}
+    (directorio / 'session.json').write_text(json.dumps(v3))
+    return mensajes, fotos, operaciones, comprobaciones, incidencias
+
+
+def test_una_sesion_v3_se_convierte_sola(proyecto):
+    """La 3 llevaba operations, checks y unresolved_records dentro de session.json."""
+    m = TerminalManager('x')
+    try:
+        directorio = m.directory / 'native' / m.task['id']
+        root = str(proyecto.resolve())
+        mensajes, fotos, operaciones, comprobaciones, incidencias = sesion_v3(directorio, root, m.task['id'])
+        conversacion = (directorio / historial.MENSAJES).read_bytes()
+        inodo = (directorio / historial.MENSAJES).stat().st_ino
+        rt = NativeRuntime(m, m.task)
+        assert [c['workspace_context'] for c in rt.state['checks']] == fotos
+        assert rt.state['unresolved_records']['finding-000001']['summary'] == 'falló'
+        # Ya en la 4, sin esperar al primer paso; la conversación y las fotos, sin tocar.
+        guardado = json.loads((directorio / 'session.json').read_text())
+        assert guardado['version'] == historial.VERSION == 4
+        assert not {'checks', 'operations', 'unresolved_records', 'resolution_records'} & set(guardado)
+        assert (directorio / historial.MENSAJES).read_bytes() == conversacion
+        assert (directorio / historial.MENSAJES).stat().st_ino == inodo
+        assert len((directorio / historial.FOTOS).read_text().splitlines()) == 2
+        completo = historial.leer(directorio / 'session.json')
+        assert completo['messages'] == [{'role': 'system', 'content': 's'}] + mensajes
+        assert [o['workspace_context'] for o in completo['operations']] == fotos
+        assert completo['checks'] == [dict(c, workspace_context=fotos[n]) for n, c in enumerate(comprobaciones)]
+        assert completo['unresolved_records'] == rt.state['unresolved_records']
+        # Abrirla otra vez no duplica nada.
+        def tamaños():
+            return {n: (directorio / n).stat().st_size for n in (*historial.LISTAS.values(), historial.FOTOS,
+                                                                historial.ARCHIVO_INCIDENCIAS)
+                    if (directorio / n).exists()}
+        antes = tamaños()
+        assert len(antes) == 4  # sin resoluciones, resolution_records.jsonl ni se crea
+        rt = NativeRuntime(m, m.task)
+        rt.save()
+        assert tamaños() == antes
+    finally:
+        m.close()
+
+
+def test_aligerar_una_v3_no_borra_nada_y_un_corte_la_deja_como_estaba(proyecto, tmp_path, monkeypatch):
+    """--aligerar-sesiones convierte una v3 como al abrirla: sin borrar ni reescribir sus JSONL."""
+    from alfalfa.sesiones.aligerar import aligerar_nativa
+    root = str(proyecto.resolve())
+    directorio = tmp_path / 'alfalfa' / 'sesiones' / 'v3' / 'native' / 'v3'
+    sesion_v3(directorio, root, 'v3')
+    completo = historial.leer(directorio / 'session.json')
+    antes = (directorio / 'session.json').read_bytes()
+    conversacion = {n: ((directorio / n).read_bytes(), (directorio / n).stat().st_ino)
+                    for n in (historial.MENSAJES, historial.FOTOS)}
+    original = herramientas.atomic_json
+
+    def cortar(path, value):
+        if path.name == 'session.json':
+            raise OSError('corte simulado')
+        return original(path, value)
+    monkeypatch.setattr(herramientas, 'atomic_json', cortar)
+    with pytest.raises(OSError):
+        aligerar_nativa(directorio)
+    # Se cortó antes de escribir session.json: la v3 sigue entera y se abre igual.
+    assert (directorio / 'session.json').read_bytes() == antes
+    assert historial.leer(directorio / 'session.json') == completo
+    monkeypatch.setattr(herramientas, 'atomic_json', original)
+    aligerar_nativa(directorio)
+    guardado = json.loads((directorio / 'session.json').read_text())
+    assert guardado['version'] == historial.VERSION and 'checks' not in guardado
+    assert historial.leer(directorio / 'session.json') == dict(completo, version=historial.VERSION)
+    # La conversación y las fotos, en el mismo archivo y sin tocar.
+    for nombre, (datos, inodo) in conversacion.items():
+        assert (directorio / nombre).read_bytes() == datos and (directorio / nombre).stat().st_ino == inodo
+    # Los JSONL de la evidencia sólo tienen lo de una vez (lo del intento cortado se recortó).
+    assert len((directorio / historial.LISTAS['checks']).read_text().splitlines()) == 2
+
+
+def test_un_corte_entre_la_evidencia_y_session_json_no_pierde_nada(proyecto, monkeypatch):
+    from alfalfa.proveedores.nativo import runtime
+    m = TerminalManager('x')
+    try:
+        rt = NativeRuntime(m, m.task)
+        root = str(proyecto.resolve())
+        for n in range(1, 4):
+            comprobar(rt, n, root)
+        rt.save()
+        guardado = {campo: list(rt.state[campo]) for campo in historial.LISTAS}
+        comprobar(rt, 4, root, exit_code=1)
+        original = runtime.atomic_json
+
+        def cortar(path, value):
+            raise OSError('corte simulado')
+        monkeypatch.setattr(runtime, 'atomic_json', cortar)
+        with pytest.raises(OSError):
+            rt.save()  # los JSONL ya llevan la comprobación 4; session.json no
+        monkeypatch.setattr(runtime, 'atomic_json', original)
+        assert len((rt.directory / historial.LISTAS['checks']).read_text().splitlines()) == 4
+        rt = NativeRuntime(m, m.task)
+        assert {campo: list(rt.state[campo]) for campo in historial.LISTAS} == guardado
+        assert rt.state['unresolved_records'] == {}
+        comprobar(rt, 5, root)
+        rt.save()
+        estado = historial.leer(rt.path)
+        assert [c['argv'][-1] for c in estado['checks']] == [f'tests/test_{n}.py' for n in (1, 2, 3, 5)]
+        assert len((rt.directory / historial.LISTAS['checks']).read_text().splitlines()) == 4
+    finally:
+        m.close()
+
+
+def test_cambiar_por_dentro_uno_de_los_ultimos_registros_se_guarda(proyecto):
+    """La Lista no ve `record.update(...)`; los últimos se comparan con lo escrito."""
+    m = TerminalManager('x')
+    try:
+        rt = NativeRuntime(m, m.task)
+        root = str(proyecto.resolve())
+        for n in range(1, 21):
+            comprobar(rt, n, root)
+        rt.save()
+        ruta = rt.directory / historial.LISTAS['operations']
+        antes = ruta.read_bytes()
+        rt.save()
+        assert ruta.read_bytes() == antes  # sin cambios, nada que añadir
+        rt.state['operations'][-2].update(reintento='rechazado')
+        rt.state['checks'][-1]['nota'] = 'vista'
+        rt.save()
+        estado = historial.leer(rt.path)
+        assert estado['operations'][-2]['reintento'] == 'rechazado'
+        assert estado['checks'][-1]['nota'] == 'vista'
+        assert estado['operations'] == list(rt.state['operations'])
+        assert ruta.read_bytes().startswith(antes)
+        # Reanudar y cambiar otra vez por dentro: también se compara lo leído.
+        rt = NativeRuntime(m, m.task)
+        rt.state['operations'][-1].update(reintento='rechazado')
+        rt.save()
+        assert historial.leer(rt.path)['operations'][-1]['reintento'] == 'rechazado'
+        # Más atrás de la cola no se vigila: para eso hay que sustituirlo en la lista.
+        assert historial._Registro.COLA < 20
+    finally:
+        m.close()
+
+
+def test_incidencias_que_se_quitan_o_no_son_un_dict(tmp_path):
+    directorio = tmp_path / 'native'
+    directorio.mkdir()
+    sesion = historial.Historial(directorio)
+    estado = {'messages': Mensajes([{'role': 'system', 'content': ''}]), 'unresolved_records': {
+        'finding-000001': {'id': 'finding-000001', 'status': 'pending'}, 'finding-000002': 'texto viejo'}}
+    sesion.empezar(estado['messages'])
+    herramientas.atomic_json(directorio / 'session.json', sesion.guardar(estado))
+    del estado['unresolved_records']['finding-000001']
+    estado['unresolved_records']['finding-000002'] = ['ya', 'no', 'es', 'texto']
+    estado['unresolved_records']['finding-000003'] = {'id': 'finding-000003', 'status': 'pending'}
+    herramientas.atomic_json(directorio / 'session.json', sesion.guardar(estado))
+    lineas = [json.loads(x) for x in (directorio / historial.ARCHIVO_INCIDENCIAS).read_text().splitlines()]
+    assert {'id': 'finding-000001', '-': 1} in lineas
+    assert {'id': 'finding-000002', '=': ['ya', 'no', 'es', 'texto']} in lineas
+    leido = historial.leer(directorio / 'session.json')['unresolved_records']
+    assert leido == estado['unresolved_records'] and list(leido) == ['finding-000002', 'finding-000003']
+    # Volver a quitar y poner la misma: se reconstruye igual.
+    del estado['unresolved_records']['finding-000002']
+    herramientas.atomic_json(directorio / 'session.json', sesion.guardar(estado))
+    assert historial.leer(directorio / 'session.json')['unresolved_records'] == {
+        'finding-000003': {'id': 'finding-000003', 'status': 'pending'}}
+
+
+def test_leer_evidencia_de_cualquier_version(proyecto, tmp_path):
+    root = str(proyecto.resolve())
+    filas = [{'id': 'operation-000001', 'argv': ['true'], 'exit_code': 0, 'workspace_context': foto(root)}]
+    incidencias = {'finding-000001': {'id': 'finding-000001', 'status': 'pending'}}
+    mensajes = [{'role': 'system', 'content': 's'}, {'role': 'user', 'content': 'Hola.'}]
+    for version in (1, 2):
+        directorio = tmp_path / f'v{version}'
+        directorio.mkdir()
+        (directorio / 'session.json').write_text(json.dumps({
+            'version': version, 'messages': mensajes, 'operations': filas, 'checks': filas,
+            'unresolved_records': incidencias, 'resolution_records': [], 'pending': []}))
+        evidencia = historial.leer_evidencia(directorio / 'session.json')
+        assert 'messages' not in evidencia and evidencia['operations'] == filas == evidencia['checks']
+        assert evidencia['unresolved_records'] == incidencias and evidencia['version'] == version
+    directorio = tmp_path / 'v3'
+    _, fotos, operaciones, comprobaciones, incidencias3 = sesion_v3(directorio, root, 'v3')
+    evidencia = historial.leer_evidencia(directorio / 'session.json')
+    assert 'messages' not in evidencia and evidencia['operations'] == operaciones  # fotos como referencia
+    assert evidencia['unresolved_records'] == incidencias3
+    completa = historial.leer_evidencia(directorio / 'session.json', fotos=True)
+    assert [c['workspace_context'] for c in completa['checks']] == fotos
+    # Leer no convierte nada.
+    assert json.loads((directorio / 'session.json').read_text())['version'] == 3
+
+
+def test_bifurcar_una_v4_copia_la_evidencia(proyecto, tmp_path):
+    from alfalfa.sesiones import bifurcar
+    m = TerminalManager('x')
+    try:
+        correr(m, 'Primero.', 2)
+        rt = NativeRuntime(m, m.task)
+        root = str(proyecto.resolve())
+        for n in range(1, 4):
+            comprobar(rt, n, root, exit_code=n % 2)
+        rt.save()
+        origen = historial.leer(rt.path)
+    finally:
+        m.close()
+    base = tmp_path / 'alfalfa' / 'sesiones'
+    nuevo = bifurcar(base, m.task['id'], m.task['turnos'][0]['id'])
+    carpeta = base / nuevo / 'native' / nuevo
+    copia = historial.leer(carpeta / 'session.json')
+    for campo in (*historial.LISTAS, 'unresolved_records'):
+        assert copia[campo] == origen[campo] and copia[campo], campo
+    for nombre in (*historial.LISTAS.values(), historial.ARCHIVO_INCIDENCIAS):
+        assert oct(os.stat(carpeta / nombre).st_mode & 0o777) == '0o600', nombre
+
+
+def test_el_cierre_de_revision_no_copia_la_evidencia_en_session_json(proyecto):
+    """review_closing guardaba la conversación, las resoluciones y las incidencias dentro de session.json."""
+    m = TerminalManager('x')
+    try:
+        rt = NativeRuntime(m, m.task)
+        rt.state['messages'] += [
+            {'role': 'system', 'content': 's'}, {'role': 'user', 'content': 'Revisa.'},
+            {'role': 'assistant', 'content': 'Leo.', 'tool_calls': [{'function': {
+                'name': 'read_file', 'arguments': {'path': 'grande.txt'}}}]},
+            {'role': 'tool', 'tool_name': 'read_file', 'content': json.dumps({'text': 'z' * 20_000})}]
+        rt.state['unresolved_records'] = {f'finding-{n:06d}': {'id': f'finding-{n:06d}', 'status': 'pending',
+                                                               'original': {'output': 'x' * 2000}}
+                                          for n in range(1, 4)}
+        rt.state['resolution_records'] = [{'id': f'resolution-{n:06d}', 'finding_id': 'finding-000001',
+                                           'status': 'pending', 'check_evidence': {'output_sha256': 'a' * 64}}
+                                          for n in range(1, 30)]
+        rt.save()
+        antes = rt.path.stat().st_size
+        cierre = rt._review_closing_context()
+        assert rt.path.stat().st_size < antes + 1_000
+        assert not {'sources', 'observations', 'unresolved_records', 'resolution_records'} & set(cierre)
+        congelado = rt._review_closing_evidence(cierre)
+        assert [x['tool'] for x in congelado['sources']] == ['read_file'] and congelado['observations'] == ['Leo.']
+        assert len(congelado['resolution_records']) == 29 and len(congelado['unresolved_records']) == 3
+        # Lo que llegue después del cierre no entra en lo congelado.
+        rt.state['resolution_records'].append({'id': 'resolution-000030'})
+        rt.state['messages'].append({'role': 'assistant', 'content': 'Después.'})
+        rt = NativeRuntime(m, m.task)
+        congelado = rt._review_closing_evidence(rt.state['review_closing'])
+        assert len(congelado['resolution_records']) == 29 and congelado['observations'] == ['Leo.']
+        # Un cierre de antes, con la copia dentro, se sigue leyendo.
+        viejo = {'status': 'failed', 'sources': [{'tool': 't', 'arguments': {}, 'result': '{}'}],
+                 'observations': ['o'], 'unresolved_records': {}, 'resolution_records': []}
+        assert rt._review_closing_evidence(viejo)['sources'] == viejo['sources']
+    finally:
+        m.close()

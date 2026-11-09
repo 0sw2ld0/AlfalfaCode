@@ -1,8 +1,8 @@
 # AlfalfaCode
 
 Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud),
-de OpenAI, OpenRouter, OpenCode Zen u otro proveedor compatible con OpenAI con tu
-propia clave, o de un servicio Alfalfa.
+de OpenAI, de Anthropic (Claude), OpenRouter, OpenCode Zen u otro proveedor
+compatible con OpenAI con tu propia clave, o de un servicio Alfalfa.
 Recibe un encargo, trabaja en la carpeta actual y pregunta antes de ejecutar lo
 que no sea una lectura. La orden es `alfalfa`.
 
@@ -36,22 +36,42 @@ El modelo dice con quién se habla:
 |---|---|
 | `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
 | `openai/gpt-6-luna` | OpenAI, con tu clave de la API (Responses API) |
+| `anthropic/claude-haiku-5-5`, `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5` | Anthropic (Claude), con tu clave de la API (Messages API) |
 | `openrouter/…`, `opencode/…`, `<proveedor>/…` | un proveedor compatible con OpenAI del catálogo, con tu clave |
 | `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
 
 ```bash
 alfalfa --proveedores                         # estado, sin secretos
 alfalfa --guardar-clave openai                # pide la clave sin enseñarla
+alfalfa --guardar-clave anthropic             # la de Claude
 alfalfa --fijar-url ollama https://ollama.com
 alfalfa --proveedor-por-defecto openai
 ```
 
 Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.
-También valen las variables estándar `OLLAMA_API_KEY` y `OPENAI_API_KEY`, y
+También valen las variables estándar `OLLAMA_API_KEY`, `OPENAI_API_KEY` y
+`ANTHROPIC_API_KEY`, y
 `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
 secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
 La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
 también abre «Proveedores…» en el selector de modelo.
+
+### Claude (Anthropic)
+
+Con tu clave de la API de Anthropic (se consigue en
+https://platform.claude.com/settings/keys), el uso se cobra en tu cuenta.
+
+- El selector ofrece Claude Haiku 5.5, Claude Sonnet 5.5 (el de por defecto si
+  Anthropic es el proveedor por defecto) y Claude Opus 5.5. Otros modelos de Claude
+  se añaden en `proveedores.json` (`"anthropic": {"modelos": ["claude-fable-5-1"]}`).
+- El esfuerzo de la sesión es el de Claude (`low` a `max`), con razonamiento
+  adaptativo. El razonamiento firmado vuelve al modelo con los resultados de las
+  herramientas, sólo en memoria.
+- El prompt del sistema y las herramientas van en la caché de prompts, y la
+  conversación usa la caché automática. El coste cuenta aparte lo leído y lo
+  escrito en la caché.
+- Haiku 5.5 cobra cinco veces más una petición cuyo prompt pase de 100K tokens:
+  su ventana se queda en 100K para no entrar nunca en ese tramo.
 
 Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección del
 servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
@@ -85,8 +105,8 @@ OpenCode). Funciona así:
 - Se refresca cada 24 horas, al listar los modelos. Sin red vale la última copia;
   tras un fallo no se reintenta hasta pasada una hora.
 - La primera vez sin internet vale la copia mínima que viaja con el paquete
-  (`alfalfa/catalogo/minimo.json`: OpenAI, Ollama Cloud, OpenRouter, OpenCode Zen
-  y NVIDIA).
+  (`alfalfa/catalogo/minimo.json`: OpenAI, Anthropic, Ollama Cloud, OpenRouter,
+  OpenCode Zen y NVIDIA).
 - El motor nunca espera a la red: en cada turno lee la copia que haya.
 - Lo que responde el propio proveedor manda. Por ejemplo, la ventana de
   `/api/show` de Ollama. El catálogo sólo rellena lo que falta: la ventana que usa
@@ -171,7 +191,7 @@ proveedor.
 
 - La app lo enseña donde ya enseña los tokens: en el panel de la sesión, en
   `/estado` y en la lista de sesiones.
-- Sólo se estima para quien cobra por token: OpenAI y los compatibles. Ollama local
+- Sólo se estima para quien cobra por token: OpenAI, Anthropic y los compatibles. Ollama local
   no cuesta nada; Ollama Cloud y el servicio Alfalfa se pagan con su plan o su
   cuota.
 - Es una estimación, no la factura del proveedor.
@@ -650,13 +670,14 @@ versión en sus dependencias.
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
 | `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |
+| `proveedores/openai.py`, `proveedores/anthropic.py` | OpenAI (Responses API) y Claude (Messages API) con la clave del usuario |
 
 ## Integrarlo en otra aplicación
 
 El arnés no importa nada de quien lo integra. Lo que esa aplicación necesita
 cambiar está en `alfalfa/ajustes.py`: instrucciones por defecto, dónde buscar los
 binarios, cómo llegar al buscador web, qué repositorio da por propio y las URL
-y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`,
+y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`, `anthropic_clave`,
 `clave_compatible`, `alfalfa_servicio_url`).
 También cómo se nombran el runtime y el integrador en los textos (`nombres`), a
 qué ramas puede avanzar un agente con `git merge --ff-only` (`ramas_de_avance`) y

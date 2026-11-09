@@ -24,6 +24,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var priceWarning: PriceWarning?
     /// Datos de una compactación (`compactacion`): la conversación pinta su marca.
     public var compaction: Compaction?
+    /// Llamada a herramienta (`herramienta`): nombre, fase y descripción; nil en motores anteriores.
+    public var tool: ToolInfo? = nil
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -753,12 +755,13 @@ public enum AlfalfaMessage: Equatable, Sendable {
                            contextMode: (object["contexto"] as? String).flatMap(ContextMode.init(rawValue:)))
     }
 
-    /// Un `evento` en vivo o una fila de `historial`, con su compactación o su aviso de tarifa.
+    /// Un `evento` en vivo o una fila de `historial`, con su compactación, su llamada a herramienta o su
+    /// aviso de tarifa.
     private static func agentEvent(_ row: [String: Any]) -> AgentEvent? {
         guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
         return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
-                          compaction: compaction(row["compactacion"]))
+                          compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]))
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.

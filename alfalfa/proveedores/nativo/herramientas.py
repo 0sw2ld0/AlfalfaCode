@@ -268,9 +268,11 @@ TOOL_ARGUMENT_EXAMPLES = {
     'write_file': {'path': 'notes.txt', 'content': 'draft', 'expected_sha256': 'NEW'},
     'edit_file': {'path': 'notes.txt', 'old': 'draft', 'new': 'ready',
                   'expected_sha256': '7743ce348d9284d677a185f33295b92266cc435a5b5f775029b300066d26693a'},
-    'run_command': {'argv': ['git', 'status', '--short'], 'purpose': 'Inspeccionar el estado del workspace'},
+    'run_command': {'argv': ['git', 'status', '--short'], 'purpose': 'Inspeccionar el estado del workspace',
+                    'description': 'Ver qué archivos cambiaron antes de hacer el commit'},
     'run_checks': {'argv': ['python3', '-m', 'pytest', 'server/tests/test_native_runtime.py'],
-                   'purpose': 'Ejecutar las pruebas del runtime nativo'},
+                   'purpose': 'Ejecutar las pruebas del runtime nativo',
+                   'description': 'Pasar las pruebas del runtime para ver si el arreglo funciona'},
     'inspect_image': {'path': 'assets/example.png', 'question': '¿Qué aparece en la imagen?'},
     'update_plan': {'plan': [{'step': 'Leer el código', 'status': 'completed'},
                              {'step': 'Arreglar la suma', 'status': 'in_progress'},
@@ -282,6 +284,13 @@ TOOL_ARGUMENT_EXAMPLES = {
 # del workspace y 120 s. No hay `cd` (no hay shell) y envolver con `env -C` pedía
 # un permiso que nadie contestaba; por eso la carpeta es un campo.
 ORDEN_OPCIONAL = {
+    # Como `description` de la herramienta Bash de Claude Code: la app la enseña en vez
+    # del comando. `purpose` sigue siendo el dato técnico que clasifica el resultado.
+    'description': {'type': 'string', 'description': (
+        'Always send it: one short sentence (5-15 words) in the language the user writes in, saying what '
+        'the command does and why, for the person reading the conversation. Plain words, no command '
+        'syntax: "Buscar dónde se guarda session.json", "Pasar las pruebas del runtime", "Ver qué archivos '
+        'cambiaron". The app shows it instead of argv.')},
     'cwd': {'type': 'string', 'description': (
         'Optional folder, relative to the workspace root, to run argv from (for example "server"); '
         'it must exist inside the workspace. Default: the workspace root. Relative paths in argv are '
@@ -331,7 +340,8 @@ TOOLS = [
                           'with no quotes or backslashes. Commands may access outside workspace; explain purpose. A '
                           'nonzero result is a failure unless the shared result classifier verifies an expected '
                           'absence from the command, purpose and captured context. The result retains argv, cwd, '
-                          'output, exit_code and purpose.',
+                          'output, exit_code and purpose. Always add description: a short sentence for the user, in '
+                          'their language, saying what the command does and why.',
            {'argv': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 100},
             'purpose': STRING, **ORDEN_OPCIONAL}, ['argv', 'purpose'], example=TOOL_ARGUMENT_EXAMPLES['run_command']),
     schema('run_checks', 'Run a test, lint or build command with exact user approval and record real verification '
@@ -345,7 +355,8 @@ TOOLS = [
                          'signature and a merge-state purpose. git diff --check exit 2 keeps whitespace pending. '
                          'pytest exit 4 requires invocation, collection, cwd, path and environment diagnosis. Swift/Go '
                          'failures, exceptions and timeouts stay failures with their captured output. Exit code is not '
-                         'a guarantee of coverage. Checks should not modify source files.',
+                         'a guarantee of coverage. Checks should not modify source files. Always add description: a '
+                         'short sentence for the user, in their language, saying what the check verifies.',
            {'argv': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 100},
             'purpose': STRING, **ORDEN_OPCIONAL}, ['argv', 'purpose'], example=TOOL_ARGUMENT_EXAMPLES['run_checks']),
     schema('inspect_image', 'Ask the configured vision model to inspect image pixels and return observations. Never '
@@ -800,6 +811,10 @@ class WorkspaceTools:
         for alias, real in ALIAS_DE_ARGUMENTOS.get(name, {}).items():
             if alias in normalizados and real not in normalizados:
                 normalizados[real] = normalizados.pop(alias)
+        # `description` sólo sirve para enseñarla: un null o un número no tumban la orden.
+        if 'description' in normalizados and not isinstance(normalizados['description'], str) \
+                and name in ('run_command', 'run_checks'):
+            normalizados.pop('description')
         desconocidos = sorted(set(normalizados) - set(spec['properties']))
         faltan = sorted(set(spec['required']) - set(normalizados))
         if desconocidos or faltan:
@@ -1531,11 +1546,16 @@ class WorkspaceTools:
     def _record_command_result(self, args, result, revision, verification, cwd, *,
                                prohibited=False, exception=False, timed_out=False, context=None, guard=None):
         if context is not None:
-            from ...evidencia.espacio import for_mutation_watch, matches
+            from ...evidencia.espacio import cambio_sin_trabajo, con_caches, for_mutation_watch, matches
             result['workspace_context'] = context
             try:
                 result['workspace_stable'] = (matches(for_mutation_watch(context)) and guard is not None
                                               and not guard.changed())
+                if not result['workspace_stable'] and cambio_sin_trabajo(context, guard):
+                    # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo;
+                    # la foto las incluye para que la comprobación no caduque por ellas.
+                    result['workspace_stable'] = True
+                    result['workspace_context'] = con_caches(context, guard)
             except OSError:
                 result['workspace_stable'] = False
         output = str(result.get('output') or '')

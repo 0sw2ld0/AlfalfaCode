@@ -26,7 +26,8 @@ def test_el_prefijo_de_un_compatible_se_reconoce(con_catalogo):  # noqa: F811
     assert proveedores.separar('nube/libre') == ('nube', 'libre')
     # Uno local o que no habla el formato de OpenAI no es un prefijo: sigue siendo de Ollama.
     assert proveedores.separar('lmstudio/local') == ('ollama', 'lmstudio/local')
-    assert proveedores.separar('anthropic/claude') == ('ollama', 'anthropic/claude')
+    # Anthropic tiene su propio proveedor, no es un compatible del catálogo.
+    assert proveedores.separar('anthropic/claude') == ('anthropic', 'claude')
     assert proveedores.separar('usuario/modelo') == ('ollama', 'usuario/modelo')
     # Un modelo de Ollama con el mismo espacio de nombres se guarda con `ollama/` y vuelve igual.
     nombre = proveedores.con_prefijo('ollama', 'nube/mio')

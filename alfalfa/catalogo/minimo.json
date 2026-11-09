@@ -2,6 +2,418 @@
  "fecha": 1794182120,
  "fuente": "https://models.dev/api.json",
  "proveedores": {
+  "anthropic": {
+   "doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+   "env": [
+    "ANTHROPIC_API_KEY"
+   ],
+   "id": "anthropic",
+   "modelos": {
+    "claude-fable-5": {
+     "abiertos": false,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-06-07",
+     "herramientas": true,
+     "id": "claude-fable-5",
+     "nombre": "Claude Fable 5",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 1,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-fable-5-1": {
+     "abiertos": false,
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-01",
+     "herramientas": true,
+     "id": "claude-fable-5-1",
+     "nombre": "Claude Fable 5.1",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 0.25,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-haiku-4-5": {
+     "abiertos": false,
+     "conocimiento": "2025-02-28",
+     "esfuerzos": [],
+     "fecha": "2025-10-15",
+     "herramientas": true,
+     "id": "claude-haiku-4-5",
+     "nombre": "Claude Haiku 4.5 (latest)",
+     "precio": {
+      "cache_escritura": 1.25,
+      "cache_lectura": 0.1,
+      "entrada": 1,
+      "salida": 5
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-haiku-4-5-20251001": {
+     "abiertos": false,
+     "conocimiento": "2025-02-28",
+     "esfuerzos": [],
+     "fecha": "2025-10-15",
+     "herramientas": true,
+     "id": "claude-haiku-4-5-20251001",
+     "nombre": "Claude Haiku 4.5",
+     "precio": {
+      "cache_escritura": 1.25,
+      "cache_lectura": 0.1,
+      "entrada": 1,
+      "salida": 5
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-haiku-5-5": {
+     "abiertos": false,
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-07",
+     "herramientas": true,
+     "id": "claude-haiku-5-5",
+     "nombre": "Claude Haiku 5.5",
+     "precio": {
+      "cache_escritura": 0.125,
+      "cache_lectura": 0.01,
+      "entrada": 0.1,
+      "salida": 0.5,
+      "tramo": {
+       "cache_escritura": 0.625,
+       "cache_lectura": 0.05,
+       "desde": 100000,
+       "entrada": 0.5,
+       "salida": 2.5
+      }
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-5": {
+     "abiertos": false,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-24",
+     "herramientas": true,
+     "id": "claude-opus-4-5",
+     "nombre": "Claude Opus 4.5 (latest)",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-opus-4-5-20251101": {
+     "abiertos": false,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-24",
+     "herramientas": true,
+     "id": "claude-opus-4-5-20251101",
+     "nombre": "Claude Opus 4.5",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-opus-4-6": {
+     "abiertos": false,
+     "conocimiento": "2025-05-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-02-04",
+     "herramientas": true,
+     "id": "claude-opus-4-6",
+     "nombre": "Claude Opus 4.6",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-7": {
+     "abiertos": false,
+     "conocimiento": "2026-01-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-04-14",
+     "herramientas": true,
+     "id": "claude-opus-4-7",
+     "nombre": "Claude Opus 4.7",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-8": {
+     "abiertos": false,
+     "conocimiento": "2026-01",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-05-28",
+     "herramientas": true,
+     "id": "claude-opus-4-8",
+     "nombre": "Claude Opus 4.8",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-5": {
+     "abiertos": false,
+     "conocimiento": "2026-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-24",
+     "herramientas": true,
+     "id": "claude-opus-5",
+     "nombre": "Claude Opus 5",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-5-5": {
+     "abiertos": false,
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "claude-opus-5-5",
+     "nombre": "Claude Opus 5.5",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.2,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-4-5": {
+     "abiertos": false,
+     "conocimiento": "2025-07-31",
+     "esfuerzos": [],
+     "fecha": "2025-09-29",
+     "herramientas": true,
+     "id": "claude-sonnet-4-5",
+     "nombre": "Claude Sonnet 4.5 (latest)",
+     "precio": {
+      "cache_escritura": 3.75,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-sonnet-4-5-20250929": {
+     "abiertos": false,
+     "conocimiento": "2025-07-31",
+     "esfuerzos": [],
+     "fecha": "2025-09-29",
+     "herramientas": true,
+     "id": "claude-sonnet-4-5-20250929",
+     "nombre": "Claude Sonnet 4.5",
+     "precio": {
+      "cache_escritura": 3.75,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-sonnet-4-6": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-02-17",
+     "herramientas": true,
+     "id": "claude-sonnet-4-6",
+     "nombre": "Claude Sonnet 4.6",
+     "precio": {
+      "cache_escritura": 3.75,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-5": {
+     "abiertos": false,
+     "conocimiento": "2026-01-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-06-29",
+     "herramientas": true,
+     "id": "claude-sonnet-5",
+     "nombre": "Claude Sonnet 5",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-5-5": {
+     "abiertos": false,
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-28",
+     "herramientas": true,
+     "id": "claude-sonnet-5-5",
+     "nombre": "Claude Sonnet 5.5",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.1,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    }
+   },
+   "nombre": "Anthropic",
+   "paquete": "@ai-sdk/anthropic"
+  },
   "nvidia": {
    "api": "https://integrate.api.nvidia.com/v1",
    "doc": "https://docs.api.nvidia.com/nim",

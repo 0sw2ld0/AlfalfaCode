@@ -38,7 +38,7 @@ ESPERA_POR_DEFECTO = 120
 MAX_INFORME = 12000     # caracteres del informe que vuelven al principal
 MAX_MENSAJE = 20000
 MAX_TIPOS = 50
-RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
+RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Anthropic', 'Alfalfa'))
 NOTA_REDIRIGIDO = ('El usuario te escribió y pidió que lo leas ya: su mensaje está en la conversación. El subagente '
                    'sigue trabajando; recoge su informe después con wait_agent.')
 
@@ -236,6 +236,10 @@ class _GestorDeSubagente:
 
     def compaction_event(self, task, text, datos):
         self.event(task, 'system', text)
+
+    def tool_event(self, task, text, datos):
+        """Los pasos de un subagente van a su registro, nunca a la conversación principal."""
+        self.event(task, 'tool', text)
 
     def context(self, task, tokens, limit):
         task['context_tokens'], task['context_limit'] = tokens, limit

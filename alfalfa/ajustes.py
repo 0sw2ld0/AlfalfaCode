@@ -76,6 +76,12 @@ def openai_clave():
     return os.getenv('OPENAI_API_KEY') or llavero.leer('openai')
 
 
+def anthropic_clave():
+    """Clave de la API de Anthropic (Claude): la estándar `ANTHROPIC_API_KEY` o la guardada en el Llavero."""
+    from .proveedores import llavero
+    return os.getenv('ANTHROPIC_API_KEY') or llavero.leer('anthropic')
+
+
 def clave_compatible(proveedor):
     """Clave de un proveedor compatible con OpenAI del catálogo (OpenRouter, OpenCode Zen…).
 

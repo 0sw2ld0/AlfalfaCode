@@ -654,7 +654,7 @@ def turns(ident):
 
 
 MAX_HISTORIAL = 600
-_RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Alfalfa'))
+_RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Anthropic', 'Alfalfa'))
 
 
 def history(ident):
@@ -682,6 +682,8 @@ def history(ident):
                 evento['compactacion'] = row['compactacion']
             if row.get('turno'):
                 evento['turno'] = row['turno']
+            if isinstance(row.get('herramienta'), dict):
+                evento['herramienta'] = row['herramienta']
             por_turno.setdefault(row['turno'], []).append(evento) if row.get('turno') else sueltos.append(evento)
     eventos = []
     if task.get('objective') and (not turnos or sueltos):

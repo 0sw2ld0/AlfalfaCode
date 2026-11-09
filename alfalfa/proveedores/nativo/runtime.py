@@ -28,6 +28,7 @@ from ...evidencia.registro import RunEvidence
 
 # Vive en el arnés para que la evidencia no tenga que importar el runtime.
 from ...reintentos.fallos import _CREDENCIALES, _sin_credenciales  # noqa: F401
+from .descripciones import datos_de_fin, datos_de_inicio
 from .herramientas import (
     COMPLEMENTOS_TOOLS,
     IMAGE_EXTENSIONS,
@@ -37,7 +38,8 @@ from .herramientas import (
     atomic_json,
     digest,
 )
-from .historial import Historial, Mensajes
+from .historial import VERSION as VERSION_SESION
+from .historial import Historial, Lista, Mensajes
 
 
 def is_cloud(model, info=None):
@@ -430,18 +432,20 @@ class NativeRuntime:
         self.directory = manager.directory / 'native' / task['id']
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = self.directory / 'session.json'
-        # La conversación y las fotos del espacio van en JSONL a los que sólo se
-        # añade (historial.py); session.json queda pequeño.
+        # La conversación, las fotos del espacio y la evidencia que crece (operaciones,
+        # comprobaciones e incidencias) van en JSONL a los que sólo se añade
+        # (historial.py); session.json queda pequeño.
         self.historial = Historial(self.directory)
-        self.state = {'version': 3, 'messages': Mensajes(), 'pending': [], 'plan': '', 'changes': []}
+        self.state = {'version': VERSION_SESION, 'messages': Mensajes(), 'pending': [], 'plan': '', 'changes': [],
+                      'operations': Lista(), 'checks': Lista()}
         self.historial.empezar(self.state['messages'])
         migrar = False
         if self.path.exists():
             self.state, migrar = self.historial.cargar(json.loads(self.path.read_text()))
-            # Version 2 added an append-only incident/resolution ledger and 3 moved
-            # the conversation out of session.json. Keep every older field intact;
-            # RunEvidence enriches it on construction.
-            self.state['version'] = 3
+            # Version 2 added an append-only incident/resolution ledger, 3 moved
+            # the conversation out of session.json and 4 the growing evidence.
+            # Keep every older field intact; RunEvidence enriches it on construction.
+            self.state['version'] = VERSION_SESION
         self.tools = WorkspaceTools(self)
         self.evidence = RunEvidence(self)
         if migrar:
@@ -688,9 +692,9 @@ class NativeRuntime:
         raise ValueError('Sesión deliberativa de solo lectura: herramienta rechazada y registrada.')
 
     def _guardar_sesion(self):
-        # Sólo se añade lo nuevo a messages.jsonl y fotos.jsonl; session.json, ya
-        # pequeño, se reescribe entero. El razonamiento sólo vive en memoria para
-        # devolvérselo al modelo: nunca se escribe a disco.
+        # Sólo se añade lo nuevo a los JSONL (historial.py); session.json, ya
+        # pequeño, se reescribe entero. El razonamiento (y los bloques firmados de
+        # Claude) sólo vive en memoria para devolvérselo al modelo: nunca se escribe a disco.
         atomic_json(self.path, self.historial.guardar(self.state))
 
     def save(self):
@@ -1048,6 +1052,11 @@ class NativeRuntime:
         if not perfil(self.task.get('model')).get('preserve_thinking'):
             for m in messages:
                 m.pop('thinking', None)
+        if not str(self.task.get('model') or '').startswith('anthropic/'):
+            # Los bloques firmados y la marca de fallo sólo los entiende Claude.
+            for m in messages:
+                m.pop('alfalfa_bloques', None)
+                m.pop('alfalfa_fallo', None)
         # Keep the full durable log; compact only old tool output in model context.
         removed = 0
         if len(json.dumps(messages)) > self.context_chars:
@@ -1285,13 +1294,19 @@ class NativeRuntime:
         from ... import catalogo
         entrada, salida = response['prompt_eval_count'], response['eval_count']
         cache = response.get('alfalfa_cache') if type(response.get('alfalfa_cache')) is int else 0
+        # Anthropic cobra aparte lo que escribe en la caché.
+        escrita = response.get('alfalfa_cache_escritura')
+        escrita = escrita if type(escrita) is int else 0
         self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
         self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
-        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache)
+        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache, escrita)
         if coste is not None:
             self.task['coste_usd'] = (self.task.get('coste_usd') or 0.0) + coste
 
     def _record_response_usage(self, response, payload, attempt=0, purpose='chat'):
+        if isinstance(response.get('alfalfa_aviso'), str):
+            # Lo que el proveedor cuenta de la petición (Anthropic: razonamiento descartado).
+            self.manager.event(self.task, 'system', response['alfalfa_aviso'][:500])
         exact = (type(response.get('prompt_eval_count')) is int and response['prompt_eval_count'] >= 0
                  and type(response.get('eval_count')) is int and response['eval_count'] >= 0)
         if exact:
@@ -1346,6 +1361,7 @@ class NativeRuntime:
         older = json.loads(json.dumps(log[start:through]))
         for item in older:
             item.pop('thinking', None)
+            item.pop('alfalfa_bloques', None)
             if item['role']=='tool':
                 item['content']=item.get('content','')[:700]
         content = json.dumps({'previous':previous.get('text',''), 'history':older,
@@ -1386,6 +1402,15 @@ class NativeRuntime:
         self.task['runtime_compactions']=self.task.get('runtime_compactions',0)+1
         self.save()
         self.manager.event(self.task,'system','Contexto compactado; el historial completo sigue guardado.')
+
+    def _tool_event(self, text, datos):
+        """Evento de herramienta con su descripción para la app (`herramienta`).
+        Un gestor sin `tool_event` (los de prueba) recibe sólo el texto."""
+        aviso = getattr(self.manager, 'tool_event', None)
+        if aviso is None:
+            self.manager.event(self.task, 'tool', text)
+        else:
+            aviso(self.task, text, datos)
 
     def _compaction_event(self, text, datos):
         """Evento de sistema con los datos de la compactación (la marca de la conversación).
@@ -1958,7 +1983,7 @@ class NativeRuntime:
                 self.task['activity'] = name
                 shown = (self.mcp.para_mostrar(args) if self.mcp is not None and self.mcp.es_propia(name)
                          else args)
-                self.manager.event(self.task, 'tool', 'Inicio '+str(name)+' · '+str(shown)[:1000])
+                self._tool_event('Inicio '+str(name)+' · '+str(shown)[:1000], datos_de_inicio(name, shown))
                 if self._hooks_activos() and not self.task.get('review'):
                     result, executed, hook_notes = await self._call_with_hooks(call, name, args)
                 else:
@@ -1987,22 +2012,54 @@ class NativeRuntime:
                     name, args, result.get('error') or 'La edición no se completó.')
             if len(output) > 20000:
                 output = json.dumps({'truncated':True, 'text':output[:19000]}, ensure_ascii=False)
-            self.state['messages'].append({'role':'tool','tool_name':str(name),'content':output})
+            fila = {'role':'tool','tool_name':str(name),'content':output}
+            if operation_failed:
+                # Claude lo recibe como `is_error`; los demás proveedores no lo ven.
+                fila['alfalfa_fallo'] = True
+            self.state['messages'].append(fila)
             call['status'] = 'done'
             self.evidence.handoff()
             self.save()
-            self.manager.event(self.task, 'tool', str(name)+'\n'+output)
+            self._tool_event(str(name)+'\n'+output, datos_de_fin(name, result))
         self.state['pending'] = []
         self.save()
 
     def _review_closing_context(self):
-        """Freeze evidence before withdrawing tools; keep the full journal on disk."""
+        """Freeze evidence before withdrawing tools; keep the full journal on disk.
+
+        Sólo guarda hasta dónde llega la evidencia (cuántos mensajes y resoluciones,
+        qué incidencias): una copia de la conversación, las resoluciones y las
+        incidencias dentro de session.json lo hacía crecer con cada revisión, y al
+        recargar no se actualizaba. `_review_closing_evidence` la reconstruye.
+        """
         closing = self.state.get('review_closing')
         if closing:
             return closing
+        resolutions = self.state.get('resolution_records', [])
+        records = self.state.get('unresolved_records', {})
+        closing = {'status': 'pending',
+                   'request': next((m['content'] for m in self.state['messages']
+                                    if m['role'] == 'user'), self.task.get('objective', '')),
+                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
+                   'unresolved': self.state.get('unresolved', {}),
+                   'evidence_through': {
+                       'messages': len(self.state['messages']),
+                       'resolution_records': len(resolutions) if isinstance(resolutions, list) else 0,
+                       'unresolved_records': list(records) if isinstance(records, dict) else []}}
+        self.state['review_closing'] = closing
+        self.save()
+        return closing
+
+    def _review_closing_evidence(self, closing):
+        """Observaciones, fuentes, incidencias y resoluciones que congeló el cierre."""
+        through = closing.get('evidence_through')
+        if not isinstance(through, dict):
+            # Cierres de antes: llevaban la copia dentro.
+            return {key: closing.get(key, default) for key, default in (
+                ('observations', []), ('sources', []), ('unresolved_records', {}), ('resolution_records', []))}
         sources, observations = [], []
         queued = []
-        for message in self.state['messages']:
+        for message in self.state['messages'][:through.get('messages', 0)]:
             if message['role'] == 'assistant':
                 queued = list(message.get('tool_calls') or [])
                 if message.get('content'):
@@ -2012,23 +2069,22 @@ class NativeRuntime:
                 sources.append({'tool': message.get('tool_name'),
                                 'arguments': function.get('arguments', {}),
                                 'result': message.get('content', '')})
-        closing = {'status': 'pending', 'observations': observations, 'sources': sources,
-                   'request': next((m['content'] for m in self.state['messages']
-                                    if m['role'] == 'user'), self.task.get('objective', '')),
-                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
-                   'unresolved': self.state.get('unresolved', {}),
-                   'unresolved_records': self.state.get('unresolved_records', {}),
-                   'resolution_records': self.state.get('resolution_records', [])}
-        self.state['review_closing'] = closing
-        self.save()
-        return closing
+        records = self.state.get('unresolved_records', {})
+        records = records if isinstance(records, dict) else {}
+        resolutions = self.state.get('resolution_records', [])
+        resolutions = resolutions if isinstance(resolutions, list) else []
+        return {'observations': observations, 'sources': sources,
+                'unresolved_records': {key: records[key] for key in through.get('unresolved_records', [])
+                                       if key in records},
+                'resolution_records': list(resolutions[:through.get('resolution_records', 0)])}
 
     async def _close_review(self, client, payload, session_deadline):
         closing = self._review_closing_context()
         # Include exact observations and source identities even if compaction omitted
         # them. Raw tool results remain in the durable snapshot and original journal.
+        frozen = self._review_closing_evidence(closing)
         sources, excerpts = [], []
-        for source in closing['sources']:
+        for source in frozen['sources']:
             try:
                 result = json.loads(source['result'])
             except ValueError:
@@ -2038,8 +2094,9 @@ class NativeRuntime:
                             result.get('truncated'), result.get('error'), '', False])
             excerpts.append(str(result.get('text') or result.get('analysis') or
                                 json.dumps(result, ensure_ascii=False, separators=(',', ':'))))
-        evidence = {**closing, 'sources': sources}
-        evidence.pop('result', None)
+        evidence = {**closing, **frozen, 'sources': sources}
+        for key in ('result', 'evidence_through'):
+            evidence.pop(key, None)
         instruction = (
             'FASE FINAL DE REVISIÓN: el presupuesto restante está reservado para cerrar. '
             'No hay herramientas; no solicites ninguna. Devuelve únicamente un JSON breve del esquema. '
@@ -2513,6 +2570,9 @@ class NativeRuntime:
                 if perfil(model).get('preserve_thinking') and isinstance(message.get('thinking'), str) \
                         and message['thinking'].strip():
                     clean['thinking'] = message['thinking'][:20000]
+                if isinstance(message.get('alfalfa_bloques'), list):
+                    # Claude: el razonamiento firmado vuelve tal cual con los resultados.
+                    clean['alfalfa_bloques'] = message['alfalfa_bloques']
                 if calls:
                     clean['tool_calls'] = calls
                 elif not clean['content'].strip():

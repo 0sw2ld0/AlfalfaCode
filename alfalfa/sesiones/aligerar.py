@@ -5,8 +5,8 @@ sólo se acota cuando el agente usa otra herramienta. Así, las sesiones que ya 
 se tocan seguían ocupando lo mismo (una llegó a 581 MB). Esta orden hace con
 todas a la vez lo mismo que hace AlfalfaCode al abrirlas:
 
-- session.json pasa a la versión 3: la conversación y las fotos del espacio de
-  trabajo van a `messages.jsonl` y `fotos.jsonl` (ver `proveedores/nativo/historial.py`).
+- session.json pasa a la versión actual: la conversación, las fotos del espacio de
+  trabajo y la evidencia que crece van a sus JSONL (ver `proveedores/nativo/historial.py`).
 - Las resoluciones «not_relevant», que no deciden nada, salen de la sesión a
   `resoluciones-no-relevantes.jsonl`; con `descartar` ni se guardan.
 - handoff.json se acota como lo escribe ahora el registro de evidencia.
@@ -34,7 +34,7 @@ def _tamaño(carpeta):
 
 
 def aligerar_nativa(directorio, descartar=False):
-    """Una carpeta `native/<id>`: session.json a la versión 3 y handoff.json acotado."""
+    """Una carpeta `native/<id>`: session.json a la versión actual y handoff.json acotado."""
     from ..evidencia.registro import acotar_handoff, archivar_no_relevantes
     from ..proveedores.nativo import historial
     from ..proveedores.nativo.herramientas import atomic_json
@@ -47,10 +47,14 @@ def aligerar_nativa(directorio, descartar=False):
             isinstance(fila, dict) and fila.get('status') == 'not_relevant'
             for fila in guardado.get('resolution_records') or [])
         if vieja or tiene_no_relevantes:
-            estado = historial.leer(ruta)
+            # Como al abrirla (NativeRuntime): se carga y se guarda con el mismo
+            # Historial, que sólo añade a los JSONL que session.json ya conoce y
+            # escribe session.json al final. Nada se borra: si se corta a medias,
+            # el session.json de antes sigue apuntando a lo que ya estaba.
+            sesion = historial.Historial(directorio)
+            estado, _ = sesion.cargar(guardado)
             archivar_no_relevantes(estado, directorio, descartar)
-            # Como al abrirla: primero los JSONL, luego session.json.
-            historial.escribir(directorio, dict(estado, version=historial.VERSION))
+            atomic_json(ruta, sesion.guardar(estado))
         elif descartar:
             archivar_no_relevantes({}, directorio, descartar)
     entrega = directorio / 'handoff.json'
