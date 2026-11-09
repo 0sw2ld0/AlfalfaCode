@@ -217,6 +217,21 @@ def _accion(objetivo, actual):
     return 'recrear' if actual is None else 'restaurar'
 
 
+def _creados(task, estado, turno):
+    """Las rutas que el agente apuntó como nuevas (`before` vacío) desde el turno."""
+    creados = set()
+    cambios = (estado or {}).get('changes')
+    for otro in _turnos(task):
+        datos = otro.get('instantanea') or {}
+        desde, hasta = datos.get('cambios_desde'), datos.get('cambios_hasta')
+        if (otro.get('inicio') or 0) < (turno.get('inicio') or 0) or not isinstance(cambios, list) \
+                or not isinstance(desde, int) or not isinstance(hasta, int):
+            continue
+        creados.update(c['path'] for c in cambios[desde:hasta] if isinstance(c, dict)
+                       and isinstance(c.get('path'), str) and c.get('before') in (None, 'DELETED'))
+    return creados
+
+
 def _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes):
     """Lo que el agente apuntó en `changes` desde el turno y no guardan las instantáneas."""
     salida = {}
@@ -271,6 +286,7 @@ def vista_deshacer(hogar, task, estado, ident):
     actuales = almacen.cambios(datos['antes'], ahora['commit'])
     dejado, origen, incompleto = _dejado(almacen, _pasos(task, estado, turno.get('inicio') or 0))
     ultimas = huella(estado)
+    creados = _creados(task, estado, turno)
     no_cubiertos = _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes)
     for ruta in sorted(objetivo):
         destino, actual = objetivo[ruta], actuales.get(ruta)
@@ -284,14 +300,20 @@ def vista_deshacer(hogar, task, estado, ident):
             if motivo:
                 no_cubiertos[ruta] = motivo
                 continue
-            if excluidos_antes is None and origen.get(ruta) != AGENTE:
+            # Sin la lista completa de lo que no entró, sólo se borra lo que el agente dijo crear.
+            incompleta = excluidos_antes is None or excluidos_antes.get('recortado')
+            if incompleta and ruta not in creados:
                 no_cubiertos[ruta] = 'sin_registro'
                 continue
         if actual is None and (en_disco.exists() or en_disco.is_symlink()):
             # Está, pero no en la instantánea de ahora: no se puede comparar con lo que dejó el agente.
             vista['conflictos'].append(dict(fila, motivo=cubre(excluidos_ahora, ruta) or GRANDE))
         elif ruta in dejado and dejado[ruta] == actual:
-            if origen.get(ruta) == AGENTE:
+            if origen.get(ruta) == AGENTE and ruta in ultimas and sha256_de(en_disco) != ultimas[ruta]:
+                # Igual que al final del turno, pero no igual que la última escritura del agente:
+                # alguien lo cambió durante el turno, después de él.
+                vista['conflictos'].append(dict(fila, motivo=EDITADO))
+            elif origen.get(ruta) == AGENTE:
                 vista['restaurables'].append(fila)
             else:
                 vista['conflictos'].append(dict(fila, motivo=origen.get(ruta, AJENO)))
@@ -316,7 +338,8 @@ def _aplicar(hogar, task, estado, vista, forzar, tipo, extra):
                                                           if c['ruta'] in forzar]
     ident = uuid4().hex[:12]
     almacen.guardar_ref(vista['_ahora'], task['id'], tipo + '-' + ident + '-antes')
-    hechas, fallos = almacen.restaurar(rutas, vista['_destino'], creadas_desde=vista.get('_desde'))
+    hechas, fallos = almacen.restaurar(rutas, vista['_destino'], creadas_desde=vista.get('_desde'),
+                                       commit=vista['_objetivo'])
     try:
         despues = almacen.guardar(task['id'], tipo + '-' + ident + '-despues', tipo.capitalize())['commit']
     except SinInstantanea:
@@ -387,11 +410,16 @@ def vista_rehacer(hogar, task, ident=None):
         return vista
     desde_deshacer = almacen.cambios(paso['despues'], ahora['commit'])
     objetivo = almacen.cambios(ahora['commit'], paso['antes'])
+    actuales = almacen.cambios(paso['antes'], ahora['commit'])
+    excluidos_ahora = almacen.excluidos(ahora['commit'])
     restaurados = set(paso.get('restaurados') or ())
     for ruta in sorted(restaurados & set(objetivo)):
         en_disco = (almacen.cwd / ruta).exists() or (almacen.cwd / ruta).is_symlink()
         fila = {'ruta': ruta, 'accion': _accion(objetivo[ruta], True if en_disco else None)}
-        if ruta in desde_deshacer:
+        if en_disco and ruta in actuales and actuales[ruta] is None:
+            # Está en disco pero no en la instantánea de ahora (ignorado, grande…): es de otro, no se pisa.
+            vista['conflictos'].append(dict(fila, motivo=cubre(excluidos_ahora, ruta) or GRANDE))
+        elif ruta in desde_deshacer:
             vista['conflictos'].append(dict(fila, motivo=EDITADO))
         else:
             vista['restaurables'].append(fila)

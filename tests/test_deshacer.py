@@ -705,3 +705,115 @@ def test_avisa_del_git_push_de_un_subagente(entorno):
     t = sesion.turno('uno', t1)
     vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
     assert {a['tipo'] for a in vista['irreversibles']} == {'publicacion', 'subagente'}
+
+
+# MARK: - Segunda revisión del PR 22
+
+@pytest.mark.parametrize('como', ['ignorado', 'grande'])
+def test_rehacer_no_pisa_un_archivo_que_el_usuario_crea_despues(entorno, monkeypatch, como):
+    hogar, cwd = entorno
+    monkeypatch.setattr(instantaneas, 'TOPE_ARCHIVO', 1000)
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: escribir(e, c, 'config.json', '{"agente": 1}\n'))
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert not (cwd / 'config.json').exists()
+    if como == 'ignorado':
+        (cwd / '.gitignore').write_text('config.json\n')
+        propio = b'{"usuario": 1}\n'
+    else:
+        propio = b'x' * 2000
+    (cwd / 'config.json').write_bytes(propio)
+    vista = deshacer.vista_rehacer(hogar, sesion.task)
+    assert ('config.json', como) in {(c['ruta'], c['motivo']) for c in vista['conflictos']}
+    deshacer.rehacer(hogar, sesion.task, sesion.estado, vista=vista)
+    assert (cwd / 'config.json').read_bytes() == propio
+
+
+def test_con_la_lista_de_ignorados_recortada_no_borra_lo_que_pasa_del_tope(entorno, monkeypatch):
+    hogar, cwd = entorno
+    monkeypatch.setattr(instantaneas, 'TOPE_EXCLUIDOS', 3)
+    (cwd / '.gitignore').write_text('*.log\n')
+    for n in range(6):
+        (cwd / f'{n}.log').write_text('registro\n')
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: (escribir(e, c, '.gitignore', '# nada\n'), escribir(e, c, 'nuevo.py', 'x\n')),
+                     llamadas=[['sed', '-i', '', '/log/d', '.gitignore']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    no_cubiertos = {n['ruta'] for n in vista['no_cubiertos']}
+    assert {f'{n}.log' for n in range(6)} <= no_cubiertos
+    assert not any(c['ruta'].endswith('.log') for c in vista['conflictos'] + vista['restaurables'])
+    assert ('nuevo.py', 'borrar') in {(f['ruta'], f['accion']) for f in vista['restaurables']}, \
+        'lo que el agente dijo crear sí se borra'
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
+    assert all((cwd / f'{n}.log').exists() for n in range(6))
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root lee cualquier carpeta')
+def test_una_carpeta_ilegible_es_un_prefijo_y_no_se_borra_su_contenido(entorno):
+    hogar, cwd = entorno
+    (cwd / 'priv').mkdir()
+    (cwd / 'priv' / 'f.txt').write_text('mío\n')
+    os.chmod(cwd / 'priv', 0)
+    try:
+        sesion = Sesion(hogar, cwd)
+        t = sesion.turno('uno', lambda c, e: os.chmod(c / 'priv', 0o755), llamadas=[['chmod', '755', 'priv']])
+        datos = sesion.task['turnos'][0]['instantanea']
+        assert Almacen(hogar, cwd).excluidos(datos['antes'])['ilegibles'] == ['priv/']
+        vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+        assert {(n['ruta'], n['motivo']) for n in vista['no_cubiertos']} == {('priv/f.txt', 'ilegible')}
+        deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['priv/f.txt'], vista=vista)
+        assert (cwd / 'priv' / 'f.txt').read_text() == 'mío\n'
+    finally:
+        os.chmod(cwd / 'priv', 0o755)
+
+
+@pytest.mark.parametrize('como', ['borrado', 'atomico'])
+def test_un_0600_que_el_agente_reemplaza_vuelve_0600(entorno, como):
+    import stat
+    hogar, cwd = entorno
+    clave = cwd / 'clave.pem'
+    clave.write_text('privada\n')
+    os.chmod(clave, 0o600)
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        if como == 'borrado':
+            (c / 'clave.pem').unlink()
+            e['changes'].append({'path': 'clave.pem', 'before': sha('privada\n'), 'after': 'DELETED'})
+        else:
+            (c / 'tmp.pem').write_text('otra\n')
+            os.chmod(c / 'tmp.pem', 0o644)
+            os.replace(c / 'tmp.pem', c / 'clave.pem')
+            e['changes'].append({'path': 'clave.pem', 'before': sha('privada\n'), 'after': sha('otra\n')})
+    t = sesion.turno('uno', t1)
+    paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert paso['restaurados'] == ['clave.pem']
+    assert clave.read_text() == 'privada\n'
+    assert stat.S_IMODE(os.stat(clave).st_mode) == 0o600
+
+
+def test_un_lock_de_ref_viejo_no_bloquea_deshacer(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: escribir(e, c, 'app.py', 'print(2)\n'))
+    almacen = Almacen(hogar, cwd)
+    viejo = almacen.dir / 'refs' / 'alfalfa' / 's1' / 'ahora.lock'
+    viejo.parent.mkdir(parents=True, exist_ok=True)
+    viejo.write_text('')
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert vista['disponible'], vista.get('motivo')
+    assert not viejo.exists()
+
+
+def test_una_edicion_del_usuario_durante_el_turno_en_el_mismo_archivo_no_se_pisa(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        escribir(e, c, 'app.py', 'print(2)\n')
+        (c / 'app.py').write_text('print(2)  # y lo mío\n')   # El usuario, mientras el agente sigue.
+    t = sesion.turno('uno', t1)
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {(c['ruta'], c['motivo']) for c in vista['conflictos']} == {('app.py', 'editado_despues')}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
+    assert (cwd / 'app.py').read_text() == 'print(2)  # y lo mío\n'

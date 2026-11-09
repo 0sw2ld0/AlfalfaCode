@@ -63,6 +63,10 @@ AUTOR = {'GIT_AUTHOR_NAME': 'AlfalfaCode', 'GIT_AUTHOR_EMAIL': 'alfalfa@localhos
 _NOMBRE = re.compile(r'[^A-Za-z0-9._-]+')
 _ILEGIBLE = re.compile(r"^(?:error|warning): (?:open|read|unable to index file|could not open)\(?['\"]?(.+?)['\"]?\)?"
                        r"(?::|$)")
+# git avisa así de una carpeta que no puede leer; se apunta con su barra final (un prefijo).
+_CARPETA_ILEGIBLE = re.compile(r"^(?:error|warning): could not open directory '(.+?)'")
+# Los modos que git ya guarda; cualquier otro (0600, 0700…) se apunta aparte.
+MODOS_GIT = (0o644, 0o755)
 
 
 class SinInstantanea(Exception):
@@ -109,8 +113,9 @@ def cubre(excluidos, ruta):
         return None
     if ruta in excluidos.get('grandes', ()):
         return 'grande'
-    if ruta in excluidos.get('ilegibles', ()):
-        return 'ilegible'
+    for ilegible in excluidos.get('ilegibles', ()):
+        if ruta == ilegible or (ilegible.endswith('/') and ruta.startswith(ilegible)):
+            return 'ilegible'
     for anidado in excluidos.get('anidados', ()):
         if ruta == anidado or ruta.startswith(anidado.rstrip('/') + '/'):
             return 'repo_anidado'
@@ -187,7 +192,9 @@ class Almacen:
                     if time.monotonic() > limite:
                         raise SinInstantanea('Otra instantánea de esta carpeta no termina.') from None
                     time.sleep(0.05)
-            for viejo in [*(self.dir / 'indices').glob('*.lock'), *self.dir.glob('*.lock')]:
+            viejos = [*(self.dir / 'indices').glob('*.lock'), *self.dir.glob('*.lock'),
+                      *(self.dir / 'refs').rglob('*.lock')]
+            for viejo in viejos:
                 viejo.unlink(missing_ok=True)
             yield
         finally:
@@ -255,7 +262,7 @@ class Almacen:
             previos = [p for p in (self.dir / 'indices').iterdir() if p.is_file() and not p.name.endswith('.lock')]
             if previos:
                 shutil.copy2(max(previos, key=lambda p: p.stat().st_mtime), indice)
-        lista = self.git('ls-files', '-z', '-o', '-m', '--exclude-standard', sesion=sesion)
+        lista, avisos = self.git('ls-files', '-z', '-o', '-m', '--exclude-standard', sesion=sesion, tolerar=(0,))
         nuevos = [n for n in lista.decode(errors='surrogateescape').split('\0') if n]
         if len(nuevos) > TOPE_ARCHIVOS:
             raise SinInstantanea(f'La carpeta tiene demasiados archivos nuevos ({len(nuevos)}) para una instantánea.')
@@ -271,6 +278,10 @@ class Almacen:
                      entrada='\0'.join(enlazados).encode(errors='surrogateescape'))
         anidados = sorted(set(anidados) | set(enlazados))
         grandes, ilegibles = [], []
+        for linea in avisos.splitlines():
+            carpeta = _CARPETA_ILEGIBLE.match(linea.strip())
+            if carpeta:
+                ilegibles.append(carpeta.group(1).rstrip('/') + '/')
         for nombre_archivo in dict.fromkeys(n for n in nuevos if not n.endswith('/')):
             path = self.cwd / nombre_archivo
             try:
@@ -289,8 +300,11 @@ class Almacen:
                               sesion=sesion, tolerar=(0, 1),
                               entrada='\0'.join(especificacion).encode(errors='surrogateescape'))
         for linea in errores.splitlines():
+            carpeta = _CARPETA_ILEGIBLE.match(linea.strip())
             hallado = _ILEGIBLE.match(linea.strip())
-            if hallado:
+            if carpeta:
+                ilegibles.append(carpeta.group(1).rstrip('/') + '/')
+            elif hallado:
                 ilegibles.append(hallado.group(1))
             elif linea.startswith(('error:', 'fatal:')):
                 raise SinInstantanea('git add: ' + linea[:300])
@@ -300,12 +314,27 @@ class Almacen:
         ignorados = self.git('ls-files', '-z', '-o', '-i', '--exclude-standard', '--directory', sesion=sesion)
         ignorados = [n for n in ignorados.decode(errors='surrogateescape').split('\0') if n]
         excluidos = {'grandes': grandes, 'ilegibles': sorted(set(ilegibles)), 'anidados': anidados,
-                     'ignorados': ignorados[:TOPE_EXCLUIDOS], 'recortado': len(ignorados) > TOPE_EXCLUIDOS}
+                     'ignorados': ignorados[:TOPE_EXCLUIDOS], 'recortado': len(ignorados) > TOPE_EXCLUIDOS,
+                     'modos': self._modos(sesion)}
         (self.dir / 'excluidos' / commit).write_text(json.dumps(excluidos, ensure_ascii=False))
         fila = {'repo': self.clave, 'commit': commit, 'fecha': time.time()}
         if grandes:
             fila['grandes'] = grandes[:20]
         return fila
+
+    def _modos(self, sesion):
+        """{ruta: modo} de los archivos guardados con permisos que git no conserva (0600, 0700…)."""
+        modos = {}
+        for ruta in self.git('ls-files', '-z', sesion=sesion).decode(errors='surrogateescape').split('\0'):
+            if not ruta:
+                continue
+            try:
+                estado = os.lstat(self.cwd / ruta)
+            except OSError:
+                continue
+            if stat.S_ISREG(estado.st_mode) and stat.S_IMODE(estado.st_mode) not in MODOS_GIT:
+                modos[ruta] = stat.S_IMODE(estado.st_mode)
+        return modos
 
     def guardar_ref(self, commit, sesion, nombre):
         """Otra ref para un commit que ya está (un rehacer no se pierde con la limpieza)."""
@@ -379,7 +408,8 @@ class Almacen:
             elif actual.is_symlink() or not actual.is_dir():
                 raise OSError('la carpeta ' + str(actual.relative_to(self.cwd)) + ' es un enlace')
 
-    def _escribir(self, path, modo, datos):
+    def _escribir(self, path, modo, datos, permisos=None):
+        """`permisos`: el modo real que apuntó la instantánea; sin él, los de ahora con el bit x de git."""
         if modo == '120000':
             if path.is_symlink() or path.exists():
                 path.unlink()
@@ -396,19 +426,25 @@ class Almacen:
         with os.fdopen(fd, 'wb') as salida:
             salida.write(datos)
         actual = stat.S_IMODE(os.lstat(path).st_mode)
-        nuevo = actual | ((actual & 0o444) >> 2) if ejecutable else actual & ~0o111
+        if permisos is not None:
+            nuevo = permisos
+        else:
+            nuevo = actual | ((actual & 0o444) >> 2) if ejecutable else actual & ~0o111
         if nuevo != actual:
             os.chmod(path, nuevo)
 
-    def restaurar(self, rutas, destino, creadas_desde=None):
+    def restaurar(self, rutas, destino, creadas_desde=None, commit=None):
         """Deja cada ruta como en `destino` ({ruta: (modo, blob)}): la escribe si está y la borra si no.
 
         Primero los borrados y después las escrituras; las carpetas que se queden vacías sólo
-        se quitan si se crearon después de `creadas_desde`. Devuelve (hechas, fallos)."""
+        se quitan si se crearon después de `creadas_desde`. Con `commit` (la instantánea de
+        `destino`), cada archivo vuelve con los permisos exactos que tenía. Devuelve (hechas, fallos)."""
         with self.cerrojo():
-            return self._restaurar(rutas, destino, creadas_desde)
+            return self._restaurar(rutas, destino, creadas_desde, commit)
 
-    def _restaurar(self, rutas, destino, creadas_desde):
+    def _restaurar(self, rutas, destino, creadas_desde, commit=None):
+        excluidos = self.excluidos(commit) if commit else None
+        modos = excluidos.get('modos') if isinstance(excluidos, dict) else None
         hechas, fallos = [], []
         for ruta in [r for r in rutas if r not in destino]:
             path = self.cwd / ruta
@@ -434,7 +470,11 @@ class Almacen:
                 datos = self.contenido(blob)
                 self._carpetas(path)
                 self._dentro(path)
-                self._escribir(path, modo, datos)
+                permisos = None
+                if isinstance(modos, dict) and modo != '120000':
+                    # Los de la instantánea: 0600 si estaba apuntado; si no, 0644 o 0755 como guarda git.
+                    permisos = modos.get(ruta) or (0o755 if modo == '100755' else 0o644)
+                self._escribir(path, modo, datos, permisos)
                 hechas.append(ruta)
             except (OSError, SinInstantanea) as exc:
                 fallos.append({'ruta': ruta, 'error': str(exc)[:200]})
