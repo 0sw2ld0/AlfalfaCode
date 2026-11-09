@@ -218,13 +218,26 @@ Dos topes en dólares, los dos opcionales:
 - **por sesión**: lo que lleva la sesión, con sus subagentes;
 - **al mes**: lo gastado este mes natural por todas las sesiones de este Mac.
 
-Al 80 % de un tope AlfalfaCode avisa una vez en la conversación. Al llegar al 100 %
-el turno se detiene limpio antes de pedir otra respuesta al modelo, nunca a mitad de
-una herramienta, y dice cuánto se gastó y cómo subir el tope. La sesión queda lista
-para seguir.
+Al 80 % de un tope AlfalfaCode avisa una vez: el de la sesión, una vez por sesión; el
+del mes, una vez al mes en este Mac. Antes de cada petición al modelo (respuestas del
+turno, compactar, mirar una imagen, recuperar una respuesta cortada) suma lo gastado,
+lo que costará la entrada de esa petición y lo apartado por las que ya están en marcha,
+como las de los subagentes en paralelo. Si pasa del tope, no la hace: el turno se
+detiene limpio, nunca a mitad de una herramienta, y dice cuánto se gastó y cómo subir
+el tope. La sesión queda lista para seguir.
 
+- **Margen**: la entrada se estima por el tamaño del contexto, contando como caché lo
+  que leyó la petición anterior. Lo que no se puede saber antes es la salida, así que
+  un tope puede pasarse, como mucho, lo que cueste la salida de la última respuesta
+  (con Opus 5.5 y 32.000 tokens de salida, unos 0,64 $). Otra sesión abierta a la vez
+  sólo cuenta para el tope del mes cuando su petición ya se apuntó.
+- Con un tope alcanzado, un mensaje nuevo no entra en el historial del modelo ni
+  dispara los hooks; «Compactar» dice que no se compactó.
 - Sólo cuenta lo que tiene precio: un modelo local, de plan o del servicio Alfalfa
-  con cortesía no gasta, y puede seguir aunque el tope se haya alcanzado.
+  con cortesía no gasta, y puede seguir aunque el tope se haya alcanzado. Un modelo
+  de pago que el catálogo no tiene con precio tampoco cuenta, y se avisa una vez.
+- Bifurcar una sesión o seguir en una nueva empieza su gasto de cero; el del mes sigue
+  sumando.
 - Se configura en la app, en **Ajustes ▸ General ▸ Presupuesto**, y vale ya para
   las sesiones abiertas. En la terminal, `alfalfa --presupuesto 5 --presupuesto-mes 40 "…"`
   o `ALFALFA_PRESUPUESTO=5 ALFALFA_PRESUPUESTO_MES=40`. Con `0` se quita el tope.

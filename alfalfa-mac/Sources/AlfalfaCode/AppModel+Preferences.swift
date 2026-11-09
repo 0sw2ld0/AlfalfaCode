@@ -75,9 +75,12 @@ extension AppModel {
         }
     }
 
-    /// Lo gastado este mes en este Mac, según la última sesión abierta que lo dijo; nil si ninguna.
+    /// Lo gastado este mes en este Mac según las sesiones abiertas; nil si ninguna lo dijo. Cada una
+    /// lee el mismo registro del mes, que sólo crece: el dato más nuevo es el mayor del mes más reciente.
     var monthSpent: BudgetStatus.Limit? {
-        live.compactMap { $0.timeline.budget?.month }.max { $0.spent < $1.spent }
+        let reports = live.compactMap { $0.timeline.budget }
+        guard let latest = reports.compactMap(\.monthName).max() else { return reports.map(\.month).max { $0.spent < $1.spent } }
+        return reports.filter { $0.monthName == latest }.map(\.month).max { $0.spent < $1.spent }
     }
 
     /// El proveedor del modelo elegido, como lo pone el pie de la barra lateral.

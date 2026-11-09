@@ -123,13 +123,27 @@ public struct BudgetStatus: Equatable, Sendable {
 
 /// Topes en dólares de Ajustes ▸ General ▸ Presupuesto.
 public enum BudgetFormat {
-    /// Lo escrito en el campo («5», «12,50», «3 $»): un importe > 0, o nil si está vacío o es 0.
-    /// Algo que no es un importe también da nil: el campo lo enseña en rojo.
-    public static func parse(_ text: String) -> Double? {
+    /// Lo escrito en el campo de un tope.
+    public enum Entry: Equatable, Sendable {
+        /// Vacío o cero («0», «0,00», «0.0 $»): sin tope.
+        case noCap
+        case amount(Double)
+        /// No es un importe: el campo lo dice y no cambia el tope.
+        case invalid
+    }
+
+    public static func entry(_ text: String) -> Entry {
         let clean = text.replacingOccurrences(of: "$", with: "").replacingOccurrences(of: ",", with: ".")
             .trimmingCharacters(in: .whitespaces)
-        guard let value = Double(clean), value.isFinite, value > 0 else { return nil }
-        return value
+        if clean.isEmpty { return .noCap }
+        guard let value = Double(clean), value.isFinite, value >= 0 else { return .invalid }
+        return value == 0 ? .noCap : .amount(value)
+    }
+
+    /// Lo escrito en el campo («5», «12,50», «3 $»): un importe > 0, o nil (vacío, cero o no es un importe).
+    public static func parse(_ text: String) -> Double? {
+        if case let .amount(value) = entry(text) { return value }
+        return nil
     }
 
     /// Para el campo: «5» o «12,5».
@@ -139,9 +153,10 @@ public enum BudgetFormat {
         return text.replacingOccurrences(of: ".", with: ",")
     }
 
-    /// Para `--presupuesto`: con punto decimal, como lo lee el motor en cualquier idioma.
+    /// Para `--presupuesto`: con punto decimal, como lo lee el motor en cualquier idioma, y sin
+    /// redondear (el mismo valor que la orden `presupuesto` en vivo).
     public static func argument(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
+        value == value.rounded() && abs(value) < 1e15 ? String(Int(value)) : String(value)
     }
 
     /// «160.000».

@@ -6,6 +6,7 @@ la red. El hogar de AlfalfaCode es uno de prueba en cada test.
 import asyncio
 import io
 import json
+import time
 from unittest.mock import patch
 
 import httpx
@@ -159,9 +160,12 @@ def test_el_turno_se_para_al_llegar_al_tope_de_la_sesion(tmp_path, monkeypatch):
     assert 'se agotó' in m.task['summary'] and '1,26 $ de 1,00 $' in m.task['summary']
     assert '--presupuesto' in m.task['summary'] and 'Ajustes' in m.task['summary']
     salidas = eventos(salida)
+    # Un solo camino por aviso: la app pinta el 80 % del evento `presupuesto` y el corte del resumen
+    # del turno; ninguno de los dos llega además como `evento` de sistema.
     textos = [e['texto'] for e in salidas if e['tipo'] == 'evento' and e['rol'] == 'system']
-    assert any(t.startswith('Llevas 0,84 $ de 1,00 $ del presupuesto de esta sesión (84 %)') for t in textos)
-    assert sum('se agotó' in t for t in textos) == 1
+    assert not any('Llevas' in t or 'se agotó' in t for t in textos)
+    transcripcion = (m.directory / (m.task['id'] + '.jsonl')).read_text()
+    assert 'Llevas 0,84 $ de 1,00 $ del presupuesto de esta sesión (84 %)' in transcripcion
     avisos = [e for e in salidas if e['tipo'] == 'presupuesto']
     assert avisos[0]['aviso'] == 'sesion' and avisos[-1]['agotado'] == 'sesion'
     assert avisos[-1]['sesion'] == {'tope': 1.0, 'gastado': pytest.approx(1.26)}
@@ -267,7 +271,6 @@ def test_ollama_no_tiene_cache_que_ensenar():
 def test_lo_que_gasta_un_subagente_cuenta_para_la_sesion(tmp_path, monkeypatch):
     from tests.test_alfalfa_hooks import Sesion, llamada
     from tests.test_subagentes import Guion
-    from tests.test_subagentes import correr as correr_con_subagentes
     s = Sesion(tmp_path, monkeypatch, None)
     s.m.cambiar_presupuesto(sesion=1.0)
     precio = {'entrada': 4.0, 'salida': 20.0, 'cache_lectura': 0.2}
@@ -293,8 +296,19 @@ def test_lo_que_gasta_un_subagente_cuenta_para_la_sesion(tmp_path, monkeypatch):
             respuesta['prompt_eval_count'] = 100_000
         return respuesta
     guion.request = lambda: cara
+    async def correr_con_tope():
+        cliente = asyncio.create_task(s._responder())
+        try:
+            # Por debajo de `request`: el presupuesto se mira en `request` de cada runtime.
+            with patch.object(NativeRuntime, '_request', guion.request()):
+                return await s.m.run('Usa subagentes.')
+        finally:
+            cliente.cancel()
+            await asyncio.gather(cliente, return_exceptions=True)
+            await s.m.close_mcp()
     with patch.object(NativeRuntime, '_cliente', con_precio):
-        codigo = correr_con_subagentes(s, guion)
+        codigo = asyncio.run(asyncio.wait_for(correr_con_tope(), 60))
+    s.m.close()
     assert codigo == 1 and s.m.task['status'] == 'blocked'
     # El principal pidió una vez (0,40 $); el subagente, dos (0,80 $) y la tercera ya no salió.
     assert len(guion.payloads['principal']) == 1
@@ -302,10 +316,10 @@ def test_lo_que_gasta_un_subagente_cuenta_para_la_sesion(tmp_path, monkeypatch):
     assert s.m.task['coste_usd'] == pytest.approx(3 * (100_000 * 4 + 10 * 20) / 1e6)
     sub = s.m.subagentes.agentes['a1']
     assert sub.estado == 'fallido' and 'se agotó' in sub.error
-    # El aviso del corte sale una sola vez, en la conversación principal.
-    cortes = [e for e in eventos(s.salida) if e['tipo'] == 'evento'
-              and e.get('texto', '').startswith('El presupuesto de esta sesión se agotó')]
-    assert len(cortes) == 1
+    # El corte se dice en el resumen del turno de la sesión, no como evento suelto.
+    assert s.m.task['summary'].startswith('El presupuesto de esta sesión se agotó')
+    assert not any(e['tipo'] == 'evento' and e.get('rol') == 'system' and 'se agotó' in e.get('texto', '')
+                   and not e['texto'].startswith('Subagente') for e in eventos(s.salida))
 
 
 # ---------------------------------------------------------------- --stdio
@@ -338,3 +352,216 @@ def test_sin_topes_ni_gasto_no_hay_nada_que_decir(tmp_path):
     assert p.para_el_cliente() is None
     GastoMensual(tmp_path).apuntar('otra', 0.5)
     assert p.para_el_cliente()['mes']['gastado'] == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------- tope duro en cada petición
+
+def opus_con_tope(tmp_path, claude, budget, monkeypatch, transport=None, gastado=None):
+    claude.instalar(monkeypatch)
+    m = TerminalManager('Lee.', home=tmp_path / 'home', model=OPUS, auto=True, budget=budget, transport=transport)
+    if gastado is not None:
+        m.task['coste_usd'] = gastado
+    return m
+
+
+def test_corta_por_lo_que_costara_la_siguiente_peticion(tmp_path, monkeypatch):
+    """Con 4,80 $ de 5 $ y un prompt de ~100K tokens (0,40 $ de entrada en Opus), no se pide."""
+    proyecto(tmp_path, monkeypatch)
+    claude = Claude()
+    m = opus_con_tope(tmp_path, claude, '5', monkeypatch, gastado=4.8)
+    assert correr(m, 'Revisa esto: ' + 'x' * 400_000) == 1
+    assert claude.peticiones == 0
+    assert 'no alcanza para la siguiente petición' in m.task['summary']
+    assert '4,80 $ de 5,00 $' in m.task['summary'] and 'su entrada costaría unos 0,4' in m.task['summary']
+
+
+def test_la_estimacion_cuenta_la_cache_de_la_anterior_e_imagenes(tmp_path):
+    task = {'id': 's', 'cache_ultima': 90_000}
+    rt = NativeRuntime.__new__(NativeRuntime)
+    rt.task, rt._precio = task, {'entrada': 4.0, 'salida': 20.0, 'cache_lectura': 0.2}
+    payload = {'messages': [{'role': 'user', 'content': 'x' * 400_000, 'images': ['A' * 1_000_000]}]}
+    estimado = rt._entrada_estimada(payload)
+    # ~100K de texto + 1.600 de la imagen (no su base64); 90K salen de la caché.
+    tokens = 100_000 + 1600
+    assert estimado == pytest.approx(((tokens - 90_000) * 4.0 + 90_000 * 0.2) / 1e6, rel=0.01)
+
+
+def test_las_reservas_de_peticiones_en_marcha_cuentan(tmp_path):
+    p = Presupuesto(tmp_path, {'id': 's', 'coste_usd': 1.0}, sesion=2)
+    p.reservar('a', 0.6)          # un subagente
+    with pytest.raises(PresupuestoAgotado, match='0,60 \\$ más en peticiones en marcha'):
+        p.reservar('b', 0.6)      # otro a la vez: 1 + 0,6 + 0,6 > 2
+    p.liberar('a')
+    p.reservar('b', 0.6)
+
+
+def test_compactar_a_mano_con_el_tope_alcanzado_no_pide(tmp_path, monkeypatch):
+    proyecto(tmp_path, monkeypatch)
+    claude = Claude(lecturas=3, entrada=100_000, salida=1000)
+    salida = io.StringIO()
+    m = opus_con_tope(tmp_path, claude, '10', monkeypatch, transport=Transport(salida))
+    try:
+        assert asyncio.run(m.run('Lee.')) == 0, m.task['summary']
+        hechas = claude.peticiones
+        m.cambiar_presupuesto(sesion=1)
+        assert asyncio.run(m.compact_now()) is False
+        assert claude.peticiones == hechas
+        fallo = [e for e in eventos(salida) if e['tipo'] == 'evento' and 'No se compactó' in e.get('texto', '')]
+        assert fallo and 'presupuesto de esta sesión se agotó' in fallo[-1]['texto']
+    finally:
+        m.close()
+
+
+def test_mirar_una_imagen_con_el_tope_alcanzado_no_pide(tmp_path, monkeypatch):
+    from tests.test_vision_propia import PNG
+    raiz = proyecto(tmp_path, monkeypatch)
+    (raiz / 'captura.png').write_bytes(PNG)
+    m = TerminalManager('Mira.', home=tmp_path / 'home', budget='1')
+    try:
+        m.task['coste_usd'] = 1.2
+        rt = m.runtime()
+        rt.task['runtime_capabilities'] = ['tools', 'vision']
+        rt._ollama = (object(), 'claude-opus-5-5', None)
+        rt._precio = {'entrada': 4.0, 'salida': 20.0}
+        enviadas = []
+
+        async def pedir(*args, **kwargs):
+            enviadas.append(args)
+            return {'message': {'content': 'una captura'}, 'done': True}
+        with patch.object(NativeRuntime, '_request', pedir), pytest.raises(PresupuestoAgotado):
+            asyncio.run(rt.vision(rt.tools.path('captura.png'), '¿Qué se ve?'))
+        assert enviadas == []
+    finally:
+        m.close()
+
+
+def test_la_recuperacion_por_longitud_no_sale_con_el_tope_alcanzado(tmp_path, monkeypatch):
+    proyecto(tmp_path, monkeypatch)
+
+    class Cortada(Claude):
+        def instalar(self, monkeypatch):
+            def api(request):
+                self.peticiones += 1
+                eventos = mensaje_claude(('text', 'Empiezo una respuesta muy lar'), stop='max_tokens',
+                                         entrada=self.entrada, salida=self.salida)
+                return httpx.Response(200, content=sse(*eventos), headers={'content-type': 'text/event-stream'})
+            real = anthropic.Transporte.__init__
+
+            def init(transporte, proveedor, url, clave, tarea=None, timeout=None, http=None):
+                real(transporte, proveedor, url, clave, tarea, timeout, httpx.MockTransport(api))
+            monkeypatch.setattr(anthropic.Transporte, '__init__', init)
+            llavero.guardar('anthropic', 'sk-ant-prueba-123456')
+    claude = Cortada(entrada=100_000, salida=5000)     # 0,50 $
+    m = opus_con_tope(tmp_path, claude, '0,5', monkeypatch)
+    try:
+        assert asyncio.run(m.run('Escribe.')) == 1
+        assert claude.peticiones == 1 and 'se agotó' in m.task['summary']
+        # No cuenta como recuperación gastada: con el tope subido la sesión sigue.
+        assert not m.runtime().state.get('length_recovery')
+    finally:
+        m.close()
+
+
+def test_con_la_sesion_cortada_un_mensaje_no_entra_en_el_historial(tmp_path, monkeypatch):
+    proyecto(tmp_path, monkeypatch)
+    claude = Claude(entrada=100_000, salida=1000)
+    m = opus_con_tope(tmp_path, claude, '1', monkeypatch)
+    try:
+        assert asyncio.run(m.run('Lee.')) == 1
+        mensajes = len(m.runtime().state['messages'])
+        corridos = []
+        monkeypatch.setattr(NativeRuntime, '_hooks_de_entrada', lambda rt, p: corridos.append(p))
+        monkeypatch.setattr(NativeRuntime, '_hooks_activos', lambda rt: True)
+        assert asyncio.run(m.run('¿Sigues?')) == 1
+        assert len(m.runtime().state['messages']) == mensajes and corridos == []
+        assert claude.peticiones == 3 and 'se agotó' in m.task['summary']
+    finally:
+        m.close()
+
+
+def test_un_modelo_de_pago_sin_precio_se_avisa_una_vez(tmp_path, monkeypatch):
+    from alfalfa.proveedores import ollama
+    eventos_dichos = []
+    task = {'id': 's', 'model': 'openai/gpt-sin-precio'}
+
+    class Gestor:
+        presupuesto = Presupuesto(tmp_path, task, sesion=5)
+
+        def event(self, task, rol, texto):
+            eventos_dichos.append(texto)
+    rt = NativeRuntime.__new__(NativeRuntime)
+    rt.manager, rt.task, rt._precio = Gestor(), task, None
+    rt._proveedor = openai.OpenAI()
+    rt._avisar_sin_precio()
+    rt._avisar_sin_precio()
+    assert len(eventos_dichos) == 1 and 'No sé el precio de openai/gpt-sin-precio' in eventos_dichos[0]
+    # Ollama no cobra por token: nada que avisar.
+    task.pop('presupuesto_sin_precio')
+    rt._proveedor = ollama.Ollama()
+    rt._avisar_sin_precio()
+    assert len(eventos_dichos) == 1
+
+
+def test_bifurcar_empieza_de_cero_su_gasto(tmp_path, monkeypatch):
+    from alfalfa import sesiones
+    proyecto(tmp_path, monkeypatch)
+    claude = Claude(lecturas=1, entrada=1000, leida=80_000, salida=100)
+    m = opus_con_tope(tmp_path, claude, '5', monkeypatch)
+    try:
+        assert asyncio.run(m.run('Lee.')) == 0, m.task['summary']
+        m.task['presupuesto_avisos'] = ['sesion:5.0']
+        m.save()
+    finally:
+        m.close()
+    assert m.task['coste_usd'] > 0 and m.task['cache']
+    nueva = sesiones.bifurcar(tmp_path / 'home' / 'sesiones', m.task['id'])
+    task = json.loads((tmp_path / 'home' / 'sesiones' / nueva / 'task.json').read_text())
+    assert not {'coste_usd', 'cache', 'presupuesto_avisos'} & set(task)
+
+
+# ---------------------------------------------------------------- registro del mes
+
+def test_el_registro_vaciado_o_borrado_se_vuelve_a_leer(tmp_path):
+    g = GastoMensual(tmp_path)
+    g.apuntar('s', 2.0)
+    g.apuntar('s', 3.0)
+    assert g.total() == pytest.approx(5.0)
+    archivo = tmp_path / 'gasto' / (presupuesto.mes_actual() + '.jsonl')
+    archivo.write_text('')
+    assert g.total() == 0
+    g.apuntar('s', 0.5)
+    assert g.total() == pytest.approx(0.5)
+    archivo.unlink()
+    assert g.total() == 0
+    g.apuntar('s', 0.25)
+    assert g.total() == pytest.approx(0.25)
+
+
+def test_una_linea_rota_no_se_come_la_buena_que_la_sigue(tmp_path):
+    g = GastoMensual(tmp_path)
+    archivo = tmp_path / 'gasto' / (presupuesto.mes_actual() + '.jsonl')
+    g.apuntar('s', 1.0)
+    with archivo.open('a') as f:
+        f.write('{"t": 1, "s": "muerta", "usd": 9')    # quien la escribía no la terminó
+    assert g.total() == pytest.approx(1.0)
+    g.apuntar('s', 2.0)                                  # la siguiente se pega detrás
+    assert g.total() == pytest.approx(3.0)
+
+
+def test_cambio_de_mes(tmp_path, monkeypatch):
+    g = GastoMensual(tmp_path)
+    g.apuntar('s', 4.0, ahora=time.mktime((2026, 10, 31, 23, 0, 0, 0, 0, -1)))
+    g.apuntar('s', 1.0, ahora=time.mktime((2026, 11, 1, 0, 30, 0, 0, 0, -1)))
+    assert g.total('2026-10') == pytest.approx(4.0)
+    assert g.total('2026-11') == pytest.approx(1.0)
+    assert g.total('2026-10') == pytest.approx(4.0)
+
+
+def test_el_aviso_del_mes_sale_una_vez_en_todo_el_mac(tmp_path):
+    dichos = []
+    GastoMensual(tmp_path).apuntar('otra', 0.85)
+    una = Presupuesto(tmp_path, {'id': 'a'}, mes=1, aviso=lambda t, d: dichos.append(d))
+    otra = Presupuesto(tmp_path, {'id': 'b'}, mes=1, aviso=lambda t, d: dichos.append(d))
+    una.sumar(una.task, 0.01)
+    otra.sumar(otra.task, 0.01)
+    assert [d.get('aviso') for d in dichos] == ['mes']

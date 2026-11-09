@@ -12,6 +12,9 @@ struct GeneralSettings: View {
     @State private var searxngURL = ""
     @State private var sessionBudgetText = ""
     @State private var monthlyBudgetText = ""
+    @FocusState private var budgetFocus: BudgetField?
+
+    private enum BudgetField { case session, month }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -48,8 +51,8 @@ struct GeneralSettings: View {
                           + "al llegar, el turno se detiene antes de pedir otra respuesta al modelo. Lo de los "
                           + "subagentes cuenta para su sesión. Los modelos locales, de plan o de Alfalfa Cloud con "
                           + "cortesía no gastan. Vacío: sin tope.") {
-                budgetField("Por sesión", text: $sessionBudgetText) { model.sessionBudget = $0 }
-                budgetField("Al mes, en este Mac", text: $monthlyBudgetText) { model.monthlyBudget = $0 }
+                budgetField("Por sesión", text: $sessionBudgetText, field: .session) { model.sessionBudget = $0 }
+                budgetField("Al mes, en este Mac", text: $monthlyBudgetText, field: .month) { model.monthlyBudget = $0 }
                 if let spent = model.monthSpent {
                     Text("Este mes: " + spent.text).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 }
@@ -114,21 +117,27 @@ struct GeneralSettings: View {
         }
     }
 
-    /// «Por sesión  [ 5 ] $»: vale al escribir (también en las sesiones abiertas); vacío o 0 quita el tope.
-    private func budgetField(_ label: String, text: Binding<String>, apply: @escaping (Double?) -> Void) -> some View {
-        let value = text.wrappedValue.trimmingCharacters(in: .whitespaces)
-        let invalid = !value.isEmpty && value != "0" && BudgetFormat.parse(value) == nil
+    /// «Por sesión  [ 5 ] $»: vale al confirmar (Intro) o al salir del campo, nunca a media escritura
+    /// (escribir «15» no pasa por un tope de 1 $), y también en las sesiones abiertas. Vacío o 0, sin tope.
+    private func budgetField(_ label: String, text: Binding<String>, field: BudgetField,
+                             apply: @escaping (Double?) -> Void) -> some View {
+        let invalid = BudgetFormat.entry(text.wrappedValue) == .invalid
+        func commit() {
+            switch BudgetFormat.entry(text.wrappedValue) {
+            case .noCap: apply(nil)
+            case let .amount(value): apply(value)
+            case .invalid: break
+            }
+        }
         return HStack(spacing: 8) {
             Text(label).frame(width: 140, alignment: .leading)
             TextField("Sin tope", text: text).textFieldStyle(.roundedBorder).frame(width: 90)
                 .multilineTextAlignment(.trailing)
+                .focused($budgetFocus, equals: field)
+                .onSubmit(commit)
+                .onChange(of: budgetFocus) { old, new in if old == field && new != field { commit() } }
+                .onDisappear(perform: commit)
                 .accessibilityLabel("Presupuesto " + label.lowercased() + " en dólares")
-                .onChange(of: text.wrappedValue) { _, new in
-                    let clean = new.trimmingCharacters(in: .whitespaces)
-                    if clean.isEmpty || clean == "0" { apply(nil) } else if let amount = BudgetFormat.parse(clean) {
-                        apply(amount)
-                    }
-                }
             Text("$").foregroundStyle(Theme.secondary)
             if invalid {
                 Text("Escribe un importe, como 5 o 12,50").font(.system(size: 11.5)).foregroundStyle(Theme.danger)

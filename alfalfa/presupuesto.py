@@ -151,24 +151,57 @@ class GastoMensual:
             self._mes, self._leido, self._total, self._resto = mes, 0, 0.0, b''
         try:
             fd = os.open(self._archivo(mes), os.O_RDONLY | os.O_NOFOLLOW)
-        except OSError:  # aún no hay gasto este mes
+        except OSError:  # aún no hay gasto este mes, o se borró el registro
+            self._leido, self._total, self._resto = 0, 0.0, b''
             return self._total
         with os.fdopen(fd, 'rb') as archivo:
+            if os.fstat(archivo.fileno()).st_size < self._leido:
+                # Lo vaciaron o lo cambiaron por otro: se vuelve a leer entero.
+                self._leido, self._total, self._resto = 0, 0.0, b''
             archivo.seek(self._leido)
             nuevo = archivo.read()
         self._leido += len(nuevo)
-        datos = self._resto + nuevo
-        lineas = datos.split(b'\n')
+        lineas = nuevo.split(b'\n')
+        resto, self._resto = self._resto, b''
+        if resto:
+            # La línea que quedó a medias se completa con el principio de lo nuevo; si así no es
+            # válida (quien la escribía no la terminó), vale sólo el trozo nuevo.
+            unida = resto + lineas[0]
+            lineas[0] = unida if len(lineas) == 1 or self._usd(unida) is not None else lineas[0]
         # Una línea a medio escribir por otra sesión se termina de leer la próxima vez.
         self._resto = lineas.pop()
         for linea in lineas:
-            try:
-                usd = json.loads(linea).get('usd')
-            except (ValueError, AttributeError):
-                continue
-            if isinstance(usd, (int, float)) and not isinstance(usd, bool) and math.isfinite(usd) and usd > 0:
+            usd = self._usd(linea)
+            if usd is not None:
                 self._total += usd
         return self._total
+
+    @staticmethod
+    def _usd(linea):
+        try:
+            usd = json.loads(linea).get('usd')
+        except (ValueError, AttributeError):
+            return None
+        if isinstance(usd, (int, float)) and not isinstance(usd, bool) and math.isfinite(usd) and usd > 0:
+            return usd
+        return None
+
+    def avisado(self, clave, mes=None):
+        """¿Ya se avisó este mes (en cualquier sesión) del 80 % de este tope?"""
+        try:
+            return clave in (self.carpeta / ((mes or mes_actual()) + '.avisos')).read_text().splitlines()
+        except OSError:
+            return False
+
+    def marcar_aviso(self, clave, mes=None):
+        try:
+            self.carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
+            fd = os.open(self.carpeta / ((mes or mes_actual()) + '.avisos'),
+                         os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, 'a') as archivo:
+                archivo.write(clave + '\n')
+        except OSError:
+            pass
 
     def apuntar(self, sesion, usd, ahora=None):
         """Una línea por petición con coste; un fallo al escribir no corta el turno."""
@@ -190,8 +223,14 @@ class Presupuesto:
     """Los topes de una sesión y lo gastado. Los subagentes usan el de su sesión: lo que
     gastan suma a ella (`coste_usd`, `cache`) y cuenta para sus topes.
 
-    `aviso(texto, datos)` dice al usuario el aviso del 80 % y el corte; `datos` es el
-    estado del presupuesto con `aviso` o `agotado`."""
+    Antes de cada petición con precio, `reservar` mira lo gastado más lo que costará la
+    entrada de esa petición (estimada) y lo ya reservado por las que están en marcha
+    (subagentes en paralelo). Lo que no se puede estimar es la salida: un turno puede
+    pasarse del tope, como mucho, lo que cueste la última respuesta.
+
+    `aviso(texto, datos)` dice al usuario el aviso del 80 % (`datos` con `aviso`) y avisa
+    a la app del corte (`agotado`); el texto del corte va en el error, que es el resumen
+    del turno."""
 
     def __init__(self, home, task, sesion=None, mes=None, aviso=None):
         self.task = task
@@ -199,6 +238,7 @@ class Presupuesto:
         self.sesion = importe(sesion) if sesion is not None else _de_entorno(ENTORNO_SESION)
         self.mes = importe(mes) if mes is not None else _de_entorno(ENTORNO_MES)
         self.aviso = aviso
+        self._reservas = {}
 
     def cambiar(self, sesion=_SIN_CAMBIO, mes=_SIN_CAMBIO):
         """Desde Ajustes de la app (`presupuesto` por --stdio): vale ya, también a mitad de turno."""
@@ -206,6 +246,10 @@ class Presupuesto:
             self.sesion = importe(sesion)
         if mes is not _SIN_CAMBIO:
             self.mes = importe(mes)
+
+    @property
+    def con_tope(self):
+        return bool(self.sesion or self.mes)
 
     def gastado_sesion(self):
         coste = self.task.get('coste_usd')
@@ -226,7 +270,7 @@ class Presupuesto:
     def para_el_cliente(self):
         """El estado si hay algo que enseñar (un tope, gasto este mes o caché); None si no."""
         datos = self.estado()
-        if self.sesion or self.mes or datos['mes']['gastado'] > 0 or 'cache' in datos:
+        if self.con_tope or datos['mes']['gastado'] > 0 or 'cache' in datos:
             return datos
         return None
 
@@ -243,47 +287,68 @@ class Presupuesto:
     def _avisar_si_toca(self):
         avisados = self.task.get('presupuesto_avisos')
         avisados = avisados if isinstance(avisados, list) else []
-        for cual, tope, gastado, clave in (
-                ('sesion', self.sesion, self.gastado_sesion, lambda t: 'sesion:' + repr(t)),
-                ('mes', self.mes, self.gastado_mes, lambda t: 'mes:' + mes_actual() + ':' + repr(t))):
-            if not tope:
-                continue
-            valor = gastado()
-            if valor < tope * AVISO_AL or valor >= tope or clave(tope) in avisados:
-                continue
-            avisados.append(clave(tope))
-            self.task['presupuesto_avisos'] = avisados[-20:]
-            nombre = 'de esta sesión' if cual == 'sesion' else 'del mes en este Mac'
-            texto = ('Llevas ' + dolares(valor) + ' de ' + dolares(tope) + ' del presupuesto ' + nombre + ' ('
-                     + str(int(valor * 100 // tope)) + ' %). Al llegar al tope el turno se detendrá antes de la '
-                     'siguiente petición al modelo.')
-            self._decir(texto, dict(self.estado(), aviso=cual))
-
-    def agotado(self):
-        """(texto, cual) si algún tope se alcanzó; None si se puede seguir."""
         for cual, tope, gastado in (('sesion', self.sesion, self.gastado_sesion),
                                     ('mes', self.mes, self.gastado_mes)):
             if not tope:
                 continue
             valor = gastado()
+            if valor < tope * AVISO_AL or valor >= tope:
+                continue
+            clave = cual + ':' + repr(tope)
+            # El de la sesión, una vez por sesión; el del mes, una vez al mes en este Mac.
+            if clave in avisados if cual == 'sesion' else self.registro.avisado(clave):
+                continue
+            if cual == 'sesion':
+                avisados.append(clave)
+                self.task['presupuesto_avisos'] = avisados[-20:]
+            else:
+                self.registro.marcar_aviso(clave)
+            nombre = 'de esta sesión' if cual == 'sesion' else 'del mes en este Mac'
+            texto = ('Llevas ' + dolares(valor) + ' de ' + dolares(tope) + ' del presupuesto ' + nombre + ' ('
+                     + str(int(valor * 100 // tope)) + ' %). Al llegar al tope se detendrá antes de la '
+                     'siguiente petición al modelo.')
+            self._decir(texto, dict(self.estado(), aviso=cual))
+
+    def agotado(self, estimado=0.0, clave=None):
+        """(texto, cual) si lo gastado, más lo reservado por otras peticiones en marcha y lo que
+        costará esta (`estimado`), pasa de algún tope; None si se puede seguir."""
+        otras = sum(v for k, v in self._reservas.items() if k != clave)
+        for cual, tope, gastado in (('sesion', self.sesion, self.gastado_sesion),
+                                    ('mes', self.mes, self.gastado_mes)):
+            if not tope:
+                continue
+            valor = gastado()
+            que = 'El presupuesto de esta sesión' if cual == 'sesion' else 'El presupuesto del mes en este Mac'
+            como = (' Para seguir, sube el tope (' + COMO_SUBIR[cual] + ') o cambia a un modelo sin coste por '
+                    'token (local o de plan).')
             if valor >= tope:
-                que = ('El presupuesto de esta sesión' if cual == 'sesion'
-                       else 'El presupuesto del mes en este Mac')
-                texto = (que + ' se agotó: se gastaron ' + dolares(valor) + ' de ' + dolares(tope) + '. El turno '
-                         'se detuvo antes de la siguiente petición al modelo. Para seguir, sube el tope ('
-                         + COMO_SUBIR[cual] + ') o cambia a un modelo sin coste por token (local o de plan).')
-                return texto, cual
+                return (que + ' se agotó: se gastaron ' + dolares(valor) + ' de ' + dolares(tope) + '. Se detuvo '
+                        'antes de la siguiente petición al modelo.' + como), cual
+            if valor + otras + estimado > tope:
+                return (que + ' no alcanza para la siguiente petición al modelo: se gastaron ' + dolares(valor)
+                        + ' de ' + dolares(tope) + (' (' + dolares(otras) + ' más en peticiones en marcha)'
+                                                    if otras > 0 else '')
+                        + ' y su entrada costaría unos ' + dolares(estimado) + '. Se detuvo antes de pedirla.'
+                        + como), cual
         return None
 
-    def comprobar(self, decir=True):
-        """Antes de cada petición a un modelo con precio: PresupuestoAgotado si no queda.
-        Un subagente no lo dice (`decir=False`): lo dice la sesión al pararse ella."""
-        agotado = self.agotado()
+    def reservar(self, clave, estimado=0.0):
+        """Antes de una petición con precio: PresupuestoAgotado si no alcanza; si alcanza, aparta
+        `estimado` hasta `liberar(clave)`."""
+        agotado = self.agotado(estimado, clave)
         if agotado:
             texto, cual = agotado
-            if decir:
-                self._decir(texto, dict(self.estado(), agotado=cual))
+            self._decir(texto, dict(self.estado(), agotado=cual))
             raise PresupuestoAgotado(texto, cual)
+        if estimado > 0:
+            self._reservas[clave] = estimado
+
+    def liberar(self, clave):
+        self._reservas.pop(clave, None)
+
+    def comprobar(self):
+        """Sin petición concreta (al empezar un turno): PresupuestoAgotado si un tope ya se alcanzó."""
+        self.reservar(None, 0.0)
 
     def _decir(self, texto, datos):
         if callable(self.aviso):

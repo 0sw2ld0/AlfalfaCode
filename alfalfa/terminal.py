@@ -325,8 +325,14 @@ class TerminalManager:
                   '(ALFALFA_MANTENER_DESPIERTO=0 lo apaga).', flush=True)
 
     def _aviso_presupuesto(self, texto, datos):
-        """El aviso del 80 % y el corte: en la conversación y, para la app, el evento `presupuesto`."""
-        self.event(self.task, 'system', texto)
+        """Un solo camino por aviso. El corte (`agotado`) ya lo dice el resumen del turno (o «No se
+        compactó: …»): aquí sólo va el evento `presupuesto` para el panel. El 80 % queda en la
+        conversación; con la app, sin emitirlo, porque ella lo pinta del evento `presupuesto`."""
+        if datos.get('agotado'):
+            if self.transport is not None:
+                self.transport.emit('presupuesto', **datos)
+            return
+        self.event(self.task, 'system', texto, emitir=self.transport is None)
         if self.transport is not None:
             self.transport.emit('presupuesto', **datos)
 

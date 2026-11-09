@@ -79,7 +79,9 @@ final class BudgetTests: XCTestCase {
                        #"{"mes":12.5,"sesion":null,"tipo":"presupuesto"}"# + "\n")
         XCTAssertEqual(Launcher.stdioArguments(task: "x", resume: nil, model: nil, effort: nil, readOnly: false,
                                                budget: 5, monthlyBudget: 12.5),
-                       ["--stdio", "--presupuesto", "5", "--presupuesto-mes", "12.50", "--", "x"])
+                       ["--stdio", "--presupuesto", "5", "--presupuesto-mes", "12.5", "--", "x"])
+        // Sin redondear: lo mismo que manda la orden en vivo.
+        XCTAssertEqual(BudgetFormat.argument(12.345), "12.345")
         XCTAssertEqual(Launcher.stdioArguments(task: "x", resume: nil, model: nil, effort: nil, readOnly: false,
                                                budget: 0),
                        ["--stdio", "--", "x"])
@@ -92,6 +94,13 @@ final class BudgetTests: XCTestCase {
         XCTAssertNil(BudgetFormat.parse("0"))
         XCTAssertNil(BudgetFormat.parse("mucho"))
         XCTAssertNil(BudgetFormat.parse("-2"))
+        // El campo: vacío o cualquier cero quita el tope; lo que no es un importe no cambia nada.
+        for zero in ["", "  ", "0", "0,00", "0.0", "0 $"] { XCTAssertEqual(BudgetFormat.entry(zero), .noCap, zero) }
+        XCTAssertEqual(BudgetFormat.entry("15"), .amount(15))
+        XCTAssertEqual(BudgetFormat.entry("1,5"), .amount(1.5))
+        XCTAssertEqual(BudgetFormat.entry("1,"), .amount(1), "a medias vale 1, por eso se aplica al confirmar")
+        XCTAssertEqual(BudgetFormat.entry("mucho"), .invalid)
+        XCTAssertEqual(BudgetFormat.entry("-2"), .invalid)
         XCTAssertEqual(BudgetFormat.field(12.5), "12,50")
         XCTAssertEqual(BudgetFormat.field(5), "5")
         XCTAssertEqual(BudgetFormat.field(nil), "")

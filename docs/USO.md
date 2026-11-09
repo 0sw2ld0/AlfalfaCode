@@ -142,9 +142,10 @@ Presupuesto: `--presupuesto USD` y `--presupuesto-mes USD` (o `ALFALFA_PRESUPUES
 ```
 
 al abrir la sesión y al acabar cada turno si hay un tope, gasto este mes o caché; al
-cambiar los topes; con `aviso` al pasar del 80 %, y con `agotado` cuando un tope
-detiene el turno. Ese turno termina con `estado: "blocked"` y el motivo en `resumen`.
-También lleva `cache` si la hay.
+cambiar los topes; con `aviso` al pasar del 80 % (el texto del aviso no llega además
+como `evento`: queda en la transcripción), y con `agotado` cuando un tope detiene una
+petición. El turno termina con `estado: "blocked"` y el motivo en `resumen`, que es el
+único texto del corte. También lleva `cache` si la hay.
 
 Proveedores (las claves y el código se leen por la entrada estándar, nunca en los
 argumentos):
