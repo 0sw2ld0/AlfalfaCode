@@ -90,19 +90,31 @@ def abrir_turno(task, mensaje, desde):
     return turno
 
 
-def cerrar_turno(task, ident, estado, hasta, cierre=None):
+def gasto_del_turno(task, tokens_antes, coste_antes):
+    """{tokens, coste?} gastados desde (tokens_antes, coste_antes); el coste sólo si hay precio."""
+    gasto = {'tokens': max(0, (task.get('total_tokens') or 0) - (tokens_antes or 0))}
+    coste = task.get('coste_usd')
+    if isinstance(coste, (int, float)) and not isinstance(coste, bool):
+        gasto['coste'] = max(0.0, coste - (coste_antes or 0.0))
+    return gasto
+
+
+def cerrar_turno(task, ident, estado, hasta, cierre=None, gasto=None):
     """Por id: la limpieza de secretos del transporte sustituye los dicts de task."""
     for turno in task.get('turnos', []):
         if isinstance(turno, dict) and turno.get('id') == ident:
             turno.update(fin=time.time(), estado=estado, hasta=hasta)
             if cierre:
                 turno['cierre'] = cierre
+            if gasto:
+                turno.update(gasto)
     task.pop('turno_actual', None)
 
 
 def turnos(task):
     return [dict(id=t['id'], mensaje=t.get('mensaje', ''), estado=t.get('estado'), inicio=t.get('inicio'),
-                 fin=t.get('fin')) for t in task.get('turnos', []) if isinstance(t, dict) and 'id' in t]
+                 fin=t.get('fin'), **{k: t[k] for k in ('tokens', 'coste') if isinstance(t.get(k), (int, float))})
+            for t in task.get('turnos', []) if isinstance(t, dict) and 'id' in t]
 
 
 def _privada(path):

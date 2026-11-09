@@ -1,7 +1,8 @@
 """Claves de los proveedores en el Llavero de macOS, nunca en texto plano.
 
 Se guardan como contraseñas genéricas del servicio `AlfalfaCode`, una cuenta por
-proveedor (`ollama`, `openai`, `alfalfa`). La orden `security` del sistema las
+proveedor (`ollama`, `openai`, `alfalfa` y el id de cada compatible con OpenAI,
+como `openrouter`). La orden `security` del sistema las
 lee y las escribe, así que la terminal y la app de Mac comparten las mismas sin
 que el Llavero pregunte a cada uso. El secreto nunca va en los argumentos de la
 orden (se verían con `ps`): se le pasa por la entrada estándar de `security -i`.
@@ -41,8 +42,12 @@ def _security():
     return shutil.which('security') or '/usr/bin/security'
 
 
+# Los compatibles con OpenAI del catálogo guardan su clave con su id (`openrouter`).
+_CUENTA = re.compile(r'^[a-z0-9][a-z0-9-]{0,63}$')
+
+
 def _cuenta(cuenta):
-    if cuenta not in CUENTAS:
+    if cuenta not in CUENTAS and not (isinstance(cuenta, str) and _CUENTA.fullmatch(cuenta)):
         raise ValueError('Proveedor desconocido para el Llavero: ' + str(cuenta))
     return cuenta
 

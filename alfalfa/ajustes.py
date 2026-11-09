@@ -76,6 +76,23 @@ def openai_clave():
     return os.getenv('OPENAI_API_KEY') or llavero.leer('openai')
 
 
+def clave_compatible(proveedor):
+    """Clave de un proveedor compatible con OpenAI del catálogo (OpenRouter, OpenCode Zen…).
+
+    La guardada en el Llavero para ese proveedor. OpenRouter y OpenCode Zen leen
+    antes su variable estándar (`OPENROUTER_API_KEY`, `OPENCODE_API_KEY`); los demás
+    no leen variables, porque el nombre viene de un catálogo externo.
+    """
+    from .proveedores import configuracion, llavero
+    from .proveedores.compatible import CONOCIDOS
+    variable = CONOCIDOS.get(proveedor, {}).get('env')
+    if variable and os.getenv(variable):
+        return os.getenv(variable)
+    if proveedor not in CONOCIDOS and configuracion.de(proveedor).get('guardada') is not True:
+        return None
+    return llavero.leer(proveedor)
+
+
 def alfalfa_codigo():
     """Código de cortesía del servicio Alfalfa: `ALFALFA_CODIGO` o el guardado al activarlo."""
     from .proveedores import llavero

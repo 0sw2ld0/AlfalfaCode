@@ -391,6 +391,7 @@ async def run(args, transport):
                            resumen=manager.task.get('summary', ''), codigo_salida=code,
                            tokens=manager.task.get('total_tokens', 0),
                            **({'turno': ultimo['id']} if ultimo.get('id') else {}),
+                           **gasto(manager.task, ultimo),
                            **({'cierre': manager.task['cierre']} if manager.task.get('cierre') else {}))
             # Un «compactar» que llegó tras la última respuesta del turno se hace ya.
             if transport.compact_pending:
@@ -420,8 +421,22 @@ async def run(args, transport):
         if code == 1:
             transport.emit('error', texto='La sesión no terminó correctamente.')
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
-                       codigo_salida=code, tokens=task.get('total_tokens', 0))
+                       codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
     return code
+
+
+def gasto(task, turno=None):
+    """`coste` de la sesión en USD (estimado con los precios de models.dev) y, de un turno,
+    `tokens_turno` y `coste_turno`. Sin precio conocido no aparece ningún coste."""
+    datos = {}
+    if isinstance(task.get('coste_usd'), (int, float)) and not isinstance(task.get('coste_usd'), bool):
+        datos['coste'] = round(task['coste_usd'], 6)
+    if isinstance(turno, dict):
+        if isinstance(turno.get('tokens'), int):
+            datos['tokens_turno'] = turno['tokens']
+        if isinstance(turno.get('coste'), (int, float)) and not isinstance(turno.get('coste'), bool):
+            datos['coste_turno'] = round(turno['coste'], 6)
+    return datos
 
 
 def sessions():
@@ -440,7 +455,7 @@ def sessions():
                            estado=task['status'], modelo=task['model'], esfuerzo=task['effort'],
                            modo=task.get('modo') or 'auto',
                            fecha=task.get('updated_at', path.stat().st_mtime), tokens=task.get('total_tokens', 0),
-                           turnos=len(task.get('turnos') or []))
+                           turnos=len(task.get('turnos') or []), **gasto(task))
                 if task.get('bifurcada_de'):
                     row['bifurcada_de'] = task['bifurcada_de']
                 if task.get('padre'):
@@ -620,8 +635,9 @@ def history(ident):
     if isinstance(task.get('context_tokens'), int) and isinstance(task.get('context_limit'), int):
         from .terminal import desglose_de
         extra['contexto'] = dict(tokens=task['context_tokens'], limite=task['context_limit'], **desglose_de(task))
+    ultimo = turnos[-1] if turnos else None
     return dict(eventos=eventos[-MAX_HISTORIAL:], recortado=len(eventos) > MAX_HISTORIAL,
-                tokens=task.get('total_tokens') or 0, **extra)
+                tokens=task.get('total_tokens') or 0, **gasto(task, ultimo), **extra)
 
 
 def check_command(argv):

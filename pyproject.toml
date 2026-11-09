@@ -32,6 +32,7 @@ include = ["alfalfa*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.sbpl", "*.swift", "LICENSE", "NOTICE"]
+"alfalfa.catalogo" = ["minimo.json"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

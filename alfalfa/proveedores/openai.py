@@ -176,15 +176,27 @@ def traducir_respuesta(datos, modelo):
         respuesta['prompt_eval_count'] = uso['input_tokens']
     if isinstance(uso.get('output_tokens'), int):
         respuesta['eval_count'] = uso['output_tokens']
+    detalle = uso.get('input_tokens_details') if isinstance(uso.get('input_tokens_details'), dict) else {}
+    if isinstance(detalle.get('cached_tokens'), int):
+        respuesta['alfalfa_cache'] = detalle['cached_tokens']
     return respuesta
 
 
 def mostrar(modelo):
-    """Lo que `/api/show` diría del modelo: capacidades y ventana."""
-    ficha = CATALOGO.get(modelo, {'ventana': 128000, 'vision': False})
+    """Lo que `/api/show` diría del modelo: capacidades y ventana.
+
+    Lo propio (`CATALOGO`) manda; para otros modelos, lo que diga models.dev.
+    """
+    from .. import catalogo
+    externa = catalogo.ficha('openai', modelo) or {}
+    ficha = CATALOGO.get(modelo) or {'ventana': externa.get('ventana') or 128000,
+                                     'vision': bool(externa.get('vision'))}
     capacidades = ['completion', 'tools', 'thinking'] + (['vision'] if ficha.get('vision') else [])
-    return {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
+    info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'gpt'}, 'model_info': {'openai.context_length': ficha['ventana']}}
+    if externa:
+        info['catalogo'] = externa
+    return info
 
 
 def _json(estado, valor, cabeceras=None):
@@ -252,6 +264,13 @@ class OpenAI(Proveedor):
         from .. import ajustes
         return ajustes.openai_clave()
 
+    def ficha(self, modelo):
+        from .. import catalogo
+        return catalogo.ficha('openai', modelo)
+
+    def precio(self, modelo):
+        return (self.ficha(modelo) or {}).get('precio')
+
     def configurado(self):
         return bool(self.clave())
 
@@ -274,8 +293,15 @@ class OpenAI(Proveedor):
         from . import configuracion
         extra = [m for m in configuracion.de('openai').get('modelos') or [] if isinstance(m, str)]
         nombres = list(CATALOGO) + [m for m in extra if m not in CATALOGO]
-        return [{'name': 'openai/' + m, 'model': 'openai/' + m, 'proveedor': self.id,
-                 'nombre': CATALOGO.get(m, {}).get('nombre', m)} for m in nombres]
+        from .. import catalogo
+        filas = []
+        for m in nombres:
+            resumen = catalogo.resumen(self.ficha(m))
+            if m in CATALOGO:
+                resumen['ventana'] = CATALOGO[m]['ventana']
+            filas.append({'name': 'openai/' + m, 'model': 'openai/' + m, 'proveedor': self.id,
+                          'nombre': CATALOGO.get(m, {}).get('nombre', m), **resumen})
+        return filas
 
     def estado(self):
         return dict(super().estado(), clave=self.configurado())

@@ -52,12 +52,37 @@ class Ollama(Proveedor):
         return httpx.AsyncClient(base_url=self.url(), headers=self.cabeceras(), timeout=timeout,
                                  trust_env=False)
 
+    def ficha(self, modelo):
+        """La de Ollama Cloud en el catálogo, para los modelos de la nube; los locales no tienen."""
+        from .. import catalogo
+        nombre = str(modelo or '')
+        try:
+            host = urlparse(self.url()).hostname or ''
+        except ValueError:
+            host = ''
+        nube = nombre.endswith('cloud') or host == 'ollama.com' or host.endswith('.ollama.com')
+        return catalogo.ficha('ollama-cloud', nombre) if nube else None
+
     def modelos(self):
+        from .. import catalogo
+        from . import con_prefijo
         with cliente_de_lista() as cliente:
             respuesta = cliente.get(self.url() + '/api/tags', headers=self.cabeceras())
             respuesta.raise_for_status()
             filas = respuesta.json()['models']
-        return [dict(fila, proveedor=self.id, nombre=fila.get('name', '')) for fila in filas]
+        resultado = []
+        for fila in filas:
+            nombre = fila.get('name', '')
+            # Ollama Cloud se paga con su plan: del catálogo sólo se toma la ventana.
+            resumen = {k: v for k, v in catalogo.resumen(self.ficha(nombre)).items() if k != 'precio'}
+            # Lo que dice Ollama manda sobre el catálogo.
+            propia = (fila.get('details') or {}).get('context_length') if isinstance(fila.get('details'), dict) \
+                else None
+            if type(propia) is int and propia > 0:
+                resumen['ventana'] = propia
+            resultado.append(dict(fila, name=con_prefijo(self.id, nombre), proveedor=self.id, nombre=nombre,
+                                  **resumen))
+        return resultado
 
     def estado(self):
         from .. import ajustes

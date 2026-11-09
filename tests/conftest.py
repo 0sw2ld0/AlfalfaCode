@@ -2,7 +2,7 @@ import os
 
 # La suite no debe heredar el entorno de quien la corre: una sesión de
 # AlfalfaCode exporta su hogar, su Ollama y sus referencias.
-for _nombre in [n for n in os.environ if n.startswith(('ALFALFA_', 'OLLAMA_', 'OPENAI_'))]:
+for _nombre in [n for n in os.environ if n.startswith(('ALFALFA_', 'OLLAMA_', 'OPENAI_', 'OPENROUTER_', 'OPENCODE_'))]:
     del os.environ[_nombre]
 
 
@@ -16,6 +16,21 @@ def _sin_llavero_ni_proveedores_del_usuario(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(llavero, '_almacen', {})
     monkeypatch.setattr(llavero, '_leidos', {})
     monkeypatch.setattr(configuracion, '_casa', tmp_path_factory.mktemp('alfalfa'))
+
+
+@pytest.fixture(autouse=True)
+def _catalogo_sin_red(monkeypatch):
+    """El catálogo de models.dev nunca se baja en la suite: sin copia guardada vale la del paquete.
+    Las pruebas del catálogo ponen su propio `_descargar` con un catálogo falso."""
+    from alfalfa import catalogo
+
+    def sin_red():
+        raise OSError('sin red en las pruebas')
+
+    monkeypatch.setattr(catalogo, '_descargar', sin_red)
+    catalogo.olvidar()
+    yield
+    catalogo.olvidar()
 
 
 @pytest.fixture(autouse=True)

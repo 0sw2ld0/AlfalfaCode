@@ -687,10 +687,16 @@ class NativeRuntime:
         from ... import proveedores
         proveedor, model = proveedores.para_modelo(self.task.get('model'))
         if not proveedor.configurado():
-            raise ValueError('El proveedor ' + proveedor.nombre + ' no está configurado: '
-                             'añade su clave o su código en Proveedores.')
+            raise ValueError(proveedor.falta())
         self._proveedor = proveedor
         self.task['provider'] = proveedor.id
+        # Del catálogo de models.dev: el precio para el coste estimado (sólo de quien
+        # cobra por token) y la ficha para la ventana y la salida si el proveedor no las da.
+        try:
+            self._precio = proveedor.precio(model)
+            self._ficha = proveedor.ficha(model)
+        except Exception:
+            self._precio = self._ficha = None
         aviso = getattr(self.manager, 'cuota', None)
         return proveedor, model, proveedor.cliente(
             timeout, tarea=self.task, al_cambiar_cuota=(lambda filas: aviso(self.task, proveedor.id, filas))
@@ -1226,12 +1232,30 @@ class NativeRuntime:
         self.task['runtime_token_reservation'] = {'key': reservation_key, 'tokens': reserva}
         return salida
 
+    def _salida_del_catalogo(self, info):
+        """La salida máxima del modelo según models.dev, o None."""
+        ficha = info.get('catalogo') if isinstance(info.get('catalogo'), dict) else getattr(self, '_ficha', None)
+        tope = (ficha or {}).get('salida')
+        return tope if type(tope) is int and tope > 0 else None
+
+    def _record_cost(self, response):
+        """Suma a la sesión los tokens de entrada y de salida y, con precio del catálogo, el coste."""
+        from ... import catalogo
+        entrada, salida = response['prompt_eval_count'], response['eval_count']
+        cache = response.get('alfalfa_cache') if type(response.get('alfalfa_cache')) is int else 0
+        self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
+        self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
+        coste = catalogo.coste(getattr(self, '_precio', None), entrada, salida, cache)
+        if coste is not None:
+            self.task['coste_usd'] = (self.task.get('coste_usd') or 0.0) + coste
+
     def _record_response_usage(self, response, payload, attempt=0, purpose='chat'):
         exact = (type(response.get('prompt_eval_count')) is int and response['prompt_eval_count'] >= 0
                  and type(response.get('eval_count')) is int and response['eval_count'] >= 0)
         if exact:
             tokens = response['prompt_eval_count'] + response['eval_count']
             source = 'ollama.prompt_eval_count+eval_count'
+            self._record_cost(response)
         else:
             # Upper bound by UTF-8 bytes: no tokenizer metadata was returned.
             # This deliberately overcounts multibyte text and is visible in the ledger.
@@ -1441,6 +1465,12 @@ class NativeRuntime:
         """Ventana de contexto del modelo y tope de caracteres, como al empezar un turno."""
         limits = [v for k, v in info.get('model_info', {}).items()
                   if k.endswith('.context_length') and type(v) is int and v > 0]
+        if not limits:
+            # Lo del proveedor manda; si no la da, la ventana del catálogo de models.dev.
+            ficha = info.get('catalogo') if isinstance(info.get('catalogo'), dict) else getattr(self, '_ficha', None)
+            ventana = (ficha or {}).get('ventana')
+            if type(ventana) is int and ventana > 0:
+                limits = [ventana]
         # Un modelo cloud no gasta la memoria de este Mac: los techos de 32k
         # de contexto y 4096 de respuesta eran para modelos locales, y a GLM
         # le cortaban las revisiones que en VS Code termina sin problema.
@@ -2218,6 +2248,10 @@ class NativeRuntime:
                     # gasta memoria del Mac, y con 4 096 cualquier modelo nuevo que razona
                     # se cortaba hasta tener perfil propio.
                     salida = TOPE_NUBE
+                tope_catalogo = self._salida_del_catalogo(info)
+                if tope_catalogo:
+                    # Pedir más salida de la que el modelo admite lo rechaza el proveedor.
+                    salida = min(salida, tope_catalogo)
                 opciones = {'num_ctx':context_tokens, **perfil(model).get('options', {}),
                             'num_predict':salida}
                 payload = {'model':model, 'messages':self._con_imagenes(context, info), 'stream':False,

@@ -92,8 +92,9 @@ def test_el_llavero_rechaza_claves_raras():
     for mala in ('', 'corta', 'con espacio dentro', 'con"comillas"largas', 'barra\\dentro-larga'):
         with pytest.raises(ValueError):
             llavero.guardar('openai', mala)
-    with pytest.raises(ValueError):
-        llavero.guardar('otro', 'sk-valida-123')
+    for cuenta in ('Otro', 'con/barra', '-guion', '', None):
+        with pytest.raises(ValueError):
+            llavero.guardar(cuenta, 'sk-valida-123')
 
 
 def test_el_llavero_real_no_pone_el_secreto_en_los_argumentos(monkeypatch):
@@ -138,8 +139,14 @@ def _tags(filas):
 def test_ollama_lista_sus_modelos_con_su_proveedor(monkeypatch):
     monkeypatch.setattr(ollama, 'cliente_de_lista', _tags([{'name': 'glm-5.3-flash:cloud', 'size': 1}]))
     filas = ollama.Ollama().modelos()
-    assert filas == [{'name': 'glm-5.3-flash:cloud', 'size': 1, 'proveedor': 'ollama',
-                      'nombre': 'glm-5.3-flash:cloud'}]
+    assert {k: filas[0][k] for k in ('name', 'size', 'proveedor', 'nombre')} == {
+        'name': 'glm-5.3-flash:cloud', 'size': 1, 'proveedor': 'ollama', 'nombre': 'glm-5.3-flash:cloud'}
+    # La ventana de Ollama Cloud sale del catálogo; el precio no, porque Ollama Cloud se paga con su plan.
+    assert filas[0]['ventana'] == 1000000 and 'precio' not in filas[0]
+    # Si Ollama da su ventana, manda la suya.
+    monkeypatch.setattr(ollama, 'cliente_de_lista', _tags([{'name': 'glm-5.3-flash:cloud',
+                                                           'details': {'context_length': 202752}}]))
+    assert ollama.Ollama().modelos()[0]['ventana'] == 202752
 
 
 class _Falla(proveedores.Proveedor):
@@ -153,7 +160,7 @@ def test_un_proveedor_que_falla_no_esconde_a_los_demas(monkeypatch):
     monkeypatch.setattr(ollama, 'cliente_de_lista', _tags([{'name': 'm'}]))
     monkeypatch.setattr(proveedores, 'disponibles', lambda: [ollama.Ollama(), _Falla()])
     modelos, fallos = proveedores.listar_modelos()
-    assert [m['name'] for m in modelos] == ['m']
+    assert [m['name'] for m in modelos if not m.get('gratis')] == ['m']
     assert fallos == {'openai': 'No se pudo consultar OpenAI.'}
 
 

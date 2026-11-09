@@ -1,0 +1,3903 @@
+{
+ "fecha": 1794182120,
+ "fuente": "https://models.dev/api.json",
+ "proveedores": {
+  "nvidia": {
+   "api": "https://integrate.api.nvidia.com/v1",
+   "doc": "https://docs.api.nvidia.com/nim",
+   "env": [
+    "NVIDIA_API_KEY"
+   ],
+   "id": "nvidia",
+   "modelos": {
+    "deepseek-ai/deepseek-v4.1-flash": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "none",
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-09-10",
+     "herramientas": true,
+     "id": "deepseek-ai/deepseek-v4.1-flash",
+     "nombre": "DeepSeek V4.1 Flash",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 384000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "google/diffusiongemma-26b-a4b-it": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-06-09",
+     "herramientas": true,
+     "id": "google/diffusiongemma-26b-a4b-it",
+     "nombre": "DiffusionGemma 26B A4B IT",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 250000,
+     "vision": true
+    },
+    "google/gemma-4-31b-it": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-04-02",
+     "herramientas": true,
+     "id": "google/gemma-4-31b-it",
+     "nombre": "Gemma-4-31B-IT",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 16384,
+     "ventana": 256000,
+     "vision": true
+    },
+    "meta/llama-3.2-11b-vision-instruct": {
+     "abiertos": true,
+     "conocimiento": "2023-12",
+     "esfuerzos": [],
+     "fecha": "2024-09-25",
+     "herramientas": true,
+     "id": "meta/llama-3.2-11b-vision-instruct",
+     "nombre": "Llama 3.2 11b Vision Instruct",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": false,
+     "salida": 4096,
+     "ventana": 128000,
+     "vision": true
+    },
+    "meta/llama-3.2-90b-vision-instruct": {
+     "abiertos": true,
+     "conocimiento": "2023-12",
+     "esfuerzos": [],
+     "fecha": "2024-09-25",
+     "herramientas": true,
+     "id": "meta/llama-3.2-90b-vision-instruct",
+     "nombre": "Llama-3.2-90B-Vision-Instruct",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": false,
+     "salida": 8192,
+     "ventana": 128000,
+     "vision": true
+    },
+    "meta/muse-glimmer-30b": {
+     "abiertos": true,
+     "conocimiento": "2026-01-04",
+     "esfuerzos": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-10",
+     "herramientas": true,
+     "id": "meta/muse-glimmer-30b",
+     "nombre": "Muse Glimmer 30B",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 131072,
+     "vision": true
+    },
+    "minimaxai/minimax-m3.1-flash": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-19",
+     "herramientas": true,
+     "id": "minimaxai/minimax-m3.1-flash",
+     "nombre": "MiniMax-M3.1-Flash",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-04-28",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+     "nombre": "Nemotron 3 Nano Omni",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 256000,
+     "vision": true
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [
+      "none",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-06-04",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3-ultra-550b-a55b",
+     "nombre": "Nemotron 3 Ultra 550B A55B",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "nvidia/nemotron-3.5-lightning-30b-a3b": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [],
+     "fecha": "2026-08-11",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
+     "nombre": "Nemotron 3.5 Lightning 30B A3B",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": false
+    },
+    "nvidia/nemotron-3.5-super-vl-120b-a12b": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-10-15",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+     "nombre": "Nemotron 3.5 Super VL 120B A12B",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 8192,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "nvidia/nemotron-voicechat": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-03-16",
+     "herramientas": true,
+     "id": "nvidia/nemotron-voicechat",
+     "nombre": "nemotron-voicechat",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": false,
+     "salida": 8192,
+     "ventana": 128000,
+     "vision": false
+    },
+    "openai/gpt-oss-20b": {
+     "abiertos": true,
+     "conocimiento": "2024-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-05",
+     "herramientas": true,
+     "id": "openai/gpt-oss-20b",
+     "nombre": "GPT OSS 20B",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 131072,
+     "vision": false
+    },
+    "poolside/laguna-xs-2.1": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-07-02",
+     "herramientas": true,
+     "id": "poolside/laguna-xs-2.1",
+     "nombre": "Laguna XS 2.1",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 16384,
+     "ventana": 262144,
+     "vision": false
+    },
+    "stepfun-ai/step-5-preview": {
+     "abiertos": true,
+     "entrada": 1048576,
+     "esfuerzos": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-16",
+     "herramientas": true,
+     "id": "stepfun-ai/step-5-preview",
+     "nombre": "Step 5 Preview",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 1048576,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "z-ai/glm-5.3-flash": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-26",
+     "herramientas": true,
+     "id": "z-ai/glm-5.3-flash",
+     "nombre": "GLM-5.3-Flash",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": true
+    }
+   },
+   "nombre": "Nvidia",
+   "paquete": "@ai-sdk/openai-compatible"
+  },
+  "ollama-cloud": {
+   "api": "https://ollama.com/v1",
+   "doc": "https://docs.ollama.com/cloud",
+   "env": [
+    "OLLAMA_API_KEY"
+   ],
+   "id": "ollama-cloud",
+   "modelos": {
+    "beam": {
+     "abiertos": true,
+     "conocimiento": "2026-06-30",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-05",
+     "herramientas": true,
+     "id": "beam",
+     "nombre": "Beam 1.0 501B A23B",
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "deepseek-v4-pro": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-04-24",
+     "herramientas": true,
+     "id": "deepseek-v4-pro",
+     "nombre": "deepseek-v4-pro",
+     "precio": {
+      "cache_lectura": 0.022,
+      "entrada": 0.66,
+      "salida": 1.98
+     },
+     "razona": true,
+     "salida": 1048576,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "deepseek-v4-pro:0813": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-13",
+     "herramientas": true,
+     "id": "deepseek-v4-pro:0813",
+     "nombre": "DeepSeek V4 Pro 0813",
+     "precio": {
+      "cache_lectura": 0.022,
+      "entrada": 0.66,
+      "salida": 1.98
+     },
+     "razona": true,
+     "salida": 1048576,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "deepseek-v4.1-flash": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-09-10",
+     "herramientas": true,
+     "id": "deepseek-v4.1-flash",
+     "nombre": "DeepSeek V4.1 Flash",
+     "precio": {
+      "cache_lectura": 0.003,
+      "entrada": 0.15,
+      "salida": 0.6
+     },
+     "razona": true,
+     "salida": 384000,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "deepseek-v4.1-flash:1017": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-10-17",
+     "herramientas": true,
+     "id": "deepseek-v4.1-flash:1017",
+     "nombre": "DeepSeek V4.1 Flash 1017",
+     "precio": {
+      "cache_lectura": 0.003,
+      "entrada": 0.15,
+      "salida": 0.6
+     },
+     "razona": true,
+     "salida": 384000,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemma4:31b": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-04-02",
+     "herramientas": true,
+     "id": "gemma4:31b",
+     "nombre": "gemma4:31b",
+     "precio": {
+      "cache_lectura": 0.05,
+      "entrada": 0.14,
+      "salida": 0.4
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "glm-5.2": {
+     "abiertos": true,
+     "esfuerzos": [
+      "high",
+      "max"
+     ],
+     "fecha": "2026-06-13",
+     "herramientas": true,
+     "id": "glm-5.2",
+     "nombre": "GLM-5.2",
+     "precio": {
+      "cache_lectura": 0.26,
+      "entrada": 1.4,
+      "salida": 4.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 976000,
+     "vision": false
+    },
+    "glm-5.3": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-14",
+     "herramientas": true,
+     "id": "glm-5.3",
+     "nombre": "GLM-5.3",
+     "precio": {
+      "cache_lectura": 0.26,
+      "entrada": 1.4,
+      "salida": 4.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "glm-5.3-flash": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-26",
+     "herramientas": true,
+     "id": "glm-5.3-flash",
+     "nombre": "GLM-5.3-Flash",
+     "precio": {
+      "cache_lectura": 0.03,
+      "entrada": 0.15,
+      "salida": 0.5
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "gpt-oss:120b": {
+     "abiertos": true,
+     "conocimiento": "2024-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-05",
+     "herramientas": true,
+     "id": "gpt-oss:120b",
+     "nombre": "gpt-oss:120b",
+     "precio": {
+      "cache_lectura": 0.014,
+      "entrada": 0.15,
+      "salida": 0.6
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 131072,
+     "vision": false
+    },
+    "gpt-oss:20b": {
+     "abiertos": true,
+     "conocimiento": "2024-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-05",
+     "herramientas": true,
+     "id": "gpt-oss:20b",
+     "nombre": "gpt-oss:20b",
+     "precio": {
+      "cache_lectura": 0.035,
+      "entrada": 0.07,
+      "salida": 0.3
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 131072,
+     "vision": false
+    },
+    "kimi-k2.6": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-04-20",
+     "herramientas": true,
+     "id": "kimi-k2.6",
+     "nombre": "kimi-k2.6",
+     "precio": {
+      "cache_lectura": 0.16,
+      "entrada": 0.95,
+      "salida": 4
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "kimi-k2.7-code": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-06-12",
+     "herramientas": true,
+     "id": "kimi-k2.7-code",
+     "nombre": "kimi-k2.7-code",
+     "precio": {
+      "cache_lectura": 0.19,
+      "entrada": 0.95,
+      "salida": 4
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "kimi-k3": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-07-16",
+     "herramientas": true,
+     "id": "kimi-k3",
+     "nombre": "kimi-k3",
+     "precio": {
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "kimi-k3.1-pro": {
+     "abiertos": false,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-10-23",
+     "herramientas": true,
+     "id": "kimi-k3.1-pro",
+     "nombre": "Kimi K3.1 Pro",
+     "precio": {
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "mimo-v2.6-flash": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "mimo-v2.6-flash",
+     "nombre": "MiMo-V2.6-Flash",
+     "precio": {
+      "cache_lectura": 0.0028,
+      "entrada": 0.14,
+      "salida": 0.28
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "mimo-v2.6-pro": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "mimo-v2.6-pro",
+     "nombre": "MiMo-V2.6-Pro",
+     "precio": {
+      "cache_lectura": 0.0036,
+      "entrada": 0.435,
+      "salida": 0.87
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "minimax-m2.7": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-03-18",
+     "herramientas": true,
+     "id": "minimax-m2.7",
+     "nombre": "minimax-m2.7",
+     "precio": {
+      "cache_lectura": 0.06,
+      "entrada": 0.3,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 196608,
+     "ventana": 196608,
+     "vision": false
+    },
+    "minimax-m3": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-06-01",
+     "herramientas": true,
+     "id": "minimax-m3",
+     "nombre": "minimax-m3",
+     "precio": {
+      "cache_lectura": 0.12,
+      "entrada": 0.6,
+      "salida": 2.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 512000,
+     "vision": true
+    },
+    "minimax-m3.1-flash": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-19",
+     "herramientas": true,
+     "id": "minimax-m3.1-flash",
+     "nombre": "MiniMax-M3.1-Flash",
+     "precio": {
+      "cache_lectura": 0.015,
+      "entrada": 0.15,
+      "salida": 0.6
+     },
+     "razona": true,
+     "salida": 512000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "mistral-large-3:675b": {
+     "abiertos": true,
+     "conocimiento": "2024-11",
+     "esfuerzos": [],
+     "fecha": "2025-12-02",
+     "herramientas": true,
+     "id": "mistral-large-3:675b",
+     "nombre": "mistral-large-3:675b",
+     "precio": {
+      "entrada": 0.5,
+      "salida": 1.5
+     },
+     "razona": false,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "mistral-large-4": {
+     "abiertos": false,
+     "esfuerzos": [
+      "none",
+      "high"
+     ],
+     "fecha": "2026-10-06",
+     "herramientas": true,
+     "id": "mistral-large-4",
+     "nombre": "Mistral Large 4",
+     "precio": {
+      "cache_lectura": 0.07,
+      "entrada": 0.68,
+      "salida": 2.09
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "muse-spark-open": {
+     "abiertos": true,
+     "conocimiento": "2026-01-04",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-10-15",
+     "herramientas": true,
+     "id": "muse-spark-open",
+     "nombre": "Muse Spark Open",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.25,
+      "salida": 4.25
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "nemotron-3-nano:30b": {
+     "abiertos": true,
+     "conocimiento": "2025-06-25",
+     "esfuerzos": [],
+     "fecha": "2025-12-15",
+     "herramientas": true,
+     "id": "nemotron-3-nano:30b",
+     "nombre": "nemotron-3-nano:30b",
+     "precio": {
+      "entrada": 0.06,
+      "salida": 0.24
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "nemotron-3-super": {
+     "abiertos": true,
+     "conocimiento": "2025-06",
+     "esfuerzos": [],
+     "fecha": "2026-03-11",
+     "herramientas": true,
+     "id": "nemotron-3-super",
+     "nombre": "nemotron-3-super",
+     "precio": {
+      "cache_lectura": 0.015,
+      "entrada": 0.015,
+      "salida": 0.6
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": false
+    },
+    "nemotron-3-ultra": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [],
+     "fecha": "2026-06-04",
+     "herramientas": true,
+     "id": "nemotron-3-ultra",
+     "nombre": "nemotron-3-ultra",
+     "precio": {
+      "cache_lectura": 0.1,
+      "entrada": 0.1,
+      "salida": 3
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 262144,
+     "vision": false
+    }
+   },
+   "nombre": "Ollama Cloud",
+   "paquete": "@ai-sdk/openai-compatible"
+  },
+  "openai": {
+   "doc": "https://platform.openai.com/docs/models",
+   "env": [
+    "OPENAI_API_KEY"
+   ],
+   "id": "openai",
+   "modelos": {
+    "gpt-4.1": {
+     "abiertos": false,
+     "conocimiento": "2024-04",
+     "esfuerzos": [],
+     "fecha": "2025-04-14",
+     "herramientas": true,
+     "id": "gpt-4.1",
+     "nombre": "GPT-4.1",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 2,
+      "salida": 8
+     },
+     "razona": false,
+     "salida": 32768,
+     "ventana": 1047576,
+     "vision": true
+    },
+    "gpt-4.1-mini": {
+     "abiertos": false,
+     "conocimiento": "2024-04",
+     "esfuerzos": [],
+     "fecha": "2025-04-14",
+     "herramientas": true,
+     "id": "gpt-4.1-mini",
+     "nombre": "GPT-4.1 mini",
+     "precio": {
+      "cache_lectura": 0.1,
+      "entrada": 0.4,
+      "salida": 1.6
+     },
+     "razona": false,
+     "salida": 32768,
+     "ventana": 1047576,
+     "vision": true
+    },
+    "gpt-4o": {
+     "abiertos": false,
+     "conocimiento": "2023-09",
+     "esfuerzos": [],
+     "fecha": "2024-05-13",
+     "herramientas": true,
+     "id": "gpt-4o",
+     "nombre": "GPT-4o",
+     "precio": {
+      "cache_lectura": 1.25,
+      "entrada": 2.5,
+      "salida": 10
+     },
+     "razona": false,
+     "salida": 16384,
+     "ventana": 128000,
+     "vision": true
+    },
+    "gpt-4o-2024-08-06": {
+     "abiertos": false,
+     "conocimiento": "2023-09",
+     "esfuerzos": [],
+     "fecha": "2024-08-06",
+     "herramientas": true,
+     "id": "gpt-4o-2024-08-06",
+     "nombre": "GPT-4o (2024-08-06)",
+     "precio": {
+      "cache_lectura": 1.25,
+      "entrada": 2.5,
+      "salida": 10
+     },
+     "razona": false,
+     "salida": 16384,
+     "ventana": 128000,
+     "vision": true
+    },
+    "gpt-4o-2024-11-20": {
+     "abiertos": false,
+     "conocimiento": "2023-09",
+     "esfuerzos": [],
+     "fecha": "2024-11-20",
+     "herramientas": true,
+     "id": "gpt-4o-2024-11-20",
+     "nombre": "GPT-4o (2024-11-20)",
+     "precio": {
+      "cache_lectura": 1.25,
+      "entrada": 2.5,
+      "salida": 10
+     },
+     "razona": false,
+     "salida": 16384,
+     "ventana": 128000,
+     "vision": true
+    },
+    "gpt-4o-mini": {
+     "abiertos": false,
+     "conocimiento": "2023-09",
+     "esfuerzos": [],
+     "fecha": "2024-07-18",
+     "herramientas": true,
+     "id": "gpt-4o-mini",
+     "nombre": "GPT-4o mini",
+     "precio": {
+      "cache_lectura": 0.075,
+      "entrada": 0.15,
+      "salida": 0.6
+     },
+     "razona": false,
+     "salida": 16384,
+     "ventana": 128000,
+     "vision": true
+    },
+    "gpt-5": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-07",
+     "herramientas": true,
+     "id": "gpt-5",
+     "nombre": "GPT-5",
+     "precio": {
+      "cache_lectura": 0.125,
+      "entrada": 1.25,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5-mini": {
+     "abiertos": false,
+     "conocimiento": "2024-05-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-07",
+     "herramientas": true,
+     "id": "gpt-5-mini",
+     "nombre": "GPT-5 Mini",
+     "precio": {
+      "cache_lectura": 0.025,
+      "entrada": 0.25,
+      "salida": 2
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5-nano": {
+     "abiertos": false,
+     "conocimiento": "2024-05-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-07",
+     "herramientas": true,
+     "id": "gpt-5-nano",
+     "nombre": "GPT-5 Nano",
+     "precio": {
+      "cache_lectura": 0.005,
+      "entrada": 0.05,
+      "salida": 0.4
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5-pro": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "high"
+     ],
+     "fecha": "2025-10-06",
+     "herramientas": true,
+     "id": "gpt-5-pro",
+     "nombre": "GPT-5 Pro",
+     "precio": {
+      "entrada": 15,
+      "salida": 120
+     },
+     "razona": true,
+     "salida": 272000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.1": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-13",
+     "herramientas": true,
+     "id": "gpt-5.1",
+     "nombre": "GPT-5.1",
+     "precio": {
+      "cache_lectura": 0.125,
+      "entrada": 1.25,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.2": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2025-12-11",
+     "herramientas": true,
+     "id": "gpt-5.2",
+     "nombre": "GPT-5.2",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.2-pro": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2025-12-11",
+     "herramientas": true,
+     "id": "gpt-5.2-pro",
+     "nombre": "GPT-5.2 Pro",
+     "precio": {
+      "entrada": 21,
+      "salida": 168
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.3-codex": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-02-05",
+     "herramientas": true,
+     "id": "gpt-5.3-codex",
+     "nombre": "GPT-5.3 Codex",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.3-codex-spark": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 100000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-02-05",
+     "herramientas": true,
+     "id": "gpt-5.3-codex-spark",
+     "nombre": "GPT-5.3 Codex Spark",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 128000,
+     "vision": true
+    },
+    "gpt-5.4": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-05",
+     "herramientas": true,
+     "id": "gpt-5.4",
+     "nombre": "GPT-5.4",
+     "precio": {
+      "cache_lectura": 0.25,
+      "entrada": 2.5,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.4-mini": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-17",
+     "herramientas": true,
+     "id": "gpt-5.4-mini",
+     "nombre": "GPT-5.4 mini",
+     "precio": {
+      "cache_lectura": 0.075,
+      "entrada": 0.75,
+      "salida": 4.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.4-nano": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-17",
+     "herramientas": true,
+     "id": "gpt-5.4-nano",
+     "nombre": "GPT-5.4 nano",
+     "precio": {
+      "cache_lectura": 0.02,
+      "entrada": 0.2,
+      "salida": 1.25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.4-pro": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 922000,
+     "esfuerzos": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-05",
+     "herramientas": true,
+     "id": "gpt-5.4-pro",
+     "nombre": "GPT-5.4 Pro",
+     "precio": {
+      "entrada": 30,
+      "salida": 180
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.5": {
+     "abiertos": false,
+     "conocimiento": "2025-12-01",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-04-23",
+     "herramientas": true,
+     "id": "gpt-5.5",
+     "nombre": "GPT-5.5",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 30
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.5-pro": {
+     "abiertos": false,
+     "conocimiento": "2025-12-01",
+     "entrada": 922000,
+     "esfuerzos": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-04-23",
+     "herramientas": true,
+     "id": "gpt-5.5-pro",
+     "nombre": "GPT-5.5 Pro",
+     "precio": {
+      "entrada": 30,
+      "salida": 180
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6",
+     "nombre": "GPT-5.6",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.4,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-luna": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-luna",
+     "nombre": "GPT-5.6 Luna",
+     "precio": {
+      "cache_escritura": 0.25,
+      "cache_lectura": 0.02,
+      "entrada": 0.2,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-sol",
+     "nombre": "GPT-5.6 Sol",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.4,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-terra": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-terra",
+     "nombre": "GPT-5.6 Terra",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 12
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-astra": {
+     "abiertos": false,
+     "conocimiento": "2026-04-30",
+     "entrada": 922000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-04",
+     "herramientas": true,
+     "id": "gpt-6-astra",
+     "nombre": "GPT-6 Astra",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 1,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-luna": {
+     "abiertos": false,
+     "conocimiento": "2026-05-18",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "gpt-6-luna",
+     "nombre": "GPT-6 Luna",
+     "precio": {
+      "cache_escritura": 0.125,
+      "cache_lectura": 0.01,
+      "entrada": 0.1,
+      "salida": 0.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-04-20",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "gpt-6-sol",
+     "nombre": "GPT-6 Sol",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6.1-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-04-30",
+     "entrada": 922000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-29",
+     "herramientas": true,
+     "id": "gpt-6.1-sol",
+     "nombre": "GPT-6.1 Sol",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.1,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6.1-terra": {
+     "abiertos": false,
+     "conocimiento": "2026-06-01",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-26",
+     "herramientas": true,
+     "id": "gpt-6.1-terra",
+     "nombre": "GPT-6.1 Terra",
+     "precio": {
+      "cache_escritura": 1.25,
+      "cache_lectura": 0.05,
+      "entrada": 1,
+      "salida": 5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-daybreak-blue-latest": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-08-07",
+     "herramientas": true,
+     "id": "gpt-daybreak-blue-latest",
+     "nombre": "Daybreak Blue",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.4,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-daybreak-red-latest": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-08-07",
+     "herramientas": true,
+     "id": "gpt-daybreak-red-latest",
+     "nombre": "Daybreak Red",
+     "precio": {
+      "cache_escritura": 15.625,
+      "cache_lectura": 1.25,
+      "entrada": 12.5,
+      "salida": 75
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-realtime-2.1": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 96000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-07-06",
+     "herramientas": true,
+     "id": "gpt-realtime-2.1",
+     "nombre": "GPT-Realtime-2.1",
+     "precio": {
+      "cache_lectura": 0.4,
+      "entrada": 4,
+      "salida": 24
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 128000,
+     "vision": true
+    },
+    "o3": {
+     "abiertos": false,
+     "conocimiento": "2024-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-04-16",
+     "herramientas": true,
+     "id": "o3",
+     "nombre": "o3",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 2,
+      "salida": 8
+     },
+     "razona": true,
+     "salida": 100000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "o3-pro": {
+     "abiertos": false,
+     "conocimiento": "2024-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-06-10",
+     "herramientas": true,
+     "id": "o3-pro",
+     "nombre": "o3-pro",
+     "precio": {
+      "entrada": 20,
+      "salida": 80
+     },
+     "razona": true,
+     "salida": 100000,
+     "ventana": 200000,
+     "vision": true
+    }
+   },
+   "nombre": "OpenAI",
+   "paquete": "@ai-sdk/openai"
+  },
+  "opencode": {
+   "api": "https://opencode.ai/inference/openai/v1",
+   "doc": "https://opencode.ai/v2/docs/console/models",
+   "env": [
+    "OPENCODE_API_KEY"
+   ],
+   "id": "opencode",
+   "modelos": {
+    "beam-free": {
+     "abiertos": true,
+     "conocimiento": "2026-06-30",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-05",
+     "herramientas": true,
+     "id": "beam-free",
+     "nombre": "Beam Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": false
+    },
+    "big-pickle": {
+     "abiertos": false,
+     "conocimiento": "2025-01",
+     "entrada": 160000,
+     "esfuerzos": [],
+     "fecha": "2025-10-17",
+     "herramientas": true,
+     "id": "big-pickle",
+     "nombre": "Big Pickle",
+     "precio": {
+      "cache_escritura": 0,
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 200000,
+     "vision": false
+    },
+    "claude-fable-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-01-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-06-09",
+     "herramientas": true,
+     "id": "claude-fable-5",
+     "nombre": "Claude Fable 5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 1,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-fable-5-1": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-01",
+     "herramientas": true,
+     "id": "claude-fable-5-1",
+     "nombre": "Claude Fable 5.1",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 0.25,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-haiku-4-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-02-28",
+     "esfuerzos": [],
+     "fecha": "2025-10-15",
+     "herramientas": true,
+     "id": "claude-haiku-4-5",
+     "nombre": "Claude Haiku 4.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 1.25,
+      "cache_lectura": 0.1,
+      "entrada": 1,
+      "salida": 5
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-haiku-5-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-07",
+     "herramientas": true,
+     "id": "claude-haiku-5-5",
+     "nombre": "Claude Haiku 5.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 0.125,
+      "cache_lectura": 0.01,
+      "entrada": 0.1,
+      "salida": 0.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-24",
+     "herramientas": true,
+     "id": "claude-opus-4-5",
+     "nombre": "Claude Opus 4.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "claude-opus-4-6": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-05-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-02-05",
+     "herramientas": true,
+     "id": "claude-opus-4-6",
+     "nombre": "Claude Opus 4.6",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-7": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-01-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-04-16",
+     "herramientas": true,
+     "id": "claude-opus-4-7",
+     "nombre": "Claude Opus 4.7",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-4-8": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-01",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-05-28",
+     "herramientas": true,
+     "id": "claude-opus-4-8",
+     "nombre": "Claude Opus 4.8",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-24",
+     "herramientas": true,
+     "id": "claude-opus-5",
+     "nombre": "Claude Opus 5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 6.25,
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-opus-5-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "claude-opus-5-5",
+     "nombre": "Claude Opus 5.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.2,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-4-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-07-31",
+     "esfuerzos": [],
+     "fecha": "2025-09-29",
+     "herramientas": true,
+     "id": "claude-sonnet-4-5",
+     "nombre": "Claude Sonnet 4.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 3.75,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-4-6": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-08-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-02-17",
+     "herramientas": true,
+     "id": "claude-sonnet-4-6",
+     "nombre": "Claude Sonnet 4.6",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 3.75,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-01-31",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-06-30",
+     "herramientas": true,
+     "id": "claude-sonnet-5",
+     "nombre": "Claude Sonnet 5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "claude-sonnet-5-5": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-28",
+     "herramientas": true,
+     "id": "claude-sonnet-5-5",
+     "nombre": "Claude Sonnet 5.5",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "crouton-alpha-free": {
+     "abiertos": false,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-11-03",
+     "herramientas": true,
+     "id": "crouton-alpha-free",
+     "nombre": "Crouton Alpha Free",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 270000,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "deepseek-v4-pro": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "high",
+      "max"
+     ],
+     "fecha": "2026-04-24",
+     "herramientas": true,
+     "id": "deepseek-v4-pro",
+     "nombre": "DeepSeek V4 Pro",
+     "precio": {
+      "cache_lectura": 0.145,
+      "entrada": 1.74,
+      "salida": 3.48
+     },
+     "razona": true,
+     "salida": 384000,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "deepseek-v4.1-flash": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-09-10",
+     "herramientas": true,
+     "id": "deepseek-v4.1-flash",
+     "nombre": "DeepSeek V4.1 Flash",
+     "precio": {
+      "cache_lectura": 0.006,
+      "entrada": 0.3,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 384000,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "deepseek-v4.1-flash-free": {
+     "abiertos": true,
+     "conocimiento": "2025-05",
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-09-10",
+     "herramientas": true,
+     "id": "deepseek-v4.1-flash-free",
+     "nombre": "DeepSeek V4.1 Flash Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "flint-40b-free": {
+     "abiertos": true,
+     "conocimiento": "2026-06",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-21",
+     "herramientas": true,
+     "id": "flint-40b-free",
+     "nombre": "Flint 40B Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": false
+    },
+    "gemini-3-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2025-01",
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-12-17",
+     "herramientas": true,
+     "id": "gemini-3-flash",
+     "nombre": "Gemini 3 Flash",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.05,
+      "entrada": 0.5,
+      "salida": 3
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.1-pro": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2025-01",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-02-19",
+     "herramientas": true,
+     "id": "gemini-3.1-pro",
+     "nombre": "Gemini 3.1 Pro Preview",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 12
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.5-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2025-01",
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-05-19",
+     "herramientas": true,
+     "id": "gemini-3.5-flash",
+     "nombre": "Gemini 3.5 Flash",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.5,
+      "salida": 9
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.5-flash-lite": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2026-03",
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-07-21",
+     "herramientas": true,
+     "id": "gemini-3.5-flash-lite",
+     "nombre": "Gemini 3.5 Flash Lite",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.03,
+      "entrada": 0.3,
+      "salida": 2.5
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.6-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2026-03",
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-07-21",
+     "herramientas": true,
+     "id": "gemini-3.6-flash",
+     "nombre": "Gemini 3.6 Flash",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.5,
+      "salida": 7.5
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.7-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2026-03",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-08-13",
+     "herramientas": true,
+     "id": "gemini-3.7-flash",
+     "nombre": "Gemini 3.7 Flash",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.5,
+      "salida": 7.5
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-3.8-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-09-02",
+     "herramientas": true,
+     "id": "gemini-3.8-flash",
+     "nombre": "Gemini 3.8 Flash",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.5,
+      "salida": 7.5
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "gemini-4-argon": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/google/v1beta",
+     "conocimiento": "2026-03",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-10-13",
+     "herramientas": true,
+     "id": "gemini-4-argon",
+     "nombre": "Gemini 4 Argon",
+     "paquete": "@ai-sdk/google",
+     "precio": {
+      "cache_lectura": 0.1,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "glm-5": {
+     "abiertos": true,
+     "conocimiento": "2025-04",
+     "esfuerzos": [],
+     "fecha": "2026-02-12",
+     "herramientas": true,
+     "id": "glm-5",
+     "nombre": "GLM-5",
+     "precio": {
+      "cache_lectura": 0.2,
+      "entrada": 1,
+      "salida": 3.2
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 204800,
+     "vision": false
+    },
+    "glm-5.1": {
+     "abiertos": true,
+     "conocimiento": "2025-04",
+     "esfuerzos": [],
+     "fecha": "2026-04-07",
+     "herramientas": true,
+     "id": "glm-5.1",
+     "nombre": "GLM-5.1",
+     "precio": {
+      "cache_lectura": 0.26,
+      "entrada": 1.4,
+      "salida": 4.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 204800,
+     "vision": false
+    },
+    "glm-5.2": {
+     "abiertos": true,
+     "esfuerzos": [
+      "high",
+      "max"
+     ],
+     "fecha": "2026-06-13",
+     "herramientas": true,
+     "id": "glm-5.2",
+     "nombre": "GLM-5.2",
+     "precio": {
+      "cache_lectura": 0.26,
+      "entrada": 1.4,
+      "salida": 4.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "glm-5.3": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-14",
+     "herramientas": true,
+     "id": "glm-5.3",
+     "nombre": "GLM-5.3",
+     "precio": {
+      "cache_lectura": 0.26,
+      "entrada": 1.4,
+      "salida": 4.4
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "glm-5.3-flash": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-26",
+     "herramientas": true,
+     "id": "glm-5.3-flash",
+     "nombre": "GLM-5.3-Flash",
+     "precio": {
+      "cache_lectura": 0.03,
+      "entrada": 0.15,
+      "salida": 0.5
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "glm-5.3-flash-free": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-08-26",
+     "herramientas": true,
+     "id": "glm-5.3-flash-free",
+     "nombre": "GLM-5.3-Flash Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "gpt-5": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-07",
+     "herramientas": true,
+     "id": "gpt-5",
+     "nombre": "GPT-5",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.107,
+      "entrada": 1.07,
+      "salida": 8.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5-codex": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-09-15",
+     "herramientas": true,
+     "id": "gpt-5-codex",
+     "nombre": "GPT-5 Codex",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.107,
+      "entrada": 1.07,
+      "salida": 8.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5-nano": {
+     "abiertos": false,
+     "conocimiento": "2024-05-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-08-07",
+     "herramientas": true,
+     "id": "gpt-5-nano",
+     "nombre": "GPT-5 Nano",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.005,
+      "entrada": 0.05,
+      "salida": 0.4
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.1": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-13",
+     "herramientas": true,
+     "id": "gpt-5.1",
+     "nombre": "GPT-5.1",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.107,
+      "entrada": 1.07,
+      "salida": 8.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.1-codex": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-13",
+     "herramientas": true,
+     "id": "gpt-5.1-codex",
+     "nombre": "GPT-5.1 Codex",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.107,
+      "entrada": 1.07,
+      "salida": 8.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.1-codex-max": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2025-11-13",
+     "herramientas": true,
+     "id": "gpt-5.1-codex-max",
+     "nombre": "GPT-5.1 Codex Max",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.125,
+      "entrada": 1.25,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.1-codex-mini": {
+     "abiertos": false,
+     "conocimiento": "2024-09-30",
+     "entrada": 272000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2025-11-13",
+     "herramientas": true,
+     "id": "gpt-5.1-codex-mini",
+     "nombre": "GPT-5.1 Codex Mini",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.025,
+      "entrada": 0.25,
+      "salida": 2
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.2": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2025-12-11",
+     "herramientas": true,
+     "id": "gpt-5.2",
+     "nombre": "GPT-5.2",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.2-codex": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2025-12-11",
+     "herramientas": true,
+     "id": "gpt-5.2-codex",
+     "nombre": "GPT-5.2 Codex",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.3-codex": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-02-05",
+     "herramientas": true,
+     "id": "gpt-5.3-codex",
+     "nombre": "GPT-5.3 Codex",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.3-codex-spark": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 128000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-02-05",
+     "herramientas": true,
+     "id": "gpt-5.3-codex-spark",
+     "nombre": "GPT-5.3 Codex Spark",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.175,
+      "entrada": 1.75,
+      "salida": 14
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 128000,
+     "vision": false
+    },
+    "gpt-5.4": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-05",
+     "herramientas": true,
+     "id": "gpt-5.4",
+     "nombre": "GPT-5.4",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.25,
+      "entrada": 2.5,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.4-mini": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-17",
+     "herramientas": true,
+     "id": "gpt-5.4-mini",
+     "nombre": "GPT-5.4 Mini",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.075,
+      "entrada": 0.75,
+      "salida": 4.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.4-nano": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 272000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-17",
+     "herramientas": true,
+     "id": "gpt-5.4-nano",
+     "nombre": "GPT-5.4 Nano",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.02,
+      "entrada": 0.2,
+      "salida": 1.25
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 400000,
+     "vision": true
+    },
+    "gpt-5.4-pro": {
+     "abiertos": false,
+     "conocimiento": "2025-08-31",
+     "entrada": 922000,
+     "esfuerzos": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-03-05",
+     "herramientas": true,
+     "id": "gpt-5.4-pro",
+     "nombre": "GPT-5.4 Pro",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 30,
+      "entrada": 30,
+      "salida": 180
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.5": {
+     "abiertos": false,
+     "conocimiento": "2025-12-01",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-04-23",
+     "herramientas": true,
+     "id": "gpt-5.5",
+     "nombre": "GPT-5.5",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 5,
+      "salida": 30
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.5-pro": {
+     "abiertos": false,
+     "conocimiento": "2025-12-01",
+     "entrada": 922000,
+     "esfuerzos": [
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-04-23",
+     "herramientas": true,
+     "id": "gpt-5.5-pro",
+     "nombre": "GPT-5.5 Pro",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 30,
+      "entrada": 30,
+      "salida": 180
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-luna": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-luna",
+     "nombre": "GPT-5.6 Luna",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 0.25,
+      "cache_lectura": 0.02,
+      "entrada": 0.2,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-sol",
+     "nombre": "GPT-5.6 Sol",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 5,
+      "cache_lectura": 0.4,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-5.6-terra": {
+     "abiertos": false,
+     "conocimiento": "2026-02-16",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-07-09",
+     "herramientas": true,
+     "id": "gpt-5.6-terra",
+     "nombre": "GPT-5.6 Terra",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 12
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-astra": {
+     "abiertos": false,
+     "conocimiento": "2026-04-30",
+     "entrada": 922000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-04",
+     "herramientas": true,
+     "id": "gpt-6-astra",
+     "nombre": "GPT-6 Astra",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 12.5,
+      "cache_lectura": 1,
+      "entrada": 10,
+      "salida": 50
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-luna": {
+     "abiertos": false,
+     "conocimiento": "2026-05-18",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "gpt-6-luna",
+     "nombre": "GPT-6 Luna",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 0.125,
+      "cache_lectura": 0.01,
+      "entrada": 0.1,
+      "salida": 0.5
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-04-20",
+     "entrada": 922000,
+     "esfuerzos": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "gpt-6-sol",
+     "nombre": "GPT-6 Sol",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.2,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "gpt-6.1-sol": {
+     "abiertos": false,
+     "conocimiento": "2026-04-30",
+     "entrada": 922000,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-09-29",
+     "herramientas": true,
+     "id": "gpt-6.1-sol",
+     "nombre": "GPT-6.1 Sol",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.1,
+      "entrada": 2,
+      "salida": 10
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 1050000,
+     "vision": true
+    },
+    "grok-4.5": {
+     "abiertos": false,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-07-08",
+     "herramientas": true,
+     "id": "grok-4.5",
+     "nombre": "Grok 4.5",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.3,
+      "entrada": 2,
+      "salida": 6
+     },
+     "razona": true,
+     "salida": 500000,
+     "ventana": 500000,
+     "vision": true
+    },
+    "grok-4.6": {
+     "abiertos": false,
+     "conocimiento": "2026-02-01",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-08-12",
+     "herramientas": true,
+     "id": "grok-4.6",
+     "nombre": "Grok 4.6",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 2,
+      "salida": 6
+     },
+     "razona": true,
+     "salida": 500000,
+     "ventana": 500000,
+     "vision": true
+    },
+    "grok-4.7": {
+     "abiertos": false,
+     "conocimiento": "2026-05",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-09-21",
+     "herramientas": true,
+     "id": "grok-4.7",
+     "nombre": "Grok 4.7",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.5,
+      "entrada": 2,
+      "salida": 6
+     },
+     "razona": true,
+     "salida": 500000,
+     "ventana": 500000,
+     "vision": true
+    },
+    "grok-build-0.1": {
+     "abiertos": false,
+     "esfuerzos": [],
+     "fecha": "2026-04-16",
+     "herramientas": true,
+     "id": "grok-build-0.1",
+     "nombre": "Grok Build 0.1",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.2,
+      "entrada": 1,
+      "salida": 2
+     },
+     "razona": true,
+     "salida": 256000,
+     "ventana": 256000,
+     "vision": true
+    },
+    "iceman-free": {
+     "abiertos": false,
+     "esfuerzos": [],
+     "fecha": "2026-11-06",
+     "herramientas": true,
+     "id": "iceman-free",
+     "nombre": "Iceman Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 262144,
+     "vision": false
+    },
+    "inkling-2-small-free": {
+     "abiertos": false,
+     "esfuerzos": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-11-05",
+     "herramientas": true,
+     "id": "inkling-2-small-free",
+     "nombre": "Inkling 2 Small Free",
+     "precio": {
+      "cache_escritura": 0,
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "kimi-k2.5": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-01-27",
+     "herramientas": true,
+     "id": "kimi-k2.5",
+     "nombre": "Kimi K2.5",
+     "precio": {
+      "cache_lectura": 0.1,
+      "entrada": 0.6,
+      "salida": 3
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": true
+    },
+    "kimi-k2.6": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-04-20",
+     "herramientas": true,
+     "id": "kimi-k2.6",
+     "nombre": "Kimi K2.6",
+     "precio": {
+      "cache_lectura": 0.16,
+      "entrada": 0.95,
+      "salida": 4
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": true
+    },
+    "kimi-k2.7-code": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-06-12",
+     "herramientas": true,
+     "id": "kimi-k2.7-code",
+     "nombre": "Kimi K2.7 Code",
+     "precio": {
+      "cache_lectura": 0.19,
+      "entrada": 0.95,
+      "salida": 4
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": true
+    },
+    "kimi-k3": {
+     "abiertos": true,
+     "esfuerzos": [
+      "low",
+      "high",
+      "max"
+     ],
+     "fecha": "2026-07-16",
+     "herramientas": true,
+     "id": "kimi-k3",
+     "nombre": "Kimi K3",
+     "precio": {
+      "cache_escritura": 3,
+      "cache_lectura": 0.3,
+      "entrada": 3,
+      "salida": 15
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "mimo-v2.6-flash-free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-09-22",
+     "herramientas": true,
+     "id": "mimo-v2.6-flash-free",
+     "nombre": "MiMo-V2.6-Flash Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "minimax-m2.5": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-02-12",
+     "herramientas": true,
+     "id": "minimax-m2.5",
+     "nombre": "MiniMax-M2.5",
+     "precio": {
+      "cache_lectura": 0.06,
+      "entrada": 0.3,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 204800,
+     "vision": false
+    },
+    "minimax-m2.7": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-03-18",
+     "herramientas": true,
+     "id": "minimax-m2.7",
+     "nombre": "MiniMax-M2.7",
+     "precio": {
+      "cache_lectura": 0.06,
+      "entrada": 0.3,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 204800,
+     "vision": false
+    },
+    "minimax-m3": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-06-01",
+     "herramientas": true,
+     "id": "minimax-m3",
+     "nombre": "MiniMax-M3",
+     "precio": {
+      "cache_lectura": 0.06,
+      "entrada": 0.3,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 128000,
+     "ventana": 512000,
+     "vision": true
+    },
+    "mistral-large-4": {
+     "abiertos": false,
+     "esfuerzos": [
+      "none",
+      "high"
+     ],
+     "fecha": "2026-10-06",
+     "herramientas": true,
+     "id": "mistral-large-4",
+     "nombre": "Mistral Large 4",
+     "paquete": "@ai-sdk/mistral",
+     "precio": {
+      "cache_lectura": 0.07,
+      "entrada": 0.68,
+      "salida": 2.09
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 524288,
+     "vision": true
+    },
+    "muse-spark-1.2": {
+     "abiertos": false,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-08-05",
+     "herramientas": true,
+     "id": "muse-spark-1.2",
+     "nombre": "Muse Spark 1.2",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.25,
+      "salida": 4.25
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "muse-spark-1.3": {
+     "abiertos": false,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-09-02",
+     "herramientas": true,
+     "id": "muse-spark-1.3",
+     "nombre": "Muse Spark 1.3",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.15,
+      "entrada": 1.25,
+      "salida": 4.25
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "muse-wonder-1.0": {
+     "abiertos": false,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-10-12",
+     "herramientas": true,
+     "id": "muse-wonder-1.0",
+     "nombre": "Muse Wonder",
+     "paquete": "@ai-sdk/openai",
+     "precio": {
+      "cache_lectura": 0.2,
+      "entrada": 4,
+      "salida": 20
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "nemotron-3.5-lightning-free": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [],
+     "fecha": "2026-08-11",
+     "herramientas": true,
+     "id": "nemotron-3.5-lightning-free",
+     "nombre": "Nemotron 3.5 Lightning Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 262144,
+     "ventana": 262144,
+     "vision": false
+    },
+    "nemotron-3.5-super-vl-free": {
+     "abiertos": true,
+     "entrada": 1048576,
+     "esfuerzos": [
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+     ],
+     "fecha": "2026-10-15",
+     "herramientas": true,
+     "id": "nemotron-3.5-super-vl-free",
+     "nombre": "Nemotron 3.5 Super VL Free",
+     "precio": {
+      "cache_lectura": 0,
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "qwen3.5-plus": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-04",
+     "esfuerzos": [],
+     "fecha": "2026-02-16",
+     "herramientas": true,
+     "id": "qwen3.5-plus",
+     "nombre": "Qwen3.5 Plus",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 0.25,
+      "cache_lectura": 0.02,
+      "entrada": 0.2,
+      "salida": 1.2
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": true
+    },
+    "qwen3.6-plus": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "conocimiento": "2025-04",
+     "esfuerzos": [],
+     "fecha": "2026-04-02",
+     "herramientas": true,
+     "id": "qwen3.6-plus",
+     "nombre": "Qwen3.6 Plus",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 0.625,
+      "cache_lectura": 0.05,
+      "entrada": 0.5,
+      "salida": 3
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 262144,
+     "vision": true
+    },
+    "qwen3.8-flash": {
+     "abiertos": false,
+     "api": "https://opencode.ai/inference/anthropic/v1",
+     "esfuerzos": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "fecha": "2026-08-26",
+     "herramientas": true,
+     "id": "qwen3.8-flash",
+     "nombre": "Qwen3.8 Flash",
+     "paquete": "@ai-sdk/anthropic",
+     "precio": {
+      "cache_escritura": 0.2,
+      "cache_lectura": 0.016,
+      "entrada": 0.15,
+      "salida": 0.47
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "qwen3.8-max": {
+     "abiertos": false,
+     "esfuerzos": [
+      "low",
+      "medium",
+      "xhigh"
+     ],
+     "fecha": "2026-08-03",
+     "herramientas": true,
+     "id": "qwen3.8-max",
+     "nombre": "Qwen3.8 Max",
+     "precio": {
+      "cache_escritura": 2.5,
+      "cache_lectura": 0.25,
+      "entrada": 2,
+      "salida": 6
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 262144,
+     "vision": true
+    }
+   },
+   "nombre": "OpenCode",
+   "paquete": "@ai-sdk/openai-compatible"
+  },
+  "openrouter": {
+   "api": "https://openrouter.ai/api/v1",
+   "doc": "https://openrouter.ai/models",
+   "env": [
+    "OPENROUTER_API_KEY"
+   ],
+   "id": "openrouter",
+   "modelos": {
+    "cohere/north-mini-code:free": {
+     "abiertos": true,
+     "conocimiento": "2025-09-23",
+     "esfuerzos": [],
+     "fecha": "2026-06-09",
+     "herramientas": true,
+     "id": "cohere/north-mini-code:free",
+     "nombre": "North Mini Code (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 64000,
+     "ventana": 256000,
+     "vision": false
+    },
+    "google/gemma-4-26b-a4b-it:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-04-02",
+     "herramientas": true,
+     "id": "google/gemma-4-26b-a4b-it:free",
+     "nombre": "Gemma 4 26B A4B  (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 262144,
+     "vision": true
+    },
+    "google/gemma-4-31b-it:free": {
+     "abiertos": true,
+     "conocimiento": "2025-01",
+     "esfuerzos": [],
+     "fecha": "2026-04-02",
+     "herramientas": true,
+     "id": "google/gemma-4-31b-it:free",
+     "nombre": "Gemma 4 31B (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 32768,
+     "ventana": 262144,
+     "vision": true
+    },
+    "liquid/lfm-2.5-2.6b:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-08-11",
+     "herramientas": true,
+     "id": "liquid/lfm-2.5-2.6b:free",
+     "nombre": "LFM2.5-2.6B (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 8192,
+     "ventana": 65536,
+     "vision": false
+    },
+    "liquid/lfm-3-1.7b:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-11-06",
+     "herramientas": true,
+     "id": "liquid/lfm-3-1.7b:free",
+     "nombre": "LFM3-1.7B (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 8192,
+     "ventana": 262144,
+     "vision": false
+    },
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-04-28",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+     "nombre": "Nemotron 3 Nano Omni (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 256000,
+     "vision": true
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b:free": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [
+      "none",
+      "medium",
+      "high"
+     ],
+     "fecha": "2026-06-04",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+     "nombre": "Nemotron 3 Ultra (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "nvidia/nemotron-3.5-lightning:free": {
+     "abiertos": true,
+     "conocimiento": "2025-09",
+     "esfuerzos": [],
+     "fecha": "2026-08-11",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3.5-lightning:free",
+     "nombre": "Nemotron 3.5 Lightning (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 65536,
+     "ventana": 1000000,
+     "vision": false
+    },
+    "nvidia/nemotron-3.5-super-vl:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-10-15",
+     "herramientas": true,
+     "id": "nvidia/nemotron-3.5-super-vl:free",
+     "nombre": "Nemotron 3.5 Super VL (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 131072,
+     "ventana": 1000000,
+     "vision": true
+    },
+    "openrouter/free": {
+     "abiertos": false,
+     "entrada": 200000,
+     "esfuerzos": [],
+     "fecha": "2026-02-01",
+     "herramientas": true,
+     "id": "openrouter/free",
+     "nombre": "Free Models Router",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 8000,
+     "ventana": 200000,
+     "vision": true
+    },
+    "recursive/flint-v1.0:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-10-21",
+     "herramientas": true,
+     "id": "recursive/flint-v1.0:free",
+     "nombre": "Flint (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 235929,
+     "ventana": 262144,
+     "vision": false
+    },
+    "stealth/crouton-alpha": {
+     "abiertos": false,
+     "esfuerzos": [
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+     ],
+     "fecha": "2026-11-03",
+     "herramientas": true,
+     "id": "stealth/crouton-alpha",
+     "nombre": "Crouton Alpha",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 943718,
+     "ventana": 1048576,
+     "vision": true
+    },
+    "xingchen-agi/xing4.0-29b-a4b:free": {
+     "abiertos": true,
+     "esfuerzos": [],
+     "fecha": "2026-10-16",
+     "herramientas": true,
+     "id": "xingchen-agi/xing4.0-29b-a4b:free",
+     "nombre": "Xing4.0 29B A4B (free)",
+     "precio": {
+      "entrada": 0,
+      "salida": 0
+     },
+     "razona": true,
+     "salida": 235929,
+     "ventana": 262144,
+     "vision": false
+    }
+   },
+   "nombre": "OpenRouter",
+   "paquete": "@openrouter/ai-sdk-provider"
+  }
+ }
+}

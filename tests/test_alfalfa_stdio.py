@@ -128,9 +128,21 @@ def test_models_json(failed, capsys):
     args = SimpleNamespace(sesiones=False, modelos=True)
     response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {'models': [{'name': 'test'}]})
     with patch('httpx.Client.get', side_effect=OSError('offline') if failed else None, return_value=response):
-        assert entry(args) == int(failed)
+        assert entry(args) == 0
     row = json.loads(capsys.readouterr().out)
-    assert row['tipo'] == ('error' if failed else 'modelos')
+    # Sin Ollama siguen los gratis ahora del catálogo; el fallo de Ollama va en `fallos`.
+    assert row['tipo'] == 'modelos'
+    assert ('ollama' in row.get('fallos', {})) is failed
+    assert any(m.get('gratis') for m in row['modelos'])
+
+
+def test_models_json_sin_nada_es_un_error(capsys, monkeypatch):
+    from alfalfa import catalogo
+    monkeypatch.setattr(catalogo, 'gratis_ahora', lambda red=False: [])
+    args = SimpleNamespace(sesiones=False, modelos=True)
+    with patch('httpx.Client.get', side_effect=OSError('offline')):
+        assert entry(args) == 1
+    assert json.loads(capsys.readouterr().out)['tipo'] == 'error'
 
 
 def test_event_failure_and_saved_evidence_redacted(tmp_path, monkeypatch):

@@ -7,7 +7,13 @@ código de cortesía van en el Llavero (`llavero.py`), nunca aquí.
     {"por_defecto": "ollama",
      "ollama": {"url": "http://127.0.0.1:11434"},
      "openai": {"modelos": ["gpt-6-luna"]},
-     "alfalfa": {"url": "https://alfalfa.example.com"}}
+     "alfalfa": {"url": "https://alfalfa.example.com"},
+     "openrouter": {"guardada": true, "url": "https://openrouter.ai/api/v1",
+                    "modelos": ["anthropic/claude-sonnet-5"]}}
+
+De un compatible con OpenAI se guarda que tiene clave en el Llavero
+(`guardada`), la URL que había al guardarla (la clave no sigue a otra URL aunque
+el catálogo cambie) y los modelos de pago que el usuario quiere en el selector.
 """
 from __future__ import annotations
 
@@ -15,7 +21,7 @@ import json
 import os
 from pathlib import Path
 
-from . import PREFIJOS
+from . import es_prefijo
 
 ARCHIVO = 'proveedores.json'
 CLAVES_SECRETAS = ('clave', 'key', 'api_key', 'token', 'codigo', 'secret')
@@ -70,18 +76,18 @@ def de(proveedor):
 
 def por_defecto():
     valor = leer().get('por_defecto')
-    return valor if valor in PREFIJOS else 'ollama'
+    return valor if isinstance(valor, str) and es_prefijo(valor) else 'ollama'
 
 
 def cambiar(proveedor, campo, valor):
     """Fija `proveedor.campo` (o `por_defecto` con proveedor None) y lo guarda."""
     datos = leer()
     if proveedor is None:
-        if valor not in PREFIJOS:
+        if not (isinstance(valor, str) and es_prefijo(valor)):
             raise ValueError('Proveedor desconocido: ' + str(valor))
         datos[campo] = valor
     else:
-        if proveedor not in PREFIJOS:
+        if not es_prefijo(proveedor):
             raise ValueError('Proveedor desconocido: ' + str(proveedor))
         seccion = datos.get(proveedor) if isinstance(datos.get(proveedor), dict) else {}
         if valor is None:

@@ -2,7 +2,9 @@
 
     alfalfa --proveedores [--json]            estado, sin secretos
     alfalfa --guardar-clave openai            lee la clave por la entrada estándar
+    alfalfa --guardar-clave openrouter        (o cualquier compatible con OpenAI del catálogo)
     alfalfa --borrar-clave openai
+    alfalfa --catalogo [--json]               estado del catálogo de models.dev y los gratis ahora
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
     alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
@@ -20,6 +22,7 @@ import json
 import sys
 
 from . import PREFIJOS, configuracion, disponibles, llavero
+from .compatible import es_compatible
 from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.
@@ -94,26 +97,53 @@ def orden(args, entrada=None):
                     if hecho['enviado'] else
                     'No se pudo enviar: ' + hecho['motivo'] + ' Escríbenos a ' + hecho['soporte'] + '.')
             return 0
+        if getattr(args, 'catalogo', False):
+            datos = _catalogo()
+            _salida({'tipo': 'catalogo', **datos}, como_json, _texto_catalogo(datos))
+            return 0
         if args.guardar_clave:
             proveedor = args.guardar_clave
-            if proveedor not in CON_CLAVE:
+            compatible = proveedor not in CON_CLAVE and es_compatible(proveedor)
+            if proveedor not in CON_CLAVE and not compatible:
                 raise ValueError('Proveedor sin clave: ' + proveedor)
+            if compatible:
+                from .compatible import Compatible
+                # La clave queda atada a la URL de ahora: si el catálogo la cambia, no la sigue.
+                url = Compatible(proveedor).url()
             llavero.guardar(proveedor, _leer_secreto(proveedor, entrada))
+            if compatible:
+                configuracion.cambiar(proveedor, 'url', url)
+                configuracion.cambiar(proveedor, 'guardada', True)
             _salida({'tipo': 'proveedores', **estado()}, como_json,
                     'Clave de ' + proveedor + ' guardada en el Llavero.')
         elif args.borrar_clave:
-            llavero.borrar(args.borrar_clave)
+            proveedor = args.borrar_clave
+            if proveedor not in CON_CLAVE + ('alfalfa',) and not es_compatible(proveedor):
+                raise ValueError('Proveedor sin clave: ' + proveedor)
+            llavero.borrar(proveedor)
+            if proveedor not in CON_CLAVE + ('alfalfa',):
+                configuracion.cambiar(proveedor, 'guardada', None)
             _salida({'tipo': 'proveedores', **estado()}, como_json,
-                    'Clave de ' + args.borrar_clave + ' borrada del Llavero.')
+                    'Clave de ' + proveedor + ' borrada del Llavero.')
         elif args.proveedor_por_defecto:
             configuracion.cambiar(None, 'por_defecto', args.proveedor_por_defecto)
             _salida({'tipo': 'proveedores', **estado()}, como_json,
                     'Proveedor por defecto: ' + args.proveedor_por_defecto + '.')
         elif args.fijar_url:
             proveedor, url = args.fijar_url
-            if proveedor not in CON_URL:
+            if proveedor not in CON_URL and not es_compatible(proveedor):
                 raise ValueError('Proveedor sin URL configurable: ' + proveedor)
-            valor = None if url == '-' else validar_url(url, 'proveedores.json', proveedor)
+            if url == '-':
+                valor = None
+            elif proveedor in CON_URL:
+                valor = validar_url(url, 'proveedores.json', proveedor)
+            else:
+                from urllib.parse import urlsplit
+                partes = urlsplit(url.strip())
+                validar_url(partes.scheme + '://' + partes.netloc, 'proveedores.json', proveedor)
+                if partes.query or partes.fragment or partes.username or partes.password:
+                    raise ValueError('La URL de ' + proveedor + ' no lleva credenciales, consulta ni fragmento.')
+                valor = url.strip().rstrip('/')
             configuracion.cambiar(proveedor, 'url', valor)
             _salida({'tipo': 'proveedores', **estado()}, como_json,
                     'URL de ' + proveedor + ': ' + (valor or 'la de siempre') + '.')
@@ -131,6 +161,33 @@ def orden(args, entrada=None):
         else:
             print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
         return 1
+
+
+def _catalogo():
+    """Fecha y origen del catálogo y los modelos gratis ahora, por proveedor."""
+    from .. import catalogo
+    datos = catalogo.cargar(red=True)
+    por_proveedor = {}
+    for proveedor, ficha in catalogo.gratis_ahora():
+        por_proveedor.setdefault(proveedor['id'], {'nombre': proveedor['nombre'], 'modelos': []})
+        por_proveedor[proveedor['id']]['modelos'].append(ficha['id'])
+    return {'fuente': catalogo.URL, 'fecha': datos.get('fecha') or 0, 'origen': datos.get('origen'),
+            'proveedores': len(datos['proveedores']),
+            'modelos': sum(len(p['modelos']) for p in datos['proveedores'].values()),
+            'gratis': sum(len(p['modelos']) for p in por_proveedor.values()),
+            'gratis_por_proveedor': por_proveedor, 'aviso': catalogo.AVISO_GRATIS}
+
+
+def _texto_catalogo(datos):
+    import time
+    origen = {'red': 'recién bajado', 'cache': 'copia guardada', 'paquete': 'copia mínima del paquete'}
+    fecha = time.strftime('%Y-%m-%d %H:%M', time.localtime(datos['fecha'])) if datos['fecha'] else '—'
+    lineas = [f"Catálogo de models.dev ({origen.get(datos['origen'], datos['origen'])}, {fecha}): "
+              f"{datos['proveedores']} proveedores, {datos['modelos']} modelos.",
+              f"Gratis ahora: {datos['gratis']} modelos. {datos['aviso']}."]
+    for ident, fila in sorted(datos['gratis_por_proveedor'].items(), key=lambda f: -len(f[1]['modelos'])):
+        lineas.append(f"  {fila['nombre']} ({ident}): {len(fila['modelos'])}")
+    return '\n'.join(lineas)
 
 
 def _leer_reporte(entrada):
@@ -164,13 +221,17 @@ def _diagnostico():
 
 def argumentos(grupo):
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
-    grupo.add_argument('--guardar-clave', choices=CON_CLAVE, metavar='PROVEEDOR',
-                       help='Guardar en el Llavero la clave que llega por la entrada estándar')
-    grupo.add_argument('--borrar-clave', choices=CON_CLAVE + ('alfalfa',), metavar='PROVEEDOR',
+    grupo.add_argument('--guardar-clave', metavar='PROVEEDOR',
+                       help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai '
+                            'o un compatible con OpenAI del catálogo, como openrouter u opencode)')
+    grupo.add_argument('--borrar-clave', metavar='PROVEEDOR',
                        help='Borrar del Llavero una clave o el código de cortesía')
-    grupo.add_argument('--proveedor-por-defecto', choices=PREFIJOS, metavar='PROVEEDOR')
+    grupo.add_argument('--proveedor-por-defecto', metavar='PROVEEDOR',
+                       help='Proveedor por defecto: ' + ', '.join(PREFIJOS) + ' o un compatible del catálogo')
     grupo.add_argument('--fijar-url', nargs=2, metavar=('PROVEEDOR', 'URL'),
-                       help='URL base de Ollama o del servicio Alfalfa («-» la quita)')
+                       help='URL base de Ollama, del servicio Alfalfa o de un compatible («-» la quita)')
+    grupo.add_argument('--catalogo', action='store_true',
+                       help='Catálogo de models.dev: fecha, origen y modelos gratis ahora')
     grupo.add_argument('--activar-codigo', action='store_true',
                        help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
@@ -184,7 +245,7 @@ def argumentos(grupo):
 
 
 def pedida(args):
-    return bool(args.proveedores or args.guardar_clave or args.borrar_clave
+    return bool(args.proveedores or getattr(args, 'catalogo', False) or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
                 or getattr(args, 'reportar', False) or getattr(args, 'buscador', None) is not None
                 or getattr(args, 'fijar_searxng', None))

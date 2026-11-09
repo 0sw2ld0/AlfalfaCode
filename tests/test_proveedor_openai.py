@@ -103,8 +103,11 @@ def test_sin_clave_openai_no_sale_en_la_lista_y_con_clave_si():
     assert not proveedores.obtener('openai').configurado()
     llavero.guardar('openai', 'sk-prueba-123')
     filas = proveedores.obtener('openai').modelos()
-    assert filas == [{'name': 'openai/gpt-6-luna', 'model': 'openai/gpt-6-luna', 'proveedor': 'openai',
-                      'nombre': 'GPT-6 Luna'}]
+    assert [{k: f[k] for k in ('name', 'model', 'proveedor', 'nombre')} for f in filas] == [
+        {'name': 'openai/gpt-6-luna', 'model': 'openai/gpt-6-luna', 'proveedor': 'openai', 'nombre': 'GPT-6 Luna'}]
+    # La ventana propia (por debajo del tramo caro de OpenAI) manda sobre la del catálogo; el precio es del catálogo.
+    assert filas[0]['ventana'] == 272000
+    assert filas[0]['precio']['entrada'] > 0
     configuracion.cambiar('openai', 'modelos', ['gpt-6-sol'])
     assert [f['name'] for f in proveedores.obtener('openai').modelos()][-1] == 'openai/gpt-6-sol'
 

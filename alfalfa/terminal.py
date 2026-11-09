@@ -534,6 +534,8 @@ class TerminalManager:
         # El cierre (wrap_up) es de cada turno: el del anterior ya no vale.
         self.task.pop('cierre', None)
         turno = registro.abrir_turno(self.task, prompt, len(rt.state.get('messages', [])))
+        # Para el coste y los tokens de este turno: lo gastado antes de empezarlo.
+        antes = (self.task.get('total_tokens') or 0, self.task.get('coste_usd'))
         # Entero en la transcripción: el turno sólo guarda el principio y el historial que se
         # reabre tiene que enseñarlo como se mandó. A la app sólo vuelve si no lo pintó ella.
         self.event(self.task, 'user', prompt, emitir=eco)
@@ -572,7 +574,8 @@ class TerminalManager:
                 rt.state.update(self.transport.clean(rt.state))
             rt.evidence.finish(error=self.task.get('summary') if self.task['status'] != 'completed' else None)
             registro.cerrar_turno(self.task, turno['id'], self.task['status'], len(rt.state.get('messages', [])),
-                                  cierre=self.task.get('cierre'))
+                                  cierre=self.task.get('cierre'),
+                                  gasto=registro.gasto_del_turno(self.task, *antes))
             rt._record_context_details()
             if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
                 self.context(self.task, self.task['context_tokens'], self.task['context_limit'])

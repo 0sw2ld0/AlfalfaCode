@@ -42,7 +42,8 @@ ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9-]{0,23}')
 VARIABLE = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,127}')
 CABECERA = re.compile(r'[A-Za-z0-9-]{1,64}')
 # Nunca llegan a un servidor MCP aunque se declaren.
-VARIABLES_PROHIBIDAS = frozenset({'OLLAMA_API_KEY', 'OPENAI_API_KEY', 'ALFALFA_CODIGO'})
+VARIABLES_PROHIBIDAS = frozenset({'OLLAMA_API_KEY', 'OPENAI_API_KEY', 'ALFALFA_CODIGO', 'OPENROUTER_API_KEY',
+                                  'OPENCODE_API_KEY'})
 CABECERAS_PROHIBIDAS = frozenset({'host', 'content-length', 'transfer-encoding', 'connection',
                                   'mcp-session-id', 'mcp-protocol-version'})
 # Su valor es «<esquema> <credencial>»; secretos() redacta también la credencial sola.
