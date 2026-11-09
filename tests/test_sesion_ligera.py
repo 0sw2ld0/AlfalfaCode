@@ -6,6 +6,7 @@ espacio de trabajo van en JSONL a los que sólo se añade, session.json queda
 pequeño y handoff.json lleva lo último de cada lista con el total aparte.
 """
 import asyncio
+import fcntl
 import json
 import os
 import subprocess
@@ -315,3 +316,71 @@ def test_bifurcar_e_importar_escriben_el_formato_nuevo(proyecto, tmp_path):
     assert len(estado['messages']) == t1['hasta']
     assert [x['content'] for x in estado['messages'] if x['role'] == 'user'] == ['Primero.']
     assert oct(os.stat(carpeta / historial.MENSAJES).st_mode & 0o777) == '0o600'
+
+
+def sesion_vieja(carpeta, root):
+    """Una sesión v2 terminada, como las dejaba AlfalfaCode 0.99.0, con su handoff.json."""
+    directorio = carpeta / 'native' / carpeta.name
+    directorio.mkdir(parents=True)
+    (carpeta / 'task.json').write_text(json.dumps({'id': carpeta.name, 'status': 'completed'}))
+    comprobaciones = [{'id': f'check-{n:06d}', 'argv': ['false', str(n)], 'cwd': root, 'exit_code': 1,
+                       'output': 'mal ' * 500, 'revision': 0, 'workspace_context': foto(root, n)} for n in range(60)]
+    no_relevantes = [{'id': f'resolution-{n:06d}', 'finding_id': 'finding-000001', 'status': 'not_relevant',
+                      'check_evidence': {'output': 'y' * 2000}} for n in range(300)]
+    mensajes = [{'role': 'system', 'content': 's'}] + [{'role': 'tool', 'tool_name': 'read_file',
+                                                        'content': 'w' * 3000} for _ in range(50)]
+    (directorio / 'session.json').write_text(json.dumps({
+        'version': 2, 'evidence_version': 2, 'messages': mensajes, 'pending': [], 'plan': '', 'changes': [],
+        'operations': comprobaciones, 'checks': comprobaciones, 'resolution_records': no_relevantes}))
+    (directorio / 'handoff.json').write_text(json.dumps({
+        'version': 1, 'checks': comprobaciones[-20:], 'checks_total': 60, 'operations': comprobaciones[-20:],
+        'operations_total': 60, 'blockers': {f'finding-{n:06d}': 'fallo' for n in range(80)},
+        'unresolved_records': {f'finding-{n:06d}': {'id': f'finding-{n:06d}', 'original': {'output': 'x' * 2000}}
+                               for n in range(80)},
+        'resolution_records': no_relevantes, 'verification': {'status': 'failed', 'check_failures': comprobaciones}}))
+    return directorio, mensajes, no_relevantes
+
+
+def test_aligerar_todas_las_sesiones_de_una_vez(proyecto, tmp_path, capsys):
+    from alfalfa.terminal import main
+    root = str(proyecto.resolve())
+    sesiones = tmp_path / 'alfalfa' / 'sesiones'
+    vieja, mensajes, no_relevantes = sesion_vieja(sesiones / 'vieja', root)
+    abierta, _, _ = sesion_vieja(sesiones / 'abierta', root)
+    antes = sum(p.stat().st_size for p in vieja.iterdir())
+    # Una sesión en marcha tiene su cerrojo tomado (como TerminalManager): no se toca.
+    en_marcha = os.open(sesiones / 'abierta' / 'lock', os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(en_marcha, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        intacta = (abierta / 'session.json').read_bytes()
+        assert main(['--aligerar-sesiones']) == 0
+        salida = capsys.readouterr().out
+        assert 'abierta  en marcha: no se toca' in salida and 'vieja  ' in salida and 'se liberan' in salida
+        assert 'resoluciones sin relación guardadas aparte ocupan' in salida
+        assert (abierta / 'session.json').read_bytes() == intacta
+    finally:
+        os.close(en_marcha)
+    guardado = json.loads((vieja / 'session.json').read_text())
+    assert guardado['version'] == 3 and 'messages' not in guardado and guardado['resolution_records'] == []
+    assert historial.leer(vieja / 'session.json')['messages'] == mensajes
+    archivadas = (vieja / registro.ARCHIVO_NO_RELEVANTES).read_text().splitlines()
+    assert [json.loads(x) for x in archivadas] == no_relevantes
+    entrega = json.loads((vieja / 'handoff.json').read_text())
+    assert len(entrega['blockers']) == 20 and entrega['blockers_total'] == 80
+    assert len(entrega['resolution_records']) == 20 and entrega['resolution_records_total'] == 300
+    assert entrega['checks_total'] == 60 and entrega['verification']['check_failures_total'] == 60
+    assert 'workspace_context' not in json.dumps(entrega)
+    despues = sum(p.stat().st_size for p in vieja.iterdir() if p.name != registro.ARCHIVO_NO_RELEVANTES)
+    assert despues < antes / 5
+    # Otra vez: ya está todo ligero y no cambia nada.
+    copia = {p.name: p.read_bytes() for p in vieja.iterdir()}
+    assert main(['--aligerar-sesiones', '--json']) == 0
+    filas = {f['id']: f for f in json.loads(capsys.readouterr().out)['sesiones']}
+    assert filas['vieja']['antes'] == filas['vieja']['despues'] and filas['abierta']['estado'] == 'aligerada'
+    assert {p.name: p.read_bytes() for p in vieja.iterdir()} == copia
+    # Lo guardado aparte no lo lee nadie: se puede descartar, y el número se conserva.
+    assert main(['--aligerar-sesiones', '--descartar-no-relevantes']) == 0
+    assert not (vieja / registro.ARCHIVO_NO_RELEVANTES).exists()
+    assert json.loads((vieja / 'session.json').read_text())['resolutions_not_relevant'] == 300
+    with pytest.raises(SystemExit):
+        main(['--descartar-no-relevantes'])
