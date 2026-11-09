@@ -581,12 +581,17 @@ que lo autorizas. La lista enseña de qué herramienta y de qué archivo viene c
 uno y su definición sin resolver. De un servidor stdio enseña la orden entera con
 sus argumentos, sin recortar; una de más de 8000 caracteres (contados en crudo) no se
 usa. La de un servidor del proyecto se ve tal cual se ejecutará. En la de uno tuyo se
-tapan sólo los valores que son claramente una credencial: `--token=…`, el valor que
-sigue a `--api-key`, `Authorization: Bearer …`, y de una URL bien formada la
-contraseña, la consulta, el fragmento o un tramo con forma de token. Los caracteres
+tapan sólo los valores que son claramente una credencial: `--token=…`,
+`NOMBRE_TOKEN=…` (como `docker run -e`), el valor que sigue a `--api-key`, una cabecera
+`Authorization: …` (también tras `--header=` o `-H`), las claves con nombre de credencial
+de un JSON, y de una URL (`http`, `https`, `ws`, `wss`) la contraseña, la consulta, el
+fragmento o un tramo con forma de token. Los caracteres
 de control salen escritos. También enseña la ruta del ejecutable, avisando si es del
-repositorio. Si la definición declara un PATH, se busca con él, y un tramo vacío
-cuenta como la carpeta del proceso. Por último, la carpeta que podrá escribir, si
+repositorio, también si un servidor tuyo acaba lanzando un binario del repositorio
+abierto (el `npx` de `node_modules/.bin`); entonces la huella incluye ese binario y su
+contenido, y la autorización no vale en otro repositorio ni si el binario cambia. Si
+la definición declara un PATH, se busca con él, y un tramo vacío cuenta como la
+carpeta del proceso. Por último, la carpeta que podrá escribir, si
 tendrá internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
 Al empezar una sesión, un aviso dice qué queda sin autorizar.
 

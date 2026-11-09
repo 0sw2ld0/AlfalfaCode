@@ -148,6 +148,19 @@ def dentro(ruta, limite):
         return False
 
 
+def _sin_repetir(filas):
+    """Sin el mismo archivo dos veces (con la sesión en ~, ~/.codex/config.toml es a la vez del
+    proyecto y del usuario): se queda como del usuario, que es lo que oculta sus valores."""
+    unicas = []
+    for ruta, ambito in filas:
+        igual = next((i for i, (otra, _) in enumerate(unicas) if traduccion._misma(ruta, otra)), None)
+        if igual is None:
+            unicas.append((ruta, ambito))
+        elif ambito == 'usuario':
+            unicas[igual] = (unicas[igual][0], 'usuario')
+    return unicas
+
+
 def archivos_opencode(cwd, ambiente):
     """[(ruta, ámbito)] en orden de precedencia: `.opencode/` gana al suelto y lo cercano a lo lejano."""
     carpetas, raiz = _carpetas(cwd)
@@ -156,8 +169,8 @@ def archivos_opencode(cwd, ambiente):
     filas += [(c / n, 'proyecto') for c in carpetas for n in nombres]
     config = _config_opencode(ambiente)
     filas += [(config / n, 'usuario') for n in nombres]
-    return [(ruta, ambito) for ruta, ambito in filas
-            if ruta.is_file() and dentro(ruta, raiz if ambito == 'proyecto' else config)]
+    return _sin_repetir([(ruta, ambito) for ruta, ambito in filas
+                         if ruta.is_file() and dentro(ruta, raiz if ambito == 'proyecto' else config)])
 
 
 def _config_opencode(ambiente):
@@ -171,8 +184,8 @@ def archivos_codex(cwd, ambiente):
         else _casa(ambiente) / '.codex'
     filas = [(c / '.codex' / 'config.toml', 'proyecto') for c in carpetas]
     filas.append((hogar_codex / 'config.toml', 'usuario'))
-    return [(ruta, ambito) for ruta, ambito in filas
-            if ruta.is_file() and dentro(ruta, raiz if ambito == 'proyecto' else hogar_codex)]
+    return _sin_repetir([(ruta, ambito) for ruta, ambito in filas
+                         if ruta.is_file() and dentro(ruta, raiz if ambito == 'proyecto' else hogar_codex)])
 
 
 def instrucciones(cwd, ambiente=None):
@@ -346,7 +359,8 @@ class Importadas:
         resuelto = elemento.valor.entorno if elemento.valor is not None else None
         try:
             elemento.definicion = traduccion.definicion_mcp(herramienta, entrada, lugar, cwd, ambitos,
-                                                            carpeta=cwd or self.cwd, entorno=resuelto)
+                                                            carpeta=cwd or self.cwd, entorno=resuelto,
+                                                            repositorio=self.raiz)
         except (TypeError, ValueError, OSError):
             elemento.definicion = {}
         if elemento.definicion.get('largo', 0) > traduccion.MAX_ORDEN:
@@ -356,7 +370,11 @@ class Importadas:
             elemento.valor = None
         elemento.detalle = traduccion.visible(prefijo) + traduccion.resumen_mcp(elemento.definicion)
         # La huella cubre la definición cruda y la carpeta ya resuelta: lo que se va a usar.
-        elemento.crudo = {'entrada': entrada, 'cwd': cwd}
+        # Con el ejecutable del repositorio que acabaría lanzando (y su contenido): la misma
+        # autorización no vale en otro repositorio con otro binario.
+        elemento.crudo = {'entrada': entrada, 'cwd': cwd,
+                          'ejecutable': [elemento.definicion.get('ejecutable_real'),
+                                         elemento.definicion.get('ejecutable_huella')]}
         self._anadir(elemento)
 
     def _agente(self, herramienta, origen, ambito, nombre, datos, cuerpo=''):
@@ -456,13 +474,26 @@ class Importadas:
         bases = [(c / '.opencode', 'proyecto', self.raiz) for c in self.carpetas]
         config = _config_opencode(self.ambiente)
         bases.append((config, 'usuario', config))
-        for base, ambito, limite in bases:
+        for base, ambito, limite in self._bases_unicas(bases):
             for carpeta in ('agents', 'agent'):
                 for nombre, ruta in _markdowns(base / carpeta, limite):
                     self._md(ruta, lambda d, c, n=nombre, r=ruta, a=ambito: self._agente(OPENCODE, r, a, n, d, c))
             for carpeta in ('commands', 'command'):
                 for nombre, ruta in _markdowns(base / carpeta, limite):
                     self._md(ruta, lambda d, c, n=nombre, r=ruta, a=ambito: self._comando(OPENCODE, r, a, n, d, c))
+
+    @staticmethod
+    def _bases_unicas(bases):
+        """Las carpetas de .md sin repetir la misma (como del usuario si también lo es)."""
+        unicas = []
+        for base, ambito, limite in bases:
+            igual = next((i for i, (otra, _, _) in enumerate(unicas) if base.is_dir() and otra.is_dir()
+                          and traduccion._misma(base, otra)), None)
+            if igual is None:
+                unicas.append((base, ambito, limite))
+            elif ambito == 'usuario':
+                unicas[igual] = (base, ambito, limite)
+        return unicas
 
     def _md(self, ruta, crear):
         try:
@@ -498,7 +529,7 @@ class Importadas:
                     self._mcp(CLAUDE, ruta, 'proyecto', nombre, entrada, traduccion.mcp_claude, carpeta)
         bases = [(c / '.claude' / 'commands', 'proyecto', self.raiz) for c in self.carpetas]
         bases.append((self.casa / '.claude' / 'commands', 'usuario', self.casa / '.claude' / 'commands'))
-        for base, ambito, limite in bases:
+        for base, ambito, limite in self._bases_unicas(bases):
             # Claude Code nombra el comando por el archivo; la subcarpeta sólo lo agrupa.
             for _, ruta in _markdowns(base, limite):
                 self._md(ruta, lambda d, c, r=ruta, a=ambito: self._comando(CLAUDE, r, a, r.stem, d, c))

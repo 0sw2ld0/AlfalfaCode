@@ -342,11 +342,26 @@ def _ejecutable(nombre, entorno, carpeta):
     return (Path(encontrado).resolve() if encontrado else None), False
 
 
-def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None, entorno=None):
+def _huella_de_archivo(ruta, tope=16 * 1024 * 1024):
+    """SHA-256 del contenido (o tamaño y fecha si es muy grande): si el binario del repositorio
+    cambia, la autorización deja de valer."""
+    import hashlib
+    try:
+        datos = Path(ruta).stat()
+        if datos.st_size > tope:
+            return 'tamaño ' + str(datos.st_size) + ' · ' + str(int(datos.st_mtime))
+        return hashlib.sha256(Path(ruta).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None, entorno=None, repositorio=None):
     """La definición cruda para decidir si se autoriza (ver el docstring del módulo).
 
     `carpeta` es donde correrá el proceso (su cwd o la de la sesión) y `entorno`, el entorno ya
-    resuelto que recibirá: con ellos se dice qué ejecutable se lanza de verdad."""
+    resuelto que recibirá: con ellos se dice qué ejecutable se lanza de verdad. `repositorio` es la
+    raíz del de la sesión: un servidor del usuario que acaba lanzando un binario de ahí (el `npx`
+    de `node_modules/.bin`) también se marca «del repositorio»."""
     if not isinstance(entrada, dict):
         return {}
     if herramienta == 'OpenCode':
@@ -376,7 +391,11 @@ def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None,
         real, con_path = _ejecutable(orden[0], entorno, carpeta or cwd or lugar.base)
         fila['ejecutable'] = (str(real) if real else orden[0] + ' (no está en el PATH)') + (
             ' (con el PATH de la definición)' if con_path else '')
-        fila['del_repositorio'] = bool(real and lugar.proyecto is not None and _dentro(real, lugar.proyecto.resolve()))
+        raices = [r for r in (lugar.proyecto, repositorio) if r is not None]
+        fila['del_repositorio'] = bool(real and any(_dentro(real, Path(r).resolve()) for r in raices))
+        if fila['del_repositorio']:
+            fila['ejecutable_real'] = str(real)
+            fila['ejecutable_huella'] = _huella_de_archivo(real)
         if cwd:
             fila['carpeta'] = cwd
     elif isinstance(url, str):

@@ -61,14 +61,23 @@ def regex_escape(text):
     return ''.join('[^/]' if ch == '"' else '\\' + ch if ch in _REGEX_META else ch for ch in text)
 
 
+def _sin_mayusculas(texto):
+    """Cada letra como `[gG]`: en APFS sin distinción de mayúsculas `.GIT` es el mismo `.git`, y así
+    la protección no depende de cómo compare Seatbelt. Seatbelt no media el renombrado que sólo
+    cambia mayúsculas (`mv .git .GIT` sale bien con cualquier regla), pero con este patrón el
+    `.GIT` resultante sigue igual de protegido: ni sus hooks se escriben ni sale de su sitio."""
+    return ''.join('[' + c.lower() + c.upper() + ']' if c.lower() != c.upper() else regex_escape(c) for c in texto)
+
+
 def protected_metadata_name_regex(root, name, nested=True):
-    """Como seatbelt_protected_metadata_name_regex, también en subcarpetas si `nested`."""
+    """Como seatbelt_protected_metadata_name_regex, también en subcarpetas si `nested`; el nombre
+    protegido, sin distinguir mayúsculas."""
     root = str(root)
     while len(root) > 1 and root.endswith('/'):
         root = root[:-1]
     prefix = '' if root == '/' else regex_escape(root)
     depth = '(.*/)?' if nested else ''
-    return '^' + prefix + '/' + depth + regex_escape(name) + '(/.*)?$'
+    return '^' + prefix + '/' + depth + _sin_mayusculas(name) + '(/.*)?$'
 
 
 def _policy_regex(regex):
@@ -124,7 +133,7 @@ def nested_metadata_ancestors(workspace, limit=None):
                     seen += 1
                     if seen > limit:
                         return None
-                    if entry.name in PROTECTED_METADATA:
+                    if entry.name.casefold() in {n.casefold() for n in PROTECTED_METADATA}:
                         protected.update(_ancestors(current, workspace))
                     elif entry.is_dir(follow_symlinks=False):
                         pending.append(entry.path)
