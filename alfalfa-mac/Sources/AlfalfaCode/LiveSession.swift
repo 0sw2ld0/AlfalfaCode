@@ -24,6 +24,8 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published var draftImages: [URL] = []
     /// Texto que la vista pone en el cuadro al abrir la sesión (volver a un mensaje).
     @Published var pendingDraft: String?
+    /// «Este modelo no ve imágenes» al pegar o soltar una con un modelo sin visión.
+    let imageNotice = ImageNotice()
 
     var onChange: (() -> Void)?
     private var process: AlfalfaProcess?
@@ -118,6 +120,14 @@ final class LiveSession: ObservableObject, Identifiable {
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
         onChange?()
+        // El motor no abrió turno con ese mensaje: vuelve al cuadro, con sus imágenes.
+        if case let .messageRejected(rejection) = message {
+            if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta." { pendingDraft = rejection.text }
+            if draftImages.isEmpty {
+                draftImages = rejection.images.map { URL(fileURLWithPath: $0) }
+                    .filter { FileManager.default.fileExists(atPath: $0.path) }
+            }
+        }
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
         if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {

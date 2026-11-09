@@ -377,6 +377,19 @@ async def run(args, transport):
                 manager.save()
                 transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                                modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'])
+            # Imágenes para un modelo que no las ve: se rechaza el mensaje sin empezar el turno.
+            # La app lo quita de la conversación y lo devuelve al cuadro (`rechazado`).
+            rechazo = await manager.sin_vision(prompt)
+            if rechazo:
+                from .imagenes import rutas_etiquetadas
+                transport.emit('error', texto=rechazo[0], motivo='sin_vision',
+                               rechazado={'texto': _sin_etiquetas(prompt), 'imagenes': rutas_etiquetadas(prompt)},
+                               con_vision=[{'modelo': ident, 'nombre': nombre} for ident, nombre in rechazo[1]])
+                if not eco:
+                    code = 0  # el encargo inicial rechazado no es un fallo; un turno anterior manda
+                eco = True
+                prompt = await transport.next_message()
+                continue
             transport.turno_cortado = False
             transport.worker = asyncio.create_task(manager.run(prompt, eco=eco))
             try:

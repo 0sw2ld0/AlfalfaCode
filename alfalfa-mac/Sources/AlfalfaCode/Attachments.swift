@@ -3,9 +3,11 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Miniaturas de las imágenes que se van a enviar, con su botón para quitarlas.
+/// Miniaturas de las imágenes que se van a enviar, con su botón para quitarlas. Con `blocked`
+/// (el modelo elegido no ve imágenes) se marcan: no llegarían al modelo.
 struct AttachmentStrip: View {
     @Binding var images: [URL]
+    var blocked = false
 
     var body: some View {
         if !images.isEmpty {
@@ -14,7 +16,18 @@ struct AttachmentStrip: View {
                     ForEach(Array(images.enumerated()), id: \.element) { index, url in
                         ZStack(alignment: .topTrailing) {
                             Thumbnail(url: url, size: 88)
-                                .help("[Image #\(index + 1)] \(url.lastPathComponent)")
+                                .opacity(blocked ? 0.45 : 1)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.danger, lineWidth: blocked ? 2 : 0))
+                                .overlay(alignment: .bottomLeading) {
+                                    if blocked {
+                                        Image(systemName: "eye.slash.fill").font(.system(size: 13))
+                                            .foregroundStyle(Theme.danger).padding(5)
+                                    }
+                                }
+                                .help(blocked ? ImageSupport.notice + ": no se enviará"
+                                      : "[Image #\(index + 1)] \(url.lastPathComponent)")
+                                .accessibilityLabel(blocked ? url.lastPathComponent + ". " + ImageSupport.notice
+                                                    : url.lastPathComponent)
                             Button { images.removeAll { $0 == url } } label: {
                                 Image(systemName: "xmark.circle.fill").font(.system(size: 15))
                                     .foregroundStyle(Theme.light, Theme.dark)

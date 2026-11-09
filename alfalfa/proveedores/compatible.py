@@ -59,6 +59,8 @@ def esfuerzo_para(ficha, esfuerzo, pensar):
 def traducir_chat(payload, ficha=None, esfuerzo=None, openrouter=False):
     """El cuerpo de `/chat/completions` para un `/api/chat` de Ollama."""
     mensajes, pendientes, llamadas = [], [], 0
+    # Las imágenes de los resultados de herramientas, para cuando acabe la tanda de resultados.
+    diferidas = []
 
     def cerrar_pendientes():
         while pendientes:
@@ -75,11 +77,21 @@ def traducir_chat(payload, ficha=None, esfuerzo=None, openrouter=False):
             if indice is None:
                 mensajes.append({'role': 'user', 'content': 'Resultado de ' + str(nombre or 'una herramienta')
                                  + ':\n' + contenido})
-                continue
-            ident, _ = pendientes.pop(indice)
-            mensajes.append({'role': 'tool', 'tool_call_id': ident, 'content': contenido})
+            else:
+                ident, _ = pendientes.pop(indice)
+                mensajes.append({'role': 'tool', 'tool_call_id': ident, 'content': contenido})
+            # Chat Completions sólo admite texto en un mensaje `tool`: sus imágenes van
+            # justo después, en uno del usuario que dice de qué herramienta vienen.
+            imagenes = [i for i in mensaje.get('images') or [] if isinstance(i, str) and i]
+            if imagenes:
+                diferidas.append({'role': 'user', 'content': [
+                    {'type': 'text', 'text': 'Imagen que devolvió la herramienta ' + str(nombre or '') + ':'},
+                    *[{'type': 'image_url', 'image_url': {'url': 'data:' + _mime(i) + ';base64,' + i}}
+                      for i in imagenes]]})
             continue
         cerrar_pendientes()
+        mensajes.extend(diferidas)
+        diferidas.clear()
         if rol == 'system':
             mensajes.append({'role': 'system', 'content': contenido})
         elif rol == 'assistant':
@@ -106,6 +118,7 @@ def traducir_chat(payload, ficha=None, esfuerzo=None, openrouter=False):
             else:
                 mensajes.append({'role': 'user', 'content': contenido})
     cerrar_pendientes()
+    mensajes.extend(diferidas)
 
     cuerpo = {'model': payload.get('model'), 'messages': mensajes, 'stream': False}
     if payload.get('tools'):
@@ -177,6 +190,7 @@ def mostrar(datos, ficha, modelo, url):
     # herramientas (para eso lo añadió); si no, el proveedor lo dirá en la primera llamada.
     capacidades = ['completion']
     capacidades += ['tools'] if not ficha or ficha.get('herramientas') else []
+    conocida = bool(ficha) and 'vision' in ficha
     ficha = ficha or {}
     capacidades += ['thinking'] if ficha.get('razona') else []
     capacidades += ['vision'] if ficha.get('vision') else []
@@ -184,6 +198,9 @@ def mostrar(datos, ficha, modelo, url):
             'details': {'family': datos.get('id', '')}, 'model_info': {}, 'catalogo': ficha}
     if ficha.get('ventana'):
         info['model_info']['catalogo.context_length'] = ficha['ventana']
+    if not conocida:
+        # Sin ficha del catálogo no se sabe si ve imágenes: se le mandan y el proveedor dirá.
+        info['vision_conocida'] = False
     return info
 
 
@@ -334,6 +351,8 @@ class Compatible(Proveedor):
         fila = {'name': self.id + '/' + ficha['id'], 'model': self.id + '/' + ficha['id'], 'proveedor': self.id,
                 'nombre': ficha.get('nombre') or ficha['id'], 'nombre_proveedor': self.nombre,
                 **catalogo.resumen(ficha)}
+        if 'vision' not in ficha:
+            fila['vision'] = None  # un modelo añadido que el catálogo no describe
         if catalogo.es_gratis(self.datos(), ficha):
             fila.update(gratis=True, aviso=catalogo.AVISO_GRATIS)
         if not self.configurado():

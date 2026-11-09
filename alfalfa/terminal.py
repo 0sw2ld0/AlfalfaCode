@@ -525,6 +525,19 @@ class TerminalManager:
             self.save()
             self.despierto.terminar()
 
+    async def sin_vision(self, prompt):
+        """Antes de empezar un turno: si el mensaje trae imágenes y el modelo de la sesión no
+        las ve, ni hay visión delegada que las describa, el texto del rechazo y los modelos
+        que sí las ven [(id, nombre)]. None si se puede seguir (también si no se sabe)."""
+        from . import ajustes, imagenes
+        if not imagenes.rutas_etiquetadas(prompt) or ajustes.vision_delegada():
+            return None
+        modelo = self.task.get('model')
+        if await proveedores.vision_del_modelo(modelo) is not False:
+            return None
+        sugeridos = await asyncio.to_thread(proveedores.con_vision, modelo)
+        return proveedores.texto_sin_vision(modelo, sugeridos), sugeridos
+
     async def run(self, prompt, eco=False):
         """`eco`: el mensaje llegó del cliente entre turnos; se le devuelve como evento `user`
         para que la app lo marque entregado (el primer encargo ya lo pinta ella)."""
@@ -703,6 +716,10 @@ async def execute(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
+        rechazo = await manager.sin_vision(args.encargo or '')
+        if rechazo:
+            print('AlfalfaCode · Error: ' + rechazo[0], file=sys.stderr)
+            return 1
         return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas '
                                                  'antes de actuar.')
     finally:

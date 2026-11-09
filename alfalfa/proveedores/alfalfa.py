@@ -316,7 +316,9 @@ class Alfalfa(Proveedor):
     def modelos(self):
         filas = self._pedir('GET', '/api/tags').get('models') or []
         return [{'name': 'alfalfa/' + f['name'], 'model': 'alfalfa/' + f['name'], 'proveedor': self.id,
-                 'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO}
+                 'nombre': (f.get('nombre') or NOMBRES.get(f['name'], f['name'])) + SUFIJO,
+                 # El servicio dice sus capacidades; uno anterior no las da y no se sabe (None).
+                 'vision': 'vision' in f['capabilities'] if isinstance(f.get('capabilities'), list) else None}
                 for f in filas if isinstance(f, dict) and f.get('name')]
 
     def cuota(self):

@@ -239,6 +239,19 @@ public struct Timeline: Equatable, Sendable {
         userTimes[id] = Date().timeIntervalSince1970
     }
 
+    /// El mensaje rechazado sale de la conversación (vuelve al cuadro) y queda el aviso. Sin turno
+    /// en marcha, la sesión sigue lista para otro mensaje.
+    mutating func reject(_ rejection: MessageRejection) {
+        let wanted = rejection.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        func matches(_ item: TimelineItem) -> Bool {
+            guard case let .user(id, text, _) = item, userTurns[id] == nil else { return false }
+            return ImageTags.split(text).text == wanted
+        }
+        if let index = items.lastIndex(where: matches) { items.remove(at: index) }
+        items.append(.notice(id: nextID(), text: rejection.message))
+        if status.isRunning, pendingPermissions.isEmpty { status = .idle }
+    }
+
     /// El turno anterior al del mensaje `id`: volver a ese mensaje es bifurcar hasta ahí.
     /// nil si es el primero (volver es empezar de cero) o si aún no se sabe su turno.
     public func turnBefore(user id: Int) -> String?? {
@@ -324,6 +337,8 @@ public struct Timeline: Equatable, Sendable {
             if let details { contextDetails = details }
         case let .error(text):
             items.append(.notice(id: nextID(), text: text))
+        case let .messageRejected(rejection):
+            reject(rejection)
         case let .turnFinished(outcome):
             runningPermission = nil
             compacting = false

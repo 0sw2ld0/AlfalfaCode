@@ -79,6 +79,8 @@ final class AppModel: ObservableObject {
     @Published var update: UpdateCheck?
     /// Imágenes del nuevo encargo.
     @Published var draftImages: [URL] = []
+    /// «Este modelo no ve imágenes» en el cuadro del encargo nuevo.
+    let newImageNotice = ImageNotice()
     private var pasteMonitor: Any?
 
     let launcher: URL?
@@ -102,9 +104,13 @@ final class AppModel: ObservableObject {
 
     private func attachPasted(_ url: URL) {
         switch route {
-        case .new: ImagePicker.add([url], to: &draftImages)
+        case .new:
+            guard allowsImages(model) else { newImageNotice.show(); return }
+            ImagePicker.add([url], to: &draftImages)
         case let .live(id):
-            if let session = session(id) { ImagePicker.add([url], to: &session.draftImages) }
+            guard let session = session(id) else { return }
+            guard allowsImages(session.model) else { session.imageNotice.show(); return }
+            ImagePicker.add([url], to: &session.draftImages)
         case .past: break
         }
     }

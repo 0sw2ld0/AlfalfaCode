@@ -21,7 +21,9 @@ struct Composer: View {
                 let quotas = session.timeline.quotas.isEmpty ? app.alfalfaQuotas : session.timeline.quotas
                 if !quotas.isEmpty { QuotaLine(quotas: quotas).frame(maxWidth: .infinity, alignment: .leading) }
             }
-            AttachmentStrip(images: $session.draftImages).frame(maxWidth: .infinity, alignment: .leading)
+            AttachmentStrip(images: $session.draftImages, blocked: !allowsImages)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ImageNoticeLine(notice: session.imageNotice)
             HStack(spacing: 10) {
                 attachButton
                 field
@@ -30,7 +32,22 @@ struct Composer: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.border))
-            .onDrop(of: [.fileURL], isTargeted: nil) { ImagePicker.drop($0, into: $session.draftImages) }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                guard allowsImages else { session.imageNotice.show(); return true }
+                return ImagePicker.drop(providers, into: $session.draftImages)
+            }
+            .confirmationDialog(ImageChoiceButtons.title, isPresented: $askingAboutImages) {
+                ImageChoiceButtons(alternatives: app.imageAlternatives(to: session.model)) { choice in
+                    session.change(model: choice.model)
+                    send()
+                } dropImages: {
+                    session.draftImages = []
+                    send()
+                }
+            } message: {
+                Text(ImageChoiceButtons.message(model: app.label(for: session.model),
+                                                alternatives: app.imageAlternatives(to: session.model)))
+            }
 
             ComposerToolbar(session: session)
         }
@@ -45,14 +62,21 @@ struct Composer: View {
     @State private var text = ""
     /// Fila elegida del menú de órdenes con «/».
     @State private var selection = 0
+    /// Al enviar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
+    @State private var askingAboutImages = false
+
+    /// Con un modelo que se sabe que no ve imágenes no se adjuntan; si no se sabe, sí.
+    private var allowsImages: Bool { app.allowsImages(session.model) }
 
     private var attachButton: some View {
         Button { ImagePicker.choose(into: &session.draftImages) } label: {
-            Image(systemName: "plus").foregroundStyle(Theme.secondary).frame(width: 22, height: 22)
-                .contentShape(Rectangle())
+            Image(systemName: allowsImages ? "plus" : "eye.slash").foregroundStyle(Theme.secondary)
+                .frame(width: 22, height: 22).contentShape(Rectangle())
         }
-        .buttonStyle(.plain).help("Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)")
-        .accessibilityLabel("Adjuntar imágenes").disabled(!session.canSend)
+        .buttonStyle(.plain)
+        .help(allowsImages ? "Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)" : ImageSupport.notice)
+        .accessibilityLabel(allowsImages ? "Adjuntar imágenes" : ImageSupport.notice)
+        .disabled(!session.canSend || !allowsImages)
     }
 
     private var field: some View {
@@ -63,6 +87,7 @@ struct Composer: View {
             .onChange(of: text) { old, new in
                 guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
                 text = dropped.text
+                guard allowsImages else { session.imageNotice.show(); return }
                 ImagePicker.add(dropped.images, to: &session.draftImages)
             }
             .onSubmit(submit)
@@ -74,6 +99,11 @@ struct Composer: View {
                     session.pendingDraft = nil
                 } else if text.isEmpty, let draft = ProcessInfo.processInfo.environment["ALFALFA_BORRADOR"] {
                     text = draft
+                }
+                // Igual con las imágenes: ALFALFA_ADJUNTOS=ruta:ruta las adjunta al abrir.
+                if session.draftImages.isEmpty, let paths = ProcessInfo.processInfo.environment["ALFALFA_ADJUNTOS"] {
+                    ImagePicker.add(paths.split(separator: ":").map { URL(fileURLWithPath: String($0)) },
+                                    to: &session.draftImages)
                 }
             }
             .onChange(of: session.pendingDraft) { _, draft in
@@ -142,6 +172,14 @@ struct Composer: View {
             }
             // «/Users/…» u otra cosa que no es una orden: va como mensaje normal.
         }
+        if !session.draftImages.isEmpty, !allowsImages {
+            askingAboutImages = true
+            return
+        }
+        send()
+    }
+
+    private func send() {
         session.send(text)
         text = ""
     }

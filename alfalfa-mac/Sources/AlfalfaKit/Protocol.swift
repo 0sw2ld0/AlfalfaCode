@@ -466,11 +466,13 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
     public var notice: String?
     /// La clave que falta para usarlo, si su proveedor no la tiene.
     public var missingKey: MissingKey?
+    /// Si ve imágenes: true, false o nil cuando no se sabe (entonces se deja adjuntar).
+    public var vision: Bool?
     public var id: String { name }
 
     public init(name: String, label: String? = nil, provider: String = "ollama", providerName: String? = nil,
                 context: Int? = nil, price: ModelPrice? = nil, free: Bool = false, notice: String? = nil,
-                missingKey: MissingKey? = nil) {
+                missingKey: MissingKey? = nil, vision: Bool? = nil) {
         self.name = name
         self.label = label ?? name
         self.provider = provider
@@ -480,6 +482,7 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
         self.free = free
         self.notice = notice
         self.missingKey = missingKey
+        self.vision = vision
     }
 }
 
@@ -560,6 +563,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case context(tokens: Int, limit: Int, mcp: McpContextUsage? = nil, breakdown: ContextBreakdown? = nil,
                  details: ContextDetails? = nil)
     case error(String)
+    /// `error` con `rechazado`: el mensaje no abrió turno (imágenes para un modelo que no las ve)
+    /// y vuelve al cuadro de texto.
+    case messageRejected(MessageRejection)
     case turnFinished(Outcome)
     case finished(Outcome)
     case sessions([SessionSummary])
@@ -632,6 +638,17 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),
                             details: details(object))
         case "error":
+            if let rejected = object["rechazado"] as? [String: Any] {
+                let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
+                    guard let model = text(row["modelo"]) else { return nil }
+                    return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
+                }
+                return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
+                                                         reason: text(object["motivo"]),
+                                                         text: rejected["texto"] as? String ?? "",
+                                                         images: rejected["imagenes"] as? [String] ?? [],
+                                                         alternatives: alternatives))
+            }
             return .error(object["texto"] as? String ?? "")
         case "turno_terminado":
             return outcome(object).map { .turnFinished($0) }
@@ -663,7 +680,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                  provider: text(row["proveedor"]) ?? "ollama",
                                  providerName: text(row["nombre_proveedor"]), context: integer(row["ventana"]),
                                  price: modelPrice(row["precio"]), free: bool(row["gratis"]) ?? false,
-                                 notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]))
+                                 notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]),
+                                 vision: bool(row["vision"]))
             })
         case "proveedores":
             guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }

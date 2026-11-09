@@ -56,9 +56,12 @@ def test_mira_el_modelo_de_la_sesion_con_la_imagen_en_images(m, monkeypatch):
 
 
 def test_sin_vision_lo_dice_y_no_llama_ni_a_codex(m, monkeypatch):
+    from alfalfa import proveedores
     rt = _runtime(m, ['tools'])
+    rt.task['model'] = 'gemma4:cloud'
     monkeypatch.setattr(ajustes, 'ejecutable', lambda nombre: pytest.fail('no debe buscar Codex'))
-    with pytest.raises(ValueError, match='gemma4:cloud no admite imágenes'):
+    monkeypatch.setattr(proveedores, 'con_vision', lambda modelo=None, limite=3: [('qwen3-vl:8b', 'qwen3-vl:8b')])
+    with pytest.raises(ValueError, match='gemma4:cloud no ve imágenes.*qwen3-vl:8b'):
         asyncio.run(rt.vision(rt.tools.path('captura.png'), '¿Qué se ve?'))
     assert not rt._puede_ver()
     assert _runtime(m, ['tools', 'vision'])._puede_ver()
