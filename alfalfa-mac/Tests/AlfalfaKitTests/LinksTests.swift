@@ -6,8 +6,8 @@ final class LinksTests: XCTestCase {
     func testLinksArePagesOfTheWebsite() {
         for url in [Links.privacy, Links.cloud] {
             XCTAssertEqual(url.scheme, "https")
-            XCTAssertEqual(url.host(), "cuycoders.dev")
-            XCTAssertTrue(url.path().hasPrefix("/alfalfa/"))
+            XCTAssertEqual(url.host(), "alfalfacode.cuycoders.dev")
+            XCTAssertTrue(url.path().hasSuffix("/"))
         }
     }
 }

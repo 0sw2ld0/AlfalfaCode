@@ -148,7 +148,7 @@ def test_desinstalar_quita_lo_suyo_y_deja_lo_demas(tmp_path):
     (raiz / 'instalacion').write_text('curl\n0.99.0\n')
     bin_ = home / '.local' / 'bin'
     bin_.mkdir(parents=True)
-    (bin_ / 'alfalfa').write_text('#!/bin/sh\n# AlfalfaCode: lo dejó instalar.sh (https://cuycoders.dev/alfalfa)\n')
+    (bin_ / 'alfalfa').write_text('#!/bin/sh\n# AlfalfaCode: lo dejó instalar.sh (https://alfalfacode.cuycoders.dev)\n')
     (bin_ / 'otra').write_text('mía\n')
     (home / '.alfalfa').mkdir()
     (home / '.zshrc').write_text('alias ll=ls\n\n# AlfalfaCode (instalar.sh)\nexport PATH="$HOME/.local/bin:$PATH"\n'

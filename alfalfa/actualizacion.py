@@ -32,7 +32,7 @@ _ETIQUETA = re.compile(r'^v(\d+)\.(\d+)\.(\d+)$')
 _ESPERA = 120
 PAGINA_DE_DESCARGA = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest'
 INSTALADOR = Path(__file__).with_name('instalar.sh')
-ORDEN_CURL = 'curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh'
+ORDEN_CURL = 'curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh'
 ORDEN_BREW = 'brew upgrade alfalfa'
 _GITHUB = re.compile(r'^https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$')
 

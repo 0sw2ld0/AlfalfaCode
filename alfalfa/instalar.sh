@@ -1,7 +1,7 @@
 #!/bin/sh
 # Instala la CLI de AlfalfaCode (`alfalfa`) en este Mac, sin sudo:
 #
-#   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+#   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 #
 # Qué hace:
 #   1. Lee version.json de la última release de github.com/0sw2ld0/AlfalfaCode.
@@ -19,7 +19,7 @@
 # trae macOS (curl, shasum, hdiutil, codesign, spctl, plutil, ditto).
 #
 # Desinstalar (tus sesiones y ajustes de ~/.alfalfa se quedan):
-#   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+#   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
 # o a mano:
 #   rm -rf ~/.local/share/alfalfa ~/.local/bin/alfalfa   (y las líneas marcadas de ~/.zshrc)
 #
@@ -154,7 +154,7 @@ main() {
 
   {
     echo "#!/bin/sh"
-    echo "$MARCA_LANZADOR (https://cuycoders.dev/alfalfa)"
+    echo "$MARCA_LANZADOR (https://alfalfacode.cuycoders.dev)"
     echo "exec $(citar "$RAIZ/Resources/motor/alfalfa") \"\$@\""
   } > "$LANZADOR.nuevo.$$"
   chmod 755 "$LANZADOR.nuevo.$$"
@@ -167,9 +167,9 @@ main() {
   paso "AlfalfaCode $VERSION instalado: $LANZADOR"
   echo "  Empezar:       alfalfa \"tu encargo\"   (la primera vez te ofrece modelos gratis)"
   echo "  Actualizar:    alfalfa --actualizar"
-  echo "  Desinstalar:   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar"
+  echo "  Desinstalar:   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar"
   echo "                 (tus sesiones y ajustes de ~/.alfalfa se quedan)"
-  echo "  La app de Mac: https://cuycoders.dev/alfalfa  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
+  echo "  La app de Mac: https://alfalfacode.cuycoders.dev  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
 }
 
 comprobar_mac() {
@@ -231,7 +231,7 @@ es_nuestra() {
 ayuda() {
   cat <<'AYUDA'
 Instala la CLI de AlfalfaCode (alfalfa) en este Mac, sin sudo:
-  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+  curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 
 Baja el DMG de la última release de github.com/0sw2ld0/AlfalfaCode, comprueba su huella
 SHA-256 y la firma de la app (equipo FZ8TW9AWLE, notarizada) y copia su motor a
@@ -239,7 +239,7 @@ SHA-256 y la firma de la app (equipo FZ8TW9AWLE, notarizada) y copia su motor a
 
 Opciones:
   --desinstalar   quita lo que instaló (tus sesiones de ~/.alfalfa se quedan):
-                  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+                  curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
   --ayuda         esto
 
 Variables:

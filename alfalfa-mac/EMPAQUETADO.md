@@ -156,7 +156,7 @@ y la versión). `empaquetado.py` lo reconoce: usa los ayudantes ya compilados, y
 |---|---|---|---|
 | `brew install --cask 0sw2ld0/tap/alfalfacode` | `/Applications/AlfalfaCode.app` | sha256 del cask y Gatekeeper (cuarentena) | el actualizador de la app |
 | `brew install 0sw2ld0/tap/alfalfa` | `$(brew --prefix)/opt/alfalfa/libexec` | sha256 del bottle | `brew upgrade alfalfa` |
-| `curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh \| sh` | `~/.local/share/alfalfa`, `~/.local/bin/alfalfa` | sha256 de `version.json`, firma del equipo, identificador, versión y notarización | `alfalfa --actualizar` (vuelve a pasar `instalar.sh`) |
+| `curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh \| sh` | `~/.local/share/alfalfa`, `~/.local/bin/alfalfa` | sha256 de `version.json`, firma del equipo, identificador, versión y notarización | `alfalfa --actualizar` (vuelve a pasar `instalar.sh`) |
 
 ### El tap
 
@@ -221,7 +221,7 @@ empezar, aunque el bottle se instale bien.
 
 `alfalfa/instalar.sh` viaja en el paquete, y por eso está dentro del motor y
 `alfalfa --actualizar` puede volver a pasarlo. La web lo sirve en
-`https://cuycoders.dev/alfalfa/instalar.sh` y se copia del repositorio en cada versión
+`https://alfalfacode.cuycoders.dev/instalar.sh` y se copia del repositorio en cada versión
 que lo cambie.
 
 Sólo usa lo que trae macOS: `curl`, `shasum`, `hdiutil`, `codesign`, `spctl`, `plutil` y
@@ -240,7 +240,7 @@ ejecuta nada.
    orden `gh release create` que enseña: DMG, `version.json` y bottle.
 2. El workflow `tap.yml` pone el tap en esa versión, o lo haces a mano con
    `actualizar-tap.sh`.
-3. Si `alfalfa/instalar.sh` cambió, cópialo a la web (`cuycoders.dev/alfalfa/instalar.sh`).
+3. Si `alfalfa/instalar.sh` cambió, cópialo a la web (`alfalfacode.cuycoders.dev/instalar.sh`).
 
 Las versiones anteriores a esta (0.99.1 y antes) no traen `instalacion` en
 `empaquetado.py`. Su CLI suelta no sabe quién la instaló, y `alfalfa --actualizar`

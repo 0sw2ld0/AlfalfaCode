@@ -9,7 +9,7 @@ cask "alfalfacode" do
       verified: "github.com/0sw2ld0/AlfalfaCode/"
   name "AlfalfaCode"
   desc "Arnés de agentes de programación: Ollama, OpenAI, Anthropic y modelos gratis"
-  homepage "https://cuycoders.dev/alfalfa"
+  homepage "https://alfalfacode.cuycoders.dev"
 
   livecheck do
     url :url
