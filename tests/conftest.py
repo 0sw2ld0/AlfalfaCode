@@ -75,3 +75,12 @@ def _sin_asercion_de_energia(monkeypatch):
     """Los turnos de la suite no toman la aserción de verdad: test_mantener_despierto la prueba aparte."""
     from alfalfa import despierto
     monkeypatch.setattr(despierto, '_asercion_del_sistema', lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def _como_con_ollama(monkeypatch):
+    """La suite hace como si este Mac tuviera Ollama: un encargo sin --modelo va al proveedor de
+    siempre y no a la bienvenida de la primera vez, tenga o no Ollama quien la corre.
+    test_primera_vez lo quita donde prueba la bienvenida."""
+    from alfalfa import primera_vez
+    monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: True)

@@ -157,9 +157,41 @@ def modelo_por_defecto():
             proveedor = proveedores.obtener(ident)
         except proveedores.ErrorDeProveedor:
             return MODELO_POR_DEFECTO
-        if proveedor.configurado() and getattr(proveedor, 'modelo_por_defecto', None):
-            return proveedores.con_prefijo(ident, proveedor.modelo_por_defecto)
+        if not proveedor.configurado():
+            return MODELO_POR_DEFECTO
+        # El elegido al conectarlo (`--conectar`) o el propio del proveedor; un compatible
+        # del catálogo sin ninguno de los dos, su gratis recomendado.
+        elegido = configuracion.de(ident).get('modelo') or getattr(proveedor, 'modelo_por_defecto', None)
+        if not elegido and ident not in proveedores.PREFIJOS:
+            from . import primera_vez
+            elegido = primera_vez.recomendado(ident)
+        if isinstance(elegido, str) and elegido:
+            return proveedores.con_prefijo(ident, elegido)
     return MODELO_POR_DEFECTO
+
+
+def bienvenida(args, entrada=None, salida=None):
+    """Sin ningún proveedor configurado: los gratis ahora y, en una terminal, conectar OpenRouter
+    con un clic. Devuelve el modelo con el que seguir, o None si el usuario no conectó nada."""
+    from . import primera_vez
+    entrada = entrada or sys.stdin
+    salida = salida or sys.stderr
+    datos = primera_vez.ofertas()
+    print(primera_vez.texto(datos), file=salida)
+    conectable = next((f for f in datos['proveedores'] if f['conectar']), None)
+    if not conectable or not entrada.isatty():
+        return None
+    print('', file=salida)
+    try:
+        respuesta = input('¿Conectar ' + conectable['nombre'] + ' ahora en el navegador? [S/n] ')
+    except EOFError:
+        return None
+    if respuesta.strip().lower() not in ('', 's', 'si', 'sí', 'y', 'yes'):
+        return None
+    from .proveedores.orden import _texto_conectado, conectar_ahora
+    hecho = conectar_ahora(conectable['id'])
+    print('✓ ' + _texto_conectado(hecho), file=salida)
+    return hecho.get('modelo') or modelo_por_defecto()
 
 
 def home_dir(home=None):
@@ -974,6 +1006,20 @@ def main(argv=None):
     if args.stdio or args.sesiones or args.modelos or args.turnos or args.historial or args.complementos:
         from .stdio import entry
         return entry(args)
+    nueva = not args.reanudar and not args.bifurcar
+    if nueva and not args.modelo:
+        from . import primera_vez
+        if primera_vez.sin_proveedor():
+            from .proveedores.conectar import ErrorAlConectar
+            try:
+                args.modelo = bienvenida(args)
+            except (ErrorAlConectar, ValueError, OSError) as exc:
+                print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
+                return 1
+            if not args.modelo:
+                return 1 if args.encargo else 0
+            if not args.encargo:
+                return 0
     if not args.encargo and not args.reanudar and not args.bifurcar:
         parser.error('indica un encargo o --reanudar ID')
     try:

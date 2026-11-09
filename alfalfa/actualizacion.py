@@ -12,6 +12,11 @@ instalado y cada una se actualiza a su manera:
   HTTPS, sin git (en un Mac sin las herramientas de línea de órdenes, `git`
   abre el diálogo de instalarlas), y no se instala nada: el bundle está firmado.
   Se descarga el DMG nuevo y se arrastra a Aplicaciones.
+- curl: la CLI suelta que dejó `instalar.sh` en `~/.local/share/alfalfa` (el motor de
+  la app copiado de su DMG). Se actualiza volviendo a pasar el `instalar.sh` que viaja
+  con el paquete, que baja la última release y comprueba su huella y su firma.
+- brew: la fórmula `alfalfa` del tap. La actualiza Homebrew (`brew upgrade alfalfa`);
+  cambiarla por debajo dejaría a Homebrew creyendo que tiene otra versión.
 """
 import os
 import re
@@ -26,6 +31,9 @@ REPO_POR_DEFECTO = 'https://github.com/0sw2ld0/AlfalfaCode.git'
 _ETIQUETA = re.compile(r'^v(\d+)\.(\d+)\.(\d+)$')
 _ESPERA = 120
 PAGINA_DE_DESCARGA = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest'
+INSTALADOR = Path(__file__).with_name('instalar.sh')
+ORDEN_CURL = 'curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh'
+ORDEN_BREW = 'brew upgrade alfalfa'
 _GITHUB = re.compile(r'^https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$')
 
 
@@ -106,14 +114,23 @@ def ultima_version_https(url, get=None):
     return max(validas, key=clave) if validas else None
 
 
-def buscar(raiz=None, instalada=__version__, app=None):
+def _tipo(app=None, instalacion=None):
+    """'app', 'curl', 'brew' o None (clon o paquete de pip, que se deciden con git)."""
+    if instalacion:
+        return instalacion
+    if app is not None:
+        return 'app' if app else None
+    return empaquetado.instalacion()
+
+
+def buscar(raiz=None, instalada=__version__, app=None, instalacion=None):
     """Qué versión hay instalada, cuál es la última y si conviene actualizar."""
-    if app is None:
-        app = empaquetado.en_la_app()
-    if app:
+    tipo = _tipo(app, instalacion)
+    if tipo:
+        # La app y la CLI suelta no tienen git a mano: la versión se pregunta por HTTPS.
         url = os.environ.get('ALFALFA_REPO_URL') or REPO_POR_DEFECTO
         ultima = ultima_version_https(url)
-        instalacion = 'app'
+        instalacion = tipo
     else:
         if raiz is None:
             raiz = raiz_del_clon()
@@ -129,18 +146,22 @@ def buscar(raiz=None, instalada=__version__, app=None):
         'instalacion': instalacion,
         'url': url,
     }
-    if app:
+    if tipo == 'app':
         info['descarga'] = PAGINA_DE_DESCARGA
+    elif tipo == 'brew':
+        info['orden'] = ORDEN_BREW
+    elif tipo == 'curl':
+        info['orden'] = ORDEN_CURL
     return info
 
 
-def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None):
+def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None, instalacion=None,
+               instalador=None):
     """Instala la última versión si es más nueva. Devuelve lo que pasó."""
-    if app is None:
-        app = empaquetado.en_la_app()
-    if raiz is None and not app:
+    tipo = _tipo(app, instalacion)
+    if raiz is None and not tipo:
         raiz = raiz_del_clon()
-    info = buscar(raiz, instalada, app=app)
+    info = buscar(raiz, instalada, instalacion=tipo)
     if not info['hay_nueva']:
         return dict(info, actualizado=False, app_mac_cambio=False)
     if info['instalacion'] == 'app':
@@ -148,6 +169,13 @@ def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None
         raise ErrorDeActualizacion(
             f'Esta copia va dentro de AlfalfaCode.app y no se cambia sola. Descarga AlfalfaCode '
             f'{info["ultima"]} de {info["descarga"]} y arrástrala a Aplicaciones.')
+    if info['instalacion'] == 'brew':
+        raise ErrorDeActualizacion(
+            f'Esta copia la instaló Homebrew y la actualiza Homebrew: `{ORDEN_BREW}` '
+            f'(hay {info["ultima"]}, tienes {info["instalada"]}).')
+    if info['instalacion'] == 'curl':
+        _reinstalar(instalador or INSTALADOR, empaquetado.contenidos())
+        return dict(info, actualizado=True, app_mac_cambio=False)
     etiqueta = info['etiqueta']
     app_mac_cambio = False
     if raiz:
@@ -168,6 +196,25 @@ def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None
     else:
         _pip(python, '--upgrade', f'alfalfa @ git+{info["url"]}@{etiqueta}')
     return dict(info, actualizado=True, app_mac_cambio=app_mac_cambio)
+
+
+def _reinstalar(instalador, raiz):
+    """Vuelve a pasar `instalar.sh` sobre la misma carpeta: baja la última release, comprueba
+    su huella y su firma y cambia la copia entera (o no toca nada si algo falla)."""
+    if not Path(instalador).is_file():
+        raise ErrorDeActualizacion('Falta instalar.sh en esta copia. Reinstálala con: ' + ORDEN_CURL)
+    entorno = dict(os.environ)
+    if raiz is not None:
+        # raiz = <prefijo>/share/alfalfa
+        entorno['ALFALFA_PREFIJO'] = str(Path(raiz).parent.parent)
+    try:
+        r = subprocess.run(['/bin/sh', str(instalador)], env=entorno, capture_output=True, text=True,
+                           timeout=_ESPERA * 5)
+    except subprocess.TimeoutExpired:
+        raise ErrorDeActualizacion('La descarga de la versión nueva tardó demasiado.')
+    if r.returncode != 0:
+        ultimas = '\n'.join((r.stderr or r.stdout).strip().splitlines()[-5:])
+        raise ErrorDeActualizacion('No se pudo instalar la versión nueva:\n' + ultimas)
 
 
 def _pip(python, *args):
@@ -213,6 +260,9 @@ def texto(resultado):
     if resultado['hay_nueva'] and resultado.get('instalacion') == 'app':
         return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
                 f'Descárgala de {resultado["descarga"]} y arrástrala a Aplicaciones.')
+    if resultado['hay_nueva'] and resultado.get('instalacion') == 'brew':
+        return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
+                f'Instálala con `{ORDEN_BREW}`.')
     if resultado['hay_nueva']:
         return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
                 'Instálala con `alfalfa --actualizar`.')

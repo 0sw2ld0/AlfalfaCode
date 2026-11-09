@@ -8,8 +8,12 @@ ni pip, ni las herramientas de línea de órdenes de Apple.
 cd alfalfa-mac
 ./build-app.sh              # dist/AlfalfaCode.app (Developer ID si hay certificado; si no, ad hoc)
 ./publicar.sh --local       # dist/AlfalfaCode-<versión>-local.dmg, ad hoc y sin notarizar: sólo este Mac
-./publicar.sh               # dist/AlfalfaCode-<versión>.dmg firmado, notarizado y grapado
+./publicar.sh               # dist/AlfalfaCode-<versión>.dmg firmado, notarizado y grapado,
+                            # dist/version.json y el bottle de Homebrew de la CLI
 ```
+
+Del mismo DMG salen también la CLI de Homebrew y la de `curl … | sh`. Están más abajo,
+en «Instalar en una orden».
 
 ## Qué lleva dentro
 
@@ -104,12 +108,126 @@ con interfaz):
    no se toca la instalada. Si macOS abrió la app desde una copia temporal (App Translocation)
    explica que hay que moverla a Aplicaciones con Finder.
 
-`publicar.sh` escribe `dist/version.json` y enseña la orden `gh release create` para subir el DMG y
-ese archivo a la release (que tiene que quedar como «Latest»). Las notas salen de
-`NOTAS-VERSION.txt`.
+`publicar.sh` escribe `dist/version.json` y el bottle, y enseña la orden `gh release create`
+que sube el DMG, ese archivo y el bottle a la release (que tiene que quedar como «Latest»).
+Las notas salen de `NOTAS-VERSION.txt`.
+
+### Con Homebrew
+
+El cask declara `auto_updates true`, así que el actualizador de la app y Homebrew no se
+pelean:
+
+- La app instalada con `brew install --cask` se actualiza sola, igual que la del DMG. El
+  cask la deja en Aplicaciones con tu usuario como dueño, así que puede cambiarla.
+- `brew upgrade` no la toca. `brew upgrade --greedy` sí: cuando el tap ya está en la versión
+  nueva instala la misma que trajo el actualizador, y si el tap va por detrás no hace nada.
+  Homebrew sigue recordando la versión con que la instaló (`brew list --versions`), pero
+  eso sólo es informativo.
+- `brew uninstall --cask alfalfacode` la quita aunque la haya cambiado el actualizador.
+- En Ajustes ▸ Actualizaciones, una app instalada con Homebrew (`Caskroom/alfalfacode`)
+  lo dice.
+
+La CLI de la fórmula no se cambia sola: `alfalfa --actualizar` dice `brew upgrade alfalfa`.
 
 Para probar el circuito sin GitHub: un `version.json` local que apunte a un DMG local y
 `open AlfalfaCode.app --env ALFALFA_ACTUALIZACION_FEED=file:///ruta/version.json --args -actualizarAhora`.
 Sólo se acepta un feed `file://`, y con él sólo un DMG local.
 
 Desde el clon (`swift run`) no cambia nada: `alfalfa --actualizar` actualiza el repositorio.
+
+## Instalar en una orden: Homebrew y `curl … | sh`
+
+Ninguna de las dos compila nada. Copian el motor de la app (`Contents/Resources/motor`)
+y los ayudantes (`Contents/Helpers`) de la app del DMG publicado a una carpeta que no es
+un `.app`, con la misma forma, y dejan al lado un archivo `instalacion` (`curl` o `brew`
+y la versión). `empaquetado.py` lo reconoce: usa los ayudantes ya compilados, y
+`actualizacion.py` sabe quién actualiza esa copia.
+
+| | Dónde | Comprueba | Se actualiza con |
+|---|---|---|---|
+| `brew install --cask 0sw2ld0/tap/alfalfacode` | `/Applications/AlfalfaCode.app` | sha256 del cask y Gatekeeper (cuarentena) | el actualizador de la app |
+| `brew install 0sw2ld0/tap/alfalfa` | `$(brew --prefix)/opt/alfalfa/libexec` | sha256 del bottle | `brew upgrade alfalfa` |
+| `curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh \| sh` | `~/.local/share/alfalfa`, `~/.local/bin/alfalfa` | sha256 de `version.json`, firma del equipo, identificador, versión y notarización | `alfalfa --actualizar` (vuelve a pasar `instalar.sh`) |
+
+### El tap
+
+Los archivos viven aquí, en `distribucion/homebrew` (`Casks/alfalfacode.rb`,
+`Formula/alfalfa.rb`, `README.md`). Se copian al repositorio público
+`0sw2ld0/homebrew-tap`, que Homebrew llama `0sw2ld0/tap`.
+
+- **El cask** baja `AlfalfaCode-<versión>.dmg` de la release, con su sha256.
+- **La fórmula** baja el **bottle** `alfalfa-<versión>.arm64_sonoma.bottle.tar.gz`, que
+  hace `distribucion/botella.sh` con el motor del DMG tal cual y va en la misma release.
+  - Se declara `cellar: :any_skip_relocation`, y eso tiene dos efectos. Homebrew lo
+    vierte sin reescribir los binarios, así que el Python sigue firmado por el equipo,
+    con hardened runtime. Y no pide las herramientas de línea de órdenes al día.
+  - Sirve en Sonoma y en cualquier macOS posterior.
+  - El `install` de la fórmula (`--build-from-source`) deja lo mismo, pero ese camino sí
+    tiene problemas. Homebrew reescribe el identificador de los `.so` de Rust (`@rpath`)
+    y los firma ad hoc, y el Python con runtime del equipo no los cargaría, así que
+    `install` firma todo el motor ad hoc. Además Homebrew exige las CLT al día.
+
+`distribucion/actualizar-tap.sh <versión> [clon del tap]` pone el cask y la fórmula en
+una release publicada:
+
+1. Baja `version.json` y el DMG y comprueba la huella.
+2. Toma la huella del bottle de la release, o lo hace si falta (con `--subir-botella`
+   también lo sube).
+3. Escribe la versión, la URL y las huellas.
+
+No hace commit ni push.
+
+`.github/workflows/tap.yml` lo hace solo al publicar una release, o a mano con su versión:
+
+1. Hace el bottle si falta y lo sube.
+2. Clona `0sw2ld0/homebrew-tap` con el secreto `TAP_TOKEN`, escribe los archivos, hace
+   commit y push.
+
+`TAP_TOKEN` es un token de grano fino con «Contents: read and write» sólo sobre ese
+repositorio. Sin él, el workflow deja los archivos como artefacto y no empuja nada.
+
+Para probar sin publicar, usa un tap local y URLs `file://`. Así se probó con la release
+v0.99.1:
+
+```bash
+brew tap-new alfalfa-pruebas/local --no-git
+TRABAJO=/tmp/tap DMG=AlfalfaCode-X.dmg VERSION_JSON=version.json distribucion/actualizar-tap.sh X /tmp/tap-prueba
+# copiar Casks/ y Formula/ a $(brew --repository)/Library/Taps/alfalfa-pruebas/homebrew-local,
+# cambiando url/root_url por file://, y:
+brew install alfalfa-pruebas/local/alfalfa
+brew install --cask --appdir=/tmp/Apps alfalfa-pruebas/local/alfalfacode
+brew untap alfalfa-pruebas/local
+```
+
+`brew test` y `--build-from-source` necesitan las CLT al día. Sin ellas fallan antes de
+empezar, aunque el bottle se instale bien.
+
+### `instalar.sh`
+
+`alfalfa/instalar.sh` viaja en el paquete, y por eso está dentro del motor y
+`alfalfa --actualizar` puede volver a pasarlo. La web lo sirve en
+`https://cuycoders.dev/alfalfa/instalar.sh` y se copia del repositorio en cada versión
+que lo cambie.
+
+Sólo usa lo que trae macOS: `curl`, `shasum`, `hdiutil`, `codesign`, `spctl`, `plutil` y
+`ditto`. No necesita sudo. Todo va dentro de `main()`, así que una descarga cortada no
+ejecuta nada.
+
+- Si algo falla, la copia anterior no se toca: la nueva se coloca con `mv` al final.
+- No pisa un `~/.local/bin/alfalfa` que no instaló él.
+- `--desinstalar` quita sólo lo suyo, incluidas las líneas marcadas de `~/.zshrc`.
+- Para probarlo con un DMG local, `ALFALFA_FEED=file:///…/version.json`. Con ese feed
+  sólo acepta un DMG `file://` y no exige la notarización.
+
+### Orden al publicar
+
+1. `./publicar.sh` y la orden `gh release create` que enseña: DMG, `version.json` y bottle.
+2. El workflow `tap.yml` pone el tap en esa versión, o lo haces a mano con
+   `actualizar-tap.sh`.
+3. Si `alfalfa/instalar.sh` cambió, cópialo a la web (`cuycoders.dev/alfalfa/instalar.sh`).
+
+Las versiones anteriores a esta (0.99.1 y antes) no traen `instalacion` en
+`empaquetado.py`. Su CLI suelta no sabe quién la instaló, y `alfalfa --actualizar`
+intentaría reinstalarla con pip. Por eso el tap y la orden de `curl` de la web conviene
+publicarlos a partir de la primera release que incluya este cambio.
+

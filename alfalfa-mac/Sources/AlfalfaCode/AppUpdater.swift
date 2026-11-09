@@ -503,6 +503,12 @@ struct AppUpdaterSettings: View {
             Toggle("Buscar actualizaciones automáticamente (como mucho una vez al día)", isOn: $updater.automatic)
             Text("Sólo se instala una versión firmada por CuyCoders y notarizada por Apple, y siempre con tu permiso.")
                 .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+            if AppUpdatePolicy.installedByHomebrew() {
+                Text("La instalaste con Homebrew: se actualiza igual desde aquí. `brew upgrade` no la toca "
+                     + "(el cask declara que se actualiza sola); con `--greedy` pone la misma versión.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

@@ -6,6 +6,8 @@
     alfalfa --guardar-clave openrouter        (o cualquier compatible con OpenAI del catálogo)
     alfalfa --borrar-clave openai
     alfalfa --catalogo [--json]               estado del catálogo de models.dev y los gratis ahora
+    alfalfa --primera-vez [--json]            si falta proveedor y los gratis ahora con los que empezar
+    alfalfa --conectar openrouter [--json]    conecta OpenRouter en el navegador (OAuth), sin pegar la clave
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
     alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
@@ -25,6 +27,7 @@ import sys
 
 from . import PREFIJOS, configuracion, disponibles, llavero
 from .compatible import es_compatible
+from .conectar import ErrorAlConectar
 from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.
@@ -105,6 +108,17 @@ def orden(args, entrada=None):
                     if hecho['enviado'] else
                     'No se pudo enviar: ' + hecho['motivo'] + ' Escríbenos a ' + hecho['soporte'] + '.')
             return 0
+        if getattr(args, 'primera_vez', False):
+            from .. import primera_vez
+            datos = primera_vez.ofertas()
+            _salida({'tipo': 'primera_vez', **datos}, como_json,
+                    primera_vez.texto(datos) if datos['sin_proveedor'] else
+                    'Ya hay un proveedor configurado: ' + configuracion.por_defecto() + '.')
+            return 0
+        if getattr(args, 'conectar', None):
+            hecho = conectar_ahora(args.conectar, como_json)
+            _salida({'tipo': 'conectado', **hecho, **estado()}, como_json, _texto_conectado(hecho))
+            return 0
         if getattr(args, 'catalogo', False):
             datos = _catalogo()
             _salida({'tipo': 'catalogo', **datos}, como_json, _texto_catalogo(datos))
@@ -163,12 +177,36 @@ def orden(args, entrada=None):
                               + (' · ' + fila['url'] if fila.get('url') else ''))
             _salida({'tipo': 'proveedores', **datos}, como_json, '\n'.join(lineas))
         return 0
-    except (ValueError, OSError, llavero.LlaveroNoDisponible) as exc:
+    except (ValueError, OSError, llavero.LlaveroNoDisponible, ErrorAlConectar) as exc:
         if como_json:
             print(json.dumps({'version': 2, 'tipo': 'error', 'texto': str(exc)}, ensure_ascii=False))
         else:
             print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
         return 1
+
+
+def conectar_ahora(proveedor, como_json=False, **opciones):
+    """`conectar.conectar` avisando de la URL: en JSON (la app la enseña por si el navegador no
+    se abrió) o en la terminal."""
+    from .conectar import conectar
+
+    def al_abrir(url):
+        if como_json:
+            print(json.dumps({'version': 2, 'tipo': 'conectando', 'proveedor': proveedor, 'url': url},
+                             ensure_ascii=False), flush=True)
+        else:
+            print('Abriendo OpenRouter en el navegador para autorizar AlfalfaCode (la cuenta es gratis).\n'
+                  'Si no se abre, entra en:\n  ' + url + '\nEsperando…', file=sys.stderr, flush=True)
+    return conectar(proveedor, al_abrir=al_abrir, **opciones)
+
+
+def _texto_conectado(hecho):
+    texto = 'OpenRouter conectado; la clave quedó en el Llavero.'
+    if hecho.get('modelo'):
+        from .. import catalogo
+        texto += (' Modelo por defecto: ' + hecho['modelo'] + ' (' + catalogo.AVISO_GRATIS.lower() + ').'
+                  ' Prueba: alfalfa "tu encargo"')
+    return texto
 
 
 def _catalogo():
@@ -240,6 +278,10 @@ def argumentos(grupo):
                        help='URL base de Ollama, del servicio Alfalfa o de un compatible («-» la quita)')
     grupo.add_argument('--catalogo', action='store_true',
                        help='Catálogo de models.dev: fecha, origen y modelos gratis ahora')
+    grupo.add_argument('--primera-vez', action='store_true',
+                       help='¿Falta configurar un proveedor? Y los modelos gratis ahora con los que empezar')
+    grupo.add_argument('--conectar', metavar='PROVEEDOR', choices=('openrouter',),
+                       help='Conectar OpenRouter en el navegador (OAuth), sin pegar la clave, y usar sus gratis')
     grupo.add_argument('--activar-codigo', action='store_true',
                        help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
@@ -255,7 +297,8 @@ def argumentos(grupo):
 
 
 def pedida(args):
-    return bool(args.proveedores or getattr(args, 'catalogo', False) or args.guardar_clave or args.borrar_clave
+    return bool(args.proveedores or getattr(args, 'catalogo', False) or getattr(args, 'primera_vez', False)
+                or getattr(args, 'conectar', None) or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
                 or getattr(args, 'reportar', False) or getattr(args, 'buscador', None) is not None
                 or getattr(args, 'fijar_searxng', None) or getattr(args, 'instalar_buscador', False))

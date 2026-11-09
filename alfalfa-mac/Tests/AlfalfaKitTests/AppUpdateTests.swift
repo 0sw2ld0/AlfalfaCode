@@ -81,4 +81,14 @@ final class AppUpdateTests: XCTestCase {
             "/private/var/folders/x/T/AppTranslocation/6E4E/d/AlfalfaCode.app")))
         XCTAssertFalse(AppUpdatePolicy.isTranslocated(URL(fileURLWithPath: "/Applications/AlfalfaCode.app")))
     }
+
+    func testKnowsWhenHomebrewInstalledIt() {
+        let caskrooms: Set<String> = ["/opt/homebrew/Caskroom/alfalfacode"]
+        XCTAssertTrue(AppUpdatePolicy.installedByHomebrew(environment: [:], exists: caskrooms.contains))
+        XCTAssertFalse(AppUpdatePolicy.installedByHomebrew(environment: [:], exists: { _ in false }))
+        let custom: Set<String> = ["/Users/ana/brew/Caskroom/alfalfacode"]
+        XCTAssertTrue(AppUpdatePolicy.installedByHomebrew(environment: ["HOMEBREW_PREFIX": "/Users/ana/brew"],
+                                                         exists: custom.contains))
+        XCTAssertFalse(AppUpdatePolicy.installedByHomebrew(environment: [:], exists: custom.contains))
+    }
 }

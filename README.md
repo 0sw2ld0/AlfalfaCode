@@ -17,6 +17,53 @@ el DMG firmado y notarizado. Detalles en
 
 ## Instalar
 
+En un Mac con Apple Silicon y macOS 14 o posterior, sin Python, git ni Xcode:
+
+```bash
+brew install --cask 0sw2ld0/tap/alfalfacode   # la app de Mac
+brew install 0sw2ld0/tap/alfalfa              # la CLI
+```
+
+o, sólo la CLI y sin Homebrew ni sudo:
+
+```bash
+curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+```
+
+También vale bajar el DMG de la
+[última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest) y
+arrastrar la app a Aplicaciones.
+
+Las tres formas usan el mismo DMG de la release, firmado y notarizado:
+
+- **El cask** instala la app. Se actualiza sola (`auto_updates`), así que
+  `brew upgrade` no la toca.
+- **La fórmula** instala la CLI desde un bottle, que es el motor de ese DMG tal
+  cual. Homebrew no reescribe sus binarios, así que siguen firmados por Apple.
+  No compila nada.
+- **`instalar.sh`** ([alfalfa/instalar.sh](alfalfa/instalar.sh)) hace esto:
+  1. Lee `version.json` de la última release.
+  2. Baja el DMG y comprueba su huella SHA-256.
+  3. Monta el DMG en sólo lectura y comprueba la firma de la app: que sea del
+     equipo FZ8TW9AWLE, con el identificador `com.cuycoders.alfalfacode`, la
+     misma versión y notarizada (`spctl`).
+  4. Copia el motor a `~/.local/share/alfalfa` y deja `~/.local/bin/alfalfa`.
+  5. Si hace falta, añade `~/.local/bin` al `PATH` en `~/.zshrc`, entre marcas.
+     Con `ALFALFA_SIN_PATH=1` no toca ese archivo.
+
+  `ALFALFA_PREFIJO` cambia la carpeta de destino, que por defecto es `~/.local`.
+
+Para desinstalar:
+
+```bash
+brew uninstall alfalfa && brew uninstall --cask alfalfacode
+curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+```
+
+Ninguna de las dos borra `~/.alfalfa`, donde viven tus sesiones y ajustes.
+
+### Desde el código
+
 ```bash
 python3.11 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
@@ -24,6 +71,35 @@ python3.11 -m venv .venv
 
 Después `alfalfa` queda en `.venv/bin/`. También se puede lanzar con
 `scripts/alfalfa`, que admite un enlace simbólico desde cualquier carpeta del `PATH`.
+
+### La primera vez, sin claves
+
+Puede que todavía no haya ningún proveedor: ni claves, ni un proveedor elegido,
+ni Ollama en el Mac. Entonces `alfalfa` y la app no dan un error de conexión.
+Enseñan los modelos de **Gratis ahora** (ver abajo), con su aviso de datos.
+
+OpenRouter se conecta con un clic, sin pegar ninguna clave:
+
+```bash
+alfalfa --conectar openrouter
+```
+
+En la app, el botón está en Nuevo encargo («Empieza gratis») y en la hoja que pide
+la clave de OpenRouter. Esto es lo que pasa:
+
+1. Se abre OpenRouter en el navegador, donde entras o creas tu cuenta gratis y
+   autorizas AlfalfaCode (OAuth con PKCE).
+2. La vuelta llega a un servidor efímero en `localhost`, que comprueba `state`.
+3. La clave pasa al Llavero sin que la veas.
+4. Queda como modelo por defecto un gratis probado con herramientas: Nemotron
+   3.5 Super VL.
+
+En una terminal, `alfalfa "encargo"` lo ofrece directamente («¿Conectar
+OpenRouter ahora? [S/n]») y sigue con el encargo. Los demás proveedores con
+modelos gratis dicen dónde se saca su clave gratis
+(`alfalfa --guardar-clave nvidia`). `alfalfa --primera-vez [--json]` da el
+mismo resumen. Para verlo en un Mac que ya tiene claves, usa
+`ALFALFA_FORZAR_PRIMERA_VEZ=1`.
 
 Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
 (por defecto `~/.alfalfa`).
@@ -729,7 +805,10 @@ En un clon, `--actualizar` avanza la rama hasta la etiqueta nueva (sólo si no h
 cambios sin guardar ni commits propios) y reinstala el paquete; instalado con pip,
 lo reinstala desde GitHub en esa etiqueta. Así llegan también las dependencias
 nuevas. Dentro de AlfalfaCode.app no instala nada (el bundle está firmado): dice
-dónde descargar el DMG nuevo. Si actualizas un clon con `git pull` y falta la
+dónde descargar el DMG nuevo. Con la CLI de `instalar.sh` vuelve a pasar el
+`instalar.sh` que viaja con el paquete, que baja la última release y comprueba su
+huella y su firma. Con la de Homebrew dice `brew upgrade alfalfa`: cambiarla por
+debajo dejaría a Homebrew creyendo que tiene otra versión. Si actualizas un clon con `git pull` y falta la
 librería de búsqueda web, la app de Mac la instala sola al abrirse. En la
 terminal, usa `alfalfa --instalar-buscador` o `pip install -e .`. Los `.venv`
 creados con `uv`, que no traen pip, se instalan con `uv pip`. La app de Mac tiene
