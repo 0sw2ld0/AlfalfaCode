@@ -351,6 +351,89 @@ class TerminalManager:
         else:
             print('AlfalfaCode · system: ' + text, flush=True)
 
+    def aviso_tarifa(self, task, text, datos):
+        """El aviso de tarifa por contexto largo (`tarifa` en el evento): la app lo enseña con
+        «Compactar ahora», «Seguir con contexto completo» y «Seguir en una sesión nueva»."""
+        if self.transport is None:
+            from .compactacion import AHORRO
+            if datos.get('modo') == AHORRO:
+                text += (' Para usar la ventana entera: alfalfa --reanudar ' + task['id']
+                         + ' --contexto completo "…".')
+            self.event(task, 'system', text)
+            return
+        text, datos = self.transport.clean(text), self.transport.clean(datos)
+        row = dict(role='system', text=text, time=time.time(), tarifa=datos)
+        if task.get('turno_actual'):
+            row['turno'] = task['turno_actual']
+        path = self.directory / (task['id'] + '.jsonl')
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'a') as stream:
+            stream.write(json.dumps(row, ensure_ascii=False) + '\n')
+        self.transport.emit('evento', rol='system', texto=text, hora=row['time'], tarifa=datos,
+                            **({'turno': row['turno']} if 'turno' in row else {}))
+
+    def elegir_contexto(self, modo):
+        """`--contexto ahorro|completo` al abrir la sesión: queda guardado con ella."""
+        from .compactacion import MODOS_CONTEXTO
+        if modo not in MODOS_CONTEXTO:
+            raise ValueError('Modo de contexto desconocido: ' + str(modo))
+        self.task['contexto_modo'] = modo
+        self.save()
+
+    def cambiar_contexto(self, modo):
+        """`/contexto ahorro|completo` o los botones del aviso: vale ya, también a mitad de turno
+        (el motor lo mira antes de cada respuesta) y se guarda con la sesión."""
+        from . import catalogo
+        from .compactacion import AHORRO, MODOS_CONTEXTO, limite, tokens_cortos
+        if modo not in MODOS_CONTEXTO:
+            raise ValueError('Modo de contexto desconocido: ' + str(modo))
+        self.task['contexto_modo'] = modo
+        tarifa = self.task.get('context_tarifa') if isinstance(self.task.get('context_tarifa'), dict) else None
+        if tarifa:
+            tarifa = self.task['context_tarifa'] = dict(tarifa, modo=modo)
+            ventana = self.task.get('context_limit')
+            if isinstance(ventana, int) and ventana > 0:
+                self.task['context_umbral'] = limite(ventana, self.compact_limit,
+                                                     tarifa['desde'] if modo == AHORRO else None)
+            caro = 'a partir de ' + tokens_cortos(tarifa['desde']) + ' tokens cada petición cuesta ' \
+                + catalogo.veces(tarifa)
+            texto = ('Ahorro: compactaré antes de llegar a ' + tokens_cortos(tarifa['desde']) + ' tokens ('
+                     + caro + ').' if modo == AHORRO else
+                     'Contexto completo: uso la ventana entera; ' + caro + '.')
+        else:
+            texto = ('Ahorro: si el modelo cobra más por contexto largo, compactaré antes de ese umbral.'
+                     if modo == AHORRO else
+                     'Contexto completo: uso la ventana entera del modelo, aunque cobre más por contexto largo.')
+        self.save()
+        self.event(self.task, 'system', texto)
+        if self.transport is not None:
+            self.transport.emit('sesion', id=self.task['id'], cwd=self.task['cwd'], modelo=self.task['model'],
+                                esfuerzo=self.task['effort'], modo=self.task['modo'], contexto=modo)
+            tokens, ventana = self.task.get('context_tokens'), self.task.get('context_limit')
+            if isinstance(tokens, int) and isinstance(ventana, int):
+                self._ultimo_contexto = None
+                self.context(self.task, tokens, ventana)
+
+    async def continuar_en_nueva(self):
+        """«Seguir en una sesión nueva»: compacta si hace falta y abre otra que arranca sólo con
+        el resumen. Devuelve su id, o None si no se pudo (ya dicho en la conversación)."""
+        mcp, self.mcp = self.mcp, None
+        try:
+            rt = self.runtime()
+        finally:
+            self.mcp = mcp
+        punto = rt.state.get('checkpoint') or {}
+        al_dia = punto.get('estilo') == 'codex' and punto.get('through', 0) >= len(rt.state.get('messages') or [])
+        if not al_dia and not await self.compact_now():
+            return None
+        try:
+            nueva = registro.continuar(self.directory.parent, self.task['id'])
+        except (OSError, ValueError) as exc:
+            self.event(self.task, 'system', 'No se pudo seguir en una sesión nueva: ' + str(exc))
+            return None
+        self.event(self.task, 'system', 'Sigue en la sesión nueva ' + nueva + ', que empieza con el resumen.')
+        return nueva
+
     def _aviso_de_procesos(self):
         """Evento `procesos`: la lista que la app enseña en el panel y en el pie."""
         if self.transport:
@@ -610,7 +693,8 @@ class TerminalManager:
 def desglose_de(task):
     """Lo que el evento `contexto` añade al total medido, si se conoce: el reparto estimado
     (`desglose`), el uso estimado ahora (`estimado`, lo medido más lo añadido después), el
-    umbral de compactación automática (`umbral`) y los archivos de memoria (`memoria`)."""
+    umbral de compactación automática (`umbral`), los archivos de memoria (`memoria`) y,
+    con un modelo que cobra más por contexto largo, su tramo y el modo de la sesión (`tarifa`)."""
     extra = {}
     partes = task.get('context_desglose')
     if isinstance(partes, dict) and all(isinstance(v, int) for v in partes.values()):
@@ -619,6 +703,9 @@ def desglose_de(task):
         valor = task.get(campo)
         if isinstance(valor, int) and not isinstance(valor, bool) and valor >= 0:
             extra[clave] = valor
+    tarifa = task.get('context_tarifa')
+    if isinstance(tarifa, dict) and isinstance(tarifa.get('desde'), int):
+        extra['tarifa'] = {k: tarifa[k] for k in ('desde', 'entrada', 'salida', 'modo') if k in tarifa}
     memoria = task.get('context_memoria')
     if isinstance(memoria, list):
         extra['memoria'] = [dict(ruta=f['ruta'], tokens=f['tokens']) for f in memoria[:50]
@@ -699,6 +786,8 @@ async def execute(args):
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args))
     loop = asyncio.get_running_loop()
+    if getattr(args, 'contexto', None):
+        manager.elegir_contexto(args.contexto)
     current = asyncio.current_task()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
@@ -729,6 +818,9 @@ def main(argv=None):
                         help='Con --stdio y --reanudar: abrir la sesión sin turno y esperar un mensaje o «compactar»')
     parser.add_argument('--compactar-en', type=int, metavar='TOKENS',
                         help='Compactar el contexto al llegar a estos tokens (como mucho, el 90 %% de la ventana)')
+    parser.add_argument('--contexto', choices=('ahorro', 'completo'),
+                        help='Con un modelo que cobra más por contexto largo (Luna pasados 272K, Haiku 5.5 pasados '
+                             '100K): «ahorro» (por defecto) compacta antes; «completo» usa la ventana entera')
     parser.add_argument('--bifurcar', metavar='ID', help='Seguir en una sesión nueva desde el final de un turno')
     parser.add_argument('--padre', metavar='ID', help='Sesión que propuso esta (propose_session): sale debajo de '
                                                       'ella y le llega una nota al terminar cada turno')

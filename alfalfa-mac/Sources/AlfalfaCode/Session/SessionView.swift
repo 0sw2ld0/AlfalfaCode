@@ -22,7 +22,8 @@ struct SessionView: View {
             SessionSidePane(terminals: terminals) {
                 SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
                           timeline: session.timeline, canCompact: session.canCompact,
-                          onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) })
+                          onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) },
+                          onContextMode: { session.setContextMode($0) })
             }
         }
     }

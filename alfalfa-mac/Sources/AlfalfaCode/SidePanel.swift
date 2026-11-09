@@ -11,6 +11,8 @@ struct SidePanel: View {
     var canCompact = false
     var onCompact: (() -> Void)?
     var onStopProcess: ((String) -> Void)?
+    /// Ahorro o Contexto completo, con un modelo que cobra más por contexto largo.
+    var onContextMode: ((ContextMode) -> Void)?
 
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
     @AppStorage("panel.entorno.abierto") private var environmentOpen = true
@@ -101,6 +103,9 @@ struct SidePanel: View {
                     .font(.system(size: 13)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             compactFooter(timeline)
+            if let tier = timeline.priceTier {
+                PriceTierRow(tier: tier, mode: timeline.contextMode ?? .saving, onMode: onContextMode)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 stat("Mensajes", "\(messages)")
                 stat("Acciones", "\(tools)")

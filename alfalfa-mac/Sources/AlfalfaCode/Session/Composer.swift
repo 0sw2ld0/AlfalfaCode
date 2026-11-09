@@ -262,6 +262,14 @@ private extension Composer {
             }
             session.change(mode: mode.rawValue)
         case .compactar: session.compact(instructions: value.isEmpty ? nil : value)
+        case .contexto:
+            let wanted = value.lowercased()
+            let mode = ContextMode.allCases.first {
+                $0.rawValue == wanted || $0.label.lowercased() == wanted || (wanted == "full" && $0 == .full)
+                    || (wanted == "saving" && $0 == .saving)
+            }
+            guard let mode else { session.showContextMode(); return }
+            session.setContextMode(mode)
         case .procesos: session.showProcesses()
         case .cerrarProcesos: session.stopProcess("todos")
         case .estado: session.showStatus()

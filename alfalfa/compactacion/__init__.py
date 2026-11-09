@@ -6,6 +6,9 @@ Apache-2.0; ver NOTICE, LICENSE y PROCEDENCIA.md de esta carpeta):
 
 - Se dispara al llegar al 90 % de la ventana del modelo o al límite que elija el
   usuario, si es menor (`auto_compact_token_limit`, openai_models.rs), o a mano.
+  Propio de AlfalfaCode: con un modelo que cobra más toda la petición pasado un
+  umbral (Luna a 272K, Haiku 5.5 a 100K), el modo Ahorro compacta también al 90 %
+  de ese umbral, avisa al 80 % y recorta lo que lo pasaría en una sola petición.
 - Se pide al mismo modelo un resumen de traspaso con PROMPT, sin herramientas.
 - El contexto nuevo es: instrucciones iniciales + los últimos mensajes reales
   del usuario hasta MAX_TOKENS_USUARIO (el que no cabe entero se recorta por
@@ -38,12 +41,46 @@ def tokens_aprox(texto):
     return (len(texto.encode('utf-8')) + BYTES_POR_TOKEN - 1) // BYTES_POR_TOKEN
 
 
-def limite(ventana, configurado=None):
-    """El 90 % de la ventana, o el límite del usuario si es menor (openai_models.rs)."""
+def limite(ventana, configurado=None, tarifa=None):
+    """El 90 % de la ventana, o el límite del usuario si es menor (openai_models.rs).
+
+    `tarifa` es el umbral de tokens a partir del cual el modelo cobra más toda la
+    petición (modo Ahorro): entonces también como mucho el 90 % de ese umbral."""
     propio = ventana * UMBRAL_NUMERADOR // UMBRAL_DENOMINADOR if ventana else None
-    if propio and configurado:
-        return min(configurado, propio)
-    return propio or configurado
+    tope = min(configurado, propio) if propio and configurado else propio or configurado
+    if tarifa:
+        barato = tarifa * UMBRAL_NUMERADOR // UMBRAL_DENOMINADOR
+        tope = min(tope, barato) if tope else barato
+    return tope
+
+
+# Modos de contexto de una sesión con un modelo que cobra más por contexto largo:
+# «ahorro» compacta antes del umbral de tarifa; «completo» usa la ventana entera.
+AHORRO, COMPLETO = 'ahorro', 'completo'
+MODOS_CONTEXTO = (AHORRO, COMPLETO)
+# El aviso sale al 80 % del umbral de tarifa.
+AVISO_NUMERADOR, AVISO_DENOMINADOR = 8, 10
+# En Ahorro ninguna petición pasa del 95 % del umbral: el resto es margen para lo que
+# la estimación por bytes no ve (el proveedor cuenta sus propios tokens).
+RECORTE_NUMERADOR, RECORTE_DENOMINADOR = 95, 100
+
+
+def aviso_en(tarifa):
+    return tarifa * AVISO_NUMERADOR // AVISO_DENOMINADOR
+
+
+def tope_de_peticion(tarifa):
+    return tarifa * RECORTE_NUMERADOR // RECORTE_DENOMINADOR
+
+
+def tokens_cortos(tokens):
+    """«100K», «1M», «1,05M», «850»: para los avisos."""
+    if tokens >= 1_000_000:
+        valor = round(tokens / 1_000_000, 2)
+        return (str(int(valor)) if valor == int(valor) else str(valor).replace('.', ',')) + 'M'
+    if tokens >= 1000:
+        return str(round(tokens / 1000)) + 'K'
+    return str(tokens)
 
 
 def recortar_medio(texto, max_tokens):

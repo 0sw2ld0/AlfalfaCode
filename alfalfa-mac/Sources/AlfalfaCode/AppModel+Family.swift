@@ -26,6 +26,14 @@ extension AppModel {
             guard let self, let session else { return }
             self.childFinished(session, outcome)
         }
+        // «Seguir en una sesión nueva» (aviso de tarifa): se abre la que sigue con el resumen.
+        session.onContinued = { [weak self] id in
+            guard let self else { return }
+            Task {
+                await self.reload()
+                self.route = .past(id)
+            }
+        }
     }
 
     // MARK: - Métodos privados

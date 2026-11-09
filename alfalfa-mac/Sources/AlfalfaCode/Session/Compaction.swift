@@ -39,6 +39,7 @@ struct CompactionMarker: View {
     private var line: some View { Rectangle().fill(Theme.border).frame(height: 1) }
 
     private var title: String {
+        if compaction.reason == "continuacion" { return "Empieza con el resumen de la sesión anterior" }
         let kind = compaction.reason == "manual" ? "Conversación compactada" : "Compactada automáticamente"
         guard compaction.before > 0 else { return kind }
         return kind + " · " + ContextFormat.tokens(compaction.before) + " → " + ContextFormat.tokens(compaction.after)

@@ -333,7 +333,7 @@ class Compatible(Proveedor):
         """La fila de la lista de modelos para una ficha del catálogo."""
         fila = {'name': self.id + '/' + ficha['id'], 'model': self.id + '/' + ficha['id'], 'proveedor': self.id,
                 'nombre': ficha.get('nombre') or ficha['id'], 'nombre_proveedor': self.nombre,
-                **catalogo.resumen(ficha)}
+                **catalogo.resumen(ficha, self.id)}
         if catalogo.es_gratis(self.datos(), ficha):
             fila.update(gratis=True, aviso=catalogo.AVISO_GRATIS)
         if not self.configurado():

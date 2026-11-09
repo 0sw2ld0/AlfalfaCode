@@ -46,6 +46,23 @@ def is_cloud(model, info=None):
     return (nombre.endswith('cloud')
             or bool((info or {}).get('remote_host') or (info or {}).get('remote_model')))
 
+
+def _tarifa_valida(valor):
+    """{'desde': int, 'entrada': ×, 'salida': ×} saneado (viene del catálogo o del servicio), o None."""
+    if not isinstance(valor, dict):
+        return None
+    desde = valor.get('desde')
+    if type(desde) is not int or not 1000 <= desde <= 100_000_000:
+        return None
+    veces = {}
+    for clave in ('entrada', 'salida'):
+        numero = valor.get(clave, 1)
+        if isinstance(numero, bool) or not isinstance(numero, (int, float)) or not 1 <= numero <= 100:
+            return None
+        veces[clave] = float(numero)
+    return dict(veces, desde=desde) if veces['entrada'] > 1 or veces['salida'] > 1 else None
+
+
 COMPACTAR_AL = 60
 OUTPUT_BYTES_PER_TOKEN = 8
 MAX_TRANSPORT_ATTEMPTS = 3
@@ -711,6 +728,12 @@ class NativeRuntime:
             self._ficha = proveedor.ficha(model)
         except Exception:
             self._precio = self._ficha = None
+        # El tramo de contexto largo (Luna a 272K, Haiku 5.5 a 100K): el modo Ahorro
+        # compacta antes. Alfalfa Cloud lo dice en /api/show (`_ventana`).
+        try:
+            self._tarifa = _tarifa_valida(proveedor.tarifa(model))
+        except Exception:
+            self._tarifa = None
         aviso = getattr(self.manager, 'cuota', None)
         return proveedor, model, proveedor.cliente(
             timeout, tarea=self.task, al_cambiar_cuota=(lambda filas: aviso(self.task, proveedor.id, filas))
@@ -1014,6 +1037,14 @@ class NativeRuntime:
         else:
             messages = log
         messages = self._solo_el_ultimo_estado(json.loads(json.dumps(messages)))
+        recortes = self.state.get('recortes_tarifa')
+        if isinstance(recortes, dict) and recortes:
+            # Lo que se recortó para no pasar del umbral de tarifa se envía igual cada vez.
+            for m in messages:
+                if m.get('role') == 'tool' and isinstance(m.get('content'), str):
+                    corto = recortes.get(digest(m['content'].encode('utf-8')))
+                    if isinstance(corto, str):
+                        m['content'] = corto
         if not perfil(self.task.get('model')).get('preserve_thinking'):
             for m in messages:
                 m.pop('thinking', None)
@@ -1163,12 +1194,16 @@ class NativeRuntime:
 
     def _record_context_details(self):
         """Umbral de compactación y uso estimado, para «X hasta la compactación» del panel."""
-        from ...compactacion import limite
         if self.compaction != 'codex':
             return
-        tope = limite(self.context_tokens, self.compact_limit)
+        tope = self._tope()
         if tope:
             self.task['context_umbral'] = tope
+        tarifa = self._tarifa_activa()
+        if tarifa:
+            self.task['context_tarifa'] = dict(tarifa, modo=self._modo_contexto())
+        else:
+            self.task.pop('context_tarifa', None)
         estimado = self.context_estimate()
         if isinstance(estimado, int):
             self.task['context_estimado'] = estimado
@@ -1197,19 +1232,12 @@ class NativeRuntime:
         if pedido:
             self._compact_instructions = pedido if isinstance(pedido, str) else None
             return 'manual'
-        from ...compactacion import limite, tokens_aprox
-        tope = limite(self.context_tokens, self.compact_limit)
+        tope = self._tope()
         if not tope:
             return None
-        usage = self.state.get('context_usage')
-        log = self.state['messages']
-        if isinstance(usage, dict) and isinstance(usage.get('tokens'), int) \
-                and isinstance(usage.get('messages'), int) and usage['messages'] <= len(log):
-            # Lo exacto que midió el proveedor más lo añadido después (aproximado).
-            used = usage['tokens'] + tokens_aprox(json.dumps(log[usage['messages']:], ensure_ascii=False))
-        else:
-            used = tokens_aprox(json.dumps(context, ensure_ascii=False))
+        used = self._uso_estimado(context)
         self.task['runtime_context_estimate'] = used
+        self._avisar_tarifa(used, tope)
         return 'auto' if used >= tope else None
 
     def _conversation_response_cap(self, payload, purpose='chat'):
@@ -1386,6 +1414,13 @@ class NativeRuntime:
         # Como Codex: si ni así cabe, se quitan los elementos más antiguos.
         while len(json.dumps(messages)) > self.context_chars and len(messages) > 2:
             messages.pop(1)
+        from ...compactacion import AHORRO, tope_de_peticion
+        tarifa = self._tarifa_activa()
+        if tarifa and self._modo_contexto() == AHORRO:
+            # Tampoco el resumen se pide a tarifa cara.
+            while tokens_aprox(json.dumps(messages, ensure_ascii=False)) > tope_de_peticion(tarifa['desde']) \
+                    and len(messages) > 2:
+                messages.pop(1)
         anteriores = self._context_messages()
         before = tokens_aprox(json.dumps(anteriores, ensure_ascii=False))
         # De qué estaba hecho el contexto, sin su texto: si vuelve a crecer sin
@@ -1499,7 +1534,130 @@ class NativeRuntime:
         if context_tokens < 8192:
             raise ValueError('El modelo necesita al menos 8192 tokens de contexto para estas herramientas.')
         self.context_tokens = context_tokens
+        anunciada = _tarifa_valida(info.get('alfalfa_tarifa'))
+        if anunciada:
+            # Alfalfa Cloud: el servicio dice a partir de dónde le cuesta más la petición.
+            self._tarifa = anunciada
         return context_tokens
+
+    def _tarifa_activa(self):
+        """El tramo de contexto largo si cabe en la ventana de esta sesión; None si no hay."""
+        datos = getattr(self, '_tarifa', None)
+        if self.compaction != 'codex' or not datos or not self.context_tokens:
+            return None
+        return datos if datos['desde'] < self.context_tokens else None
+
+    def _modo_contexto(self):
+        from ...compactacion import AHORRO, MODOS_CONTEXTO
+        modo = self.task.get('contexto_modo')
+        return modo if modo in MODOS_CONTEXTO else AHORRO
+
+    def _tope(self):
+        """Umbral de compactación automática: la ventana, el del usuario y, en Ahorro, la tarifa."""
+        from ...compactacion import AHORRO, limite
+        tarifa = self._tarifa_activa()
+        return limite(self.context_tokens, self.compact_limit,
+                      tarifa['desde'] if tarifa and self._modo_contexto() == AHORRO else None)
+
+    def _nombre_del_modelo(self):
+        ficha = getattr(self, '_ficha', None)
+        nombre = (ficha or {}).get('nombre') if isinstance(ficha, dict) else None
+        from ... import proveedores
+        return nombre or proveedores.separar(self.task.get('model'))[1] or 'el modelo'
+
+    def _avisar_tarifa(self, usado, tope):
+        """Al 80 % del umbral de tarifa en Ahorro (una vez por tramo entre compactaciones), y al
+        pasarlo en Contexto completo: la app enseña el aviso con sus botones."""
+        from ... import catalogo
+        from ...compactacion import AHORRO, aviso_en, tokens_cortos
+        tarifa = self._tarifa_activa()
+        if not tarifa or not isinstance(usado, int):
+            return
+        modo = self._modo_contexto()
+        marca = self.task.get('runtime_compactions', 0)
+        nombre = self._nombre_del_modelo()
+        precio = 'A partir de ' + tokens_cortos(tarifa['desde']) + ' tokens, ' + nombre + ' cobra ' \
+            + catalogo.veces(tarifa) + ' toda la petición.'
+        datos = dict(tarifa, modo=modo, estimado=usado, modelo=nombre)
+        if modo == AHORRO:
+            if usado < aviso_en(tarifa['desde']) or self.task.get('aviso_tarifa') == marca:
+                return
+            self.task['aviso_tarifa'] = marca
+            faltan = max(0, (tope or 0) - usado)
+            datos.update(compactar_en=tope, faltan=faltan)
+            texto = precio + (' Compactaré en unos ' + tokens_cortos(faltan) + '.' if faltan
+                              else ' Compactaré antes de la siguiente respuesta.')
+        else:
+            if usado < tarifa['desde'] or self.task.get('aviso_tarifa_completo') == marca:
+                return
+            self.task['aviso_tarifa_completo'] = marca
+            texto = ('Contexto completo: vas por unos ' + tokens_cortos(usado) + ' tokens. ' + precio
+                     + ' Compacta para volver a la tarifa barata.')
+        aviso = getattr(self.manager, 'aviso_tarifa', None)
+        if callable(aviso):
+            aviso(self.task, texto, datos)
+        else:
+            self.manager.event(self.task, 'system', texto)
+
+    def _uso_estimado(self, context):
+        """Lo exacto que midió el proveedor más lo añadido después (aproximado), o el contexto entero."""
+        from ...compactacion import tokens_aprox
+        usage = self.state.get('context_usage')
+        log = self.state['messages']
+        if isinstance(usage, dict) and isinstance(usage.get('tokens'), int) \
+                and isinstance(usage.get('messages'), int) and usage['messages'] <= len(log):
+            return usage['tokens'] + tokens_aprox(json.dumps(log[usage['messages']:], ensure_ascii=False))
+        return tokens_aprox(json.dumps(context, ensure_ascii=False))
+
+    def _recortar_por_tarifa(self, context, tools=()):
+        """En Ahorro, una petición que pasaría del umbral de tarifa (una salida de herramienta
+        enorme) se recorta antes de enviarla: las salidas más grandes, por el medio, como ya se
+        recortan las viejas. El recorte se guarda para que la siguiente petición sea idéntica
+        (y la caché del proveedor siga valiendo); el historial completo no cambia."""
+        from ... import catalogo
+        from ...compactacion import AHORRO, recortar_medio, tokens_aprox, tokens_cortos, tope_de_peticion
+        tarifa = self._tarifa_activa()
+        if not tarifa or self._modo_contexto() != AHORRO:
+            return context
+        techo = tope_de_peticion(tarifa['desde'])
+        enviado = tokens_aprox(json.dumps(context, ensure_ascii=False)) \
+            + tokens_aprox(json.dumps(list(tools), ensure_ascii=False))
+        exceso = max(enviado, self._uso_estimado(context)) - techo
+        if exceso <= 0:
+            return context
+        recortes = self.state.setdefault('recortes_tarifa', {})
+        nota = ('\n[Salida recortada para no pasar de ' + tokens_cortos(tarifa['desde']) + ' tokens, donde '
+                + self._nombre_del_modelo() + ' cobra ' + catalogo.veces(tarifa)
+                + '. Vuelve a pedir sólo la parte que necesites.]')
+        salidas = sorted((i for i, m in enumerate(context)
+                          if m.get('role') == 'tool' and isinstance(m.get('content'), str)),
+                         key=lambda i: -len(context[i]['content']))
+        context, recortadas, quitados = list(context), 0, 0
+        for i in salidas:
+            if exceso <= 0:
+                break
+            original = context[i]['content']
+            antes = tokens_aprox(original)
+            if antes <= 400:
+                break
+            nuevo = recortar_medio(original, max(200, antes - exceso - tokens_aprox(nota))) + nota
+            ahorro = antes - tokens_aprox(nuevo)
+            if ahorro <= 0:
+                continue
+            context[i] = dict(context[i], content=nuevo)
+            recortes[digest(original.encode('utf-8'))] = nuevo
+            exceso -= ahorro
+            quitados += ahorro
+            recortadas += 1
+        if recortadas:
+            self.task['runtime_recortes_tarifa'] = self.task.get('runtime_recortes_tarifa', 0) + recortadas
+            self.save()
+            self.manager.event(self.task, 'system', 'Recorté ' + ('una salida' if recortadas == 1 else
+                                                               str(recortadas) + ' salidas')
+                               + ' (unos ' + tokens_cortos(quitados) + ' tokens) para que la petición no pase de '
+                               + tokens_cortos(tarifa['desde']) + ', donde ' + self._nombre_del_modelo()
+                               + ' cobra ' + catalogo.veces(tarifa) + '.')
+        return context
 
     async def approve(self, args):
         if self.approval_policy is not None:
@@ -2256,6 +2414,8 @@ class NativeRuntime:
                     # explícita; el contenido sigue abriéndose bajo demanda.
                     allowed_tools += [t for t in self.complementos_tools
                                       if t['function']['name'] not in self.excluded_tools]
+                if self.compaction == 'codex' and not final_review:
+                    context = self._recortar_por_tarifa(context, allowed_tools)
                 salida = limite_num_predict(model)
                 if nube and 'num_predict' not in perfil(model):
                     # Como OpenCode (OUTPUT_TOKEN_MAX = 32 000): en la nube la salida no

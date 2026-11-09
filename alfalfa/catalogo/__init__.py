@@ -14,6 +14,7 @@ el nombre de su variable (`env`) y dónde se consigue (`doc`) para explicarlo.
     ficha(proveedor, modelo) -> dict | None
     proveedor(ident) -> dict | None
     gratis_ahora() -> [(proveedor, ficha), …]
+    tarifa(precio, proveedor, modelo) -> {'desde', 'entrada', 'salida'} | None
 """
 from __future__ import annotations
 
@@ -38,6 +39,22 @@ MAX_MODELOS = 5000
 MAX_TEXTO = 300
 MINIMO = Path(__file__).with_name('minimo.json')
 ARCHIVO = 'models.dev.json'
+# Sube cuando cambia lo que se guarda de cada modelo: una copia de otro formato se
+# vuelve a bajar en cuanto hay red (la 2 añadió los tramos de precio por contexto largo).
+FORMATO = 2
+# models.dev da los tramos en `tiers`; algunos modelos antiguos sólo en `context_over_200k`.
+DESDE_200K = 200_000
+# Tramos de contexto largo comprobados en las páginas oficiales (2026-11-09), por si el
+# catálogo guardado aún no los trae: los multiplicadores son sobre el precio normal.
+# - OpenAI GPT-6 Luna (developers.openai.com/api/docs/models/gpt-6-luna): ventana 1.050.000;
+#   «Prompts with more than 272K input tokens are priced at 2x input and cache rates and
+#   1.5x output for the full request».
+# - Claude Haiku 5.5 (platform.claude.com, precios): ventana 1M; por encima de 100K tokens
+#   de prompt, caché incluida, toda la petición va a 5×.
+TARIFAS_PROPIAS = {
+    ('openai', 'gpt-6-luna'): {'desde': 272_000, 'entrada': 2.0, 'salida': 1.5},
+    ('anthropic', 'claude-haiku-5-5'): {'desde': 100_000, 'entrada': 5.0, 'salida': 5.0},
+}
 
 ID_PROVEEDOR = re.compile(r'^[a-z0-9][a-z0-9-]{0,63}$')
 ID_MODELO = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$')
@@ -131,7 +148,24 @@ def _precio(valor):
         numero = _numero(valor.get(origen))
         if numero is not None:
             precio[destino] = numero
+    # Un tramo por longitud del prompt (Claude Haiku 5.5 cobra más toda la petición si pasa de 100K).
+    for tramo in (valor.get('tiers') if isinstance(valor.get('tiers'), list) else [])[:4]:
+        limite = tramo.get('tier') if isinstance(tramo, dict) and isinstance(tramo.get('tier'), dict) else {}
+        desde = _entero(limite.get('size'))
+        caro = _precio({k: v for k, v in tramo.items() if k != 'tiers'}) if limite.get('type') == 'context' else None
+        if desde and caro:
+            precio['tramo'] = dict(caro, desde=desde)
+            break
     return precio
+
+
+def _con_tramos(valor):
+    """`context_over_200k` (formato antiguo de models.dev) como un tramo más de `tiers`."""
+    if not isinstance(valor, dict) or isinstance(valor.get('tiers'), list) \
+            or not isinstance(valor.get('context_over_200k'), dict):
+        return valor
+    tramo = dict(valor['context_over_200k'], tier={'type': 'context', 'size': DESDE_200K})
+    return dict(valor, tiers=[tramo])
 
 
 def _esfuerzos(valor):
@@ -161,7 +195,7 @@ def _modelo(ident, crudo, base):
         'esfuerzos': _esfuerzos(crudo.get('reasoning_options')),
         'herramientas': crudo.get('tool_call') is True,
         'vision': crudo.get('attachment') is True and 'image' in entradas,
-        'precio': _precio(crudo.get('cost')),
+        'precio': _precio(_con_tramos(crudo.get('cost'))),
         'abiertos': crudo.get('open_weights') is True,
         'fecha': _texto(crudo.get('release_date'), 20),
         'conocimiento': _texto(crudo.get('knowledge'), 20),
@@ -253,6 +287,9 @@ def _leer(camino):
         return None
     fecha = valor.get('fecha')
     valor['fecha'] = fecha if isinstance(fecha, (int, float)) and math.isfinite(fecha) else 0
+    if camino != MINIMO and valor.get('formato') != FORMATO:
+        # Guardada antes de conocer los tramos: vale, pero se renueva en cuanto haya red.
+        valor['fecha'] = 0
     return valor
 
 
@@ -279,9 +316,7 @@ def _revalidar(proveedores):
                 'limit': {'context': ficha.get('ventana'), 'input': ficha.get('entrada'),
                           'output': ficha.get('salida')},
                 'reasoning_options': [{'type': 'effort', 'values': ficha.get('esfuerzos') or []}],
-                'cost': None if precio is None else {'input': precio.get('entrada'), 'output': precio.get('salida'),
-                                                     'cache_read': precio.get('cache_lectura'),
-                                                     'cache_write': precio.get('cache_escritura')},
+                'cost': None if precio is None else _coste_crudo(precio),
                 'open_weights': ficha.get('abiertos'), 'release_date': ficha.get('fecha'),
                 'knowledge': ficha.get('conocimiento'), 'status': ficha.get('estado'),
                 'provider': {'npm': ficha.get('paquete'), 'api': ficha.get('api')}}
@@ -293,11 +328,23 @@ def _revalidar(proveedores):
     return limpios
 
 
+def _coste_crudo(precio):
+    """El precio reducido otra vez con los nombres de models.dev, para volver a validarlo."""
+    crudo = {'input': precio.get('entrada'), 'output': precio.get('salida'),
+             'cache_read': precio.get('cache_lectura'), 'cache_write': precio.get('cache_escritura')}
+    tramo = precio.get('tramo')
+    if isinstance(tramo, dict):
+        crudo['tiers'] = [{'input': tramo.get('entrada'), 'output': tramo.get('salida'),
+                           'cache_read': tramo.get('cache_lectura'), 'cache_write': tramo.get('cache_escritura'),
+                           'tier': {'type': 'context', 'size': tramo.get('desde')}}]
+    return crudo
+
+
 def _guardar(proveedores, fecha):
     destino = ruta()
     destino.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporal = destino.with_suffix('.tmp')
-    temporal.write_text(json.dumps({'fuente': URL, 'fecha': fecha, 'proveedores': proveedores},
+    temporal.write_text(json.dumps({'fuente': URL, 'fecha': fecha, 'formato': FORMATO, 'proveedores': proveedores},
                                    ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     os.chmod(temporal, 0o600)
     os.replace(temporal, destino)
@@ -431,22 +478,68 @@ def gratis_ahora(red=False):
     return filas
 
 
-def coste(precio, entrada, salida, cache=0):
-    """USD de una llamada con los precios por millón del catálogo; None sin precio."""
+def coste(precio, entrada, salida, cache=0, escrita=0):
+    """USD de una llamada con los precios por millón del catálogo; None sin precio.
+
+    `entrada` es el prompt entero; `cache`, lo leído de la caché y `escrita`, lo
+    escrito en ella (Anthropic lo cobra a 1,25 veces la entrada si el catálogo no
+    dice otra cosa). Con un tramo por longitud, un prompt más largo que el tramo
+    paga toda la petición a su precio.
+    """
     if not precio or not isinstance(entrada, int) or not isinstance(salida, int):
         return None
+    tramo = precio.get('tramo')
+    if isinstance(tramo, dict) and isinstance(tramo.get('desde'), int) and entrada > tramo['desde']:
+        precio = tramo
     cache = cache if isinstance(cache, int) and 0 <= cache <= entrada else 0
+    escrita = escrita if isinstance(escrita, int) and 0 <= escrita <= entrada - cache else 0
     lectura = precio.get('cache_lectura', precio['entrada'])
-    return ((entrada - cache) * precio['entrada'] + cache * lectura + salida * precio['salida']) / 1_000_000
+    escritura = precio.get('cache_escritura', precio['entrada'] * 1.25)
+    return ((entrada - cache - escrita) * precio['entrada'] + cache * lectura + escrita * escritura
+            + salida * precio['salida']) / 1_000_000
 
 
-def resumen(ficha_modelo):
-    """Lo que el selector enseña de un modelo: ventana, precio y si es gratis."""
+def tarifa(precio, proveedor=None, modelo=None):
+    """El tramo de contexto largo: {'desde': tokens, 'entrada': ×, 'salida': ×}, o None.
+
+    Por encima de `desde` tokens de prompt (caché incluida) toda la petición se cobra
+    con esos multiplicadores. Sale del precio del catálogo y, si no lo trae, de
+    TARIFAS_PROPIAS. Sin precio (local, plan, cortesía) no hay tarifa que cuidar."""
+    tramo = precio.get('tramo') if isinstance(precio, dict) else None
+    if isinstance(tramo, dict) and type(tramo.get('desde')) is int and tramo['desde'] > 0:
+        def veces(clave):
+            normal, caro = precio.get(clave), tramo.get(clave)
+            if isinstance(normal, (int, float)) and isinstance(caro, (int, float)) and normal > 0 and caro >= normal:
+                return round(caro / normal, 2)
+            return 1.0
+        datos = {'desde': tramo['desde'], 'entrada': veces('entrada'), 'salida': veces('salida')}
+        if datos['entrada'] > 1 or datos['salida'] > 1:
+            return datos
+    propia = TARIFAS_PROPIAS.get((proveedor, modelo))
+    return dict(propia) if propia and precio else None
+
+
+def veces(datos):
+    """«5×» o «2× la entrada y 1,5× la salida», para los avisos."""
+    def numero(valor):
+        return (str(int(valor)) if float(valor).is_integer() else str(valor).replace('.', ',')) + '×'
+    if datos['entrada'] == datos['salida']:
+        return numero(datos['entrada'])
+    return numero(datos['entrada']) + ' la entrada y ' + numero(datos['salida']) + ' la salida'
+
+
+def resumen(ficha_modelo, proveedor=None):
+    """Lo que el selector enseña de un modelo: ventana, precio, si es gratis y hasta
+    dónde llega la tarifa barata (`barato_hasta`, con `tarifa_larga` los multiplicadores)."""
     if not ficha_modelo:
         return {}
     datos = {}
     if ficha_modelo.get('ventana'):
         datos['ventana'] = ficha_modelo['ventana']
+    caro = tarifa(ficha_modelo.get('precio'), proveedor, ficha_modelo.get('id'))
+    if caro and (not datos.get('ventana') or caro['desde'] < datos['ventana']):
+        datos['barato_hasta'] = caro['desde']
+        datos['tarifa_larga'] = {'entrada': caro['entrada'], 'salida': caro['salida']}
     if ficha_modelo.get('salida'):
         datos['salida_max'] = ficha_modelo['salida']
     if ficha_modelo.get('precio'):

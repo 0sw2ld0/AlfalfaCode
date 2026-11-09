@@ -97,6 +97,11 @@ class Proveedor:
         """Precio por millón de tokens si este proveedor cobra por token; None si no (local, cuota, plan)."""
         return None
 
+    def tarifa(self, modelo):
+        """El tramo de contexto largo de quien cobra por token ({'desde', 'entrada', 'salida'}), o None."""
+        from .. import catalogo
+        return catalogo.tarifa(self.precio(modelo), self.id, modelo)
+
     def falta(self):
         """Qué falta configurar, en palabras para el usuario."""
         return ('El proveedor ' + self.nombre + ' no está configurado: añade su clave o su código en '
