@@ -761,6 +761,10 @@ def main(argv=None):
                          help='Chats de la app de Ollama que se pueden cargar (títulos, sin su contenido)')
     listing.add_argument('--importar-ollama', metavar='CHAT',
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
+    listing.add_argument('--aligerar-sesiones', action='store_true',
+                         help='Pasar todas las sesiones guardadas al formato ligero y decir cuánto se libera')
+    parser.add_argument('--descartar-no-relevantes', action='store_true',
+                        help='Con --aligerar-sesiones: borrar las resoluciones sin relación, no guardarlas aparte')
     listing.add_argument('--solo-bifurcar', metavar='ID',
                          help='Crear la sesión bifurcada sin lanzarla y decir su id (JSON)')
     from .proveedores import orden as orden_de_proveedores
@@ -768,6 +772,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if orden_de_proveedores.pedida(args):
         return orden_de_proveedores.orden(args)
+    if args.descartar_no_relevantes and not args.aligerar_sesiones:
+        parser.error('--descartar-no-relevantes sólo vale con --aligerar-sesiones')
+    if args.aligerar_sesiones:
+        from .sesiones.aligerar import orden
+        return orden(home_dir(), args.descartar_no_relevantes, args.json)
     if args.marcar or args.eliminar_sesion or args.solo_bifurcar:
         from .stdio import gestionar
         return gestionar(args)
