@@ -417,6 +417,9 @@ public struct Timeline: Equatable, Sendable {
             if let turn = event.turn { userTurns[id] = turn }
             if status == .idle || status == .blocked { status = .working }
         case "agent", "assistant":
+            // La misma respuesta dos veces seguidas (sesiones guardadas por motores anteriores,
+            // cuando el modelo la repetía tras recordarle una operación sin resolver): una basta.
+            if case let .agent(_, previous)? = items.last, previous == event.text { return }
             let id = nextID()
             items.append(.agent(id: id, text: event.text))
             if event.time > 0 { agentTimes[id] = event.time }

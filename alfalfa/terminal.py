@@ -315,6 +315,12 @@ class TerminalManager:
             text = self.mcp.limpiar(text)
             if herramienta:
                 herramienta = self.mcp.limpiar(herramienta)
+        # Al recordarle una operación sin resolver, el modelo suele repetir la misma respuesta:
+        # la segunda vez no se apunta ni se enseña. Los avisos del sistema no la separan.
+        if role == 'agent' and text == getattr(self, '_ultima_respuesta', None):
+            return
+        if role != 'system':
+            self._ultima_respuesta = text if role == 'agent' else None
         row = dict(role=role, text=text, time=time.time())
         if herramienta:
             row['herramienta'] = herramienta

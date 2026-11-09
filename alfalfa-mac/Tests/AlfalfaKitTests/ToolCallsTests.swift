@@ -125,6 +125,18 @@ final class ToolCallsTests: XCTestCase {
         XCTAssertEqual(timeline.items.count, 3)
     }
 
+    func testSameAgentReplyTwiceInARowShowsOnce() {
+        // Sesiones guardadas por motores anteriores: la respuesta repetida tras el recordatorio.
+        var timeline = Timeline()
+        apply(&timeline, [start("run_checks", "Pasar la prueba"), end("run_checks", #"{"exit_code": 1}"#, code: 1),
+                          ["rol": "agent", "texto": "La prueba falla."], ["rol": "agent", "texto": "La prueba falla."]])
+        XCTAssertEqual(timeline.items.count, 2)
+        // Separadas por trabajo, o distintas, sí se enseñan las dos.
+        apply(&timeline, [["rol": "agent", "texto": "Otra cosa."], start("read_file", "Leer a.py"),
+                          ["rol": "agent", "texto": "Otra cosa."]])
+        XCTAssertEqual(timeline.items.count, 5)
+    }
+
     func testFallbackWithoutEngineDescription() {
         // Eventos de un motor anterior: sólo texto. La fila dice algo razonable.
         let events = [
