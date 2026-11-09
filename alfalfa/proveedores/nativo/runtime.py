@@ -173,7 +173,6 @@ from ...reintentos.fallos import (  # noqa: E402, F401
     _es_modelo_inexistente,
     _mensaje_ollama,
     _ollama_failure,
-    _recorte,
     _senales_del_texto,
     classify_ollama_error,
 )

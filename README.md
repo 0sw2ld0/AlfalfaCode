@@ -540,6 +540,7 @@ tarjeta, que dice qué subagente pide.
   los tuyos en `.alfalfa/agents/*.md`, `.claude/agents/*.md` del proyecto,
   `~/.alfalfa/agents` o `~/.claude/agents`, con el formato de Claude Code
   (`name`, `description`, `tools`, `model` en la cabecera e instrucciones debajo).
+  También los de OpenCode que autorices (ver «Venir de OpenCode, Codex o Claude Code»).
   `tools: Read, Grep` se traduce a `read_file` y `search`; un modelo de Claude
   (`sonnet`, `inherit`…) usa el de la sesión.
 - Como en Codex, hay 6 trabajando como mucho y un subagente no lanza otros. En
@@ -551,6 +552,69 @@ tarjeta, que dice qué subagente pide.
 La app los enseña en el panel «Subagentes» (tipo, modelo, estado, lo que hacen y
 sus pasos) y en el pie («2 subagentes trabajando»); sus pasos no se mezclan con la
 conversación principal.
+
+## Venir de OpenCode, Codex o Claude Code
+
+Un proyecto preparado para otra herramienta funciona en AlfalfaCode sin tocar nada.
+`alfalfa --importar` dice qué encontró en la carpeta y en qué estado está; en la app
+está en Ajustes ▸ Importar.
+
+| Herramienta | Qué se lee | Qué se usa |
+|---|---|---|
+| Estándar AGENTS.md | `AGENTS.md` / `AGENTS.override.md` de la raíz del repositorio a la carpeta de trabajo | Instrucciones |
+| Claude Code | `CLAUDE.md`, `.claude/CLAUDE.md` y `CLAUDE.local.md` de esas mismas carpetas; `.mcp.json` del proyecto; `.claude/commands/*.md` (del proyecto y de `~/.claude/commands`) | Instrucciones, servidores MCP, órdenes «/» |
+| OpenCode | `opencode.json(c)` y `.opencode/opencode.json(c)` del proyecto, `~/.config/opencode/opencode.json(c)`, `.opencode/agent(s)/*.md` y `.opencode/command(s)/*.md` | `mcp`, `agent`/`agents`, `command`/`commands` e `instructions` (formatos V1 y V2) |
+| Codex | `~/.codex/config.toml` y `.codex/config.toml` del proyecto | `[mcp_servers.*]`, `developer_instructions` y `project_doc_fallback_filenames` |
+
+**Instrucciones.** Entran en este orden y en el mismo tope de 32 KiB:
+`developer_instructions` de Codex (como hace Codex, delante); en cada carpeta, de la
+raíz a la de trabajo, `AGENTS.override.md`, `AGENTS.md` o un nombre alternativo de
+Codex, y después los CLAUDE.md; al final, los archivos de `instructions` de OpenCode
+(nunca URL ni rutas fuera del proyecto). Un archivo que ya entró no se repite: ni el
+mismo, ni un enlace a él, ni otro con el mismo texto, y un CLAUDE.md que sólo dice
+`@AGENTS.md` no añade nada. El `AGENTS.md` de `~/.alfalfa` sigue yendo primero.
+
+**Servidores MCP y agentes: se autorizan una vez.** Como los complementos, lo que
+viene de una configuración ajena no se activa hasta que lo autorizas. La lista dice
+de qué herramienta y de qué archivo viene cada uno; al empezar una sesión, un aviso
+dice qué queda sin autorizar.
+
+```bash
+alfalfa --importar                          # qué hay y en qué estado
+alfalfa --importar --autorizar mcp:docs     # uno (la clave corta vale si no hay dudas)
+alfalfa --importar --autorizar todo         # todos los pendientes
+alfalfa --importar --autorizar todo --sin-internet
+alfalfa --importar --retirar agente:revisor
+```
+
+La autorización queda en `~/.alfalfa/importadas.json` como una huella de la
+definición (HMAC con una clave de este Mac). Si la definición cambia (otra orden,
+otros argumentos, otro entorno), vuelve a «sin autorizar». Otro proyecto con un
+servidor del mismo nombre no hereda la autorización.
+
+- Los servidores corren como los de `mcp.json`: stdio dentro del sandbox Seatbelt
+  (con internet salvo `--sin-internet`) y cada llamada pide permiso. Sólo reciben el
+  entorno que declaran. Las referencias (`{env:X}` de OpenCode, `${X}` de Claude Code,
+  `env_vars` y `bearer_token_env_var` de Codex) se resuelven en memoria al abrir la
+  sesión y nunca entregan una clave de proveedor. Ninguna clave de esos archivos se
+  copia a ningún sitio y la lista no enseña argumentos, entorno ni cabeceras.
+- `mcp.json` y los complementos ganan; luego va lo del proyecto (la carpeta de
+  trabajo antes que la raíz, `.opencode/` antes que el `opencode.json` suelto) y por
+  último lo del usuario. Un nombre repetido sale como «duplicado».
+- No se usan: OAuth (sólo cabeceras), `{file:…}` en un servidor, SSE ni
+  `http_headers_helper` de Codex.
+- Un agente de OpenCode se usa como subagente (`spawn_agent`). `permission.edit:
+  deny` o `tools.write/edit: false` lo dejan de sólo lectura, y `bash` denegado le
+  quita las órdenes. Su modelo `proveedor/modelo` no es de AlfalfaCode, así que usa
+  el de la sesión, y la variante (`#high`) pasa a esfuerzo. Un `.alfalfa/agents` o
+  `.claude/agents` con el mismo nombre gana.
+
+**Órdenes «/».** Los comandos de OpenCode y de Claude Code no necesitan autorización:
+sólo corren cuando los escribes. Salen en el menú «/» de la app; `/probar unidad`
+(o `alfalfa "/probar unidad"`) le manda al agente su plantilla con `$ARGUMENTS` y
+`$1`…`$9` sustituidos. `` !`orden` `` no se ejecuta sola: queda como petición al
+agente, que la corre con los permisos de siempre. Si el comando pide un subagente
+(`subtask`/`subagent`), el mensaje lo dice. Las órdenes propias de la app ganan.
 
 ## Probar apps del Mac (control de apps)
 
@@ -695,7 +759,8 @@ con un turno en marcha. También aceptan su nombre en inglés (`/model`, `/compa
 `/inicializar` (crea un AGENTS.md, como `/init` de Codex), `/renombrar`, `/fijar`,
 `/bifurcar`, `/archivar`, `/copiar`, `/exportar` (la conversación en Markdown) y
 `/detener`. Lo que empieza por «/» y no es una orden, como una ruta, se envía como
-mensaje normal.
+mensaje normal. Las órdenes del proyecto de OpenCode y Claude Code también salen en el
+menú (ver «Venir de OpenCode, Codex o Claude Code»).
 
 ## Cargar un chat de Ollama
 
@@ -752,6 +817,7 @@ versión en sus dependencias.
 | `permisos/`, `seatbelt/`, `reglas/` | Permisos bajo demanda, sandbox de macOS y reglas de `reglas.toml` |
 | `mcp_cliente/`, `complementos/`, `hooks/` | Servidores MCP, complementos y hooks compatibles con Claude Code |
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
+| `importadas/` | Proyectos de OpenCode, Codex y Claude Code: MCP, agentes, órdenes «/» e instrucciones |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
 | `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |
 | `proveedores/openai.py`, `proveedores/anthropic.py` | OpenAI (Responses API) y Claude (Messages API) con la clave del usuario |

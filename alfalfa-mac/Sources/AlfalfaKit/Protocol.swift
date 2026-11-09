@@ -605,6 +605,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `--reportar`: el reporte de error se envió, o por qué no.
     case reported(ReportResult)
     case ollamaChats([OllamaChat])
+    /// `--importar --json`: lo que trae la carpeta de OpenCode, Codex y Claude Code, y su estado.
+    case imported(ImportedConfig)
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
     case sessionChanged(id: String, forkedFrom: String?)
@@ -717,6 +719,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .quota(quotas(rows))
         case "activado":
             return .activated(name: text(object["nombre"]), quotas: quotas(object["cuotas"] as? [[String: Any]] ?? []))
+        case "importadas":
+            return ImportedConfig(object).map(Self.imported)
         case "chats_ollama":
             guard let rows = object["chats"] as? [[String: Any]] else { return nil }
             return .ollamaChats(rows.compactMap { row in

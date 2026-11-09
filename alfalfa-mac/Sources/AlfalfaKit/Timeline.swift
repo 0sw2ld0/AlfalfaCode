@@ -428,7 +428,7 @@ public struct Timeline: Equatable, Sendable {
         case let .keepingAwake(on): keepingAwake = on
         case .continued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats, .browser:
+             .ollamaChats, .imported, .browser:
             break
         }
     }

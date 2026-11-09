@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 # La suite no debe heredar el entorno de quien la corre: una sesión de
 # AlfalfaCode exporta su hogar, su Ollama y sus referencias.
@@ -8,6 +9,9 @@ for _nombre in [n for n in os.environ if n.startswith(_PREFIJOS)]:
 # Ni los procesos hijos de la suite (`alfalfa --stdio` de verdad) mantienen el Mac despierto:
 # test_mantener_despierto lo enciende donde lo prueba.
 os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
+# Ni las configuraciones de OpenCode, Codex y Claude Code de quien corre la suite (alfalfa/importadas),
+# tampoco en los procesos hijos.
+os.environ['ALFALFA_IMPORTAR_CASA'] = tempfile.mkdtemp(prefix='casa-ajena-')
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
@@ -42,6 +46,13 @@ def _sin_habilidades_del_usuario(tmp_path_factory, monkeypatch):
     """Las habilidades sueltas de ~/.claude/skills y ~/.codex/skills de quien corre la suite no entran."""
     from alfalfa.complementos import cargador
     monkeypatch.setattr(cargador, 'CASA', tmp_path_factory.mktemp('casa'))
+
+
+@pytest.fixture(autouse=True)
+def _sin_configuraciones_ajenas_del_usuario(tmp_path_factory, monkeypatch):
+    """~/.codex/config.toml, ~/.config/opencode y ~/.claude/commands de quien corre la suite no entran."""
+    from alfalfa import importadas
+    monkeypatch.setattr(importadas, 'CASA', tmp_path_factory.mktemp('casa-ajena'))
 
 
 @pytest.fixture(autouse=True)
