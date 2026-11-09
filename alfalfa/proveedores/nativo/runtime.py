@@ -1841,13 +1841,41 @@ class NativeRuntime:
         self.save()
 
     def _review_closing_context(self):
-        """Freeze evidence before withdrawing tools; keep the full journal on disk."""
+        """Freeze evidence before withdrawing tools; keep the full journal on disk.
+
+        Sólo guarda hasta dónde llega la evidencia (cuántos mensajes y resoluciones,
+        qué incidencias): una copia de la conversación, las resoluciones y las
+        incidencias dentro de session.json lo hacía crecer con cada revisión, y al
+        recargar no se actualizaba. `_review_closing_evidence` la reconstruye.
+        """
         closing = self.state.get('review_closing')
         if closing:
             return closing
+        resolutions = self.state.get('resolution_records', [])
+        records = self.state.get('unresolved_records', {})
+        closing = {'status': 'pending',
+                   'request': next((m['content'] for m in self.state['messages']
+                                    if m['role'] == 'user'), self.task.get('objective', '')),
+                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
+                   'unresolved': self.state.get('unresolved', {}),
+                   'evidence_through': {
+                       'messages': len(self.state['messages']),
+                       'resolution_records': len(resolutions) if isinstance(resolutions, list) else 0,
+                       'unresolved_records': list(records) if isinstance(records, dict) else []}}
+        self.state['review_closing'] = closing
+        self.save()
+        return closing
+
+    def _review_closing_evidence(self, closing):
+        """Observaciones, fuentes, incidencias y resoluciones que congeló el cierre."""
+        through = closing.get('evidence_through')
+        if not isinstance(through, dict):
+            # Cierres de antes: llevaban la copia dentro.
+            return {key: closing.get(key, default) for key, default in (
+                ('observations', []), ('sources', []), ('unresolved_records', {}), ('resolution_records', []))}
         sources, observations = [], []
         queued = []
-        for message in self.state['messages']:
+        for message in self.state['messages'][:through.get('messages', 0)]:
             if message['role'] == 'assistant':
                 queued = list(message.get('tool_calls') or [])
                 if message.get('content'):
@@ -1857,23 +1885,22 @@ class NativeRuntime:
                 sources.append({'tool': message.get('tool_name'),
                                 'arguments': function.get('arguments', {}),
                                 'result': message.get('content', '')})
-        closing = {'status': 'pending', 'observations': observations, 'sources': sources,
-                   'request': next((m['content'] for m in self.state['messages']
-                                    if m['role'] == 'user'), self.task.get('objective', '')),
-                   'checkpoint': self.state.get('checkpoint'), 'plan': self.state.get('plan'),
-                   'unresolved': self.state.get('unresolved', {}),
-                   'unresolved_records': self.state.get('unresolved_records', {}),
-                   'resolution_records': self.state.get('resolution_records', [])}
-        self.state['review_closing'] = closing
-        self.save()
-        return closing
+        records = self.state.get('unresolved_records', {})
+        records = records if isinstance(records, dict) else {}
+        resolutions = self.state.get('resolution_records', [])
+        resolutions = resolutions if isinstance(resolutions, list) else []
+        return {'observations': observations, 'sources': sources,
+                'unresolved_records': {key: records[key] for key in through.get('unresolved_records', [])
+                                       if key in records},
+                'resolution_records': list(resolutions[:through.get('resolution_records', 0)])}
 
     async def _close_review(self, client, payload, session_deadline):
         closing = self._review_closing_context()
         # Include exact observations and source identities even if compaction omitted
         # them. Raw tool results remain in the durable snapshot and original journal.
+        frozen = self._review_closing_evidence(closing)
         sources, excerpts = [], []
-        for source in closing['sources']:
+        for source in frozen['sources']:
             try:
                 result = json.loads(source['result'])
             except ValueError:
@@ -1883,8 +1910,9 @@ class NativeRuntime:
                             result.get('truncated'), result.get('error'), '', False])
             excerpts.append(str(result.get('text') or result.get('analysis') or
                                 json.dumps(result, ensure_ascii=False, separators=(',', ':'))))
-        evidence = {**closing, 'sources': sources}
-        evidence.pop('result', None)
+        evidence = {**closing, **frozen, 'sources': sources}
+        for key in ('result', 'evidence_through'):
+            evidence.pop(key, None)
         instruction = (
             'FASE FINAL DE REVISIÓN: el presupuesto restante está reservado para cerrar. '
             'No hay herramientas; no solicites ninguna. Devuelve únicamente un JSON breve del esquema. '
