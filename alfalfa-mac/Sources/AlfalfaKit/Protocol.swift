@@ -538,6 +538,46 @@ public struct ProviderStatus: Equatable, Identifiable, Sendable {
     }
 }
 
+/// La primera vez sin proveedor (`alfalfa --primera-vez --json`): los gratis ahora para empezar.
+public struct FirstRun: Equatable, Sendable {
+    /// Ningún proveedor configurado: ni claves, ni proveedor elegido, ni Ollama en este Mac.
+    public var needed: Bool
+    /// «Gratis: puede usar tus datos para entrenar».
+    public var notice: String
+    public var providers: [FirstRunProvider]
+
+    public init(needed: Bool, notice: String, providers: [FirstRunProvider]) {
+        self.needed = needed
+        self.notice = notice
+        self.providers = providers
+    }
+}
+
+/// Un proveedor con modelos gratis ahora, para la primera vez.
+public struct FirstRunProvider: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    /// Se conecta en el navegador (OAuth), sin pegar la clave: OpenRouter.
+    public var connects: Bool
+    /// Dónde se saca su clave, si no se conecta así.
+    public var keyPage: String?
+    /// El modelo gratis que se elige con él (`openrouter/…`).
+    public var recommended: String?
+    public var models: [String]
+    public var labels: [String]
+
+    public init(id: String, name: String, connects: Bool, keyPage: String? = nil, recommended: String? = nil,
+                models: [String] = [], labels: [String] = []) {
+        self.id = id
+        self.name = name
+        self.connects = connects
+        self.keyPage = keyPage
+        self.recommended = recommended
+        self.models = models
+        self.labels = labels
+    }
+}
+
 /// El buscador web de los agentes, como lo cuenta `alfalfa --buscador --json`, sin secretos.
 public struct WebSearchSettings: Equatable, Sendable {
     /// Los modos que entiende `alfalfa --buscador`, en el orden del selector.
@@ -604,6 +644,12 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case quota([Quota])
     /// `--activar-codigo`: el código quedó atado a este Mac.
     case activated(name: String?, quotas: [Quota])
+    /// `--primera-vez --json`.
+    case firstRun(FirstRun)
+    /// `--conectar`: la URL de autorización que se abrió en el navegador (por si no se abrió).
+    case connecting(provider: String, url: String)
+    /// `--conectar`: conectado, con el modelo gratis que quedó por defecto.
+    case connected(provider: String, model: String?)
     /// `--reportar`: el reporte de error se envió, o por qué no.
     case reported(ReportResult)
     case ollamaChats([OllamaChat])
@@ -721,6 +767,26 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .quota(quotas(rows))
         case "activado":
             return .activated(name: text(object["nombre"]), quotas: quotas(object["cuotas"] as? [[String: Any]] ?? []))
+        case "primera_vez":
+            let rows = object["proveedores"] as? [[String: Any]] ?? []
+            return .firstRun(FirstRun(
+                needed: bool(object["sin_proveedor"]) ?? false,
+                notice: text(object["aviso"]) ?? "Gratis: puede usar tus datos para entrenar",
+                providers: rows.compactMap { row in
+                    guard let id = text(row["id"]) else { return nil }
+                    let models = row["modelos"] as? [[String: Any]] ?? []
+                    return FirstRunProvider(id: id, name: text(row["nombre"]) ?? id,
+                                            connects: bool(row["conectar"]) ?? false, keyPage: text(row["donde"]),
+                                            recommended: text(row["recomendado"]),
+                                            models: models.compactMap { text($0["name"]) },
+                                            labels: models.compactMap { text($0["nombre"]) ?? text($0["name"]) })
+                }))
+        case "conectando":
+            guard let provider = text(object["proveedor"]), let url = text(object["url"]) else { return nil }
+            return .connecting(provider: provider, url: url)
+        case "conectado":
+            guard let provider = text(object["proveedor"]) else { return nil }
+            return .connected(provider: provider, model: text(object["modelo"]))
         case "chats_ollama":
             guard let rows = object["chats"] as? [[String: Any]] else { return nil }
             return .ollamaChats(rows.compactMap { row in

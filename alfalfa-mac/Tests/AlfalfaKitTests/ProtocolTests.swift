@@ -181,4 +181,33 @@ final class ProtocolTests: XCTestCase {
         let claude = ["ANTHROPIC_API_KEY": "sk-ant-secreto"]
         XCTAssertEqual(Redactor.clean("x sk-ant-secreto y", environment: claude), "x [REDACTADO] y")
     }
+
+    func testDecodesFirstRunAndConnect() {
+        let first = #"{"version":2,"tipo":"primera_vez","sin_proveedor":true,"#
+            + #""aviso":"Gratis: puede usar tus datos para entrenar","proveedores":[{"id":"openrouter","#
+            + #""nombre":"OpenRouter","conectar":true,"donde":"https://openrouter.ai/settings/keys","#
+            + #""recomendado":"openrouter/nvidia/nemotron-3.5-super-vl:free","modelos":[{"name":"#
+            + #""openrouter/nvidia/nemotron-3.5-super-vl:free","nombre":"Nemotron 3.5 Super VL (free)"}]},"#
+            + #"{"id":"nvidia","nombre":"NVIDIA","conectar":false,"modelos":[]},{"nombre":"sin id"}]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: first), .firstRun(FirstRun(
+            needed: true, notice: "Gratis: puede usar tus datos para entrenar", providers: [
+                FirstRunProvider(id: "openrouter", name: "OpenRouter", connects: true,
+                                 keyPage: "https://openrouter.ai/settings/keys",
+                                 recommended: "openrouter/nvidia/nemotron-3.5-super-vl:free",
+                                 models: ["openrouter/nvidia/nemotron-3.5-super-vl:free"],
+                                 labels: ["Nemotron 3.5 Super VL (free)"]),
+                FirstRunProvider(id: "nvidia", name: "NVIDIA", connects: false)
+            ])))
+        let configured = #"{"version":2,"tipo":"primera_vez","sin_proveedor":false,"aviso":"x","proveedores":[]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: configured),
+                       .firstRun(FirstRun(needed: false, notice: "x", providers: [])))
+        let waiting = #"{"version":2,"tipo":"conectando","proveedor":"openrouter","url":"https://openrouter.ai/auth?x=1"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: waiting),
+                       .connecting(provider: "openrouter", url: "https://openrouter.ai/auth?x=1"))
+        XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"conectando","proveedor":"openrouter"}"#))
+        let done = #"{"version":2,"tipo":"conectado","proveedor":"openrouter","#
+            + #""modelo":"openrouter/nvidia/nemotron-3.5-super-vl:free","por_defecto":"openrouter","proveedores":[]}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: done),
+                       .connected(provider: "openrouter", model: "openrouter/nvidia/nemotron-3.5-super-vl:free"))
+    }
 }

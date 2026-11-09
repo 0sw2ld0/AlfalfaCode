@@ -24,6 +24,9 @@ struct NewTaskView: View {
                 Spacer(minLength: 0)
                 VStack(spacing: 22) {
                     LeafIcon(size: 34)
+                    if let firstRun = model.firstRun {
+                        FirstRunCard(firstRun: firstRun, openProviders: openProviders)
+                    }
                     folders
                     ollamaButton
                     resumeList

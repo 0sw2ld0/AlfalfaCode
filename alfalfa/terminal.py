@@ -158,9 +158,44 @@ def modelo_por_defecto():
             proveedor = proveedores.obtener(ident)
         except proveedores.ErrorDeProveedor:
             return MODELO_POR_DEFECTO
-        if proveedor.configurado() and getattr(proveedor, 'modelo_por_defecto', None):
-            return proveedores.con_prefijo(ident, proveedor.modelo_por_defecto)
+        if not proveedor.configurado():
+            return MODELO_POR_DEFECTO
+        # El que eligió el usuario (al conectarlo con `--conectar` desde la bienvenida) o el
+        # propio del proveedor. Nunca un gratis por su cuenta: puede usar los datos para entrenar.
+        elegido = configuracion.de(ident).get('modelo') or getattr(proveedor, 'modelo_por_defecto', None)
+        if isinstance(elegido, str) and elegido:
+            return proveedores.con_prefijo(ident, elegido)
+        raise ValueError(f'{proveedor.nombre} es el proveedor por defecto pero no tiene un modelo elegido. '
+                         f'Indica uno con --modelo {ident}/<modelo> (alfalfa --modelos los lista; los '
+                         'gratis pueden usar tus datos para entrenar).')
     return MODELO_POR_DEFECTO
+
+
+def bienvenida(args, entrada=None, salida=None):
+    """Sin ningún proveedor configurado: los gratis ahora y, en una terminal, conectar OpenRouter
+    con un clic. Devuelve el modelo con el que seguir, o None si el usuario no conectó nada."""
+    from . import primera_vez
+    entrada = entrada or sys.stdin
+    salida = salida or sys.stderr
+    datos = primera_vez.ofertas()
+    print(primera_vez.texto(datos), file=salida)
+    conectable = next((f for f in datos['proveedores'] if f['conectar']), None)
+    if not conectable or not entrada.isatty():
+        return None
+    print('', file=salida)
+    from . import catalogo
+    gratis = (conectable.get('recomendado') or conectable['nombre']).split('/', 1)[-1]
+    try:
+        respuesta = input(f'¿Conectar {conectable["nombre"]} en el navegador y usar su modelo gratis {gratis}? '
+                          f'{catalogo.AVISO_GRATIS}. [s/N] ')
+    except EOFError:
+        return None
+    if respuesta.strip().lower() not in ('s', 'si', 'sí', 'y', 'yes'):
+        return None
+    from .proveedores.orden import _texto_conectado, conectar_ahora
+    hecho = conectar_ahora(conectable['id'], elegir=True)
+    print('✓ ' + _texto_conectado(hecho), file=salida)
+    return hecho.get('modelo') or modelo_por_defecto()
 
 
 def home_dir(home=None):
@@ -990,6 +1025,8 @@ def main(argv=None):
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
     listing.add_argument('--aligerar-sesiones', action='store_true',
                          help='Pasar todas las sesiones guardadas al formato ligero y decir cuánto se libera')
+    parser.add_argument('--solo-clave', action='store_true',
+                        help='Con --conectar: guardar sólo la clave, sin cambiar el proveedor ni el modelo por defecto')
     parser.add_argument('--descartar-no-relevantes', action='store_true',
                         help='Con --aligerar-sesiones: borrar las resoluciones sin relación, no guardarlas aparte')
     listing.add_argument('--solo-bifurcar', metavar='ID',
@@ -1034,6 +1071,20 @@ def main(argv=None):
     if args.stdio or args.sesiones or args.modelos or args.turnos or args.historial or args.complementos:
         from .stdio import entry
         return entry(args)
+    nueva = not args.reanudar and not args.bifurcar
+    if nueva and not args.modelo:
+        from . import primera_vez
+        if primera_vez.sin_proveedor():
+            from .proveedores.conectar import ErrorAlConectar
+            try:
+                args.modelo = bienvenida(args)
+            except (ErrorAlConectar, ValueError, OSError) as exc:
+                print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
+                return 1
+            if not args.modelo:
+                return 1 if args.encargo else 0
+            if not args.encargo:
+                return 0
     if not args.encargo and not args.reanudar and not args.bifurcar:
         parser.error('indica un encargo o --reanudar ID')
     try:

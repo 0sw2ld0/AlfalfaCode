@@ -11,11 +11,13 @@
 #
 # Uso:  ./publicar.sh             → dist/AlfalfaCode-<versión>.dmg firmado y notarizado
 #       PERFIL=otro ./publicar.sh → si guardaste la credencial con otro nombre
+#                                   (hoy: PERFIL=CuyCleaner, la del mismo equipo; «AlfalfaCode» aún no existe)
 #       ./publicar.sh --local     → DMG con firma ad hoc y sin notarizar, sólo para probar en este Mac
 #                                   (en otro Mac Gatekeeper no lo deja abrir)
 #
 # Escribe también dist/version.json (versión, URL del DMG en la release, huella, tamaño y las notas
-# de NOTAS-VERSION.txt) y enseña la orden para publicar ambos en GitHub. No publica nada.
+# de NOTAS-VERSION.txt) y el bottle de Homebrew de la CLI (alfalfa-<versión>.arm64_sonoma.bottle.tar.gz),
+# y enseña la orden para publicar los tres en GitHub. No publica nada.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -123,6 +125,11 @@ json.dump({
 }, open(destino, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print("version.json →", destino)
 PY
+# --- 7. Bottle de Homebrew de la CLI: el motor del DMG tal cual (ver distribucion/botella.sh) ----
+BOTELLA="dist/alfalfa-$VERSION.arm64_sonoma.bottle.tar.gz"
+echo "bottle de la fórmula alfalfa → $BOTELLA ($(../distribucion/botella.sh "$DMG" "$VERSION" dist))"
 echo
 echo "Para publicarlo (la release tiene que quedar como «Latest»; el actualizador lee releases/latest):"
-echo "  gh release create $ETIQUETA $DMG dist/version.json --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
+echo "  gh release create $ETIQUETA $DMG dist/version.json $BOTELLA --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
+echo "Al publicarla, .github/workflows/tap.yml pone el tap 0sw2ld0/homebrew-tap (cask y fórmula) en $VERSION."
+echo "instalar.sh (curl) no necesita nada más: lee version.json y el DMG de la última release."

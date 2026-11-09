@@ -221,12 +221,19 @@ public final class AlfalfaProcess: @unchecked Sendable {
 
     /// Consulta de una sola pasada (`--sesiones --json`, `--modelos --json`).
     /// `input` va por la entrada estándar (una clave para `--guardar-clave`), nunca en los argumentos.
+    /// `progress` recibe cada mensaje según llega (en otra cola), y `started` el proceso, para
+    /// poder pararlo (`--conectar` espera a que el usuario autorice en el navegador).
     public static func query(launcher: URL, arguments: [String], directory: URL,
-                             input: String? = nil) async throws -> [AlfalfaMessage] {
+                             input: String? = nil,
+                             progress: (@Sendable (AlfalfaMessage) -> Void)? = nil,
+                             started: (@Sendable (AlfalfaProcess) -> Void)? = nil) async throws -> [AlfalfaMessage] {
         try await withCheckedThrowingContinuation { continuation in
             let process = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: directory)
             let box = MessageBox()
-            process.onMessage = { box.append($0) }
+            process.onMessage = { message in
+                box.append(message)
+                progress?(message)
+            }
             process.onExit = { _, tail in
                 let messages = box.all()
                 if messages.isEmpty {
@@ -238,6 +245,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
             }
             do {
                 try process.start()
+                started?(process)
                 if let input { process.write(line: input) }
                 process.closeInput()
             } catch {

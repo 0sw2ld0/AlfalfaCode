@@ -94,6 +94,21 @@ public enum AppUpdatePolicy {
         codesignDetails.split(whereSeparator: \.isNewline).contains { $0 == "TeamIdentifier=\(team)" }
     }
 
+    /// El cask del tap 0sw2ld0/tap. Declara `auto_updates true`: Homebrew deja que la app se
+    /// actualice sola y `brew upgrade` no la toca. `--greedy` compara con la versión que instaló
+    /// Homebrew, no con la del actualizador: si el tap va por detrás, la baja de versión.
+    public static let homebrewCask = "alfalfacode"
+
+    /// ¿La instaló Homebrew? Su Caskroom guarda el cask (`/opt/homebrew` en Apple Silicon,
+    /// `/usr/local` en Intel o `HOMEBREW_PREFIX`). Sólo informa: el actualizador hace lo mismo.
+    public static func installedByHomebrew(environment: [String: String] = ProcessInfo.processInfo.environment,
+                                           exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) })
+        -> Bool {
+        var prefixes = ["/opt/homebrew", "/usr/local"]
+        if let custom = environment["HOMEBREW_PREFIX"], !custom.isEmpty { prefixes.insert(custom, at: 0) }
+        return prefixes.contains { exists($0 + "/Caskroom/" + homebrewCask) }
+    }
+
     /// Una app que macOS abrió desde una copia temporal («App Translocation») no puede cambiarse
     /// a sí misma: pasa si se abrió sin moverla con Finder a Aplicaciones.
     public static func isTranslocated(_ bundle: URL) -> Bool {

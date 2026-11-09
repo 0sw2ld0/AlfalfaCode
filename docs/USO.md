@@ -156,11 +156,31 @@ printf '%s\n' "$CLAVE" | alfalfa --guardar-clave openai --json
 alfalfa --fijar-url alfalfa https://servicio.example.com --json
 printf '%s\n' CUY-XXXX-XXXX-XXXX | alfalfa --activar-codigo --json
 alfalfa --cuota --json
+alfalfa --primera-vez --json
+alfalfa --conectar openrouter --json
+alfalfa --conectar openrouter --solo-clave --json
 ```
 
 ```jsonl
 {"version":2,"tipo":"proveedores","por_defecto":"ollama","proveedores":[{"id":"ollama","nombre":"Ollama","configurado":true,"url":"http://127.0.0.1:11434","clave":false},{"id":"openai","nombre":"OpenAI","configurado":false,"clave":false},{"id":"alfalfa","nombre":"Alfalfa","configurado":false,"url":null,"clave":false}]}
 {"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","caduca":null,"modelos":["gpt-6-luna"],"cuotas":[]}
+```
+
+La primera vez, sin ningún proveedor (ni claves, ni proveedor elegido, ni Ollama en el
+Mac), `--primera-vez` da los gratis con los que empezar. `--conectar openrouter` hace
+el OAuth de OpenRouter en el navegador:
+
+1. Emite `conectando` con la URL que abrió, por si el navegador no se abre.
+2. Al autorizar, guarda la clave en el Llavero sin emitirla.
+3. Sólo si no había ningún proveedor (la bienvenida), deja OpenRouter por defecto con
+   su gratis recomendado. Si ya había uno, o con `--solo-clave` (la hoja de la clave
+   de la app), no cambia ni el proveedor ni el modelo por defecto, y `modelo` va `null`.
+4. Emite `conectado`, con los mismos campos que `proveedores`.
+
+```jsonl
+{"version":2,"tipo":"primera_vez","sin_proveedor":true,"aviso":"Gratis: puede usar tus datos para entrenar","proveedores":[{"id":"openrouter","nombre":"OpenRouter","conectar":true,"donde":"https://openrouter.ai/settings/keys","variable":"OPENROUTER_API_KEY","recomendado":"openrouter/nvidia/nemotron-3.5-super-vl:free","modelos":[{"name":"openrouter/nvidia/nemotron-3.5-super-vl:free","nombre":"Nemotron 3.5 Super VL (free)","ventana":1000000,"vision":true}]}]}
+{"version":2,"tipo":"conectando","proveedor":"openrouter","url":"https://openrouter.ai/auth?callback_url=http%3A%2F%2Flocalhost%3A51423%2Falfalfa%2Fopenrouter&…"}
+{"version":2,"tipo":"conectado","proveedor":"openrouter","modelo":"openrouter/nvidia/nemotron-3.5-super-vl:free","por_defecto":"openrouter","proveedores":[…]}
 ```
 
 El código de cortesía queda atado a este Mac: `--activar-codigo` crea una clave en

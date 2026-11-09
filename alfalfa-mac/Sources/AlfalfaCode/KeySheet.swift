@@ -24,6 +24,10 @@ struct KeySheet: View {
                     .font(.system(size: 12)).foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if request.model.provider == "openrouter" {
+                connectRow
+                Text("O pega una clave que ya tengas:").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+            }
             SecureField(request.missing.variable, text: $secret).textFieldStyle(.roundedBorder)
                 .accessibilityLabel("Clave de \(providerName)")
                 .onSubmit { Task { await save() } }
@@ -38,6 +42,34 @@ struct KeySheet: View {
             }
         }
         .padding(20).frame(width: 440)
+    }
+
+    /// OpenRouter se conecta en el navegador (OAuth): sin copiar ni pegar la clave.
+    @ViewBuilder
+    private var connectRow: some View {
+        if let waiting = model.connecting {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Autoriza AlfalfaCode en el navegador…").font(.system(size: 12.5))
+                if let url = waiting.url { Link("Abrir otra vez", destination: url).font(.system(size: 12.5)) }
+                Spacer()
+                Button("Cancelar") { model.cancelConnect() }.controlSize(.small)
+            }
+        } else {
+            Button {
+                Task {
+                    let request = self.request
+                    // Sólo la clave: el modelo es el que eligió en el selector, no el gratis.
+                    if await model.connect("openrouter", onlyKey: true) != nil {
+                        request.apply(request.model.name)
+                        model.keyRequest = nil
+                    }
+                }
+            } label: {
+                Label("Conectar con OpenRouter sin pegar la clave", systemImage: "arrow.up.forward.app")
+            }
+            .buttonStyle(.borderedProminent).tint(Theme.alfalfa)
+        }
     }
 
     private var providerName: String { request.model.providerName ?? model.providerName(request.model.provider) }

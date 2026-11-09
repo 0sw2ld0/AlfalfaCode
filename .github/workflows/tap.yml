@@ -1,0 +1,85 @@
+# Al publicar una release (o a mano, con su versión): pone el cask y la fórmula del tap
+# 0sw2ld0/homebrew-tap en esa versión, y sube el bottle de la fórmula a la release si falta.
+#
+# Necesita el secreto TAP_TOKEN: un token de grano fino con «Contents: read and write» sólo
+# sobre 0sw2ld0/homebrew-tap. Sin él, el workflow hace el bottle y los archivos y los deja
+# como artefacto, pero no empuja nada al tap.
+name: Tap de Homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión publicada (sin la v), por ejemplo 0.99.0"
+        required: true
+
+permissions:
+  contents: write   # subir el bottle a la release de este repositorio
+
+concurrency:
+  group: tap
+  cancel-in-progress: false
+
+jobs:
+  tap:
+    # Apple Silicon: botella.sh arranca el motor del DMG para comprobarlo.
+    runs-on: macos-14
+    if: github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión
+        id: v
+        env:
+          ETIQUETA: ${{ github.event.release.tag_name }}
+          ENTRADA: ${{ inputs.version }}
+        run: |
+          v="${ENTRADA:-${ETIQUETA#v}}"
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "versión rara: $v"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Bottle y archivos del tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRABAJO: ${{ runner.temp }}/tap
+        run: distribucion/actualizar-tap.sh "${{ steps.v.outputs.version }}" --subir-botella
+
+      - name: Clon del tap
+        id: clon
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::Falta el secreto TAP_TOKEN: no se empuja al tap."
+            echo "hay=" >> "$GITHUB_OUTPUT"
+          else
+            git clone "https://x-access-token:${TAP_TOKEN}@github.com/0sw2ld0/homebrew-tap.git" "$RUNNER_TEMP/homebrew-tap"
+            echo "hay=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Empujar al tap
+        if: steps.clon.outputs.hay == '1'
+        env:
+          TRABAJO: ${{ runner.temp }}/tap
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          # Sin --subir-botella: el bottle ya está en la release y se toma su huella.
+          distribucion/actualizar-tap.sh "$VERSION" "$RUNNER_TEMP/homebrew-tap"
+          cd "$RUNNER_TEMP/homebrew-tap"
+          git config user.name "Oswaldo Leon"
+          git config user.email "3227113+0sw2ld0@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "El tap ya estaba en $VERSION."
+          else
+            git commit -m "AlfalfaCode $VERSION"
+            git push origin HEAD
+          fi
+
+      - name: Archivos del tap como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-tap
+          path: distribucion/homebrew

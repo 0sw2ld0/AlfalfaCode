@@ -50,6 +50,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var models: [ModelInfo] = []
     /// Un modelo elegido cuyo proveedor no tiene clave: la hoja explica cuál falta y la guarda.
     @Published var keyRequest: KeyRequest?
+    /// Sin ningún proveedor configurado: los gratis con los que empezar (`--primera-vez`).
+    @Published var firstRun: FirstRun?
+    /// Esperando a que el usuario autorice en el navegador (`--conectar`).
+    @Published var connecting: Connecting?
+    var connectHandle: ConnectHandle?
     /// Ollama, OpenAI y Alfalfa, como los cuenta `alfalfa --proveedores --json`.
     @Published private(set) var providers: [ProviderStatus] = []
     @Published private(set) var defaultProvider = "ollama"
@@ -84,7 +89,7 @@ final class AppModel: ObservableObject {
     private var pasteMonitor: Any?
 
     let launcher: URL?
-    private let home = FileManager.default.homeDirectoryForCurrentUser
+    let home = FileManager.default.homeDirectoryForCurrentUser
     private static let recentsKey = "recentFolders"
 
     init() {
@@ -141,6 +146,7 @@ final class AppModel: ObservableObject {
             if loadError == nil { loadError = "No se pudo consultar Ollama para listar modelos." }
         }
         await reloadProviders()
+        await loadFirstRun()
         // Sin esperar: si falta la librería de búsqueda web, se instala mientras la app sigue.
         Task { await ensureWebSearch() }
         await loadAlfalfaQuota()

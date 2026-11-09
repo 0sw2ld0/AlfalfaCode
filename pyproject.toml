@@ -32,6 +32,7 @@ include = ["alfalfa", "alfalfa.*"]  # sin «alfalfa-mac/», que no es parte del 
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.sbpl", "*.swift", "LICENSE", "NOTICE"]
+"alfalfa" = ["instalar.sh"]
 "alfalfa.catalogo" = ["minimo.json"]
 
 [tool.pytest.ini_options]
