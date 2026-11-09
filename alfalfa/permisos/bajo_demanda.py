@@ -187,10 +187,15 @@ class OnRequestPolicy:
 
     @staticmethod
     def _annotate(runtime, result, **fields):
-        """Añade al registro ya guardado del intento lo que se supo después."""
-        for record in reversed(runtime.state.get('operations') or []):
+        """Añade al registro ya guardado del intento lo que se supo después.
+
+        Lo sustituye en la lista en vez de cambiarlo por dentro: así el historial
+        (operations.jsonl, al que sólo se añade) ve el cambio y lo escribe."""
+        operations = runtime.state.get('operations') or []
+        for index in range(len(operations) - 1, -1, -1):
+            record = operations[index]
             if isinstance(record, dict) and record.get('id') == result.get('operation_id'):
-                record.update(fields)
+                operations[index] = dict(record, **fields)
                 runtime.save()
                 return
 
