@@ -38,7 +38,8 @@ from .ollama import LOCALES, validar_url
 FUENTE = Path(__file__).with_name('firmante.swift')
 COMPILAR_SEGUNDOS = 240
 FIRMAR_SEGUNDOS = 15
-NOMBRES = {'gpt-6-luna': 'GPT-6 Luna', 'glm-5.3-flash': 'GLM 5.3 Flash', 'deepseek-v4.1-flash': 'DeepSeek v4.1 Flash'}
+NOMBRES = {'gpt-6-luna': 'GPT-6 Luna', 'claude-haiku-5-5': 'Claude Haiku 5.5', 'glm-5.3-flash': 'GLM 5.3 Flash',
+           'deepseek-v4.1-flash': 'DeepSeek v4.1 Flash'}
 SUFIJO = ' - Alfalfa'
 # Adonde va un reporte de error cuando no hay servicio Alfalfa o el servicio no lo acepta.
 SOPORTE = 'soporte@cuycoders.dev'
@@ -178,7 +179,7 @@ def _cuotas(valor):
         filas = valor.get('cuotas') if isinstance(valor, dict) else None
     if not isinstance(filas, list):
         return None
-    nombres = {'openai': 'GPT-6 Luna', 'ollama': 'GLM y DeepSeek Flash'}
+    nombres = {'openai': 'GPT-6 Luna', 'anthropic': 'Claude Haiku 5.5', 'ollama': 'GLM y DeepSeek Flash'}
     salida = []
     for f in filas:
         if not isinstance(f, dict) or not isinstance(f.get('usado_pct'), (int, float)):

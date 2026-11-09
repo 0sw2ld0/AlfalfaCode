@@ -94,7 +94,7 @@ struct ProvidersView: View {
             }
             section("Alfalfa", status: status("alfalfa"),
                     detail: "Con un código de cortesía, CUY-…@servicio, que trae la dirección del servicio: "
-                        + "cuota mensual de GPT-6 Luna, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
+                        + "cuota mensual de GPT-6 Luna, Claude Haiku 5.5, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
                         + "El código queda atado a este Mac.") {
                 // La dirección del servicio va dentro del código: CUY-XXXX-XXXX-XXXX@servicio.
                 SecureField(status("alfalfa")?.configured == true ? "Código activado · pega otro para cambiarlo"
