@@ -95,6 +95,9 @@ def test_api_show_y_tags_con_lo_del_catalogo(con_catalogo):  # noqa: F811
     assert set(info['capabilities']) == {'completion', 'tools', 'thinking', 'vision'}
     assert info['remote_host'] == 'https://openrouter.ai/api/v1'
     assert info['catalogo']['salida'] == 32000
+    # Uno añadido a mano que el catálogo no conoce: con herramientas y sin ventana (el motor pone la suya).
+    _, info = _llamar(proveedores.obtener('openrouter'), '/api/show', {'model': 'otro/raro'}, nunca)
+    assert info['capabilities'] == ['completion', 'tools'] and info['model_info'] == {}
 
 
 def test_chat_completions_ida_y_vuelta_con_herramientas(con_catalogo):  # noqa: F811

@@ -173,9 +173,11 @@ def respuesta_chat(datos, modelo):
 
 def mostrar(datos, ficha, modelo, url):
     """Lo que `/api/show` diría del modelo, con lo que cuenta el catálogo."""
-    ficha = ficha or {}
+    # Un modelo que el usuario añadió y el catálogo no conoce: se da por hecho que llama
+    # herramientas (para eso lo añadió); si no, el proveedor lo dirá en la primera llamada.
     capacidades = ['completion']
-    capacidades += ['tools'] if ficha.get('herramientas') else []
+    capacidades += ['tools'] if not ficha or ficha.get('herramientas') else []
+    ficha = ficha or {}
     capacidades += ['thinking'] if ficha.get('razona') else []
     capacidades += ['vision'] if ficha.get('vision') else []
     info = {'capabilities': capacidades, 'remote_host': url, 'remote_model': modelo,
