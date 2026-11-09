@@ -130,7 +130,10 @@ class Servidor:
 # espacios ni órdenes de shell.
 _VALOR_TOKEN = re.compile(r'[A-Za-z0-9._~+/=%-]{8,}')
 _TRAMO_TOKEN = re.compile(r'[A-Za-z0-9_%-]{16,}')
-_SECRETO = r'(?:token|key|secret|password|passwd|pass|auth|bearer|credential)'
+# Nombres de credencial. `pat` sólo como palabra (GITHUB_PAT, --pat; no --path) y `pass` no en
+# passive/passthrough.
+_SECRETO = (r'(?:token|key|secret|password|passwd|pass(?!ive|thr)|auth|bearer|credential|cookie|session'
+            r'|(?<![a-z])pat(?![a-z]))')
 _BANDERA = re.compile(r'--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*', re.IGNORECASE)
 _BANDERA_CON_VALOR = re.compile(r'(--?[A-Za-z0-9_-]*' + _SECRETO + r'[A-Za-z0-9_-]*)=(?P<valor>.+)', re.IGNORECASE)
 # NOMBRE=valor sin guion, como `docker run -e GITHUB_PERSONAL_ACCESS_TOKEN=…`.
@@ -138,48 +141,64 @@ _VARIABLE_CON_VALOR = re.compile(r'[A-Za-z0-9_]*' + _SECRETO + r'[A-Za-z0-9_]*=(
 # Una cabecera, sola, tras `--header=`/`--header ` o pegada a `-H`.
 _PREFIJO_CABECERA = re.compile(r'(?:--header[= ]|-H\s*)', re.IGNORECASE)
 _CABECERA_EN_ARGUMENTO = re.compile(r'\s*(?:proxy-)?authorization\s*:\s*(?:(?:bearer|basic|token)\s+)?(?P<valor>\S+)\s*'
-                                    r'|\s*[A-Za-z0-9-]*' + _SECRETO + r'[A-Za-z0-9-]*\s*:\s*(?P<otro>\S+)\s*',
+                                    r'|\s*[A-Za-z0-9-]*' + _SECRETO + r'[A-Za-z0-9-]*\s*:\s*(?P<otro>\S.*?)\s*',
                                     re.IGNORECASE)
-URL_EN_TEXTO = re.compile(r'(?:https?|wss?)://[^\s\'"]+', re.IGNORECASE)
-_ESQUEMAS = ('http', 'https', 'ws', 'wss')
+# Cualquier esquema: también cadenas de conexión (postgresql://, mongodb+srv://, redis://).
+URL_EN_TEXTO = re.compile(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s\'"]+')
+# usuario:contraseña@host con o sin esquema (la contraseña se tapa siempre, sea corta o no).
+CONTRASENA_EN_TEXTO = re.compile(r'(?:(?<=://)|^)(?P<usuario>[^\s/:@]*):(?P<contrasena>[^\s/@]+)@(?=[^\s/@])')
+# Prefijos de tokens conocidos, en cualquier argumento.
+_PREFIJO_TOKEN = re.compile(r'(?<![A-Za-z0-9])(?:gh[pousr]_|github_pat_|sk-(?:proj-|ant-)?|sk_live_|rk_live_|'
+                            r'xox[abeoprs]-|glpat-|hf_|npm_|AKIA|ASIA)[A-Za-z0-9_-]{8,}')
+# `clave=valor` con nombre de credencial en una consulta, con o sin esquema delante.
+_CONSULTA_SECRETA = re.compile(r'[?&#;](?P<clave>[^=&#;\s?]*)=(?P<valor>[^&#;\s]+)')
 
 
 def _consulta(query):
-    """Valores con forma de token de una consulta: los de `clave=valor` y los sueltos (`?ghp_…`)."""
+    """Valores de una consulta (o de un fragmento OAuth con `&`): los de nombre de credencial
+    siempre, y los demás si tienen forma de token; un token suelto (`?ghp_…`) si lleva cifras."""
     valores = []
     for parte in re.split(r'[&;]', query or ''):
-        valor = parte.split('=', 1)[1] if '=' in parte else parte
-        if _VALOR_TOKEN.fullmatch(valor) and (re.search(r'\d', valor) or '=' in parte):
+        clave, igual, valor = parte.partition('=')
+        if not igual:
+            clave, valor = '', parte
+        if not valor:
+            continue
+        if clave and re.search(_SECRETO, clave, re.IGNORECASE) and not re.search(r'\s', valor):
+            valores.append(valor)
+        elif _VALOR_TOKEN.fullmatch(valor) and (re.search(r'\d', valor) or igual):
             valores.append(valor)
     return valores
 
 
 def _secretos_de_url(url):
-    """Lo que en una URL es claramente una credencial: la contraseña de usuario:contraseña@, los
-    valores de la consulta y el fragmento con forma de token, y los tramos de la ruta con pinta de
-    token (largos, con letras y cifras: /api/mcp/s/<token>/mcp). Nunca un trozo con espacios u
-    órdenes de shell. Una URL mal formada se mira con expresiones, con las mismas formas."""
+    """Lo que en una URL (de cualquier esquema) es claramente una credencial: la contraseña de
+    usuario:contraseña@, los valores de la consulta (y del fragmento, que en OAuth es otra
+    consulta) y los tramos de la ruta con pinta de token (/api/mcp/s/<token>/mcp). Una URL mal
+    formada se mira con expresiones, con las mismas formas."""
     if not isinstance(url, str) or not url:
         return []
     from urllib.parse import urlsplit
     try:
         partes = urlsplit(url)
-        bien = partes.scheme.lower() in _ESQUEMAS and bool(partes.hostname)
-        contrasena = partes.password if bien else None
+        contrasena = partes.password
         consulta, fragmento, ruta = partes.query, partes.fragment, partes.path
+        bien = bool(partes.scheme) and partes.netloc != ''
     except ValueError:
         bien = False
     if not bien:
-        cuerpo = re.sub(r'^[A-Za-z]+://', '', url)
-        contrasena = (re.match(r'[^/@\s:]*:([^/@\s]+)@', cuerpo) or [None, None])[1]
-        cuerpo = re.sub(r'^[^/?#]*', '', cuerpo)
+        encontrada = CONTRASENA_EN_TEXTO.search(re.sub(r'^[A-Za-z][A-Za-z0-9+.-]*://', '', url))
+        contrasena = encontrada.group('contrasena') if encontrada else None
+        cuerpo = re.sub(r'^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*', '', url)
         ruta, _, resto = cuerpo.partition('?')
         consulta, _, fragmento = resto.partition('#')
         if '#' in ruta:
             ruta, _, fragmento = ruta.partition('#')
     valores = [contrasena] if contrasena else []
     valores += _consulta(consulta)
-    if _VALOR_TOKEN.fullmatch(fragmento or ''):
+    if fragmento and ('=' in fragmento or '&' in fragmento):
+        valores += _consulta(fragmento)
+    elif _VALOR_TOKEN.fullmatch(fragmento or ''):
         valores.append(fragmento)
     valores += [t for t in (ruta or '').split('/') if _TRAMO_TOKEN.fullmatch(t) and re.search(r'\d', t)
                 and re.search(r'[A-Za-z]', t)]
@@ -187,8 +206,9 @@ def _secretos_de_url(url):
 
 
 def _secretos_de_json(texto):
-    """Un argumento que es JSON (`{"Authorization": "Bearer …", "apiKey": "…"}`): los valores de
-    sus claves con nombre de credencial, a cualquier profundidad."""
+    """Un argumento que es JSON: los valores de sus claves con nombre de credencial, el `value` de
+    un par `{"name": "Authorization", "value": …}` y lo que cada texto lleve, a cualquier
+    profundidad."""
     if not texto.lstrip().startswith(('{', '[')):
         return []
     try:
@@ -198,6 +218,11 @@ def _secretos_de_json(texto):
     valores, pendientes = [], [datos]
     while pendientes and len(valores) < 100:
         actual = pendientes.pop()
+        if isinstance(actual, dict):
+            nombre = actual.get('name', actual.get('key'))
+            if (isinstance(nombre, str) and re.search(_SECRETO, nombre, re.IGNORECASE)
+                    and isinstance(actual.get('value'), str)):
+                valores.append(re.sub(r'(?i)^(bearer|basic|token)\s+', '', actual['value'].strip()))
         pares = actual.items() if isinstance(actual, dict) else enumerate(actual) if isinstance(actual, list) else ()
         for clave, valor in pares:
             if isinstance(valor, (dict, list)):
@@ -212,7 +237,9 @@ def _secretos_de_json(texto):
 def secretos_de_argumento(argumento, anterior=None):
     """Lo que un argumento lleva que es claramente una credencial: el valor de `--token=…`, de
     `NOMBRE_TOKEN=…` o el que sigue a `--api-key`, el de una cabecera (sola, tras `--header=` o
-    pegada a `-H`), las claves de un JSON y lo de sus URL."""
+    pegada a `-H`), un token con prefijo conocido (`ghp_…`, `sk-…`), la contraseña de
+    usuario:contraseña@, los `clave=valor` secretos de una consulta, las claves de un JSON y lo
+    de sus URL de cualquier esquema."""
     if not isinstance(argumento, str):
         return []
     valores = []
@@ -226,7 +253,14 @@ def secretos_de_argumento(argumento, anterior=None):
     cabecera = _CABECERA_EN_ARGUMENTO.fullmatch(_PREFIJO_CABECERA.sub('', argumento, count=1)
                                                 if _PREFIJO_CABECERA.match(argumento) else argumento)
     if cabecera:
-        valores.append(cabecera.group('valor') or cabecera.group('otro'))
+        valor = cabecera.group('valor') or cabecera.group('otro')
+        valores.append(valor)
+        # Una Cookie (`session=…; otra=…`): también cada valor suelto, por si el servidor lo repite.
+        valores += [v.strip() for _, igual, v in (par.partition('=') for par in valor.split(';')) if igual]
+    valores += _PREFIJO_TOKEN.findall(argumento)
+    valores += [m.group('contrasena') for m in CONTRASENA_EN_TEXTO.finditer(argumento)]
+    valores += [m.group('valor') for m in _CONSULTA_SECRETA.finditer(argumento)
+                if re.search(_SECRETO, m.group('clave'), re.IGNORECASE)]
     valores += _secretos_de_json(argumento)
     for url in URL_EN_TEXTO.findall(argumento):
         valores += _secretos_de_url(url)

