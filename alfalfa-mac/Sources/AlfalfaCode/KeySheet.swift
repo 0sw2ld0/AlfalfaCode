@@ -59,7 +59,8 @@ struct KeySheet: View {
             Button {
                 Task {
                     let request = self.request
-                    if await model.connect("openrouter") != nil {
+                    // Sólo la clave: el modelo es el que eligió en el selector, no el gratis.
+                    if await model.connect("openrouter", onlyKey: true) != nil {
                         request.apply(request.model.name)
                         model.keyRequest = nil
                     }

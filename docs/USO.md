@@ -138,6 +138,7 @@ printf '%s\n' CUY-XXXX-XXXX-XXXX | alfalfa --activar-codigo --json
 alfalfa --cuota --json
 alfalfa --primera-vez --json
 alfalfa --conectar openrouter --json
+alfalfa --conectar openrouter --solo-clave --json
 ```
 
 ```jsonl
@@ -151,7 +152,9 @@ el OAuth de OpenRouter en el navegador:
 
 1. Emite `conectando` con la URL que abrió, por si el navegador no se abre.
 2. Al autorizar, guarda la clave en el Llavero sin emitirla.
-3. Deja OpenRouter por defecto con su gratis recomendado.
+3. Sólo si no había ningún proveedor (la bienvenida), deja OpenRouter por defecto con
+   su gratis recomendado. Si ya había uno, o con `--solo-clave` (la hoja de la clave
+   de la app), no cambia ni el proveedor ni el modelo por defecto, y `modelo` va `null`.
 4. Emite `conectado`, con los mismos campos que `proveedores`.
 
 ```jsonl

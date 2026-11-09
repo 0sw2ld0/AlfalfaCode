@@ -159,14 +159,14 @@ def modelo_por_defecto():
             return MODELO_POR_DEFECTO
         if not proveedor.configurado():
             return MODELO_POR_DEFECTO
-        # El elegido al conectarlo (`--conectar`) o el propio del proveedor; un compatible
-        # del catálogo sin ninguno de los dos, su gratis recomendado.
+        # El que eligió el usuario (al conectarlo con `--conectar` desde la bienvenida) o el
+        # propio del proveedor. Nunca un gratis por su cuenta: puede usar los datos para entrenar.
         elegido = configuracion.de(ident).get('modelo') or getattr(proveedor, 'modelo_por_defecto', None)
-        if not elegido and ident not in proveedores.PREFIJOS:
-            from . import primera_vez
-            elegido = primera_vez.recomendado(ident)
         if isinstance(elegido, str) and elegido:
             return proveedores.con_prefijo(ident, elegido)
+        raise ValueError(f'{proveedor.nombre} es el proveedor por defecto pero no tiene un modelo elegido. '
+                         f'Indica uno con --modelo {ident}/<modelo> (alfalfa --modelos los lista; los '
+                         'gratis pueden usar tus datos para entrenar).')
     return MODELO_POR_DEFECTO
 
 
@@ -182,14 +182,17 @@ def bienvenida(args, entrada=None, salida=None):
     if not conectable or not entrada.isatty():
         return None
     print('', file=salida)
+    from . import catalogo
+    gratis = (conectable.get('recomendado') or conectable['nombre']).split('/', 1)[-1]
     try:
-        respuesta = input('¿Conectar ' + conectable['nombre'] + ' ahora en el navegador? [S/n] ')
+        respuesta = input(f'¿Conectar {conectable["nombre"]} en el navegador y usar su modelo gratis {gratis}? '
+                          f'{catalogo.AVISO_GRATIS}. [s/N] ')
     except EOFError:
         return None
-    if respuesta.strip().lower() not in ('', 's', 'si', 'sí', 'y', 'yes'):
+    if respuesta.strip().lower() not in ('s', 'si', 'sí', 'y', 'yes'):
         return None
     from .proveedores.orden import _texto_conectado, conectar_ahora
-    hecho = conectar_ahora(conectable['id'])
+    hecho = conectar_ahora(conectable['id'], elegir=True)
     print('✓ ' + _texto_conectado(hecho), file=salida)
     return hecho.get('modelo') or modelo_por_defecto()
 
@@ -968,6 +971,8 @@ def main(argv=None):
                          help='Cargar un chat de la app de Ollama como sesión nueva en esta carpeta')
     listing.add_argument('--aligerar-sesiones', action='store_true',
                          help='Pasar todas las sesiones guardadas al formato ligero y decir cuánto se libera')
+    parser.add_argument('--solo-clave', action='store_true',
+                        help='Con --conectar: guardar sólo la clave, sin cambiar el proveedor ni el modelo por defecto')
     parser.add_argument('--descartar-no-relevantes', action='store_true',
                         help='Con --aligerar-sesiones: borrar las resoluciones sin relación, no guardarlas aparte')
     listing.add_argument('--solo-bifurcar', metavar='ID',

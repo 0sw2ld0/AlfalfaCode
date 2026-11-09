@@ -59,6 +59,41 @@ def test_la_cli_suelta_usa_sus_ayudantes_compilados(tmp_path):
 @pytest.fixture
 def ultima(monkeypatch):
     monkeypatch.setattr(act, 'ultima_version_https', lambda url: 'v0.3.0')
+    monkeypatch.setattr(act, 'ultima_release', lambda get=None: 'v0.3.0')
+
+
+def test_curl_compara_con_la_ultima_release_y_no_con_las_etiquetas(monkeypatch):
+    # Una etiqueta sin release todavía no la puede instalar instalar.sh.
+    monkeypatch.setattr(act, 'ultima_version_https', lambda url: 'v0.4.0')
+    monkeypatch.setattr(act, 'ultima_release', lambda get=None: 'v0.3.0')
+    assert act.buscar(instalada='0.3.0', instalacion='curl')['hay_nueva'] is False
+    assert act.buscar(instalada='0.3.0', instalacion='brew')['hay_nueva'] is True
+
+
+class _R:
+    def __init__(self, codigo, datos=None):
+        self.status_code, self._datos = codigo, datos
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f'HTTP {self.status_code}')
+
+    def json(self):
+        return self._datos
+
+
+def test_ultima_release_lee_version_json():
+    pedidas = []
+
+    def get(url, **kw):
+        pedidas.append(url)
+        return _R(200, {'version': '0.99.1'})
+    assert act.ultima_release(get) == 'v0.99.1'
+    assert pedidas == ['https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version.json']
+    assert act.ultima_release(lambda url, **kw: _R(404)) is None
+    assert act.ultima_release(lambda url, **kw: _R(200, {'version': 'rara'})) is None
+    with pytest.raises(act.ErrorDeActualizacion):
+        act.ultima_release(lambda url, **kw: _R(500))
 
 
 def test_brew_dice_que_se_actualiza_con_brew(ultima):

@@ -106,7 +106,8 @@ def _navegador_que_autoriza(codigo='codigo-1', estado=None, rutas=None):
         q = parse_qs(urlsplit(url).query)
         vistos.update(q)
         destino = q['callback_url'][0]
-        sufijo = {'code': codigo, 'state': estado or q['state'][0]} if codigo else {'error': 'denied'}
+        sufijo = {'state': estado or q['state'][0]}
+        sufijo.update({'code': codigo} if codigo else {'error': 'denied'})
 
         def ir():
             from urllib.parse import urlencode
@@ -152,6 +153,24 @@ def test_si_el_usuario_no_autoriza_se_dice():
         conectar.obtener_clave(abrir=abrir, post=lambda *a, **k: None, espera=10)
 
 
+def test_una_vuelta_sin_state_no_corta_la_espera():
+    # Sin `code` ni `state` (o una denegación sin `state`, que OpenRouter no devuelve): se sigue
+    # esperando y la vuelta buena, después, vale.
+    abrir, _ = _navegador_que_autoriza(rutas=['', '?error=denied', '?code=robado'])
+    clave = conectar.obtener_clave(abrir=abrir, post=lambda url, json, timeout: _Respuesta(
+        200, {'key': 'sk-or-buena'} if json['code'] == 'codigo-1' else {}), espera=10)
+    assert clave == 'sk-or-buena'
+
+
+def test_sin_state_no_termina_ni_con_error():
+    def abrir(url):
+        destino = parse_qs(urlsplit(url).query)['callback_url'][0].replace('localhost', '127.0.0.1')
+        threading.Thread(target=lambda: urllib.request.urlopen(destino + '?error=denied', timeout=5),
+                         daemon=True).start()
+    with pytest.raises(conectar.ErrorAlConectar, match='a tiempo'):
+        conectar.obtener_clave(abrir=abrir, espera=1)
+
+
 def test_sin_respuesta_a_tiempo_se_dice():
     with pytest.raises(conectar.ErrorAlConectar, match='a tiempo'):
         conectar.obtener_clave(abrir=lambda url: None, espera=0.2)
@@ -165,7 +184,7 @@ def test_un_canje_fallido_se_dice_sin_detalles():
 
 def test_conectar_guarda_la_clave_en_el_llavero_y_elige_un_gratis(sin_nada, monkeypatch):
     monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
-    hecho = conectar.conectar('openrouter')
+    hecho = conectar.conectar('openrouter', elegir=True)
     assert hecho == {'proveedor': 'openrouter', 'modelo': 'openrouter/nvidia/nemotron-3.5-super-vl:free'}
     assert llavero._almacen['openrouter'] == 'sk-or-v1-guardada'
     datos = configuracion.leer()
@@ -175,6 +194,66 @@ def test_conectar_guarda_la_clave_en_el_llavero_y_elige_un_gratis(sin_nada, monk
     assert 'sk-or' not in configuracion.ruta().read_text()
     assert terminal.modelo_por_defecto() == 'openrouter/nvidia/nemotron-3.5-super-vl:free'
     assert not primera_vez.sin_proveedor()
+
+
+def test_conectar_sin_elegir_no_cambia_el_modelo_ni_el_proveedor(sin_nada, monkeypatch):
+    # La hoja de la clave de la app (--solo-clave): el usuario ya eligió su modelo, quizá de pago.
+    configuracion.cambiar(None, 'por_defecto', 'openai')
+    monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
+    assert conectar.conectar('openrouter') == {'proveedor': 'openrouter', 'modelo': None}
+    assert llavero._almacen['openrouter'] == 'sk-or-v1-guardada'
+    datos = configuracion.leer()
+    assert datos['por_defecto'] == 'openai' and 'modelo' not in datos['openrouter']
+
+
+def test_la_orden_solo_elige_el_gratis_la_primera_vez(sin_nada, monkeypatch, capsys):
+    import json
+    monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
+    assert terminal.main(['--conectar', 'openrouter', '--solo-clave', '--json']) == 0
+    salida = [json.loads(linea) for linea in capsys.readouterr().out.splitlines()]
+    assert salida[-1]['tipo'] == 'conectado' and salida[-1]['modelo'] is None
+    assert 'por_defecto' not in configuracion.leer()
+    # Ya hay proveedor (la clave de OpenRouter): otro --conectar tampoco elige nada.
+    assert terminal.main(['--conectar', 'openrouter', '--json']) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])['modelo'] is None
+    # Sin nada configurado, sí: es la bienvenida.
+    llavero._almacen.clear()
+    configuracion.escribir({})
+    assert terminal.main(['--conectar', 'openrouter', '--json']) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])['modelo'] == \
+        'openrouter/nvidia/nemotron-3.5-super-vl:free'
+
+
+def test_nunca_se_usa_un_gratis_que_el_usuario_no_eligio(sin_nada):
+    # Clave de pago de OpenRouter y OpenRouter por defecto, sin modelo elegido: no va a «:free».
+    llavero._almacen['openrouter'] = 'sk-or-v1-de-pago'
+    configuracion.cambiar('openrouter', 'guardada', True)
+    configuracion.cambiar('openrouter', 'url', 'https://openrouter.ai/api/v1')
+    configuracion.cambiar(None, 'por_defecto', 'openrouter')
+    with pytest.raises(ValueError, match='no tiene un modelo elegido'):
+        terminal.modelo_por_defecto()
+    configuracion.cambiar('openrouter', 'modelo', 'anthropic/claude-sonnet-5')
+    assert terminal.modelo_por_defecto() == 'openrouter/anthropic/claude-sonnet-5'
+
+
+def test_un_encargo_sin_modelo_elegido_lo_pide(sin_nada, capsys):
+    llavero._almacen['openrouter'] = 'sk-or-v1-de-pago'
+    configuracion.cambiar('openrouter', 'guardada', True)
+    configuracion.cambiar('openrouter', 'url', 'https://openrouter.ai/api/v1')
+    configuracion.cambiar(None, 'por_defecto', 'openrouter')
+    assert terminal.main(['arregla el test']) == 1
+    assert '--modelo openrouter/' in capsys.readouterr().err
+
+
+def test_sin_proveedor_no_lee_el_llavero_si_hay_ollama(monkeypatch):
+    from alfalfa import ajustes
+    leidas = []
+    monkeypatch.setattr(ajustes, 'openai_clave', lambda: leidas.append(1))
+    monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: True)
+    assert not primera_vez.sin_proveedor()
+    monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: False)
+    assert not primera_vez.sin_proveedor(lambda url, **kw: _Respuesta(200))
+    assert leidas == []
 
 
 def test_solo_se_conecta_openrouter():
@@ -198,9 +277,15 @@ def test_en_la_terminal_se_ofrece_conectar_y_se_sigue_con_el_gratis(sin_nada, mo
         def isatty(self):
             return True
 
-    monkeypatch.setattr('builtins.input', lambda texto: '')
+    preguntas = []
+    respuestas = iter(['', 's'])
+    monkeypatch.setattr('builtins.input', lambda texto: preguntas.append(texto) or next(respuestas))
     monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
     salida = io.StringIO()
+    # Enter no acepta: hay que decir que sí, y la pregunta lleva el aviso de datos.
+    assert terminal.bienvenida(None, entrada=Tty(), salida=salida) is None
+    assert 'puede usar tus datos para entrenar' in preguntas[0] and '[s/N]' in preguntas[0]
+    assert 'nemotron-3.5-super-vl:free' in preguntas[0]
     modelo = terminal.bienvenida(None, entrada=Tty(), salida=salida)
     assert modelo == 'openrouter/nvidia/nemotron-3.5-super-vl:free'
     assert 'OpenRouter conectado' in salida.getvalue() and 'sk-or' not in salida.getvalue()

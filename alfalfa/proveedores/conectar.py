@@ -68,13 +68,20 @@ def _manejador(espera):
             datos = parse_qs(partes.query)
             codigo = (datos.get('code') or [''])[0]
             estado = (datos.get('state') or [''])[0]
+            if not secrets.compare_digest(estado.encode(), espera.estado.encode()):
+                # Otra pestaña o una página ajena (sin `state` o con otro): no termina la espera,
+                # ni con código ni sin él; se sigue esperando la vuelta buena. OpenRouter no
+                # devuelve `state` al denegar, así que una denegación tampoco la corta: se
+                # cancela desde AlfalfaCode (o se agota la espera).
+                if 'error' in datos:
+                    self._responder(200, 'No se conectó', 'No se autorizó la clave. Vuelve a AlfalfaCode y '
+                                    'cancela, o vuelve a intentarlo desde allí.')
+                else:
+                    self._responder(400, 'No vale', 'Esta respuesta no es la que AlfalfaCode esperaba.')
+                return
             if not codigo:
                 espera.error = 'OpenRouter no dio permiso (¿cancelaste la autorización?).'
                 titulo, texto = 'No se conectó', 'No se autorizó la clave. Puedes cerrar esta pestaña.'
-            elif not secrets.compare_digest(estado, espera.estado):
-                # Otra pestaña o una página ajena: no se acepta, y se sigue esperando la buena.
-                self._responder(400, 'No vale', 'Esta respuesta no es la que AlfalfaCode esperaba.')
-                return
             else:
                 espera.codigo = codigo
                 titulo, texto = 'AlfalfaCode ya está conectado', ('OpenRouter autorizó la clave. '
@@ -172,9 +179,11 @@ def obtener_clave(abrir=abrir_en_navegador, post=None, espera=ESPERA, al_abrir=N
     return _canjear(esperando.codigo, verifier, post)
 
 
-def conectar(proveedor='openrouter', **opciones):
-    """Conecta `proveedor` y lo deja como el de por defecto, con un modelo gratis elegido.
-    Devuelve {proveedor, modelo} (sin la clave)."""
+def conectar(proveedor='openrouter', elegir=False, **opciones):
+    """Conecta `proveedor`: guarda su clave en el Llavero. Con `elegir` (lo pidió el usuario en
+    la bienvenida, que enseña el aviso de datos) lo deja además por defecto con su modelo gratis
+    recomendado; si no, no cambia ni el proveedor ni el modelo por defecto.
+    Devuelve {proveedor, modelo} (sin la clave; `modelo` sólo si se eligió)."""
     if proveedor not in CONECTABLES:
         raise ErrorAlConectar('Sólo se puede conectar así OpenRouter; para ' + str(proveedor)
                               + ' guarda su clave con `alfalfa --guardar-clave ' + str(proveedor) + '`.')
@@ -185,9 +194,11 @@ def conectar(proveedor='openrouter', **opciones):
     llavero.guardar(proveedor, clave)
     configuracion.cambiar(proveedor, 'url', url)
     configuracion.cambiar(proveedor, 'guardada', True)
+    if not elegir:
+        return {'proveedor': proveedor, 'modelo': None}
     from .. import primera_vez
     modelo = primera_vez.recomendado(proveedor)
     if modelo:
         configuracion.cambiar(proveedor, 'modelo', modelo)
-    configuracion.cambiar(None, 'por_defecto', proveedor)
+        configuracion.cambiar(None, 'por_defecto', proveedor)
     return {'proveedor': proveedor, 'modelo': proveedor + '/' + modelo if modelo else None}

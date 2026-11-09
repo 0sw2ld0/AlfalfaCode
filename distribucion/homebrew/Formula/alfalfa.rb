@@ -18,8 +18,8 @@ class Alfalfa < Formula
   end
 
   # El bottle lo hace distribucion/botella.sh con el motor del DMG tal cual y va en la
-  # release. :any_skip_relocation: Homebrew no reescribe sus binarios (siguen firmados por
-  # Apple) y no pide las herramientas de línea de órdenes al día, como sí haría `install`.
+  # release. :any_skip_relocation: Homebrew no reescribe sus binarios (siguen con la firma
+  # Developer ID del equipo FZ8TW9AWLE) y no pide las CLT al día, como sí haría `install`.
   bottle do
     root_url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.1"
     sha256 cellar: :any_skip_relocation, arm64_sonoma: "255977bc45e9fb95ebbf7b25d6f4fc61083f851ac925d07755f86b0f9d61e85b"
@@ -51,7 +51,7 @@ class Alfalfa < Formula
     macho = Dir[libexec/"**/*"].select do |f|
       File.file?(f) && !File.symlink?(f) && File.size(f) >= 4 && magicos.include?(File.binread(f, 4).unpack1("N"))
     end
-    macho.each { |f| system "/usr/bin/codesign", "--force", "--sign", "-", f, out: File::NULL }
+    macho.each { |f| system "/usr/bin/codesign", "--force", "--sign", "-", f }
 
     (bin/"alfalfa").write <<~SH
       #!/bin/sh

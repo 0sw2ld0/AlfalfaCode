@@ -114,6 +114,28 @@ def ultima_version_https(url, get=None):
     return max(validas, key=clave) if validas else None
 
 
+FEED_RELEASE = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version.json'
+
+
+def ultima_release(get=None):
+    """La versión de la última release (`version.json`, el mismo que lee instalar.sh), como
+    etiqueta `vX.Y.Z`; None si no la hay. Una etiqueta sin release todavía no se puede instalar."""
+    if get is None:
+        import httpx
+        get = httpx.get
+    try:
+        r = get(FEED_RELEASE, headers={'User-Agent': f'AlfalfaCode/{__version__}'}, timeout=20,
+                follow_redirects=True)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        version = r.json().get('version')
+    except Exception as exc:
+        raise ErrorDeActualizacion('No se pudo consultar la última versión de AlfalfaCode: '
+                                   + (str(exc) or type(exc).__name__)) from None
+    return 'v' + version if isinstance(version, str) and clave(version) else None
+
+
 def _tipo(app=None, instalacion=None):
     """'app', 'curl', 'brew' o None (clon o paquete de pip, que se deciden con git)."""
     if instalacion:
@@ -127,9 +149,10 @@ def buscar(raiz=None, instalada=__version__, app=None, instalacion=None):
     """Qué versión hay instalada, cuál es la última y si conviene actualizar."""
     tipo = _tipo(app, instalacion)
     if tipo:
-        # La app y la CLI suelta no tienen git a mano: la versión se pregunta por HTTPS.
+        # La app y la CLI suelta no tienen git a mano: la versión se pregunta por HTTPS. La de
+        # curl, a la release que instalaría instalar.sh (no a la etiqueta más alta).
         url = os.environ.get('ALFALFA_REPO_URL') or REPO_POR_DEFECTO
-        ultima = ultima_version_https(url)
+        ultima = ultima_release() if tipo == 'curl' else ultima_version_https(url)
         instalacion = tipo
     else:
         if raiz is None:
@@ -174,6 +197,8 @@ def actualizar(raiz=None, instalada=__version__, python=sys.executable, app=None
             f'Esta copia la instaló Homebrew y la actualiza Homebrew: `{ORDEN_BREW}` '
             f'(hay {info["ultima"]}, tienes {info["instalada"]}).')
     if info['instalacion'] == 'curl':
+        # instalar.sh cambia la carpeta de este mismo motor mientras corre: después de esto sólo
+        # se usa lo ya importado (`texto`, `Transport`), nada que haya que leer de disco.
         _reinstalar(instalador or INSTALADOR, empaquetado.contenidos())
         return dict(info, actualizado=True, app_mac_cambio=False)
     etiqueta = info['etiqueta']

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hace el bottle de Homebrew de la fórmula `alfalfa` a partir del DMG de una release, sin
-# compilar nada y sin Homebrew: el motor de la app tal cual, con su firma de Apple.
+# compilar nada y sin Homebrew: el motor de la app tal cual, con su firma Developer ID.
 #
 #   distribucion/botella.sh AlfalfaCode-0.99.0.dmg 0.99.0 carpeta/de/salida
 #

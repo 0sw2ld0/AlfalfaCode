@@ -80,7 +80,12 @@ def sin_proveedor(get=None):
     # Para revisar la bienvenida en un Mac que ya tiene claves: ALFALFA_FORZAR_PRIMERA_VEZ=1.
     if os.environ.get('ALFALFA_FORZAR_PRIMERA_VEZ') == '1':
         return True
-    return not _algo_guardado() and not ollama_instalado() and not ollama_responde(get)
+    # De lo barato a lo caro: el archivo, Ollama instalado o respondiendo, y el Llavero al final
+    # (cada clave es una llamada a `security`).
+    from .proveedores import configuracion
+    if 'por_defecto' in configuracion.leer() or ollama_instalado() or ollama_responde(get):
+        return False
+    return not _algo_guardado()
 
 
 def _elegible(ficha):

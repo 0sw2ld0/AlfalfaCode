@@ -95,7 +95,8 @@ public enum AppUpdatePolicy {
     }
 
     /// El cask del tap 0sw2ld0/tap. Declara `auto_updates true`: Homebrew deja que la app se
-    /// actualice sola y `brew upgrade` no la toca (salvo `--greedy`, que pone la misma versión).
+    /// actualice sola y `brew upgrade` no la toca. `--greedy` compara con la versión que instaló
+    /// Homebrew, no con la del actualizador: si el tap va por detrás, la baja de versión.
     public static let homebrewCask = "alfalfacode"
 
     /// ¿La instaló Homebrew? Su Caskroom guarda el cask (`/opt/homebrew` en Apple Silicon,

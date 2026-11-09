@@ -54,7 +54,7 @@ final class AppModel: ObservableObject {
     @Published var firstRun: FirstRun?
     /// Esperando a que el usuario autorice en el navegador (`--conectar`).
     @Published var connecting: Connecting?
-    var connectProcess: AlfalfaProcess?
+    var connectHandle: ConnectHandle?
     /// Ollama, OpenAI y Alfalfa, como los cuenta `alfalfa --proveedores --json`.
     @Published private(set) var providers: [ProviderStatus] = []
     @Published private(set) var defaultProvider = "ollama"

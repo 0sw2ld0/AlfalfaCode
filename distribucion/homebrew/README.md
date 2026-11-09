@@ -9,7 +9,8 @@ Sólo Apple Silicon y macOS 14 (Sonoma) o posterior.
 
 - **alfalfacode** (cask): el DMG firmado y notarizado de la última release de
   [AlfalfaCode](https://github.com/0sw2ld0/AlfalfaCode). La app se actualiza sola
-  (`auto_updates`), así que `brew upgrade` no la toca salvo con `--greedy`.
+  (`auto_updates`), así que `brew upgrade` no la toca. Con `--greedy` Homebrew compara con
+  la versión con que la instaló él, y si este tap va por detrás puede bajarla de versión.
 - **alfalfa** (fórmula): la CLI, con el mismo motor que lleva la app (un Python propio con
   todas sus dependencias). Se instala desde un bottle hecho con ese motor tal cual, firmado
   por Apple; no compila nada. Se actualiza con `brew upgrade alfalfa`.

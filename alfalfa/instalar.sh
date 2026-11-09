@@ -6,7 +6,7 @@
 # Qué hace:
 #   1. Lee version.json de la última release de github.com/0sw2ld0/AlfalfaCode.
 #   2. Baja el DMG de esa release y comprueba su huella SHA-256 con la de version.json.
-#   3. Lo monta (sólo lectura) y comprueba la app de dentro: firma de Apple intacta
+#   3. Lo monta (sólo lectura) y comprueba la app de dentro: firma Developer ID intacta
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
 #      con el identificador com.cuycoders.alfalfacode y la misma versión.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
@@ -47,7 +47,7 @@ main() {
 
   case "${1:-}" in
     --desinstalar) desinstalar; return 0 ;;
-    --ayuda|-h|--help) sed -n '2,30p' "$0" 2>/dev/null || echo "Ver https://cuycoders.dev/alfalfa"; return 0 ;;
+    --ayuda|-h|--help) ayuda; return 0 ;;
     "") ;;
     *) falla "opción desconocida: $1 (vale --desinstalar)" ;;
   esac
@@ -56,10 +56,19 @@ main() {
   if [ -e "$LANZADOR" ] && ! grep -q "$MARCA_LANZADOR" "$LANZADOR" 2>/dev/null; then
     falla "ya hay otro $LANZADOR que no instaló este guion; quítalo o usa ALFALFA_PREFIJO=otra/carpeta."
   fi
+  # Sólo se sustituye una carpeta que dejó este guion: lo demás puede ser de otra cosa.
+  if [ -e "$RAIZ" ] && ! es_nuestra; then
+    falla "$RAIZ ya existe y no la instaló este guion; no se toca. Quítala o usa ALFALFA_PREFIJO=otra/carpeta."
+  fi
 
   TMP="$(mktemp -d "${TMPDIR:-/tmp}/alfalfa-instalar.XXXXXX")"
   VOLUMEN=""
-  trap limpiar EXIT INT TERM
+  NUEVA=""
+  # EXIT limpia siempre; una señal (Ctrl-C, cerrar la terminal) limpia y para con su código.
+  trap limpiar EXIT
+  trap 'limpiar; exit 130' INT
+  trap 'limpiar; exit 143' TERM
+  trap 'limpiar; exit 129' HUP
 
   # --- 1. version.json ------------------------------------------------------------------
   case "$FEED" in
@@ -71,10 +80,7 @@ main() {
   VERSION="$(campo version)"
   URL="$(campo url)"
   HUELLA="$(campo sha256 | tr 'A-F' 'a-f')"
-  case "$VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) falla "version.json trae una versión rara: $VERSION" ;;
-  esac
+  printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || falla "version.json trae una versión rara: $VERSION"
   printf '%s' "$HUELLA" | grep -Eq '^[0-9a-f]{64}$' || falla "version.json no trae una huella SHA-256 válida"
   if [ -n "$PRUEBA" ]; then
     case "$URL" in file:///*) ;; *) falla "con un feed file:// sólo vale un DMG file://" ;; esac
@@ -115,7 +121,11 @@ main() {
   fi
   MOTOR="$APP/Contents/Resources/motor"
   [ -x "$MOTOR/alfalfa" ] && [ -x "$MOTOR/python/bin/python3" ] || falla "la app no trae el motor"
-  paso "Firma de Apple correcta (equipo $EQUIPO)."
+  if [ -n "$PRUEBA" ]; then
+    paso "Firma correcta (Developer ID del equipo $EQUIPO; notarización sin comprobar: modo de prueba)."
+  else
+    paso "Firma correcta (Developer ID del equipo $EQUIPO, notarizada)."
+  fi
 
   # --- 4. Copiar el motor ---------------------------------------------------------------------
   mkdir -p "$PREFIJO/share" "$BIN"
@@ -131,6 +141,7 @@ main() {
 
   VIEJA=""
   if [ -e "$RAIZ" ]; then
+    es_nuestra || falla "$RAIZ ya no es una instalación de este guion; no se toca."
     VIEJA="$PREFIJO/share/.alfalfa-vieja.$$"
     mv "$RAIZ" "$VIEJA"
   fi
@@ -138,6 +149,7 @@ main() {
     [ -n "$VIEJA" ] && mv "$VIEJA" "$RAIZ"
     falla "no se pudo colocar la versión nueva en $RAIZ"
   fi
+  NUEVA=""
   [ -n "$VIEJA" ] && rm -rf "$VIEJA"
 
   {
@@ -212,9 +224,34 @@ poner_en_path() {
   fi
 }
 
+es_nuestra() {
+  [ -f "$RAIZ/instalacion" ] && [ "$(sed -n 1p "$RAIZ/instalacion")" = "curl" ]
+}
+
+ayuda() {
+  cat <<'AYUDA'
+Instala la CLI de AlfalfaCode (alfalfa) en este Mac, sin sudo:
+  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+
+Baja el DMG de la última release de github.com/0sw2ld0/AlfalfaCode, comprueba su huella
+SHA-256 y la firma de la app (equipo FZ8TW9AWLE, notarizada) y copia su motor a
+~/.local/share/alfalfa, con la orden en ~/.local/bin/alfalfa.
+
+Opciones:
+  --desinstalar   quita lo que instaló (tus sesiones de ~/.alfalfa se quedan):
+                  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+  --ayuda         esto
+
+Variables:
+  ALFALFA_PREFIJO   otra carpeta en vez de ~/.local
+  ALFALFA_SIN_PATH  1: no tocar ~/.zshrc ni ~/.bash_profile
+  ALFALFA_FEED      otro version.json (sólo file://, para probar con un DMG local)
+AYUDA
+}
+
 desinstalar() {
   QUITADO=""
-  if [ -f "$RAIZ/instalacion" ] && [ "$(sed -n 1p "$RAIZ/instalacion")" = "curl" ]; then
+  if es_nuestra; then
     rm -rf "$RAIZ"
     QUITADO=1
   elif [ -e "$RAIZ" ]; then
@@ -244,9 +281,9 @@ desinstalar() {
 }
 
 limpiar() {
-  if [ -n "${VOLUMEN:-}" ]; then hdiutil detach -quiet -force "$VOLUMEN" 2>/dev/null || true; fi
-  [ -n "${TMP:-}" ] && rm -rf "$TMP"
-  [ -n "${NUEVA:-}" ] && rm -rf "$NUEVA"
+  if [ -n "${VOLUMEN:-}" ]; then hdiutil detach -quiet -force "$VOLUMEN" 2>/dev/null || true; VOLUMEN=""; fi
+  if [ -n "${TMP:-}" ]; then rm -rf "$TMP"; TMP=""; fi
+  if [ -n "${NUEVA:-}" ]; then rm -rf "$NUEVA"; NUEVA=""; fi
   return 0
 }
 

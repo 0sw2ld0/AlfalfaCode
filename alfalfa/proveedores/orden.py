@@ -116,7 +116,11 @@ def orden(args, entrada=None):
                     'Ya hay un proveedor configurado: ' + configuracion.por_defecto() + '.')
             return 0
         if getattr(args, 'conectar', None):
-            hecho = conectar_ahora(args.conectar, como_json)
+            # Desde la bienvenida (sin proveedor) se elige el gratis; con --solo-clave (la hoja de la
+            # clave de la app) o si ya había proveedor, sólo se guarda la clave.
+            from .. import primera_vez
+            elegir = not getattr(args, 'solo_clave', False) and primera_vez.sin_proveedor()
+            hecho = conectar_ahora(args.conectar, como_json, elegir=elegir)
             _salida({'tipo': 'conectado', **hecho, **estado()}, como_json, _texto_conectado(hecho))
             return 0
         if getattr(args, 'catalogo', False):
@@ -206,6 +210,8 @@ def _texto_conectado(hecho):
         from .. import catalogo
         texto += (' Modelo por defecto: ' + hecho['modelo'] + ' (' + catalogo.AVISO_GRATIS.lower() + ').'
                   ' Prueba: alfalfa "tu encargo"')
+    else:
+        texto += ' El proveedor y el modelo por defecto no cambian; elige uno con --modelo openrouter/<modelo>.'
     return texto
 
 

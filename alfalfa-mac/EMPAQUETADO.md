@@ -125,10 +125,13 @@ pelean:
 
 - La app instalada con `brew install --cask` se actualiza sola, igual que la del DMG. El
   cask la deja en Aplicaciones con tu usuario como dueño, así que puede cambiarla.
-- `brew upgrade` no la toca. `brew upgrade --greedy` sí: cuando el tap ya está en la versión
-  nueva instala la misma que trajo el actualizador, y si el tap va por detrás no hace nada.
-  Homebrew sigue recordando la versión con que la instaló (`brew list --versions`), pero
-  eso sólo es informativo.
+- `brew upgrade` no la toca. `brew upgrade --greedy` (o `--greedy-auto-updates`) sí, y
+  compara con la versión con que **Homebrew** la instaló (`brew list --versions`), no con
+  la que trajo el actualizador. Si el tap va por detrás de la app, la reinstala en la
+  versión del tap, es decir, la baja de versión. Por ejemplo: brew instaló la 1.0, el
+  actualizador la subió a 1.2 y el tap está en 1.1. Por eso el tap tiene que seguir a
+  cada release (lo hace `tap.yml`). Si pasa, el actualizador la vuelve a subir al
+  abrirla.
 - `brew uninstall --cask alfalfacode` la quita aunque la haya cambiado el actualizador.
 - En Ajustes ▸ Actualizaciones, una app instalada con Homebrew (`Caskroom/alfalfacode`)
   lo dice.
@@ -181,7 +184,13 @@ una release publicada:
    también lo sube).
 3. Escribe la versión, la URL y las huellas.
 
-No hace commit ni push.
+No hace commit ni push. Se niega a escribir en un clon del tap si el bottle no está en la
+release, porque la fórmula de ese tap no se podría instalar. En las plantillas del
+repositorio sólo avisa.
+
+Las plantillas de `distribucion/homebrew` apuntan ahora a v0.99.1. Esa release sólo trae el
+DMG y `version.json`, no el bottle, así que **no se publican así**. El tap se crea con la
+primera release que lleve el bottle (`publicar.sh` lo pone en la orden `gh release create`).
 
 `.github/workflows/tap.yml` lo hace solo al publicar una release, o a mano con su versión:
 

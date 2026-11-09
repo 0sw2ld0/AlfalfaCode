@@ -59,19 +59,33 @@ HUELLA_DMG="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
 echo "DMG $NOMBRE_DMG: $HUELLA_DMG"
 
 # --- 2. Bottle ----------------------------------------------------------------------------------
+# PUBLICADO: el bottle está en la release. Sin él, la fórmula de un tap publicado no se instala.
+PUBLICADO=""
 if [ -z "${BOTELLA:-}" ] && [ -z "${VERSION_JSON:-}" ] \
    && curl -fsSL --proto '=https' -o "$TRABAJO/$NOMBRE_BOTELLA" "$BASE/$NOMBRE_BOTELLA" 2>/dev/null; then
   BOTELLA="$TRABAJO/$NOMBRE_BOTELLA"
+  PUBLICADO=1
   echo "La release ya trae el bottle."
 elif [ -z "${BOTELLA:-}" ]; then
   "$DIST/botella.sh" "$DMG" "$VERSION" "$TRABAJO" >/dev/null
   BOTELLA="$TRABAJO/$NOMBRE_BOTELLA"
   if [ -n "$SUBIR" ]; then
     gh release upload "$ETIQUETA" "$BOTELLA" --repo "$REPO"
+    PUBLICADO=1
     echo "Bottle subido a la release $ETIQUETA."
   else
     echo "Bottle hecho (súbelo a la release $ETIQUETA): $BOTELLA"
   fi
+fi
+FUERA=""
+[ "$(mkdir -p "$TAP" && cd "$TAP" && pwd)" != "$DIST/homebrew" ] && FUERA=1
+if [ -z "$PUBLICADO" ]; then
+  if [ -n "$FUERA" ] && [ -z "${VERSION_JSON:-}" ]; then
+    echo "✗ La release $ETIQUETA no trae $NOMBRE_BOTELLA: un tap con esta fórmula no se podría instalar." >&2
+    echo "  Súbelo antes (--subir-botella, o publicar.sh lo pone en la orden gh release create)." >&2
+    exit 1
+  fi
+  echo "! El bottle no está en la release $ETIQUETA: no publiques el tap hasta subirlo." >&2
 fi
 HUELLA_BOTELLA="$(shasum -a 256 "$BOTELLA" | cut -d' ' -f1)"
 echo "Bottle $NOMBRE_BOTELLA: $HUELLA_BOTELLA"

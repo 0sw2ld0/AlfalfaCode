@@ -17,8 +17,9 @@ cask "alfalfacode" do
   end
 
   # La app se actualiza sola (lee version.json de la última release, comprueba huella,
-  # firma y notarización). Con esto `brew upgrade` no se pelea con ella: no la toca salvo
-  # con --greedy, y entonces instala lo mismo que ya trajo el actualizador.
+  # firma y notarización). Con esto `brew upgrade` no la toca. Ojo con --greedy: Homebrew
+  # compara con la versión con que la instaló él, no con la que trajo el actualizador, así
+  # que si este cask va por detrás de la app puede bajarla de versión.
   auto_updates true
   depends_on arch: :arm64
   depends_on macos: :sonoma

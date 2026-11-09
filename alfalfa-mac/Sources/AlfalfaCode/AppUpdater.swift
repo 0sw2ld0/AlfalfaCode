@@ -505,7 +505,8 @@ struct AppUpdaterSettings: View {
                 .font(.system(size: 12)).foregroundStyle(Theme.secondary)
             if AppUpdatePolicy.installedByHomebrew() {
                 Text("La instalaste con Homebrew: se actualiza igual desde aquí. `brew upgrade` no la toca "
-                     + "(el cask declara que se actualiza sola); con `--greedy` pone la misma versión.")
+                     + "(el cask declara que se actualiza sola). `brew upgrade --greedy` puede volver a la "
+                     + "versión del tap si va por detrás; al abrirla, se ofrece otra vez la última.")
                     .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
