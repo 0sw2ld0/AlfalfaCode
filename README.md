@@ -71,7 +71,8 @@ https://platform.claude.com/settings/keys), el uso se cobra en tu cuenta.
   conversación usa la caché automática. El coste cuenta aparte lo leído y lo
   escrito en la caché.
 - Haiku 5.5 cobra cinco veces más una petición cuyo prompt pase de 100K tokens:
-  su ventana se queda en 100K para no entrar nunca en ese tramo.
+  se usa su ventana real (1M) y el modo Ahorro de la sesión compacta antes de ese
+  tramo (ver «Modelos que cobran más por contexto largo»).
 
 Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección del
 servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
