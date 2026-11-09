@@ -58,16 +58,23 @@ def simulados(tmp_path, monkeypatch):
     tabla = {}
     original = modulo._ejecutable
 
-    def ejecutable(nombre, env, *extra):
+    def ejecutable(nombre, env, *extra, raiz=None):
         if nombre in tabla:
             return tabla[nombre]
         if nombre in ('pyright-langserver', 'basedpyright-langserver', 'typescript-language-server'):
-            return original(nombre, {'PATH': ''}, *extra)
-        return original(nombre, env, *extra)
+            return original(nombre, {'PATH': ''}, *extra, raiz=raiz)
+        return original(nombre, env, *extra, raiz=raiz)
     monkeypatch.setattr(modulo, '_ejecutable', ejecutable)
     monkeypatch.setattr(modulo, '_sourcekit', lambda env: tabla.get('sourcekit-lsp', (None,))[0])
     monkeypatch.setattr(modulo, 'carpeta_de_sourcekit', lambda raiz: tmp_path / 'cache-sourcekit')
-    monkeypatch.setattr(linters, '_programa', lambda nombre, env, *carpetas: tabla.get(nombre, (None, False)))
+    monkeypatch.setattr(linters, '_programa',
+                        lambda nombre, env, *carpetas, raiz=None: tabla.get(nombre, (None, False)))
+
+    # El manifiesto «evaluado» de un paquete corriente; las pruebas de dump-package usan swift de verdad.
+    async def volcado_corriente(self, paquete):
+        tabla.setdefault('volcados', []).append(str(paquete))
+        return tabla.get('volcado', {'dependencies': [], 'targets': [{'name': 'X', 'type': 'regular'}]})
+    monkeypatch.setattr(Diagnosticos, '_volcar_paquete', volcado_corriente)
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
     monkeypatch.setenv('LSP_SIMULADO_REGISTRO', str(tmp_path / 'metodos.txt'))
     return tabla
@@ -668,6 +675,11 @@ def test_sourcekit_compila_fuera_del_sandbox_y_sin_plugins(sourcekit, sesion, pe
     assert cliente.opciones['swiftPM'] == {'scratchPath': str(cache / 'compilacion'), 'skipPlugins': True}
     assert cliente.opciones['generatedFilesPath'] == str(cache / 'generados')
     assert 'disableSandbox' not in json.dumps(cliente.opciones)
+    # Su caché de módulos y sus temporales, fuera de $TMPDIR (las órdenes del sandbox escriben allí).
+    assert cliente.env['TMPDIR'].startswith(str(cache / 'tmp'))
+    modulos = str(cache / 'modulos')
+    assert cliente.env['CLANG_MODULE_CACHE_PATH'] == cliente.env['SWIFTPM_MODULECACHE_OVERRIDE'] == modulos
+    assert (cache / 'tmp').is_dir() and (cache / 'modulos').is_dir()
 
 
 def test_dos_paquetes_swift_en_un_parche(sourcekit, sesion, permisos):
@@ -715,6 +727,8 @@ def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, mo
     ruta = 'Sources/Demo/Suma.swift'
 
     async def ediciones():
+        # Evaluar Package.swift (dump-package en el sandbox) va antes del plazo, como el permiso.
+        assert await rt.manager.diagnosticos._revisar_paquete(raiz.resolve()) is None
         inicio = time.monotonic()
         primero = await escribir(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + 1\n}\n')
         tardo = time.monotonic() - inicio
@@ -754,3 +768,180 @@ def test_ruff_de_respaldo_y_del_proyecto(sesion, monkeypatch):
     roto = editar(rt, 'p.py', 'import os\nimport sys\nx = (\n')
     assert 'ruff falló' in roto['diagnosticos']['sin_respuesta'][0]
     assert roto['diagnosticos']['revisado_con'] == [modulo.SOLO_SINTAXIS]
+
+
+# --- paquetes que harían ejecutar algo a sourcekit-lsp (segunda revisión) ----------------------------
+
+
+@pytest.mark.parametrize('archivo,manifiesto,motivo', [
+    ('Package.swift', 'let package = Package(name: "X", targets: [.target(name: "X", swiftSettings: '
+                      '[.unsafeFlags(["-Xfrontend", "-load-plugin-executable"])])])', 'unsafeFlags'),
+    ('Package@swift-6.0.swift', 'let package = Package(name: "X", dependencies: [.package (path: "../y")])',
+     'dependencias'),
+    ('Package.swift', 'let package = Package(name: "X", targets: [.binaryTarget(name: "B", path: "b.zip")])',
+     'binario'),
+    ('Package.swift', 'let package = Package(name: "X", targets: [.macro(name: "M")])', 'macro'),
+    ('Package.swift', 'let package = Package(name: "X", targets: [.target(name: "X", plugins: ["P"])])', 'plugins'),
+])
+def test_sourcekit_no_arranca_con_manifiestos_peligrosos(sourcekit, sesion, permisos, archivo, manifiesto, motivo):
+    raiz, rt = sesion
+    pedidas, _ = permisos
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
+                                        'let package = Package(name: "X")\n')
+    (raiz / archivo).write_text('// swift-tools-version:5.9\nimport PackageDescription\n' + manifiesto + '\n')
+    resultado = editar(rt, 'Sources/a.swift', 'let a = ERROR\n')
+    (aviso,) = resultado['diagnosticos']['sin_respuesta']
+    assert 'no se lanza porque ' + archivo in aviso and motivo in aviso
+    assert pedidas == [] and not sourcekit.exists()
+
+
+def test_el_volcado_del_manifiesto_decide(sourcekit, simulados, sesion, permisos):
+    raiz, rt = sesion
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\n')
+    simulados['volcado'] = {'dependencies': [], 'targets': [
+        {'name': 'X', 'type': 'regular', 'settings': [{'tool': 'swift', 'kind': {'unsafeFlags': {'_0': ['-x']}}}]}]}
+    resultado = editar(rt, 'Sources/a.swift', 'let a = ERROR\n')
+    assert 'unsafeFlags' in resultado['diagnosticos']['sin_respuesta'][0]
+    assert not sourcekit.exists()
+    assert simulados['volcados'] == [str(raiz.resolve())], 'se evalúa tras el permiso, una vez por versión'
+    editar(rt, 'Sources/a.swift', 'let a = 2\n')
+    assert len(simulados['volcados']) == 1
+
+
+def test_motivo_en_el_volcado():
+    corriente = {'dependencies': [], 'targets': [{'name': 'X', 'type': 'regular', 'settings': []}]}
+    assert modulo.motivo_en_el_volcado(corriente) is None
+    assert 'dependencias' in modulo.motivo_en_el_volcado(dict(corriente, dependencies=[{'fileSystem': []}]))
+    assert 'macro' in modulo.motivo_en_el_volcado({'targets': [{'name': 'M', 'type': 'macro'}]})
+    assert 'binario' in modulo.motivo_en_el_volcado({'targets': [{'name': 'B', 'type': 'binary'}]})
+    assert 'plugins' in modulo.motivo_en_el_volcado({'targets': [{'name': 'X', 'type': 'regular',
+                                                                  'pluginUsages': [{'plugin': ['P', None]}]}]})
+    anidado = {'targets': [{'name': 'X', 'type': 'regular', 'settings': [
+        {'tool': 'linker', 'kind': {'unsafeFlags': {'_0': ['-x']}}, 'condition': None}]}]}
+    assert 'unsafeFlags' in modulo.motivo_en_el_volcado(anidado)
+    assert modulo.motivo_en_el_volcado(None) == 'el manifiesto no se pudo leer'
+
+
+def test_un_manifiesto_que_cambia_a_mitad_de_sesion_cierra_el_servidor(sourcekit, sesion, permisos):
+    raiz, rt = sesion
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
+                                        'let package = Package(name: "X")\n')
+
+    async def ediciones():
+        primero = await escribir(rt, 'Sources/a.swift', 'let a = ERROR\n')
+        (cliente,) = rt.manager.diagnosticos.servidores.values()
+        # Una orden del turno (en el sandbox) reescribe el manifiesto.
+        (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
+                                            'let package = Package(name: "X", targets: [.target(name: "X", '
+                                            'swiftSettings: [.unsafeFlags(["-x"])])])\n')
+        segundo = await escribir(rt, 'Sources/a.swift', 'let a = 1\n')
+        await rt.manager.cerrar_diagnosticos()
+        return primero, cliente, segundo
+    primero, cliente, segundo = asyncio.run(ediciones())
+    assert primero['diagnosticos']['errores'] == 1
+    assert cliente.proc.returncode is not None
+    assert 'unsafeFlags' in segundo['diagnosticos']['sin_respuesta'][0]
+
+
+def test_un_cambio_inocente_del_manifiesto_tambien_reinicia(sourcekit, simulados, sesion, permisos):
+    raiz, rt = sesion
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\n')
+
+    async def ediciones():
+        await escribir(rt, 'Sources/a.swift', 'let a = 1\n')
+        (viejo,) = rt.manager.diagnosticos.servidores.values()
+        (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\n// otro comentario\n')
+        segundo = await escribir(rt, 'Sources/a.swift', 'let a = ERROR\n')
+        (nuevo,) = rt.manager.diagnosticos.servidores.values()
+        await rt.manager.cerrar_diagnosticos()
+        return viejo, nuevo, segundo
+    viejo, nuevo, segundo = asyncio.run(ediciones())
+    assert viejo is not nuevo and viejo.proc.returncode is not None, 'el que cargó el manifiesto viejo se cierra'
+    assert segundo['diagnosticos']['errores'] == 1 and len(simulados['volcados']) == 2
+
+
+def test_un_programa_del_path_dentro_del_proyecto_es_del_proyecto(tmp_path):
+    raiz = tmp_path / 'proyecto'
+    bins = raiz / 'node_modules' / '.bin'
+    bins.mkdir(parents=True)
+    programa = bins / 'typescript-language-server'
+    programa.write_text('#!/bin/sh\n')
+    programa.chmod(0o755)
+    # direnv o una entrada relativa ponen el node_modules/.bin del repo en el PATH.
+    assert modulo._ejecutable('typescript-language-server', {'PATH': str(bins)}, raiz=raiz) == (str(programa), True)
+    # También a través de un enlace desde fuera.
+    fuera = tmp_path / 'fuera'
+    fuera.mkdir()
+    (fuera / 'eslint').symlink_to(programa)
+    assert linters._programa('eslint', {'PATH': str(fuera)}, raiz=raiz) == (str(fuera / 'eslint'), True)
+    otro = tmp_path / 'global'
+    otro.mkdir()
+    (otro / 'eslint').write_text('#!/bin/sh\n')
+    (otro / 'eslint').chmod(0o755)
+    assert linters._programa('eslint', {'PATH': str(otro)}, raiz=raiz) == (str(otro / 'eslint'), False)
+    assert modulo.dentro_de(str(raiz), raiz) and not modulo.dentro_de(str(tmp_path / 'proyecto2'), raiz)
+
+
+def test_typescript_del_path_dentro_del_proyecto_pide_permiso(tmp_path, monkeypatch, sesion, permisos):
+    raiz, rt = sesion
+    pedidas, respuesta = permisos
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
+    monkeypatch.setattr(linters, '_programa', lambda *a, **k: (None, False))
+    bins = raiz / 'node_modules' / '.bin'
+    lanzador(bins, 'typescript-language-server', SIMULADO)
+    monkeypatch.setenv('PATH', str(bins) + ':' + '/usr/bin:/bin')
+    respuesta['si'] = False
+    resultado = editar(rt, 'a.ts', 'const a = ERROR\n')
+    assert len(pedidas) == 1 and pedidas[0]['motivo'] == 'modo' and 'del proyecto' in pedidas[0]['purpose']
+    assert 'no se dio permiso' in resultado['diagnosticos']['sin_respuesta'][0]
+
+
+SWIFT = shutil.which('swift') if sys.platform == 'darwin' else None
+
+
+@pytest.mark.skipif(SWIFT is None, reason='swift no está instalado')
+def test_dump_package_de_verdad_en_el_sandbox(tmp_path, monkeypatch):
+    """Sin la mirada al texto, el manifiesto evaluado en el sandbox también lo rechaza."""
+    raiz = tmp_path / 'paquete'
+    (raiz / 'Sources' / 'X').mkdir(parents=True)
+    (raiz / 'Sources' / 'X' / 'x.swift').write_text('public let x = 1\n')
+    d = Diagnosticos(raiz, tmp_path / 'hogar')
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
+                                        'let package = Package(name: "X", targets: [.target(name: "X")])\n')
+    assert asyncio.run(d._revisar_paquete(raiz)) is None
+    (raiz / 'Package.swift').write_text(
+        '// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: "X", targets: ['
+        '.target(name: "X", swiftSettings: [.unsafeFlags(["-Xfrontend", "-load-plugin-executable"])]),'
+        '.binaryTarget(name: "B", path: "b.xcframework")])\n')
+    monkeypatch.setattr(modulo, 'motivo_en_el_texto', lambda paquete: None)
+    assert 'unsafeFlags' in asyncio.run(d._revisar_paquete(raiz))
+    assert not (raiz / '.build').exists(), 'dump-package compila en un temporal, no en el proyecto'
+
+
+@pytest.mark.skipif(SOURCEKIT is None or SWIFT is None, reason='sourcekit-lsp o swift no están instalados')
+def test_la_macro_maliciosa_de_la_revision_no_se_ejecuta(sesion, permisos, monkeypatch, tmp_path):
+    """El caso del verificador: unsafeFlags que cargan herr/evil como plugin de macros. Ni se pregunta
+    ni se lanza sourcekit-lsp, y herr/evil no deja su marca."""
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
+    monkeypatch.setattr(linters, '_programa', lambda *a, **k: (None, False))
+    raiz, rt = sesion
+    rt.task['modo'] = 'omitir'   # ni siquiera en Omitir permisos
+    marca = tmp_path / 'marca-de-evil'
+    (raiz / 'herr').mkdir()
+    (raiz / 'herr' / 'evil').write_text('#!/bin/sh\ntouch ' + str(marca) + '\n')
+    (raiz / 'herr' / 'evil').chmod(0o755)
+    (raiz / 'Sources' / 'Demo').mkdir(parents=True)
+    (raiz / 'Package.swift').write_text(
+        '// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: "Demo", targets: ['
+        '.target(name: "Demo", swiftSettings: [.unsafeFlags(["-Xfrontend", "-load-plugin-executable", '
+        '"-Xfrontend", "' + str(raiz / 'herr' / 'evil') + '#Evil", "-Xfrontend", "-disable-sandbox"])])])\n')
+    resultado = editar(rt, 'Sources/Demo/a.swift', '@freestanding(expression) macro evil() = '
+                                                   '#externalMacro(module: "Evil", type: "Evil")\nlet x = #evil()\n')
+    assert 'unsafeFlags' in resultado['diagnosticos']['sin_respuesta'][0]
+    assert not rt.manager.diagnosticos.servidores
+    time.sleep(0.5)
+    assert not marca.exists()

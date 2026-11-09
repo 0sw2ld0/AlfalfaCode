@@ -550,15 +550,23 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
     de `node_modules/.bin` lo pide en cualquier modo. ruff y SwiftLint sólo leen y no lo
     piden. Un «no» también vale para toda la sesión.
   - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
-    el sandbox bloquea), así que pide el permiso de **orden fuera del sandbox**, una vez
-    por paquete y sesión (Omitir permisos lo concede solo). `Package.swift` queda en el
-    sandbox propio de SwiftPM, sin plugins, y compila en `~/Library/Caches/alfalfa/sourcekit`,
-    donde el sandbox de las órdenes no escribe (ni en `.build` ni en `$TMPDIR`).
+    el sandbox bloquea): ejecuta el compilador de Swift sobre el código del repositorio con
+    tus permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete
+    y sesión (Omitir permisos lo concede solo), y compila, genera y guarda su caché de
+    módulos y sus temporales en `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las
+    órdenes no escribe (ni en `.build` ni en `$TMPDIR`), sin plugins.
   - `sourcekit-lsp` **no se lanza** si el proyecto trae algo que le haría ejecutar órdenes
     o cambiar su configuración (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`,
     `compile_commands.json`, `compile_flags.txt`, también en `build/`), desde la carpeta
-    del archivo hasta la raíz, ni en un paquete con dependencias (tendría que resolverlas).
-    Si uno de esos archivos aparece con el servidor en marcha, se cierra.
+    del archivo hasta la raíz. Tampoco si algún `Package*.swift` del paquete (también
+    `Package@swift-6.0.swift`) usa `unsafeFlags` (pueden cargar un programa del repo como
+    plugin de macros), declara dependencias, macros, plugins, binarios o bibliotecas del
+    sistema. Se mira primero el texto y luego, tras el permiso, el manifiesto evaluado con
+    `swift package dump-package` dentro del sandbox, una vez por versión de los manifiestos.
+    Si un manifiesto cambia o aparece uno de esos archivos con el servidor en marcha, se
+    cierra y se vuelve a revisar.
+  - Un programa del PATH que en realidad está dentro del proyecto (un `node_modules/.bin` o
+    un `.venv/bin` del repo puesto en el PATH) cuenta como del proyecto y pide permiso.
 - En la app, la fila de la edición enseña «2 errores · 1 aviso» y «incompleto» si algún
   servidor no contestó.
 

@@ -173,11 +173,13 @@ class SwiftLint(Linter):
         return filas
 
 
-def _programa(nombre, env, *carpetas):
-    """(ruta, del_proyecto): el del PATH antes que el de node_modules/.bin del proyecto."""
+def _programa(nombre, env, *carpetas, raiz=None):
+    """(ruta, del_proyecto): el del PATH antes que el de node_modules/.bin del proyecto. Uno del PATH que
+    en realidad está dentro de `raiz` (un .venv o node_modules del repo en el PATH) también es del proyecto."""
+    from . import dentro_de
     global_ = shutil.which(nombre, path=(env or os.environ).get('PATH'))
     if global_:
-        return global_, False
+        return global_, dentro_de(global_, raiz)
     for carpeta in carpetas:
         candidato = Path(carpeta) / nombre
         if candidato.is_file() and os.access(candidato, os.X_OK):
@@ -192,20 +194,20 @@ def del_proyecto(archivos, raiz, env, *, python_sin_servidor=False):
     hallados = {}
     python = [a for a in archivos if a['ruta'].suffix.lower() in PYTHON]
     if python:
-        ruff, _ = _programa('ruff', env)
+        ruff, propio = _programa('ruff', env, raiz=raiz)
         configurado = any(_subiendo(a['ruta'].parent, raiz, config_ruff) for a in python)
         if ruff and (configurado or python_sin_servidor):
-            hallados['ruff'] = Ruff('ruff', ruff, raiz, env, python)
+            hallados['ruff'] = Ruff('ruff', ruff, raiz, env, python, del_proyecto=propio)
     swift = [a for a in archivos if a['ruta'].suffix.lower() in SWIFT]
     if swift:
         carpeta = _subiendo(swift[0]['ruta'].parent, raiz, config_swiftlint)
-        programa, _ = _programa('swiftlint', env) if carpeta else (None, False)
+        programa, propio = _programa('swiftlint', env, raiz=raiz) if carpeta else (None, False)
         if programa:
-            hallados['swiftlint'] = SwiftLint('swiftlint', programa, carpeta, env, swift)
+            hallados['swiftlint'] = SwiftLint('swiftlint', programa, carpeta, env, swift, del_proyecto=propio)
     javascript = [a for a in archivos if a['ruta'].suffix.lower() in JAVASCRIPT]
     if javascript:
         carpeta = _subiendo(javascript[0]['ruta'].parent, raiz, config_eslint)
-        programa, propio = (_programa('eslint', env, *_bins_de_node(javascript[0]['ruta'].parent, raiz))
+        programa, propio = (_programa('eslint', env, *_bins_de_node(javascript[0]['ruta'].parent, raiz), raiz=raiz)
                             if carpeta else (None, False))
         if programa:
             linter = ESLint('eslint', programa, carpeta, env, javascript, del_proyecto=propio)

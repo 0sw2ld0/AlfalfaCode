@@ -54,8 +54,10 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from . import linters
@@ -74,6 +76,8 @@ MAX_CACHE = 400
 MAX_PROCESOS = 4
 # Por encima, «nuevos» compara sin alinear las líneas (difflib es cuadrático en el peor caso).
 MAX_LINEAS_ALINEADAS = 20000
+# Lo que puede tardar `swift package dump-package` en leer el manifiesto (compilarlo la primera vez).
+MAX_VOLCADO = 60.0
 NOTA = ('Diagnósticos automáticos tras editar: orientan, pero no son una comprobación ni cuentan como '
         'verificación. Verifica con run_checks.')
 NOTA_LIMPIO = ('Sin diagnósticos nuevos. No es una comprobación ni cuenta como verificación: verifica con '
@@ -141,11 +145,22 @@ def carpeta_de_sourcekit(raiz):
             / hashlib.sha256(str(raiz).encode()).hexdigest()[:16])
 
 
-def _ejecutable(nombre, env, *extra):
-    """(ruta, del_proyecto): el del PATH antes que el de las carpetas del proyecto (`extra`)."""
+def dentro_de(ruta, raiz):
+    """¿La ruta, ya resuelta (enlaces incluidos), queda dentro de `raiz`? Así un `node_modules/.bin` o un
+    `.venv/bin` del repo que el PATH del usuario incluye (direnv, una entrada relativa) cuenta como del
+    proyecto."""
+    if raiz is None or ruta is None:
+        return False
+    real, base = os.path.realpath(ruta), os.path.realpath(raiz)
+    return real == base or real.startswith(base.rstrip(os.sep) + os.sep)
+
+
+def _ejecutable(nombre, env, *extra, raiz=None):
+    """(ruta, del_proyecto): el del PATH antes que el de las carpetas del proyecto (`extra`). Uno del PATH
+    que en realidad está dentro de `raiz` también es del proyecto."""
     global_ = shutil.which(nombre, path=(env or os.environ).get('PATH'))
     if global_:
-        return global_, False
+        return global_, dentro_de(global_, raiz)
     for carpeta in extra:
         candidato = Path(carpeta) / nombre
         if candidato.is_file() and os.access(candidato, os.X_OK):
@@ -190,11 +205,75 @@ def trampa_de_sourcekit(desde, raiz):
     return None
 
 
-def _con_dependencias(paquete):
+def manifiestos(paquete):
+    """Package.swift y sus variantes por versión (Package@swift-6.0.swift), las que SwiftPM puede elegir."""
+    return sorted(p for p in Path(paquete).glob('Package*.swift') if p.is_file() or p.is_symlink())
+
+
+def huella_de_manifiestos(paquete):
+    """Lo que cambia si cambia cualquier manifiesto (también a mitad de sesión), o None si no se pueden leer."""
+    resumen = hashlib.sha256()
     try:
-        return '.package(' in (Path(paquete) / 'Package.swift').read_text(encoding='utf-8', errors='replace')
+        for ruta in manifiestos(paquete):
+            resumen.update(ruta.name.encode() + b'\0' + ruta.read_bytes() + b'\0')
     except OSError:
-        return False
+        return None
+    return resumen.hexdigest()
+
+
+# Lo que, escrito en un manifiesto, puede hacer que el compilador cargue o ejecute algo del repositorio, o
+# que SwiftPM descargue código. Swift no tiene `eval`: sin escribir estos nombres un manifiesto no puede
+# pedirlo, aunque se comporte distinto dentro y fuera del sandbox (por eso no basta con `dump-package`).
+TEXTO_PELIGROSO = (
+    (r'\bunsafeFlags\b', 'usa unsafeFlags (opciones del compilador que pueden cargar programas del repo)'),
+    (r'\.package\s*\(', 'tiene dependencias y sourcekit-lsp tendría que resolverlas'),
+    (r'\bbinaryTarget\b', 'tiene un binario precompilado'),
+    (r'\.macro\s*\(', 'tiene una macro'),
+    (r'\.plugin\s*\(|\bplugins\s*:', 'tiene o usa plugins'),
+    (r'\bsystemLibrary\b', 'tiene una biblioteca del sistema'),
+)
+
+
+def motivo_en_el_texto(paquete):
+    """Una primera mirada a los manifiestos, sin ejecutarlos (también a Package@swift-6.0.swift y demás)."""
+    for ruta in manifiestos(paquete):
+        try:
+            texto = ruta.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            return ruta.name + ' no se puede leer'
+        for patron, motivo in TEXTO_PELIGROSO:
+            if re.search(patron, texto):
+                return ruta.name + ' ' + motivo
+    return None
+
+
+TIPOS_PELIGROSOS = {'macro': 'una macro', 'plugin': 'un plugin', 'binary': 'un binario precompilado',
+                    'system': 'una biblioteca del sistema'}
+
+
+def motivo_en_el_volcado(volcado):
+    """Lo que dice `swift package dump-package` (el manifiesto ya evaluado) que impide lanzar sourcekit-lsp."""
+    if not isinstance(volcado, dict):
+        return 'el manifiesto no se pudo leer'
+    if _contiene_clave(volcado, 'unsafeFlags'):
+        return 'el paquete usa unsafeFlags (opciones del compilador que pueden cargar programas del repo)'
+    if volcado.get('dependencies'):
+        return 'el paquete tiene dependencias y sourcekit-lsp tendría que resolverlas'
+    for objetivo in volcado.get('targets') or []:
+        tipo = objetivo.get('type') if isinstance(objetivo, dict) else None
+        if tipo in TIPOS_PELIGROSOS:
+            return 'el paquete tiene ' + TIPOS_PELIGROSOS[tipo] + ' (' + str(objetivo.get('name'))[:60] + ')'
+        if isinstance(objetivo, dict) and objetivo.get('pluginUsages'):
+            return 'el objetivo ' + str(objetivo.get('name'))[:60] + ' usa plugins'
+    return None
+
+
+def _contiene_clave(valor, clave):
+    if isinstance(valor, dict):
+        return clave in valor or any(_contiene_clave(v, clave) for v in valor.values())
+    if isinstance(valor, list):
+        return any(_contiene_clave(v, clave) for v in valor)
+    return False
 
 
 def _bins_de_node(desde, raiz):
@@ -318,15 +397,25 @@ class Diagnosticos:
         self._cache = {}           # (fuente, raíz, ruta, sha) -> diagnósticos de ese contenido
         self._dichos = set()       # avisos que ya se dieron en la sesión
         self._permisos = {}        # clave -> True/False: la respuesta del usuario, una vez por sesión
+        self._paquetes = {}        # carpeta del paquete -> (huella de sus manifiestos, motivo o None)
         self._procesos = None
         self._cerrado = False
 
     @property
     def env(self):
-        """El entorno de los servidores, leído al lanzarlos, con la caché de módulos de Clang/Swift
+        """El entorno de lo que corre en el sandbox, leído al lanzarlo, con la caché de módulos de Clang/Swift
         donde el sandbox deja escribir."""
         from ..seatbelt import compiladores
         return dict(self._env if self._env is not None else os.environ, **compiladores.entorno())
+
+    def entorno_de_sourcekit(self, cache):
+        """El de sourcekit-lsp, que corre fuera del sandbox: su caché de módulos y sus temporales dentro de
+        `cache`, nunca en $TMPDIR, donde las órdenes del sandbox podrían dejarle módulos preparados."""
+        base = {k: v for k, v in (self._env if self._env is not None else os.environ).items()
+                if k not in ('CLANG_MODULE_CACHE_PATH', 'SWIFTPM_MODULECACHE_OVERRIDE', 'TMPDIR')}
+        modulos = str(Path(cache) / 'modulos')
+        return dict(base, CLANG_MODULE_CACHE_PATH=modulos, SWIFTPM_MODULECACHE_OVERRIDE=modulos,
+                    TMPDIR=str(Path(cache) / 'tmp') + os.sep)
 
     # --- ajustes ---------------------------------------------------------
 
@@ -362,42 +451,51 @@ class Diagnosticos:
             clave = ('swift', str(raiz))
             if sys.platform != 'darwin':
                 return {'clave': clave, 'motivo': etiqueta + ': fuera de macOS no hay con qué aislar Package.swift.'}
+            if dentro_de(argv, self.raiz):
+                return {'clave': clave, 'motivo': etiqueta + ': no se lanza porque el sourcekit-lsp del PATH está '
+                                                             'dentro del proyecto.'}
             trampa = trampa_de_sourcekit(ruta.parent, self.raiz)
             if trampa is not None:
                 return {'clave': clave, 'motivo': (
                     etiqueta + ': no se lanza porque el proyecto trae ' + str(trampa.relative_to(self.raiz))
                     + ', que le haría ejecutar órdenes del proyecto fuera del sandbox.')}
-            if paquete is not None and _con_dependencias(paquete):
-                return {'clave': clave, 'motivo': (
-                    etiqueta + ': no se lanza porque Package.swift tiene dependencias y tendría que '
-                    'resolverlas. Comprueba con run_checks.')}
-            # Sin indexado en segundo plano ni plugins, con el sandbox propio de SwiftPM para el manifiesto
-            # y compilando fuera del proyecto.
+            if paquete is not None:
+                motivo = motivo_en_el_texto(paquete)
+                if motivo:
+                    return {'clave': clave, 'motivo': etiqueta + ': no se lanza porque ' + motivo
+                                                      + '. Comprueba con run_checks.'}
+            # Sin indexado en segundo plano ni plugins y compilando fuera del proyecto y de $TMPDIR. Antes de
+            # lanzarlo, el manifiesto se evalúa en el sandbox (`_revisar_paquete`).
             cache = carpeta_de_sourcekit(raiz)
             opciones = {'backgroundIndexing': False, 'generatedFilesPath': str(cache / 'generados'),
                         'swiftPM': {'scratchPath': str(cache / 'compilacion'), 'skipPlugins': True}}
             return {'clave': clave, 'nombre': 'sourcekit-lsp', 'etiqueta': etiqueta,
                     'argv': [argv], 'raiz': raiz, 'opciones': opciones, 'aislado': False,
-                    'carga': paquete is not None, 'permiso': FUERA,
-                    'proposito': ('Lanzar sourcekit-lsp fuera del sandbox para ver los errores de los .swift '
-                                  'que se editen en ' + str(raiz) + ' durante esta sesión. Su sourcekitd es '
-                                  'un servicio de Xcode que el sandbox bloquea; Package.swift sigue en el '
-                                  'sandbox de SwiftPM.')}
+                    'carga': paquete is not None, 'permiso': FUERA, 'paquete': paquete, 'cache': cache,
+                    'env': self.entorno_de_sourcekit(cache),
+                    'proposito': ('Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que '
+                                  'se editen en ' + str(raiz) + ' durante esta sesión. Ejecuta el compilador de '
+                                  'Swift sobre el código del repositorio'
+                                  + (' y lee su Package.swift' if paquete is not None else '')
+                                  + ' con los permisos del usuario. Antes se rechazan los paquetes con '
+                                    'unsafeFlags, dependencias, macros, plugins o binarios. Su sourcekitd es un '
+                                    'servicio de Xcode que el sandbox bloquea.')}
         if sufijo in PYTHON:
             for nombre in ('basedpyright-langserver', 'pyright-langserver'):
-                argv, _ = _ejecutable(nombre, self.env)
+                argv, propio = _ejecutable(nombre, self.env, raiz=self.raiz)
                 if argv:
                     corto = nombre.replace('-langserver', '')
                     return {'clave': ('python', str(self.raiz)), 'nombre': corto, 'etiqueta': corto,
                             'argv': [argv, '--stdio'], 'raiz': self.raiz, 'opciones': None, 'aislado': True,
-                            'carga': False, 'permiso': MODO if pide else None,
-                            'proposito': ('Lanzar ' + corto + ' en el sandbox para ver los errores de los .py '
-                                          'que se editen en esta sesión. Puede usar el intérprete que diga '
-                                          'la configuración del proyecto.')}
+                            'carga': False, 'permiso': MODO if pide or propio else None,
+                            'proposito': ('Lanzar ' + (corto + ' del proyecto (' + argv + ')' if propio else corto)
+                                          + ' en el sandbox para ver los errores de los .py que se editen en '
+                                            'esta sesión. Puede usar el intérprete que diga la configuración '
+                                            'del proyecto.')}
             return None
         if sufijo in JAVASCRIPT:
-            argv, propio = _ejecutable('typescript-language-server', self.env, *_bins_de_node(ruta.parent,
-                                                                                            self.raiz))
+            argv, propio = _ejecutable('typescript-language-server', self.env,
+                                       *_bins_de_node(ruta.parent, self.raiz), raiz=self.raiz)
             if not argv:
                 return None
             raiz = _subiendo(ruta.parent, self.raiz, ('tsconfig.json', 'jsconfig.json', 'package.json')) \
@@ -416,13 +514,66 @@ class Diagnosticos:
     def _cliente(self, plan):
         cliente = self.servidores.get(plan['clave'])
         if cliente is None:
+            if plan.get('cache') is not None:
+                for carpeta in ('tmp', 'modulos'):
+                    (Path(plan['cache']) / carpeta).mkdir(mode=0o700, parents=True, exist_ok=True)
             cliente = self.servidores[plan['clave']] = ClienteLSP(
-                plan['nombre'], plan['argv'], plan['raiz'], env=self.env, opciones=plan['opciones'],
+                plan['nombre'], plan['argv'], plan['raiz'], env=plan.get('env') or self.env,
+                opciones=plan['opciones'],
                 idioma_de=lambda r: IDIOMAS.get(Path(r).suffix.lower(), 'plaintext'),
                 envolver=self.sandbox.envolver if plan['aislado'] else None, carga=plan['carga'])
             cliente.etiqueta = plan['etiqueta']
             cliente.clave = plan['clave']
+            cliente.paquete = plan.get('paquete')
+            cliente.huella = self._paquetes.get(str(plan.get('paquete')), (None,))[0]
         return cliente
+
+    async def _revisar_paquete(self, paquete):
+        """Por qué no lanzar sourcekit-lsp sobre este paquete, o None. Se evalúa el manifiesto con
+        `swift package dump-package` en el sandbox, una vez por versión de sus manifiestos."""
+        huella = huella_de_manifiestos(paquete)
+        if huella is None:
+            return 'sus manifiestos no se pueden leer'
+        guardado = self._paquetes.get(str(paquete))
+        if guardado is not None and guardado[0] == huella:
+            return guardado[1]
+        motivo = motivo_en_el_texto(paquete)
+        if motivo is None:
+            try:
+                motivo = motivo_en_el_volcado(await self._volcar_paquete(paquete))
+            except Exception as exc:  # noqa: BLE001 — sin manifiesto evaluado, no se lanza
+                motivo = ('no se pudo evaluar Package.swift en el sandbox ('
+                          + (str(exc) or type(exc).__name__)[:150] + ')')
+        # Si cambió mientras se evaluaba, lo evaluado no vale: se mira otra vez en la siguiente edición.
+        if huella_de_manifiestos(paquete) != huella:
+            return 'Package.swift cambió mientras se revisaba'
+        self._paquetes[str(paquete)] = (huella, motivo)
+        return motivo
+
+    async def _volcar_paquete(self, paquete):
+        """El manifiesto evaluado por SwiftPM, en el sandbox sin red y compilando en un temporal."""
+        from ..seatbelt.compiladores import dentro_del_sandbox
+        swift, propio = _ejecutable('swift', self.env, raiz=self.raiz)
+        if not swift or propio:
+            raise ValueError('no hay un swift del sistema con el que leerlo')
+        with tempfile.TemporaryDirectory(prefix='alfalfa-manifiesto-') as temporal:
+            argv = await self.sandbox.envolver(dentro_del_sandbox(
+                [swift, 'package', '--package-path', str(paquete), '--scratch-path', temporal, 'dump-package']))
+            # Sus temporales (los cerrojos de SwiftPM) también en el temporal, que se borra al acabar.
+            proc = await asyncio.create_subprocess_exec(
+                *argv, cwd=str(paquete), env=dict(self.env, TMPDIR=temporal + os.sep), stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
+            try:
+                salida, error = await asyncio.wait_for(proc.communicate(), MAX_VOLCADO)
+            finally:
+                if proc.returncode is None:
+                    from .. import procesos
+                    procesos.senal_grupo(proc.pid, 9)
+                    await asyncio.gather(proc.wait(), return_exceptions=True)
+        if proc.returncode != 0:
+            ultima = (error or b'').decode(errors='replace').strip().splitlines()
+            raise ValueError('código ' + str(proc.returncode) + (': ' + ultima[-1][:150] if ultima else ''))
+        return json.loads(salida)
 
     def _decir(self, avisos, clave, texto):
         """Un aviso que sólo se da una vez por sesión."""
@@ -501,6 +652,21 @@ class Diagnosticos:
                                                              pedir, avisos):
                 sin_servidor.append(archivo)
                 continue
+            if plan.get('paquete') is not None:
+                # El manifiesto evaluado en el sandbox, antes de lanzar y cada vez que cambie: si ya no vale,
+                # el servidor que lo cargó se cierra.
+                motivo = await self._revisar_paquete(plan['paquete'])
+                abierto = self.servidores.get(plan['clave'])
+                if motivo or (abierto is not None
+                              and getattr(abierto, 'huella', None) != self._paquetes[str(plan['paquete'])][0]):
+                    if abierto is not None:
+                        self.servidores.pop(plan['clave'], None)
+                        await abierto.cerrar()
+                    if motivo:
+                        texto = plan['etiqueta'] + ': no se lanza porque ' + motivo + '. Comprueba con run_checks.'
+                        self._decir(avisos, ('omitido', texto), texto)
+                        sin_servidor.append(archivo)
+                        continue
             cliente = self._cliente(plan)
             if cliente.caido:
                 # Se perdió entre dos ediciones (p. ej. no terminó de arrancar): se dice una vez.
