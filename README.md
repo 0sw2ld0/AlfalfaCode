@@ -518,7 +518,7 @@ Usa lo que ya está instalado; no instala nada:
 
 | Archivos | Servidor de lenguaje | Si no hay |
 |---|---|---|
-| Swift | `sourcekit-lsp` (viene con Xcode) | — |
+| Swift | `sourcekit-lsp` (viene con Xcode), con una base de datos de compilación propia | — |
 | Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff (o si falla), los errores de sintaxis del propio Python |
 | TypeScript/JavaScript | `typescript-language-server` (el del PATH antes que el de `node_modules`) | — |
 
@@ -534,8 +534,10 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
   resultado lo dice en `sin_respuesta` («sourcekit-lsp no contestó en 3 s (sigue
   arrancando…)»); un servidor que arranca sigue arrancando y sirve en la siguiente
   edición. Uno que no termina de arrancar en 90 s se da por perdido en la sesión.
-  `sourcekit-lsp` tarda unos 2,5 s la primera vez en un paquete SwiftPM y centésimas
-  después. Si se cancela el turno, no queda nada corriendo.
+  Con un paquete Swift, la primera edición prepara el paquete en el sandbox (unos 2 s, más
+  la caché de módulos del SDK la primera vez en el Mac, que se comparte entre proyectos) y
+  suele decir «prepara el paquete…»; después, centésimas. Si se cancela el turno, no queda
+  nada corriendo.
 - Un fallo de los diagnósticos nunca hace fallar la edición: la edición se hizo y el
   resultado lo dice.
 - **No son una comprobación**: la evidencia sólo cuenta `run_checks`, y el resultado lo
@@ -550,25 +552,34 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
     de `node_modules/.bin` lo pide en cualquier modo. ruff y SwiftLint sólo leen y no lo
     piden. Un «no» también vale para toda la sesión.
   - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
-    el sandbox bloquea): ejecuta el compilador de Swift sobre el código del repositorio con
-    tus permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete
-    y sesión (Omitir permisos lo concede solo); en un paquete SwiftPM ese permiso empieza por
-    «Confiar en el paquete…», porque su `Package.swift` es código que decide cómo se compila, y compila, genera y guarda su caché de
-    módulos y sus temporales en `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las
-    órdenes no escribe (ni en `.build` ni en `$TMPDIR`), sin plugins.
+    el sandbox bloquea): ejecuta el compilador de Swift sobre los archivos editados con tus
+    permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete y
+    sesión (Omitir permisos lo concede solo).
+  - **`sourcekit-lsp` nunca evalúa un `Package.swift`.** Un manifiesto es código y puede pedir
+    cualquier opción al compilador sin escribir su nombre (con `dlsym` o `@_silgen_name`,
+    por ejemplo, cargar un programa del repositorio como plugin de macros), así que ninguna
+    lista de nombres prohibidos lo cierra. En su lugar, AlfalfaCode evalúa el manifiesto
+    **dentro del sandbox** con `swift package describe` y sólo se queda con datos: los
+    objetivos de Swift, sus fuentes dentro del paquete y las dependencias entre ellos. Compila
+    en el sandbox, con `swiftc -emit-module` y opciones fijas, los módulos de los objetivos de
+    los que dependen otros, y escribe un `compile_commands.json` en
+    `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las órdenes no escribe. Sus únicas
+    opciones son `-module-name`, `-sdk`, `-target`, `-swift-version`, `-parse-as-library` y
+    `-I`/`-F` de esa caché y de la plataforma: ninguna sale del manifiesto. `sourcekit-lsp` se
+    lanza en modo base de datos de compilación con esa carpeta como raíz y sólo recibe
+    archivos que están en la base; uno que no estuviera (el propio `Package.swift`) le haría
+    buscar un paquete. Los archivos sueltos van igual, cada uno con su orden fija. Si los
+    ajustes no se pueden sacar así, ese paquete se queda sin diagnósticos de Swift (se dice):
+    nunca se cae al modo SwiftPM.
+  - Por eso no se cargan las macros ni los plugins del paquete, ni las dependencias de otros
+    paquetes, ni los objetivos de C: los diagnósticos del código que los usa quedan
+    incompletos. Los módulos de otros objetivos se vuelven a compilar cuando cambian sus fuentes.
   - `sourcekit-lsp` **no se lanza** si el proyecto trae algo que le haría ejecutar órdenes
     o cambiar su configuración (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`,
     `compile_commands.json`, `compile_flags.txt`, también en `build/`), desde la carpeta
-    del archivo hasta la raíz. Tampoco si algún manifiesto del paquete (`Package.swift` y
-    `Package@swift-6.0.swift`, con las mayúsculas que sea: en un disco que no las distingue
-    SwiftPM abre igual `package.swift`) nombra `unsafeFlags` (pueden cargar un programa del
-    repo como plugin de macros), dependencias (`.package`, con o sin paréntesis), macros,
-    plugins, binarios o bibliotecas del sistema. La protección es ese filtro de texto, que no
-    ejecuta nada: un manifiesto puede comportarse distinto en otro entorno. Además, tras el
-    permiso, se evalúa con `swift package dump-package` dentro del sandbox, una vez por
-    versión de los manifiestos.
-    Si un manifiesto cambia o aparece uno de esos archivos con el servidor en marcha, se
-    cierra y se vuelve a revisar.
+    del archivo hasta la raíz. Si aparece uno con el servidor en marcha, se cierra. Si
+    cambia el manifiesto o qué archivos hay, el paquete se prepara de nuevo y el servidor
+    se reinicia con la base nueva.
   - Un programa del PATH que en realidad está dentro del proyecto (un `node_modules/.bin` o
     un `.venv/bin` del repo puesto en el PATH) cuenta como del proyecto y pide permiso.
 - En la app, la fila de la edición enseña «2 errores · 1 aviso» y «incompleto» si algún

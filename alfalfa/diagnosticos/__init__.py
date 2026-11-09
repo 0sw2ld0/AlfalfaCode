@@ -31,12 +31,13 @@ Permisos y aislamiento, porque estos programas cargan código del proyecto:
   del PATH. ruff y SwiftLint sólo leen y no lo piden.
 - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC que
   el sandbox bloquea), así que pide el permiso de «fuera del sandbox» una vez
-  por raíz y sesión (Omitir permisos lo concede). No se lanza si el proyecto
-  trae algo que le haga ejecutar órdenes (`buildServer.json`, `.bsp/`,
-  `.sourcekit-lsp/`, `compile_commands.json`, `compile_flags.txt`) ni en un
-  paquete con dependencias (tendría que resolverlas). `Package.swift` queda en
-  el sandbox propio de SwiftPM y compila en `~/Library/Caches/alfalfa/sourcekit`,
-  donde el sandbox de las órdenes no escribe.
+  por raíz y sesión (Omitir permisos lo concede) y NUNCA evalúa un
+  `Package.swift`: los ajustes del paquete se sacan dentro del sandbox y se le
+  da una base de datos de compilación con opciones fijas (`paquete.py`). No se
+  lanza si el proyecto trae algo que le haría ejecutar órdenes
+  (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`, `compile_commands.json`,
+  `compile_flags.txt`). Compila y guarda sus temporales en
+  `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las órdenes no escribe.
 
 Los diagnósticos orientan, pero no son una comprobación: la evidencia
 (`alfalfa/evidencia`) sólo cuenta `run_checks`, y el resultado lo recuerda.
@@ -54,10 +55,8 @@ import difflib
 import hashlib
 import json
 import os
-import re
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 from . import linters
@@ -76,8 +75,6 @@ MAX_CACHE = 400
 MAX_PROCESOS = 4
 # Por encima, «nuevos» compara sin alinear las líneas (difflib es cuadrático en el peor caso).
 MAX_LINEAS_ALINEADAS = 20000
-# Lo que puede tardar `swift package dump-package` en leer el manifiesto (compilarlo la primera vez).
-MAX_VOLCADO = 60.0
 NOTA = ('Diagnósticos automáticos tras editar: orientan, pero no son una comprobación ni cuentan como '
         'verificación. Verifica con run_checks.')
 NOTA_LIMPIO = ('Sin diagnósticos nuevos. No es una comprobación ni cuenta como verificación: verifica con '
@@ -245,62 +242,6 @@ def huella_de_manifiestos(paquete):
     return resumen.hexdigest()
 
 
-# Lo que, escrito en un manifiesto, puede hacer que el compilador cargue o ejecute algo del repositorio, o
-# que SwiftPM descargue código. Swift no tiene `eval`: sin escribir estos nombres un manifiesto no puede
-# pedirlo, aunque se comporte distinto dentro y fuera del sandbox (por eso no basta con `dump-package`).
-TEXTO_PELIGROSO = (
-    (r'\bunsafeFlags\b', 'usa unsafeFlags (opciones del compilador que pueden cargar programas del repo)'),
-    # Sin exigir paréntesis: `let p = Package.Dependency.package` y luego `p("../otro")` también cuenta.
-    (r'\.package\b', 'tiene dependencias y sourcekit-lsp tendría que resolverlas'),
-    (r'\bbinaryTarget\b', 'tiene un binario precompilado'),
-    (r'\.macro\b', 'tiene una macro'),
-    (r'\.plugin\b|\bplugins\s*:', 'tiene o usa plugins'),
-    (r'\bsystemLibrary\b', 'tiene una biblioteca del sistema'),
-)
-
-
-def motivo_en_el_texto(paquete):
-    """Una primera mirada a los manifiestos, sin ejecutarlos (también a Package@swift-6.0.swift y demás)."""
-    for ruta in manifiestos(paquete):
-        try:
-            texto = ruta.read_text(encoding='utf-8', errors='replace')
-        except OSError:
-            return ruta.name + ' no se puede leer'
-        for patron, motivo in TEXTO_PELIGROSO:
-            if re.search(patron, texto):
-                return ruta.name + ' ' + motivo
-    return None
-
-
-TIPOS_PELIGROSOS = {'macro': 'una macro', 'plugin': 'un plugin', 'binary': 'un binario precompilado',
-                    'system': 'una biblioteca del sistema'}
-
-
-def motivo_en_el_volcado(volcado):
-    """Lo que dice `swift package dump-package` (el manifiesto ya evaluado) que impide lanzar sourcekit-lsp."""
-    if not isinstance(volcado, dict):
-        return 'el manifiesto no se pudo leer'
-    if _contiene_clave(volcado, 'unsafeFlags'):
-        return 'el paquete usa unsafeFlags (opciones del compilador que pueden cargar programas del repo)'
-    if volcado.get('dependencies'):
-        return 'el paquete tiene dependencias y sourcekit-lsp tendría que resolverlas'
-    for objetivo in volcado.get('targets') or []:
-        tipo = objetivo.get('type') if isinstance(objetivo, dict) else None
-        if tipo in TIPOS_PELIGROSOS:
-            return 'el paquete tiene ' + TIPOS_PELIGROSOS[tipo] + ' (' + str(objetivo.get('name'))[:60] + ')'
-        if isinstance(objetivo, dict) and objetivo.get('pluginUsages'):
-            return 'el objetivo ' + str(objetivo.get('name'))[:60] + ' usa plugins'
-    return None
-
-
-def _contiene_clave(valor, clave):
-    if isinstance(valor, dict):
-        return clave in valor or any(_contiene_clave(v, clave) for v in valor.values())
-    if isinstance(valor, list):
-        return any(_contiene_clave(v, clave) for v in valor)
-    return False
-
-
 def _bins_de_node(desde, raiz):
     """Las carpetas node_modules/.bin desde el archivo hasta la raíz del proyecto."""
     return [c / 'node_modules' / '.bin' for c in _carpetas(desde, raiz) if (c / 'node_modules' / '.bin').is_dir()]
@@ -422,7 +363,9 @@ class Diagnosticos:
         self._cache = {}           # (fuente, raíz, ruta, sha) -> diagnósticos de ese contenido
         self._dichos = set()       # avisos que ya se dieron en la sesión
         self._permisos = {}        # clave -> True/False: la respuesta del usuario, una vez por sesión
-        self._paquetes = {}        # carpeta del paquete -> (huella de sus manifiestos, motivo o None)
+        self._preparaciones = {}   # carpeta del paquete -> tarea que saca sus ajustes en el sandbox
+        self._preparando = {}      # etiqueta -> esa tarea, para decir «prepara el paquete» si tarda
+        self._sueltos = {}         # carpeta de caché -> archivos sueltos que ya están en su base
         self._procesos = None
         self._cerrado = False
 
@@ -438,7 +381,9 @@ class Diagnosticos:
         `cache`, nunca en $TMPDIR, donde las órdenes del sandbox podrían dejarle módulos preparados."""
         base = {k: v for k, v in (self._env if self._env is not None else os.environ).items()
                 if k not in ('CLANG_MODULE_CACHE_PATH', 'SWIFTPM_MODULECACHE_OVERRIDE', 'TMPDIR')}
-        modulos = str(Path(cache) / 'modulos')
+        # La caché de módulos del SDK se comparte entre proyectos: sólo tiene módulos del SDK, compilados con
+        # las opciones fijas de la base (ninguna ruta de cabeceras del proyecto).
+        modulos = str(Path(cache).parent / 'modulos-del-sdk')
         return dict(base, CLANG_MODULE_CACHE_PATH=modulos, SWIFTPM_MODULECACHE_OVERRIDE=modulos,
                     TMPDIR=str(Path(cache) / 'tmp') + os.sep)
 
@@ -484,29 +429,22 @@ class Diagnosticos:
                 return {'clave': clave, 'motivo': (
                     etiqueta + ': no se lanza porque el proyecto trae ' + str(trampa.relative_to(self.raiz))
                     + ', que le haría ejecutar órdenes del proyecto fuera del sandbox.')}
-            if paquete is not None:
-                motivo = motivo_en_el_texto(paquete)
-                if motivo:
-                    return {'clave': clave, 'motivo': etiqueta + ': no se lanza porque ' + motivo
-                                                      + '. Comprueba con run_checks.'}
-            # Sin indexado en segundo plano ni plugins y compilando fuera del proyecto y de $TMPDIR. Antes de
-            # lanzarlo, el manifiesto se evalúa en el sandbox (`_revisar_paquete`).
+            # sourcekit-lsp nunca lee Package.swift: modo base de datos de compilación, con su caché (que el
+            # sandbox no escribe) como raíz, y los ajustes sacados en el sandbox (`paquete.py`).
             cache = carpeta_de_sourcekit(raiz)
             opciones = {'backgroundIndexing': False, 'generatedFilesPath': str(cache / 'generados'),
-                        'swiftPM': {'scratchPath': str(cache / 'compilacion'), 'skipPlugins': True}}
+                        'defaultWorkspaceType': 'compilationDatabase'}
             return {'clave': clave, 'nombre': 'sourcekit-lsp', 'etiqueta': etiqueta,
-                    'argv': [argv], 'raiz': raiz, 'opciones': opciones, 'aislado': False,
-                    'carga': paquete is not None, 'permiso': FUERA, 'paquete': paquete, 'cache': cache,
-                    'env': self.entorno_de_sourcekit(cache),
-                    'proposito': (
-                        ('Confiar en el paquete Swift de ' + str(raiz) + ': su Package.swift es código que '
-                         'SwiftPM ejecuta y que decide cómo se compila. ' if paquete is not None else '')
-                        + 'Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que se '
-                          'editen en ' + str(raiz) + ' durante esta sesión: ejecuta el compilador de Swift sobre '
-                          'el código del repositorio con los permisos del usuario. Antes se rechazan los '
-                          'paquetes con unsafeFlags, dependencias, macros, plugins o binarios, pero sólo '
-                          'concédelo si confías en este proyecto. Su sourcekitd es un servicio de Xcode que el '
-                          'sandbox bloquea.')}
+                    'argv': [argv, '--default-workspace-type', 'compilationDatabase'], 'raiz': cache / 'db',
+                    'opciones': opciones, 'aislado': False, 'carga': False, 'permiso': FUERA, 'paquete': paquete,
+                    'cache': cache, 'env': self.entorno_de_sourcekit(cache),
+                    'proposito': ('Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que se '
+                                  'editen en ' + str(raiz) + ' durante esta sesión: ejecuta el compilador de Swift '
+                                  'sobre esos archivos con los permisos del usuario. No lee Package.swift: '
+                                  + ('los ajustes del paquete se sacan dentro del sandbox y ' if paquete is not None
+                                     else '')
+                                  + 'el compilador sólo recibe opciones fijas (sin plugins, macros ni unsafeFlags). '
+                                    'Su sourcekitd es un servicio de Xcode que el sandbox bloquea.')}
         if sufijo in PYTHON:
             for nombre in ('basedpyright-langserver', 'pyright-langserver'):
                 argv, propio = _ejecutable(nombre, self.env, raiz=self.raiz)
@@ -542,8 +480,8 @@ class Diagnosticos:
         cliente = self.servidores.get(plan['clave'])
         if cliente is None:
             if plan.get('cache') is not None:
-                for carpeta in ('tmp', 'modulos'):
-                    (Path(plan['cache']) / carpeta).mkdir(mode=0o700, parents=True, exist_ok=True)
+                for carpeta in (Path(plan['cache']) / 'tmp', Path(plan['cache']).parent / 'modulos-del-sdk'):
+                    carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
             cliente = self.servidores[plan['clave']] = ClienteLSP(
                 plan['nombre'], plan['argv'], plan['raiz'], env=plan.get('env') or self.env,
                 opciones=plan['opciones'],
@@ -552,55 +490,7 @@ class Diagnosticos:
             cliente.etiqueta = plan['etiqueta']
             cliente.clave = plan['clave']
             cliente.paquete = plan.get('paquete')
-            cliente.huella = self._paquetes.get(str(plan.get('paquete')), (None,))[0]
         return cliente
-
-    async def _revisar_paquete(self, paquete):
-        """Por qué no lanzar sourcekit-lsp sobre este paquete, o None. Se evalúa el manifiesto con
-        `swift package dump-package` en el sandbox, una vez por versión de sus manifiestos."""
-        huella = huella_de_manifiestos(paquete)
-        if huella is None:
-            return 'sus manifiestos no se pueden leer'
-        guardado = self._paquetes.get(str(paquete))
-        if guardado is not None and guardado[0] == huella:
-            return guardado[1]
-        motivo = motivo_en_el_texto(paquete)
-        if motivo is None:
-            try:
-                motivo = motivo_en_el_volcado(await self._volcar_paquete(paquete))
-            except Exception as exc:  # noqa: BLE001 — sin manifiesto evaluado, no se lanza
-                motivo = ('no se pudo evaluar Package.swift en el sandbox ('
-                          + (str(exc) or type(exc).__name__)[:150] + ')')
-        # Si cambió mientras se evaluaba, lo evaluado no vale: se mira otra vez en la siguiente edición.
-        if huella_de_manifiestos(paquete) != huella:
-            return 'Package.swift cambió mientras se revisaba'
-        self._paquetes[str(paquete)] = (huella, motivo)
-        return motivo
-
-    async def _volcar_paquete(self, paquete):
-        """El manifiesto evaluado por SwiftPM, en el sandbox sin red y compilando en un temporal."""
-        from ..seatbelt.compiladores import dentro_del_sandbox
-        swift, propio = _ejecutable('swift', self.env, raiz=self.raiz)
-        if not swift or propio:
-            raise ValueError('no hay un swift del sistema con el que leerlo')
-        with tempfile.TemporaryDirectory(prefix='alfalfa-manifiesto-') as temporal:
-            argv = await self.sandbox.envolver(dentro_del_sandbox(
-                [swift, 'package', '--package-path', str(paquete), '--scratch-path', temporal, 'dump-package']))
-            # Sus temporales (los cerrojos de SwiftPM) también en el temporal, que se borra al acabar.
-            proc = await asyncio.create_subprocess_exec(
-                *argv, cwd=str(paquete), env=dict(self.env, TMPDIR=temporal + os.sep), stdin=asyncio.subprocess.DEVNULL,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
-            try:
-                salida, error = await asyncio.wait_for(proc.communicate(), MAX_VOLCADO)
-            finally:
-                if proc.returncode is None:
-                    from .. import procesos
-                    procesos.senal_grupo(proc.pid, 9)
-                    await asyncio.gather(proc.wait(), return_exceptions=True)
-        if proc.returncode != 0:
-            ultima = (error or b'').decode(errors='replace').strip().splitlines()
-            raise ValueError('código ' + str(proc.returncode) + (': ' + ultima[-1][:150] if ultima else ''))
-        return json.loads(salida)
 
     def _decir(self, avisos, clave, texto):
         """Un aviso que sólo se da una vez por sesión."""
@@ -679,21 +569,9 @@ class Diagnosticos:
                                                              pedir, avisos):
                 sin_servidor.append(archivo)
                 continue
-            if plan.get('paquete') is not None:
-                # El manifiesto evaluado en el sandbox, antes de lanzar y cada vez que cambie: si ya no vale,
-                # el servidor que lo cargó se cierra.
-                motivo = await self._revisar_paquete(plan['paquete'])
-                abierto = self.servidores.get(plan['clave'])
-                if motivo or (abierto is not None
-                              and getattr(abierto, 'huella', None) != self._paquetes[str(plan['paquete'])][0]):
-                    if abierto is not None:
-                        self.servidores.pop(plan['clave'], None)
-                        await abierto.cerrar()
-                    if motivo:
-                        texto = plan['etiqueta'] + ': no se lanza porque ' + motivo + '. Comprueba con run_checks.'
-                        self._decir(avisos, ('omitido', texto), texto)
-                        sin_servidor.append(archivo)
-                        continue
+            if plan['nombre'] == 'sourcekit-lsp':
+                por_cliente.setdefault(plan['clave'], (plan, []))[1].append(archivo)
+                continue
             cliente = self._cliente(plan)
             if cliente.caido:
                 # Se perdió entre dos ediciones (p. ej. no terminó de arrancar): se dice una vez.
@@ -719,7 +597,10 @@ class Diagnosticos:
         hasta = asyncio.get_running_loop().time() + plazo
         trabajos = {}   # etiqueta -> corrutina que devuelve [(archivo, antes, después)] o lanza
         for cliente, lista in por_cliente.values():
-            trabajos[cliente.etiqueta] = self._con_servidor(cliente, lista, hasta)
+            if isinstance(cliente, dict):   # el plan de sourcekit-lsp: el cliente depende de la preparación
+                trabajos[cliente['etiqueta']] = self._con_swift(cliente, lista, hasta, avisos)
+            else:
+                trabajos[cliente.etiqueta] = self._con_servidor(cliente, lista, hasta)
         for nombre, linter in herramientas.items():
             trabajos[nombre] = self._con_linter(nombre, linter)
         omitidos = len(candidatos) - min(len(candidatos), MAX_ARCHIVOS)
@@ -746,8 +627,12 @@ class Diagnosticos:
                 cliente = next((c for c in self.servidores.values() if getattr(c, 'etiqueta', None) == etiqueta),
                                None)
                 arrancando = cliente is not None and cliente.arrancando
+                preparando = self._preparando.get(etiqueta)
+                preparando = preparando is not None and not preparando.done()
                 sin_respuesta.append(etiqueta + ' no contestó en ' + _segundos(plazo)
-                                     + (' (sigue arrancando; servirá en las próximas ediciones)' if arrancando else '')
+                                     + (' (prepara el paquete en el sandbox; servirá en las próximas ediciones)'
+                                        if preparando else
+                                        ' (sigue arrancando; servirá en las próximas ediciones)' if arrancando else '')
                                      + '; esta vez sin sus diagnósticos.')
                 continue
             if exc is not None:
@@ -797,6 +682,111 @@ class Diagnosticos:
         self._cache[clave] = valor
         while len(self._cache) > MAX_CACHE:
             self._cache.pop(next(iter(self._cache)))
+
+    async def _con_swift(self, plan, archivos, hasta, avisos):
+        """sourcekit-lsp sobre una base de datos de compilación que nunca sale de un Package.swift."""
+        if plan['paquete'] is not None:
+            preparacion = await asyncio.shield(self._preparado(plan))
+        else:
+            preparacion = self._sueltos_preparados(plan, archivos)
+        cliente = self.servidores.get(plan['clave'])
+        if cliente is not None and getattr(cliente, 'preparacion', None) != preparacion['clave']:
+            # Otra base de datos: sourcekit-lsp no la relee, así que se arranca de nuevo.
+            self.servidores.pop(plan['clave'], None)
+            await cliente.cerrar()
+            cliente = None
+        if cliente is None:
+            cliente = self._cliente(plan)
+            cliente.preparacion = preparacion['clave']
+        if cliente.caido:
+            raise ServidorCaido(cliente.caido)
+        # Sólo archivos de la base: con uno que no estuviera, sourcekit-lsp buscaría un espacio de trabajo
+        # (y abriría el Package.swift que encontrase).
+        cubiertos = [a for a in archivos if os.path.realpath(a['ruta']) in preparacion['archivos']]
+        for archivo in archivos:
+            if archivo not in cubiertos:
+                self._decir(avisos, ('fuera', plan['etiqueta'], archivo['rel']),
+                            plan['etiqueta'] + ': ' + archivo['rel'] + ' no está en ningún objetivo de Swift del '
+                            'paquete; sin sus diagnósticos.')
+        if preparacion.get('faltan'):
+            self._decir(avisos, ('faltan', plan['etiqueta'], tuple(preparacion['faltan'])),
+                        plan['etiqueta'] + ': no se pudieron compilar los módulos ' + ', '.join(preparacion['faltan'])
+                        + '; los diagnósticos que los usan quedan incompletos.')
+        return await self._con_servidor(cliente, cubiertos, hasta) if cubiertos else []
+
+    def _sueltos_preparados(self, plan, archivos):
+        """Archivos sin paquete: cada uno con su propia orden fija en la base de su caché."""
+        from . import paquete as paquetes
+        cache = str(plan['cache'])
+        sueltos = self._sueltos.setdefault(cache, set())
+        nuevos_ = {os.path.realpath(a['ruta']) for a in archivos} - sueltos
+        if nuevos_ or not (Path(cache) / 'db' / 'compile_commands.json').exists():
+            sueltos |= nuevos_
+            h = paquetes.herramientas()
+            objetivos_ = [{'nombre': 'main', 'tipo': 'executable', 'carpeta': os.path.dirname(f), 'fuentes': [f],
+                           'dependencias': []} for f in sorted(sueltos)]
+            for objetivo in objetivos_:
+                objetivo['guion'] = True   # puede tener código de nivel superior, como un guion
+            paquetes.escribir_base(Path(cache) / 'db', objetivos_, h, '5', Path(cache) / 'paquete-modulos')
+        return {'clave': ('sueltos', paquetes.firma(sorted(sueltos))), 'archivos': set(sueltos)}
+
+    def _preparado(self, plan):
+        """La tarea que deja lista la base de datos del paquete (o falla), compartida mientras no cambie nada.
+        Una en marcha se espera; una terminada vale si nada cambió desde entonces (un fallo tampoco se repite)."""
+        paquete_ = str(plan['paquete'])
+        actual = self._preparaciones.get(paquete_)
+        if actual is not None and not actual.done():
+            return actual
+        clave = self._clave_de_preparacion(plan, actual)
+        hecha = (actual.result() if actual is not None and not actual.cancelled() and actual.exception() is None
+                 else None)
+        if actual is None or (getattr(actual, 'clave', None) != clave and (hecha or {}).get('clave') != clave):
+            actual = asyncio.ensure_future(self._preparar(plan, actual))
+            actual.clave = clave
+            self._preparaciones[paquete_] = actual
+            self._preparando[plan['etiqueta']] = actual
+        return actual
+
+    def _clave_de_preparacion(self, plan, anterior):
+        """Lo que obliga a preparar de nuevo: los manifiestos, qué .swift hay y el contenido de los objetivos de
+        los que dependen otros (sus módulos)."""
+        from . import paquete as paquetes
+        huella = huella_de_manifiestos(plan['paquete'])
+        hecha = None
+        if anterior is not None and anterior.done() and not anterior.cancelled() and anterior.exception() is None:
+            hecha = anterior.result()
+        if hecha is None or hecha['huella'] != huella:
+            return (huella, None, None)
+        objetivos_ = hecha['objetivos']
+        return (huella, paquetes.firma(paquetes.archivos_de_objetivos(objetivos_)),
+                paquetes.firma([f for o in paquetes.dependencias_de_otros(objetivos_) for f in o['fuentes']],
+                               con_contenido=True))
+
+    async def _preparar(self, plan, anterior):
+        """Describe el paquete en el sandbox, compila los módulos que hagan falta y escribe la base."""
+        from . import paquete as paquetes
+        huella = huella_de_manifiestos(plan['paquete'])
+        if huella is None:
+            raise paquetes.PaqueteNoPreparable('sus manifiestos no se pueden leer')
+        descripcion = await paquetes.describir(plan['paquete'], self.sandbox, self.env)
+        objetivos_ = paquetes.objetivos(descripcion, plan['paquete'])
+        if not objetivos_:
+            raise paquetes.PaqueteNoPreparable('el paquete no tiene objetivos de Swift que se puedan mirar')
+        version = paquetes.version_de_swift(descripcion)
+        firma_modulos = paquetes.firma([f for o in paquetes.dependencias_de_otros(objetivos_) for f in o['fuentes']],
+                                       con_contenido=True)
+        modulos = Path(plan['cache']) / 'paquete-modulos' / firma_modulos[:16]
+        faltan = []
+        if paquetes.dependencias_de_otros(objetivos_) and not modulos.is_dir():
+            faltan = await paquetes.compilar_modulos(objetivos_, modulos, self.sandbox, self.env, version)
+        archivos = paquetes.escribir_base(Path(plan['cache']) / 'db', objetivos_, paquetes.herramientas(), version,
+                                          modulos)
+        # Los módulos de preparaciones anteriores ya no los usa nadie.
+        for viejo in (Path(plan['cache']) / 'paquete-modulos').glob('*'):
+            if viejo.name != modulos.name and viejo.is_dir() and not viejo.is_symlink():
+                shutil.rmtree(viejo, ignore_errors=True)
+        clave = (huella, paquetes.firma(paquetes.archivos_de_objetivos(objetivos_)), firma_modulos)
+        return {'huella': huella, 'objetivos': objetivos_, 'archivos': archivos, 'faltan': faltan, 'clave': clave}
 
     async def _con_servidor(self, cliente, archivos, hasta):
         await asyncio.shield(cliente.arrancar())
