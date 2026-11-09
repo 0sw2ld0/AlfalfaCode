@@ -33,6 +33,10 @@ class MutationWatch:
         # acceso no mueve el ctime; un chmod, chown o escritura sí.
         self.ctimes = {}
         self.sucio = False
+        # Qué rutas vigiladas avisaron (sólo con kqueue): si sólo fueron carpetas,
+        # `solo_carpetas` deja comprobar si lo nuevo es sólo una caché regenerable.
+        self.rutas = {}
+        self.tocadas = set()
         paths = set()
         for snapshot in snapshots:
             watch = snapshot['watch']
@@ -53,6 +57,7 @@ class MutationWatch:
                 for name in sorted(paths):
                     fd = os.open(name, os.O_RDONLY | os.O_NONBLOCK)
                     self.files.append(fd)
+                    self.rutas[fd] = name
                     self.ctimes[fd] = os.fstat(fd).st_ctime_ns
                     self.queue.control([select.kevent(fd, filter=select.KQ_FILTER_VNODE,
                         flags=select.KQ_EV_ADD | select.KQ_EV_CLEAR, fflags=flags)], 0, 0)
@@ -78,15 +83,19 @@ class MutationWatch:
             if self.sucio:
                 return True
             # Los eventos se consumen al leerlos: un cambio visto una vez se recuerda.
-            for evento in self.queue.control([], 64, 0):
-                if evento.fflags & ~select.KQ_NOTE_ATTRIB:
-                    self.sucio = True
-                    continue
-                try:
-                    if os.fstat(evento.ident).st_ctime_ns != self.ctimes.get(evento.ident):
-                        self.sucio = True
-                except OSError:
-                    self.sucio = True
+            while True:
+                eventos = self.queue.control([], 64, 0)
+                for evento in eventos:
+                    if evento.fflags & ~select.KQ_NOTE_ATTRIB:
+                        self._tocada(evento.ident)
+                        continue
+                    try:
+                        if os.fstat(evento.ident).st_ctime_ns != self.ctimes.get(evento.ident):
+                            self._tocada(evento.ident)
+                    except OSError:
+                        self._tocada(evento.ident)
+                if len(eventos) < 64:
+                    break
             return self.sucio
         if self.fd is not None:
             try:
@@ -94,6 +103,22 @@ class MutationWatch:
             except BlockingIOError:
                 return False
         return True
+
+    def _tocada(self, fd):
+        self.sucio = True
+        self.tocadas.add(self.rutas.get(fd))
+
+    def solo_carpetas(self, carpetas):
+        """¿Todo lo que avisó fueron carpetas de `carpetas`? False si no se sabe (inotify).
+
+        Una carpeta avisa cuando se crea o se borra algo dentro, como la
+        `.pytest_cache/` que pytest deja la primera vez. Quien pregunta comprueba
+        luego con `matches` que lo de dentro, sin cachés, sigue igual.
+        """
+        if self.queue is None:
+            return False
+        self.changed()
+        return bool(self.tocadas) and all(ruta in carpetas for ruta in self.tocadas)
 
     def close(self):
         if self.queue is not None:
@@ -163,6 +188,32 @@ def temporal(name):
     """¿`name` (relativo a la raíz) cae en una carpeta de temporales de primer nivel?"""
     return str(name).partition('/')[0].startswith(PREFIJOS_TEMPORALES)
 
+
+def en_cache(name):
+    """¿`name` (relativo a la raíz) cae en una caché regenerable (`.pytest_cache/`, `__pycache__/`, `.next/`…)?
+
+    Son las mismas que el agente puede borrar sin preguntar (permisos.ordenes.CACHES).
+    Las crean las propias comprobaciones: pytest deja `.pytest_cache/` la primera
+    vez y, en un repo sin .gitignore, la carpeta cambiaba mientras corría y un
+    pytest en verde quedaba como «sin resolver» (prueba real con Claude Haiku, 09/11).
+    """
+    from ..permisos.ordenes import CACHES
+    return any(parte in CACHES for parte in str(name).split('/'))
+
+
+def cambio_sin_trabajo(snapshot, guard):
+    """¿Lo que cambió durante la orden fue sólo crear o borrar cachés o temporales?
+
+    El vigilante avisó sólo desde carpetas y todo lo vigilado sigue igual: los
+    archivos con el mismo contenido, inodo y fechas, y cada carpeta con las mismas
+    entradas sin contar cachés, temporales ni lo ignorado.
+    """
+    try:
+        return bool(guard is not None and guard.solo_carpetas(snapshot['watch']['directories'])
+                    and matches(for_mutation_watch(snapshot)))
+    except (OSError, KeyError, TypeError):
+        return False
+
 # Los revisores nombran su carpeta de capturas a su manera: independent-review,
 # revision-qa, review-current-1848…
 CARPETAS_DEL_REVISOR = ('independent-review',)
@@ -204,7 +255,7 @@ def _entries(path, ignored, root=None):
     # Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
     # caducaba la evidencia al terminar cada revisión («La evidencia caducó»).
     return sorted(p.name for p in path.iterdir()
-                  if p.name != '.git' and not temporal(p.name) and str(p) not in ignored
+                  if p.name != '.git' and not temporal(p.name) and not en_cache(p.name) and str(p) not in ignored
                   and not (root and _del_revisor(p, root)))
 
 
@@ -331,8 +382,10 @@ def _same_file(path, expected):
 
 
 def _status(porcelain):
+    def ruta(line):
+        return line[3:].split(' -> ')[-1].strip('"').rstrip('/')
     return '\n'.join(line for line in porcelain.split('\n')
-                     if not escrito_por_el_revisor(line[3:].split(' -> ')[-1].strip('"').rstrip('/')))
+                     if not escrito_por_el_revisor(ruta(line)) and not en_cache(ruta(line)))
 
 
 def _capture(root):
@@ -392,7 +445,7 @@ def _capture(root):
     # artefactos de compilación entraban en cada huella. Git sigue informando de
     # ellos en `status` si cambian.
     names = {name for name in names
-             if not temporal(name) and not escrito_por_el_revisor(name)}
+             if not temporal(name) and not en_cache(name) and not escrito_por_el_revisor(name)}
     paths = [root / name for name in sorted(names)]
     directories = {root}
     for path in paths:
@@ -412,7 +465,7 @@ def _capture(root):
         if any(watch['files'][name] != value for name, value in git_before.items()):
             raise ValueError('Git cambió mientras se tomaba su huella.')
         final_names = {name for name in git('ls-files', '-co', '--exclude-standard', '-z').split('\0')
-                       if name and not temporal(name) and not escrito_por_el_revisor(name)}
+                       if name and not temporal(name) and not en_cache(name) and not escrito_por_el_revisor(name)}
         if final_names != names or _status(git('status', '--porcelain')) != context['status']:
             raise ValueError('El workspace cambió mientras se tomaba su huella.')
         if not matches(result):
