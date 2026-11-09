@@ -57,6 +57,8 @@ class Transport:
         self.compacting = False
         # Modelo y esfuerzo pedidos por el cliente para el próximo turno.
         self.pending_settings = {}
+        # Peticiones al navegador de la app (alfalfa/navegador.py) que esperan respuesta.
+        self.navegador_pendientes = {}
 
     def clean(self, value):
         from . import proveedores
@@ -198,6 +200,19 @@ class Transport:
         self.pending_settings.update({k: v for k, v in (('model', model), ('effort', effort), ('modo', mode))
                                       if v is not None})
 
+    async def pedir_navegador(self, accion, campos, tiempo):
+        """Una petición al navegador propio de la app; devuelve su `navegador_respuesta`."""
+        ident = uuid4().hex
+        future = asyncio.get_running_loop().create_future()
+        self.navegador_pendientes[ident] = future
+        self.emit('navegador', id=ident, accion=accion, **campos)
+        try:
+            return await asyncio.wait_for(future, tiempo)
+        except asyncio.TimeoutError:
+            raise ValueError('El navegador de la app no respondió a tiempo.') from None
+        finally:
+            self.navegador_pendientes.pop(ident, None)
+
     def take_settings(self):
         cambios, self.pending_settings = self.pending_settings, {}
         return cambios
@@ -231,6 +246,11 @@ class Transport:
                 if not isinstance(ident, str) or self.stop_process is None:
                     raise ValueError()
                 self.stop_process(ident)
+            elif value.get('tipo') == 'navegador_respuesta':
+                # Una respuesta que llega tarde (la petición ya caducó) se descarta sin ruido.
+                future = self.navegador_pendientes.get(value.get('id'))
+                if future is not None and not future.done():
+                    future.set_result(value)
             elif value.get('tipo') == 'permiso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or ident not in self.pending:
@@ -296,7 +316,8 @@ async def run(args, transport):
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
-                                  wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args))
+                                  wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
+                                  navegador=bool(getattr(args, 'navegador', False)))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)

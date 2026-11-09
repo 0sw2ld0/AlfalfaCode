@@ -26,6 +26,8 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published var pendingDraft: String?
 
     var onChange: (() -> Void)?
+    /// El navegador propio de la sesión (herramientas browser_* del agente), con su almacén de datos aislado.
+    private(set) lazy var browser = BrowserEngine()
     private var process: AlfalfaProcess?
     /// El usuario se fue de la sesión: al quedar libre se cierra stdin del proceso.
     private(set) var releaseWhenParked = false
@@ -96,7 +98,7 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
                                                 images: images.map(\.path), mode: mode, wait: wait,
                                                 parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake)
+                                                keepAwake: Preferences().keepAwake, browser: true)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -119,6 +121,7 @@ final class LiveSession: ObservableObject, Identifiable {
         timeline.apply(message)
         onChange?()
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
+        if case let .browser(request) = message { answerBrowser(request) }
         if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
@@ -354,5 +357,18 @@ extension LiveSession {
     /// El interruptor de Ajustes: el proceso abierto lo aplica ya, también a mitad de turno.
     func setKeepAwake(_ on: Bool) {
         process?.send(.keepAwake(on))
+    }
+}
+
+// MARK: - Navegador propio
+
+extension LiveSession {
+    /// El agente usa el navegador: el panel se abre y la respuesta vuelve al motor.
+    private func answerBrowser(_ request: BrowserRequest) {
+        Task { [weak self] in
+            guard let self else { return }
+            let reply = await browser.perform(request)
+            process?.send(.browserReply(reply))
+        }
     }
 }

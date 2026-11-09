@@ -150,6 +150,9 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     case edit = "edicion"
     /// Mirar o manejar otra app del Mac (app_state, app_action), una vez por app.
     case app = "app"
+    /// El navegador propio: enviar un formulario, escribir una contraseña, descargar, JavaScript
+    /// que cambia la página o abrir una dirección local.
+    case browser = "navegador"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -161,6 +164,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .mode: return "El modo pide permiso"
         case .edit: return "Edición de archivos"
         case .app: return "Controlar una app"
+        case .browser: return "Navegador"
         }
     }
 
@@ -322,6 +326,10 @@ public struct PermissionRequest: Equatable, Sendable {
         if reasons.contains(.edit) { return "El modo Manual pide permiso antes de editar archivos." }
         if reasons.contains(.mode) {
             return "Tu modo pide permiso para cada orden que no sólo lee; se ejecutará dentro del sandbox, sin red."
+        }
+        if reasons.contains(.browser) {
+            return "Lo hará el navegador de la sesión, que ves en el panel: aislado, sin tus cuentas "
+                + "ni las cookies de Safari."
         }
         return nil
     }
@@ -592,6 +600,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
     /// se duerma por inactividad mientras trabaja un turno.
     case keepingAwake(Bool)
+    /// `navegador`: el agente pide algo al navegador propio de la app (BrowserEngine).
+    case browser(BrowserRequest)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -716,6 +726,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                 return PlanStep(text, PlanStep.Status(rawValue: row["estado"] as? String ?? "") ?? .pending)
             }
             return .plan(Plan(steps: steps, explanation: object["explicacion"] as? String))
+        case "navegador":
+            return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
         case "subagente_evento":
@@ -906,6 +918,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case settings(model: String?, effort: String?, mode: String? = nil)
     /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
     case keepAwake(Bool)
+    /// La respuesta del navegador propio a una petición `navegador`.
+    case browserReply(BrowserReply)
 
     public var line: String {
         let object: [String: Any]
@@ -921,6 +935,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case .redirect: object = ["tipo": "redirigir"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
         case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
+        case let .browserReply(reply): object = reply.object
         case let .compact(instructions):
             object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
         case let .settings(model, effort, mode):
