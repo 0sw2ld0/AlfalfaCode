@@ -247,7 +247,14 @@ class _Registro:
     guardado, se añade `{"$hasta": n}` y los registros desde n: el archivo nunca
     se reescribe, así que un corte entre el JSONL y session.json no lo deja
     ilegible, y la sustitución casi siempre toca uno de los últimos.
+
+    Cambiar por dentro un registro ya guardado (`record.update(...)`) no lo ve la
+    `Lista`. Como es en los últimos donde se anota lo que se supo después, se
+    comparan los `COLA` últimos con lo escrito y, si cambió alguno, se escribe
+    desde él. Uno más antiguo cambiado así se perdería al reanudar: sustitúyelo.
     """
+
+    COLA = 8
 
     def __init__(self, directorio, campo):
         self.campo = campo
@@ -255,26 +262,30 @@ class _Registro:
         self.lista = None  # la Lista del estado que está escrita
         self.largo = 0     # registros en disco, aplicados los `$hasta`
         self.entradas = 0  # líneas válidas
+        self.cola = []     # líneas de los últimos registros escritos, de largo - len(cola) a largo
 
     def cargar(self, indice, resolver):
         lineas = self.diario.leer_indice(indice, self.campo, 'entradas')
-        filas = Lista()
+        filas, escritas = Lista(), []
         for linea in lineas:
             if isinstance(linea, dict) and set(linea) == {HASTA}:
                 hasta = linea[HASTA]
                 if type(hasta) is not int or not 0 <= hasta <= len(filas):
                     raise HistorialIncompleto(self.diario.ruta.name + ' tiene un «$hasta» inválido.')
                 del filas[hasta:]
+                del escritas[hasta:]
             else:
                 filas.append(resolver(linea))
+                escritas.append(linea)
         if len(filas) != _entero(indice.get('filas')):
             raise HistorialIncompleto(self.diario.ruta.name + ' no coincide con session.json.')
         filas.cambiado = None
         self.lista, self.largo, self.entradas = filas, len(filas), len(lineas)
+        self.cola = [_linea(linea) for linea in escritas[-self.COLA:]]
         return filas
 
     def pendiente(self, estado, con_referencia):
-        """(lista, líneas por añadir), o None si el campo no es una lista y va en session.json."""
+        """(lista, líneas por añadir, cola), o None si el campo no es una lista y va en session.json."""
         filas = estado.get(self.campo)
         if not isinstance(filas, list):
             return None
@@ -284,18 +295,31 @@ class _Registro:
             # Una lista nueva (`setdefault('checks', [])`, una sesión vieja, la que deja
             # `_archive_not_relevant`): se adopta.
             filas = estado[self.campo] = Lista(filas)
+        inicio = self.largo - len(self.cola)
         if filas is not self.lista:
             desde = 0
         else:
             desde = self.largo if filas.cambiado is None else min(filas.cambiado, self.largo)
-        lineas = [_linea({HASTA: desde})] if desde < self.largo else []
-        lineas += [_linea(con_referencia(fila)) for fila in filas[desde:]]
-        return filas, lineas
+            for i in range(inicio, desde):
+                if _linea(con_referencia(filas[i])) != self.cola[i - inicio]:
+                    desde = i  # cambiado por dentro
+                    break
+        nuevas = [_linea(con_referencia(fila)) for fila in filas[desde:]]
+        lineas = ([_linea({HASTA: desde})] if desde < self.largo else []) + nuevas
+        cola = []
+        for i in range(max(0, len(filas) - self.COLA), len(filas)):
+            if i >= desde:
+                cola.append(nuevas[i - desde])
+            elif filas is self.lista and inicio <= i:
+                cola.append(self.cola[i - inicio])
+            else:
+                cola.append(_linea(con_referencia(filas[i])))
+        return filas, lineas, cola
 
-    def escrito(self, filas, lineas):
+    def escrito(self, filas, lineas, cola):
         self.diario.añadir(lineas)
         filas.cambiado = None
-        self.lista, self.largo = filas, len(filas)
+        self.lista, self.largo, self.cola = filas, len(filas), cola
         self.entradas += len(lineas)
 
     def indice(self):
@@ -562,7 +586,12 @@ def leer_evidencia(ruta, *, fotos=False):
 
 
 def escribir(directorio, estado):
-    """Crea la sesión nativa de `directorio` con el estado completo (`messages` incluido)."""
+    """Crea la sesión nativa de `directorio` con el estado completo (`messages` incluido).
+
+    Sólo para una carpeta nueva (bifurcar, importar): borra los JSONL que hubiera
+    antes de escribir. Para convertir una sesión que ya existe, `Historial.cargar`
+    y luego `guardar` con el mismo objeto, que nunca borra nada.
+    """
     directorio = Path(directorio)
     estado = dict(estado)
     for nombre in (MENSAJES, FOTOS, ARCHIVO_INCIDENCIAS, *LISTAS.values()):

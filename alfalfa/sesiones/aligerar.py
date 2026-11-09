@@ -47,10 +47,14 @@ def aligerar_nativa(directorio, descartar=False):
             isinstance(fila, dict) and fila.get('status') == 'not_relevant'
             for fila in guardado.get('resolution_records') or [])
         if vieja or tiene_no_relevantes:
-            estado = historial.leer(ruta)
+            # Como al abrirla (NativeRuntime): se carga y se guarda con el mismo
+            # Historial, que sólo añade a los JSONL que session.json ya conoce y
+            # escribe session.json al final. Nada se borra: si se corta a medias,
+            # el session.json de antes sigue apuntando a lo que ya estaba.
+            sesion = historial.Historial(directorio)
+            estado, _ = sesion.cargar(guardado)
             archivar_no_relevantes(estado, directorio, descartar)
-            # Como al abrirla: primero los JSONL, luego session.json.
-            historial.escribir(directorio, dict(estado, version=historial.VERSION))
+            atomic_json(ruta, sesion.guardar(estado))
         elif descartar:
             archivar_no_relevantes({}, directorio, descartar)
     entrega = directorio / 'handoff.json'
