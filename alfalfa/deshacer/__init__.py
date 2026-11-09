@@ -2,18 +2,24 @@
 
 Cada turno guarda una instantánea de la carpeta al empezar y otra al terminar
 (`instantaneas.py`, en un git paralelo fuera del proyecto) y las apunta en su fila de
-`task.json` (`turnos[].instantanea` = {repo, antes, despues}).
+`task.json` (`turnos[].instantanea` = {repo, antes, despues, cambios_desde, cambios_hasta}).
+`cambios_desde`/`cambios_hasta` marcan qué filas de `changes` (la evidencia) escribió
+el agente durante ese turno.
 
 Deshacer hasta el turno T devuelve a su instantánea «antes» cada archivo que cambió
 desde entonces, pero sólo lo que dejó el agente:
 
-- Un archivo que cambió en T o en un turno posterior (lo dicen las instantáneas de
-  cada turno, así que cuenta también lo que cambiaron sus órdenes) se restaura si
-  sigue como lo dejó el agente: igual que en la instantánea del final de su último
-  turno o, si ésta falta (el proceso murió), igual que la huella `after` de `changes`.
-- Si no coincide, lo cambiaste tú después (`editado_despues`); si ningún turno lo
-  cambió, el cambio no es del agente (`ajeno`). Ninguno se toca sin que se pida por
-  su ruta (`forzar`).
+- Lo que cambió en un turno y el agente dejó apuntado en `changes` durante ese turno
+  se restaura si sigue igual que al final de su último turno.
+- Lo que cambió en un turno con órdenes, subagentes o herramientas externas, pero sin
+  fila en `changes`, lo hizo probablemente una orden (`orden`): se restaura sólo si lo
+  confirmas (la app lo trae marcado; la terminal pregunta).
+- Lo que cambió en un turno sin nada de eso (tú u otro programa mientras trabajaba),
+  lo que cambiaste después (`editado_despues`) y lo que ningún turno cambió (`ajeno`)
+  se queda, salvo que lo pidas por su ruta.
+- Nunca se borra algo que ya existía al empezar el turno sólo porque no estaba en la
+  instantánea (ignorado, demasiado grande, en un repositorio anidado o ilegible): va a
+  `no_cubiertos` con su motivo y al aviso de lo que no se deshace.
 
 Antes de restaurar se guarda el estado de ahora: rehacer lo devuelve, con la misma
 regla (lo que cambiaste después de deshacer no se pisa). Cada deshacer y rehacer
@@ -30,15 +36,19 @@ from pathlib import Path
 from uuid import uuid4
 
 from . import irreversibles
-from .instantaneas import Almacen, SinInstantanea, sha256_de
+from .instantaneas import CARPETA, Almacen, SinInstantanea, cubre, limpiar_todo, sha256_de
 
 __all__ = ['Almacen', 'SinInstantanea', 'activas', 'al_empezar_turno', 'al_terminar_turno', 'vista_deshacer',
            'deshacer', 'vista_rehacer', 'rehacer', 'turno_de', 'turno_anterior']
 
 EDITADO = 'editado_despues'
 AJENO = 'ajeno'
+ORDEN = 'orden'
 GRANDE = 'grande'
+AGENTE = 'agente'
 LIMPIEZA_CADA = 86400
+# Herramientas que cambian archivos sin dejar fila en `changes`.
+ACTUAN = {'run_command', 'run_checks', 'spawn_agent', 'send_input', 'browser_download', 'app_action'}
 
 
 def activas():
@@ -70,10 +80,12 @@ def turno_anterior(task, ident):
 
 # MARK: - Instantáneas de cada turno
 
-def _apuntar(task, ident, momento, fila):
+def _apuntar(task, ident, momento, fila, cambios=None):
     for turno in _turnos(task):
         if turno['id'] == ident:
             datos = turno.setdefault('instantanea', {})
+            if isinstance(cambios, int):
+                datos['cambios_desde' if momento == 'antes' else 'cambios_hasta'] = cambios
             if 'commit' in fila:
                 datos['repo'] = fila['repo']
                 datos[momento] = fila['commit']
@@ -85,9 +97,11 @@ def _apuntar(task, ident, momento, fila):
             return
 
 
-def _instantanea(hogar, task, ident, momento):
+def _instantanea(hogar, task, ident, momento, estado):
     if not activas() or not task.get('cwd') or not task.get('id'):
         return
+    cambios = (estado or {}).get('changes')
+    cambios = len(cambios) if isinstance(cambios, list) else None
     almacen = Almacen(hogar, task['cwd'])
     try:
         fila = almacen.guardar(task['id'], ident + '-' + momento,
@@ -95,55 +109,97 @@ def _instantanea(hogar, task, ident, momento):
     except (SinInstantanea, OSError, subprocess.SubprocessError, ValueError) as exc:
         # Sin instantánea el turno sigue: sólo no se podrá deshacer su código.
         fila = {'error': str(exc) or type(exc).__name__}
-    _apuntar(task, ident, momento, fila)
+    _apuntar(task, ident, momento, fila, cambios)
     if momento == 'despues' and 'commit' in fila:
-        _limpiar_de_vez_en_cuando(almacen)
+        _limpiar_de_vez_en_cuando(hogar)
 
 
-def al_empezar_turno(hogar, task, ident):
-    """La instantánea de antes del turno `ident`; un fallo queda apuntado y el turno sigue."""
-    _instantanea(hogar, task, ident, 'antes')
+def al_empezar_turno(hogar, task, ident, estado=None):
+    """La instantánea de antes del turno `ident`; un fallo queda apuntado y el turno sigue.
+    `estado` (el del runtime) marca desde qué fila de `changes` son de este turno."""
+    _instantanea(hogar, task, ident, 'antes', estado)
 
 
-def al_terminar_turno(hogar, task, ident):
-    _instantanea(hogar, task, ident, 'despues')
+def al_terminar_turno(hogar, task, ident, estado=None):
+    _instantanea(hogar, task, ident, 'despues', estado)
 
 
-def _limpiar_de_vez_en_cuando(almacen):
-    marca = almacen.dir / 'limpieza'
+def _limpiar_de_vez_en_cuando(hogar):
+    """Una vez al día, todos los almacenes del hogar (y fuera los de carpetas borradas)."""
+    marca = Path(hogar) / CARPETA / 'limpieza'
     try:
         if marca.is_file() and time.time() - marca.stat().st_mtime < LIMPIEZA_CADA:
             return
         marca.touch()
-        almacen.limpiar()
+        limpiar_todo(hogar)
     except (OSError, SinInstantanea, subprocess.SubprocessError):
         pass
 
 
 # MARK: - Qué dejó el agente
 
-def _pasos(task, desde):
-    """[(fecha, antes, despues)] de los turnos y de los deshacer/rehacer desde `desde`, en orden."""
+def _llamadas(mensajes):
+    """Nombres de las herramientas llamadas en estos mensajes."""
+    nombres = set()
+    for mensaje in mensajes or []:
+        if isinstance(mensaje, dict) and mensaje.get('role') == 'assistant':
+            for llamada in mensaje.get('tool_calls') or []:
+                funcion = llamada.get('function') if isinstance(llamada, dict) else None
+                if isinstance(funcion, dict) and isinstance(funcion.get('name'), str):
+                    nombres.add(funcion['name'])
+    return nombres
+
+
+def _registrados(estado, datos):
+    """Las rutas que el agente apuntó en `changes` durante el turno, o None si no se sabe."""
+    desde, hasta = datos.get('cambios_desde'), datos.get('cambios_hasta')
+    cambios = (estado or {}).get('changes')
+    if not isinstance(desde, int) or not isinstance(hasta, int) or not isinstance(cambios, list):
+        return None
+    return {c['path'] for c in cambios[desde:hasta] if isinstance(c, dict) and isinstance(c.get('path'), str)}
+
+
+def _pasos(task, estado, desde):
+    """Los turnos y los deshacer/rehacer desde `desde`, en orden: {fecha, antes, despues, registrados, actua}."""
     pasos = []
+    mensajes = (estado or {}).get('messages') or []
     for turno in _turnos(task):
         if (turno.get('inicio') or 0) >= desde:
             datos = turno.get('instantanea') or {}
-            pasos.append((turno.get('inicio') or 0, datos.get('antes'), datos.get('despues')))
+            fin = turno.get('hasta') if isinstance(turno.get('hasta'), int) else len(mensajes)
+            nombres = _llamadas(mensajes[turno.get('desde') or 0:fin])
+            pasos.append({'fecha': turno.get('inicio') or 0, 'antes': datos.get('antes'),
+                          'despues': datos.get('despues'), 'registrados': _registrados(estado, datos),
+                          'actua': bool(nombres & ACTUAN) or any(n.startswith('mcp__') for n in nombres)})
     for paso in task.get('deshechos') or []:
         if isinstance(paso, dict) and (paso.get('fecha') or 0) >= desde:
-            pasos.append((paso['fecha'], paso.get('antes'), paso.get('despues')))
-    return sorted(pasos, key=lambda paso: paso[0])
+            # Lo restauró AlfalfaCode: cuenta como del agente.
+            pasos.append({'fecha': paso['fecha'], 'antes': paso.get('antes'), 'despues': paso.get('despues'),
+                          'registrados': True, 'actua': False})
+    return sorted(pasos, key=lambda paso: paso['fecha'])
 
 
 def _dejado(almacen, pasos):
-    """({ruta: estado al final del último paso que la cambió}, ¿falta alguno?)."""
-    dejado, incompleto = {}, False
-    for _, antes, despues in pasos:
+    """({ruta: estado al final del último paso que la cambió}, {ruta: origen}, ¿falta alguno?).
+
+    El origen es `agente` (apuntado en `changes` en ese turno), `orden` (sin apuntar, en un
+    turno con órdenes o subagentes) o `ajeno` (sin apuntar y sin nada que lo explique)."""
+    dejado, origen, incompleto = {}, {}, False
+    for paso in pasos:
+        antes, despues = paso['antes'], paso['despues']
         if not antes or not despues or not almacen.existe(antes) or not almacen.existe(despues):
             incompleto = True
             continue
-        dejado.update(almacen.cambios(antes, despues))
-    return dejado, incompleto
+        registrados = paso['registrados']
+        for ruta, estado in almacen.cambios(antes, despues).items():
+            dejado[ruta] = estado
+            if registrados is True or (registrados is not None and ruta in registrados):
+                origen[ruta] = AGENTE
+            elif paso['actua'] or registrados is None:
+                origen[ruta] = ORDEN
+            else:
+                origen[ruta] = AJENO
+    return dejado, origen, incompleto
 
 
 def huella(estado):
@@ -161,19 +217,38 @@ def _accion(objetivo, actual):
     return 'recrear' if actual is None else 'restaurar'
 
 
+def _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes):
+    """Lo que el agente apuntó en `changes` desde el turno y no guardan las instantáneas."""
+    salida = {}
+    for otro in _turnos(task):
+        if (otro.get('inicio') or 0) < (turno.get('inicio') or 0):
+            continue
+        datos = otro.get('instantanea') or {}
+        rutas = _registrados(estado, datos) or set()
+        finales = almacen.excluidos(datos['despues']) if datos.get('despues') else None
+        for ruta in rutas:
+            motivo = cubre(excluidos_antes, ruta) or cubre(finales, ruta)
+            if motivo:
+                salida.setdefault(ruta, motivo)
+    return salida
+
+
 # MARK: - Deshacer
 
 def vista_deshacer(hogar, task, estado, ident):
     """Lo que haría deshacer hasta antes del turno `ident`, sin tocar nada.
 
     {disponible, motivo?, turno, restaurables: [{ruta, accion}], conflictos: [{ruta, accion,
-    motivo}], grandes, irreversibles}; las claves con `_` son internas (para `deshacer`)."""
+    motivo}], no_cubiertos: [{ruta, motivo}], grandes, irreversibles}; las claves con `_` son
+    internas (para `deshacer`)."""
     turno = turno_de(task, ident)
     datos = turno.get('instantanea') or {}
-    vista = {'turno': ident, 'disponible': False, 'restaurables': [], 'conflictos': [],
-             'grandes': list(datos.get('grandes') or []),
-             'irreversibles': irreversibles.de_mensajes(
-                 (estado or {}).get('messages', [])[turno.get('desde') or 0:], task.get('cwd') or '.'),
+    cwd = task.get('cwd') or '.'
+    avisos = irreversibles.de_mensajes((estado or {}).get('messages', [])[turno.get('desde') or 0:], cwd)
+    avisos = irreversibles.juntar(avisos, irreversibles.de_subagentes(
+        Path(hogar) / 'sesiones' / str(task.get('id')) / 'subagentes', turno.get('inicio') or 0, cwd))
+    vista = {'turno': ident, 'disponible': False, 'restaurables': [], 'conflictos': [], 'no_cubiertos': [],
+             'grandes': list(datos.get('grandes') or []), 'irreversibles': avisos,
              'primer_turno': turno_anterior(task, ident) is None}
     if not datos.get('antes'):
         error = (datos.get('errores') or {}).get('antes')
@@ -190,28 +265,47 @@ def vista_deshacer(hogar, task, estado, ident):
     except SinInstantanea as exc:
         vista['motivo'] = 'No se pudo guardar el estado de ahora para poder rehacer: ' + str(exc)
         return vista
+    excluidos_antes = almacen.excluidos(datos['antes'])
+    excluidos_ahora = almacen.excluidos(ahora['commit'])
     objetivo = almacen.cambios(ahora['commit'], datos['antes'])
     actuales = almacen.cambios(datos['antes'], ahora['commit'])
-    dejado, incompleto = _dejado(almacen, _pasos(task, turno.get('inicio') or 0))
+    dejado, origen, incompleto = _dejado(almacen, _pasos(task, estado, turno.get('inicio') or 0))
     ultimas = huella(estado)
+    no_cubiertos = _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes)
     for ruta in sorted(objetivo):
         destino, actual = objetivo[ruta], actuales.get(ruta)
         if '160000' in (destino or ('',))[0] + (actual or ('',))[0]:
-            continue  # Un submódulo no es contenido de esta carpeta.
+            continue  # Un repositorio anidado no es contenido de esta carpeta.
         fila = {'ruta': ruta, 'accion': _accion(destino, actual)}
         en_disco = almacen.cwd / ruta
+        if destino is None:
+            # Ya existía al empezar el turno aunque no estuviera en la instantánea: no se borra nunca.
+            motivo = cubre(excluidos_antes, ruta)
+            if motivo:
+                no_cubiertos[ruta] = motivo
+                continue
+            if excluidos_antes is None and origen.get(ruta) != AGENTE:
+                no_cubiertos[ruta] = 'sin_registro'
+                continue
         if actual is None and (en_disco.exists() or en_disco.is_symlink()):
-            # Está, pero no en la instantánea de ahora: es demasiado grande para compararlo.
-            vista['conflictos'].append(dict(fila, motivo=GRANDE))
+            # Está, pero no en la instantánea de ahora: no se puede comparar con lo que dejó el agente.
+            vista['conflictos'].append(dict(fila, motivo=cubre(excluidos_ahora, ruta) or GRANDE))
         elif ruta in dejado and dejado[ruta] == actual:
-            vista['restaurables'].append(fila)
+            if origen.get(ruta) == AGENTE:
+                vista['restaurables'].append(fila)
+            else:
+                vista['conflictos'].append(dict(fila, motivo=origen.get(ruta, AJENO)))
         elif ruta in ultimas and (incompleto or ruta not in dejado) and sha256_de(en_disco) == ultimas[ruta]:
             # Sin la instantánea final de algún turno, vale la huella que dejó el agente.
             vista['restaurables'].append(fila)
         else:
             vista['conflictos'].append(dict(fila, motivo=EDITADO if ruta in dejado else AJENO))
+    vista['no_cubiertos'] = [{'ruta': r, 'motivo': m} for r, m in sorted(no_cubiertos.items())]
+    if no_cubiertos:
+        vista['irreversibles'] = irreversibles.juntar(vista['irreversibles'], [irreversibles.no_cubiertos(
+            vista['no_cubiertos'])])
     vista.update(disponible=True, _repo=almacen.clave, _ahora=ahora['commit'], _objetivo=datos['antes'],
-                 _destino={r: v for r, v in objetivo.items() if v is not None})
+                 _destino={r: v for r, v in objetivo.items() if v is not None}, _desde=turno.get('inicio'))
     return vista
 
 
@@ -222,7 +316,7 @@ def _aplicar(hogar, task, estado, vista, forzar, tipo, extra):
                                                           if c['ruta'] in forzar]
     ident = uuid4().hex[:12]
     almacen.guardar_ref(vista['_ahora'], task['id'], tipo + '-' + ident + '-antes')
-    hechas, fallos = almacen.restaurar(rutas, vista['_destino'])
+    hechas, fallos = almacen.restaurar(rutas, vista['_destino'], creadas_desde=vista.get('_desde'))
     try:
         despues = almacen.guardar(task['id'], tipo + '-' + ident + '-despues', tipo.capitalize())['commit']
     except SinInstantanea:
@@ -278,7 +372,7 @@ def vista_rehacer(hogar, task, ident=None):
     """Lo que haría rehacer el último deshacer (o `ident`): la misma forma que `vista_deshacer`."""
     paso = _deshecho(task, ident)
     vista = {'deshecho': paso['id'], 'turno': paso.get('turno'), 'disponible': False, 'restaurables': [],
-             'conflictos': [], 'grandes': [], 'irreversibles': []}
+             'conflictos': [], 'no_cubiertos': [], 'grandes': [], 'irreversibles': []}
     if paso.get('rehecho'):
         vista['motivo'] = 'Ese deshacer ya se rehízo.'
         return vista
@@ -302,7 +396,7 @@ def vista_rehacer(hogar, task, ident=None):
         else:
             vista['restaurables'].append(fila)
     vista.update(disponible=True, _repo=almacen.clave, _ahora=ahora['commit'], _objetivo=paso['antes'],
-                 _destino={r: v for r, v in objetivo.items() if v is not None})
+                 _destino={r: v for r, v in objetivo.items() if v is not None}, _desde=paso.get('fecha'))
     return vista
 
 

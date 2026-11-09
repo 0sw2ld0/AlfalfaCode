@@ -9,8 +9,9 @@ analizadores de los permisos: `peligrosos` para sacar las órdenes de un `bash -
 """
 from __future__ import annotations
 
+import ast
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from ..permisos import ordenes, peligrosos
 
@@ -21,6 +22,8 @@ FUERA = 'fuera_de_la_carpeta'
 RED = 'red'
 SISTEMA = 'sistema'
 EXTERNA = 'herramienta_externa'
+NO_CUBIERTO = 'no_cubierto'
+SUBAGENTE = 'subagente'
 
 TITULOS = {
     PUBLICA: 'Publicó fuera de tu Mac',
@@ -30,6 +33,8 @@ TITULOS = {
     RED: 'Hizo llamadas de red',
     SISTEMA: 'Cambió el sistema',
     EXTERNA: 'Usó herramientas que actúan fuera (MCP o navegador)',
+    SUBAGENTE: 'Un subagente ejecutó órdenes que no se pudieron leer',
+    NO_CUBIERTO: 'Cambió archivos que las instantáneas no guardan (ignorados, grandes o en repositorios anidados)',
 }
 
 # git: lo que sólo lee no importa; lo que publica va aparte.
@@ -173,28 +178,80 @@ def _argumentos(funcion):
     return valor if isinstance(valor, dict) else {}
 
 
+def _clasificar_llamada(nombre, argumentos, cwd):
+    from ..navegador import ESCRITURA as NAVEGADOR_ESCRIBE
+    if nombre in ('run_command', 'run_checks'):
+        return clasificar(argumentos.get('argv'), cwd)
+    if nombre.startswith('mcp__') or nombre in NAVEGADOR_ESCRIBE:
+        return [(EXTERNA, nombre)]
+    return []
+
+
+def _agrupar(encontrados):
+    por_tipo = {}
+    for tipo, texto in encontrados:
+        lista = por_tipo.setdefault(tipo, [])
+        if texto not in lista:
+            lista.append(texto)
+    return [{'tipo': tipo, 'titulo': TITULOS[tipo], 'ordenes': textos[:8]}
+            for tipo, textos in sorted(por_tipo.items(), key=lambda par: list(TITULOS).index(par[0]))]
+
+
 def de_mensajes(mensajes, cwd):
     """Avisos de los mensajes del agente: [{tipo, titulo, ordenes: [texto]}], sin repetir."""
-    from ..navegador import ESCRITURA as NAVEGADOR_ESCRIBE
-    por_tipo = {}
+    encontrados = []
     for mensaje in mensajes or []:
         if not isinstance(mensaje, dict) or mensaje.get('role') != 'assistant':
             continue
         for llamada in mensaje.get('tool_calls') or []:
             funcion = llamada.get('function') if isinstance(llamada, dict) else None
-            if not isinstance(funcion, dict) or not isinstance(funcion.get('name'), str):
+            if isinstance(funcion, dict) and isinstance(funcion.get('name'), str):
+                encontrados += _clasificar_llamada(funcion['name'], _argumentos(funcion), cwd)
+    return _agrupar(encontrados)
+
+
+def de_subagentes(carpeta, desde, cwd):
+    """Avisos de las órdenes de los subagentes desde `desde` (sus registros `subagentes/*.jsonl`).
+
+    Cada paso empieza con «Inicio NOMBRE · ARGUMENTOS»; si los argumentos no se pueden leer
+    (vienen recortados), una orden queda como orden sin clasificar."""
+    encontrados = []
+    carpeta = Path(carpeta)
+    if not carpeta.is_dir() or carpeta.is_symlink():
+        return []
+    for registro in sorted(carpeta.glob('*.jsonl')):
+        try:
+            lineas = registro.read_text(errors='replace').splitlines()
+        except OSError:
+            continue
+        for linea in lineas:
+            try:
+                fila = json.loads(linea)
+            except ValueError:
                 continue
-            nombre = funcion['name']
-            argumentos = _argumentos(funcion)
-            if nombre in ('run_command', 'run_checks'):
-                encontrados = clasificar(argumentos.get('argv'), cwd)
-            elif nombre.startswith('mcp__') or nombre in NAVEGADOR_ESCRIBE:
-                encontrados = [(EXTERNA, nombre)]
-            else:
-                encontrados = []
-            for tipo, texto in encontrados:
-                lista = por_tipo.setdefault(tipo, [])
-                if texto not in lista:
-                    lista.append(texto)
-    return [{'tipo': tipo, 'titulo': TITULOS[tipo], 'ordenes': textos[:8]}
-            for tipo, textos in sorted(por_tipo.items(), key=lambda par: list(TITULOS).index(par[0]))]
+            texto = fila.get('text') if isinstance(fila, dict) else None
+            if (fila.get('role') != 'tool' or not isinstance(texto, str) or not texto.startswith('Inicio ')
+                    or (fila.get('time') or 0) < desde):
+                continue
+            nombre, _, resto = texto[len('Inicio '):].partition(' · ')
+            try:
+                argumentos = ast.literal_eval(resto)
+            except (ValueError, SyntaxError, MemoryError, RecursionError):
+                argumentos = None
+            if not isinstance(argumentos, dict):
+                if nombre in ('run_command', 'run_checks'):
+                    encontrados.append((SUBAGENTE, resto[:150]))
+                continue
+            encontrados += _clasificar_llamada(nombre, argumentos, cwd)
+    return _agrupar(encontrados)
+
+
+def no_cubiertos(filas):
+    """El aviso de los archivos que cambiaron y no guardan las instantáneas."""
+    return {'tipo': NO_CUBIERTO, 'titulo': TITULOS[NO_CUBIERTO], 'ordenes': [f['ruta'] for f in filas[:8]]}
+
+
+def juntar(*listas):
+    """Une avisos de varias fuentes sin repetir tipos ni órdenes."""
+    encontrados = [(aviso['tipo'], texto) for lista in listas for aviso in lista for texto in aviso['ordenes']]
+    return _agrupar(encontrados)

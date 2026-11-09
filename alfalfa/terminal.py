@@ -728,7 +728,7 @@ class TerminalManager:
                 self.event(self.task, 'system', 'Hooks · ' + diagnostico.texto)
         try:
             # El código de la carpeta antes del turno, para poder volver a este mensaje con él.
-            await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'])
+            await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'], rt.state)
             await rt.run(prompt)
             if self.task['status'] == 'running':
                 if (rt.evidence.handoff().get('status') in ('failed', 'stale', 'changed_externally')
@@ -759,7 +759,8 @@ class TerminalManager:
                                   cierre=self.task.get('cierre'),
                                   gasto=registro.gasto_del_turno(self.task, *antes))
             # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
-            deshacer.al_terminar_turno(self.home, self.task, turno['id'])
+            # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
+            await asyncio.to_thread(deshacer.al_terminar_turno, self.home, self.task, turno['id'], rt.state)
             rt._record_context_details()
             if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
                 self.context(self.task, self.task['context_tokens'], self.task['context_limit'])

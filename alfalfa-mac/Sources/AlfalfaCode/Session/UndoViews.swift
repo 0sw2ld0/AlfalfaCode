@@ -98,9 +98,7 @@ struct UndoSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         restorable(preview)
                         conflicts(preview)
-                        if !preview.large.isEmpty {
-                            note("Sin instantánea, por demasiado grandes: " + preview.large.joined(separator: ", "))
-                        }
+                        untouched(preview)
                         warnings(preview.warnings)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -145,6 +143,15 @@ struct UndoSheet: View {
                     }
                     .toggleStyle(.checkbox).help("Restaurarlo igualmente: perderías lo que cambió después")
                 }
+            }
+        }
+    }
+
+    @ViewBuilder private func untouched(_ preview: UndoPreview) -> some View {
+        if !preview.untouched.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No se tocan").font(.system(size: 12.5, weight: .medium))
+                ForEach(preview.untouched, id: \.self) { file in fileRow(file.path, file.reasonLabel) }
             }
         }
     }
@@ -220,6 +227,8 @@ struct UndoSheet: View {
         switch result {
         case let .success(value):
             preview = value
+            // Lo que probablemente cambió una orden del agente viene marcado: se ve y se puede desmarcar.
+            force = Set(value.conflicts.filter(\.suggested).map(\.path))
             if !value.available && !isRedo { scope = .conversation }
         case let .failure(error):
             failure = error.text

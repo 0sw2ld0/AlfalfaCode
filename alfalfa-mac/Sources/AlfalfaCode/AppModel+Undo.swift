@@ -38,6 +38,12 @@ extension AppModel {
             }
             return
         }
+        // Cerrar el proceso cerraría también un servidor o un juego que sigue abierto.
+        guard session.timeline.liveProcesses.isEmpty else {
+            sessionError = "Hay procesos en segundo plano abiertos en esta sesión; "
+                + "detenlos antes de volver con el código."
+            return
+        }
         Task {
             // Como al bifurcar: el proceso abierto entre turnos guarda el cerrojo y se cierra antes.
             if !(await session.releaseProcess()) {
@@ -62,6 +68,10 @@ extension AppModel {
     /// pisa si está en `force`.
     func redo(session: LiveSession, step: String, force: [String]) async {
         guard let id = session.sessionID else { return }
+        guard session.timeline.liveProcesses.isEmpty else {
+            sessionError = "Hay procesos en segundo plano abiertos en esta sesión; detenlos antes de rehacer."
+            return
+        }
         if !(await session.releaseProcess()) {
             sessionError = "La sesión está trabajando; espera a que termine el turno para rehacer."
             return

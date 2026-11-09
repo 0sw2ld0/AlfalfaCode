@@ -44,7 +44,7 @@ class Sesion:
         mensajes = self.estado['messages']
         turno = sesiones.abrir_turno(self.task, mensaje, len(mensajes))
         turno['inicio'] = time.time()
-        deshacer.al_empezar_turno(self.hogar, self.task, turno['id'])
+        deshacer.al_empezar_turno(self.hogar, self.task, turno['id'], self.estado)
         mensajes.append({'role': 'user', 'content': mensaje})
         if llamadas:
             mensajes.append({'role': 'assistant', 'tool_calls': [
@@ -53,7 +53,7 @@ class Sesion:
         trabajo(self.cwd, self.estado)
         mensajes.append({'role': 'assistant', 'content': 'hecho'})
         sesiones.cerrar_turno(self.task, turno['id'], 'completed', len(mensajes))
-        deshacer.al_terminar_turno(self.hogar, self.task, turno['id'])
+        deshacer.al_terminar_turno(self.hogar, self.task, turno['id'], self.estado)
         self.guardar()
         time.sleep(0.01)
         return turno['id']
@@ -144,9 +144,11 @@ def test_cubre_lo_que_cambian_las_ordenes(entorno):
 
     t1 = sesion.turno('genera', orden, llamadas=[['python', 'gen.py']])
     vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t1)
-    assert {(f['ruta'], f['accion']) for f in vista['restaurables']} == {
-        ('app.py', 'restaurar'), ('generado.json', 'borrar'), ('notas.md', 'recrear')}
-    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, vista=vista)
+    # app.py tiene huella del agente; lo demás lo hizo probablemente la orden: se propone, no se impone.
+    assert {(f['ruta'], f['accion']) for f in vista['restaurables']} == {('app.py', 'restaurar')}
+    assert {(c['ruta'], c['accion'], c['motivo']) for c in vista['conflictos']} == {
+        ('generado.json', 'borrar', 'orden'), ('notas.md', 'recrear', 'orden')}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, forzar=['generado.json', 'notas.md'], vista=vista)
     assert not (cwd / 'generado.json').exists()
     assert (cwd / 'notas.md').read_text() == 'notas\n'
     assert (cwd / 'app.py').read_text() == 'print(1)\n'
@@ -255,7 +257,12 @@ def test_limpieza_de_instantaneas_viejas(entorno):
     assert almacen.limpiar(dias=30, ahora=time.time() + 31 * 86400) == 1
     otra = almacen.guardar('s1', 'otra')
     assert almacen.arbol(otra['commit']), 'tras la limpieza el índice no apunta a objetos borrados'
-    assert almacen.limpiar(tope=1) == 1, 'por encima del tope se borran las más viejas'
+    almacen.guardar('s1', 'deshacer-x-antes')
+    assert almacen.limpiar(tope=1) == 0, 'las recientes no se borran aunque se pase del tope'
+    # Pasados dos días, por encima del tope se borran las más viejas, salvo las de deshacer.
+    assert almacen.limpiar(tope=1, ahora=time.time() + 3 * 86400) == 1
+    salida = almacen.git('for-each-ref', '--format=%(refname)', 'refs/alfalfa/').decode()
+    assert salida.strip() == 'refs/alfalfa/s1/deshacer-x-antes'
     # Un almacén de una carpeta que ya no existe se borra entero.
     otra = cwd.parent / 'borrada'
     otra.mkdir()
@@ -412,3 +419,289 @@ def test_un_turno_de_verdad_guarda_sus_dos_instantaneas(tmp_path, monkeypatch):
         assert guardada['turnos'][0]['instantanea']['despues'] == datos['despues']
     finally:
         m.close()
+
+
+# MARK: - Lo que deshacer nunca debe estropear (revisión del PR 22)
+
+def escribir_bytes(estado, cwd, ruta, datos):
+    """write_file con bytes: el archivo y su fila en `changes`."""
+    path = cwd / ruta
+    antes = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    path.write_bytes(datos)
+    estado['changes'].append({'path': ruta, 'before': antes, 'after': hashlib.sha256(datos).hexdigest()})
+
+
+def _resumen(vista):
+    return ({(f['ruta'], f['accion']) for f in vista['restaurables']},
+            {(c['ruta'], c['motivo']) for c in vista['conflictos']},
+            {(n['ruta'], n['motivo']) for n in vista['no_cubiertos']})
+
+
+def test_no_borra_un_ignorado_que_el_turno_deja_de_ignorar(entorno):
+    hogar, cwd = entorno
+    (cwd / '.gitignore').write_text('.env\n')
+    (cwd / '.env').write_text('SECRET=1\n')
+    sesion = Sesion(hogar, cwd)
+    t1 = sesion.turno('uno', lambda c, e: escribir(e, c, '.gitignore', '# limpio\n'))
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t1)
+    assert _resumen(vista) == ({('.gitignore', 'restaurar')}, set(), {('.env', 'ignorado')})
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, forzar=['.env'], vista=vista)
+    assert (cwd / '.env').read_text() == 'SECRET=1\n'
+    assert (cwd / '.gitignore').read_text() == '.env\n'
+
+
+def test_no_borra_un_archivo_grande_que_el_agente_achica(entorno, monkeypatch):
+    hogar, cwd = entorno
+    monkeypatch.setattr(instantaneas, 'TOPE_ARCHIVO', 1000)
+    (cwd / 'datos.csv').write_bytes(b'x' * 2000)
+    sesion = Sesion(hogar, cwd)
+    t1 = sesion.turno('uno', lambda c, e: escribir(e, c, 'datos.csv', 'a,b\n'))
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t1)
+    assert _resumen(vista) == (set(), set(), {('datos.csv', 'grande')})
+    assert vista['grandes'] == ['datos.csv']
+    assert vista['irreversibles'][-1]['tipo'] == 'no_cubierto'
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t1, vista=vista)
+    assert (cwd / 'datos.csv').read_text() == 'a,b\n'
+
+
+def test_no_pisa_lo_que_cambia_otro_durante_un_turno_sin_ordenes(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        escribir(e, c, 'app.py', 'print(2)\n')
+        (c / 'notas.md').write_text('escritas por el usuario mientras el agente trabajaba\n')
+    t = sesion.turno('uno', t1)
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert _resumen(vista)[:2] == ({('app.py', 'restaurar')}, {('notas.md', 'ajeno')})
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
+    assert (cwd / 'notas.md').read_text().startswith('escritas por el usuario')
+
+
+def test_conserva_permisos_y_bytes_crlf_y_utf16(entorno):
+    import stat
+    hogar, cwd = entorno
+    (cwd / '.gitattributes').write_text('* text=auto\n*.u16 working-tree-encoding=UTF-16\n*.id ident\n')
+    (cwd / 'clave.pem').write_text('privada\n')
+    os.chmod(cwd / 'clave.pem', 0o600)
+    (cwd / 'win.txt').write_bytes(b'a\r\nb\r\n')
+    original16 = 'hola\n'.encode('utf-16')
+    (cwd / 'u.u16').write_bytes(original16)
+    (cwd / 'v.id').write_bytes(b'$Id$\n')
+    (cwd / 'run.sh').write_text('echo 1\n')
+    os.chmod(cwd / 'run.sh', 0o750)
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        escribir(e, c, 'clave.pem', 'otra\n')
+        escribir_bytes(e, c, 'win.txt', b'cambiado\n')
+        escribir_bytes(e, c, 'u.u16', 'adios\n'.encode('utf-16'))
+        escribir_bytes(e, c, 'v.id', b'nada\n')
+        escribir(e, c, 'run.sh', 'echo 2\n')
+        os.chmod(c / 'run.sh', 0o640)
+    t = sesion.turno('uno', t1)
+    paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert not paso['fallos']
+    assert stat.S_IMODE(os.stat(cwd / 'clave.pem').st_mode) == 0o600
+    assert (cwd / 'clave.pem').read_text() == 'privada\n'
+    assert (cwd / 'win.txt').read_bytes() == b'a\r\nb\r\n'
+    assert (cwd / 'u.u16').read_bytes() == original16
+    assert (cwd / 'v.id').read_bytes() == b'$Id$\n'
+    assert stat.S_IMODE(os.stat(cwd / 'run.sh').st_mode) == 0o750, 'sólo vuelve el bit x, con los permisos de ahora'
+
+
+def test_no_escribe_fuera_por_un_enlace(entorno, tmp_path):
+    import shutil
+    hogar, cwd = entorno
+    fuera, fuera2 = tmp_path / 'fuera', tmp_path / 'fuera2'
+    fuera.mkdir()
+    fuera2.mkdir()
+    (cwd / 'sub').mkdir()
+    (cwd / 'sub' / 'a.txt').write_text('a\n')
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        shutil.rmtree(c / 'sub')
+        os.symlink(fuera, c / 'sub')
+    t = sesion.turno('uno', t1, llamadas=[['ln', '-s', str(fuera), 'sub']])
+    os.unlink(cwd / 'sub')
+    os.symlink(fuera2, cwd / 'sub')  # El usuario cambia el destino después.
+    paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['sub/a.txt'])
+    assert not list(fuera2.iterdir()) and not list(fuera.iterdir())
+    assert [f['ruta'] for f in paso['fallos']] == ['sub/a.txt']
+    assert 'enlace' in paso['fallos'][0]['error']
+
+
+def test_un_enlace_a_un_archivo_de_fuera_vuelve_sin_seguirlo(entorno, tmp_path):
+    hogar, cwd = entorno
+    fuera = tmp_path / 'secreto.txt'
+    fuera.write_text('original\n')
+    os.symlink(fuera, cwd / 'enlace.txt')
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        os.unlink(c / 'enlace.txt')
+        escribir(e, c, 'enlace.txt', 'agente\n')
+    t = sesion.turno('uno', t1)
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert os.path.islink(cwd / 'enlace.txt') and os.readlink(cwd / 'enlace.txt') == str(fuera)
+    assert fuera.read_text() == 'original\n'
+
+
+def test_misma_fecha_y_tamano_no_engana(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: escribir(e, c, 'app.py', 'print(2)\n'))
+    time.sleep(1.1)
+    previo = os.stat(cwd / 'app.py')
+    (cwd / 'app.py').write_text('print(9)\n')
+    os.utime(cwd / 'app.py', ns=(previo.st_atime_ns, previo.st_mtime_ns))
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert (cwd / 'app.py').read_text() == 'print(9)\n'
+
+
+def _repo(path, con_commit):
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    subprocess.run(['git', 'init', '-q', str(path)], check=True, env=env)
+    (path / 'x.py').write_text('1\n')
+    if con_commit:
+        for orden in (['add', '.'], ['commit', '-qm', 'x']):
+            subprocess.run(['git', '-C', str(path), '-c', 'user.name=a', '-c', 'user.email=a@a', *orden],
+                           check=True, env=env)
+
+
+@pytest.mark.parametrize('con_commit', [False, True])
+def test_un_repo_anidado_no_rompe_las_instantaneas_y_se_avisa(entorno, con_commit):
+    hogar, cwd = entorno
+    (cwd / 'lib').mkdir()
+    _repo(cwd / 'lib', con_commit)
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: (escribir(e, c, 'lib/x.py', '2\n'), escribir(e, c, 'app.py', 'print(2)\n')))
+    datos = sesion.task['turnos'][0]['instantanea']
+    assert datos['antes'] and datos['despues'] and 'errores' not in datos
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert _resumen(vista) == ({('app.py', 'restaurar')}, set(), {('lib/x.py', 'repo_anidado')})
+    assert 'lib/x.py' in vista['irreversibles'][-1]['ordenes']
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, vista=vista)
+    assert (cwd / 'lib' / 'x.py').read_text() == '2\n'
+    assert (cwd / 'app.py').read_text() == 'print(1)\n'
+
+
+def test_un_repo_vacio_creado_por_el_agente_no_apaga_las_siguientes(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+    sesion.turno('uno', lambda c, e: subprocess.run(['git', 'init', '-q', str(c / 'nuevo')], check=True))
+    sesion.turno('dos', lambda c, e: escribir(e, c, 'app.py', 'print(5)\n'))
+    for turno in sesion.task['turnos']:
+        assert turno['instantanea']['antes'] and turno['instantanea']['despues']
+
+
+def test_quitar_el_git_de_un_repo_anidado_no_borra_su_contenido(entorno):
+    import shutil
+    hogar, cwd = entorno
+    (cwd / 'lib').mkdir()
+    _repo(cwd / 'lib', True)
+    (cwd / 'lib' / 'mucho.py').write_text('trabajo del usuario\n')
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: shutil.rmtree(c / 'lib' / '.git'), llamadas=[['rm', '-rf', 'lib/.git']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {n['motivo'] for n in vista['no_cubiertos']} == {'repo_anidado'}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['lib/mucho.py', 'lib/x.py'], vista=vista)
+    assert (cwd / 'lib' / 'mucho.py').read_text() == 'trabajo del usuario\n'
+
+
+def test_avisa_de_un_ignorado_que_edito_el_agente(entorno):
+    hogar, cwd = entorno
+    (cwd / '.gitignore').write_text('.env\n')
+    (cwd / '.env').write_text('A=1\n')
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: escribir(e, c, '.env', 'A=2\n'))
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert vista['no_cubiertos'] == [{'ruta': '.env', 'motivo': 'ignorado'}]
+    assert vista['irreversibles'] == [{'tipo': 'no_cubierto', 'titulo': irreversibles.TITULOS['no_cubierto'],
+                                       'ordenes': ['.env']}]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root lee cualquier archivo')
+def test_un_archivo_ilegible_no_apaga_las_instantaneas(entorno):
+    hogar, cwd = entorno
+    privado = cwd / 'privado.txt'
+    privado.write_text('x')
+    os.chmod(privado, 0)
+    try:
+        sesion = Sesion(hogar, cwd)
+        sesion.turno('uno', lambda c, e: escribir(e, c, 'app.py', 'print(5)\n'))
+        datos = sesion.task['turnos'][0]['instantanea']
+        assert datos['antes'] and datos['despues']
+        assert Almacen(hogar, cwd).excluidos(datos['antes'])['ilegibles'] == ['privado.txt']
+    finally:
+        os.chmod(privado, 0o600)
+
+
+def test_carpetas_vacias_que_ya_estaban_se_quedan(entorno):
+    import sys
+    hogar, cwd = entorno
+    (cwd / 'uploads').mkdir()
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: (escribir(e, c, 'uploads/a.txt', 'x\n'), escribir(e, c, 'nueva/b.txt', 'y\n')))
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+    assert (cwd / 'uploads').is_dir() and not (cwd / 'uploads' / 'a.txt').exists()
+    if sys.platform == 'darwin':
+        assert not (cwd / 'nueva').exists(), 'la carpeta que creó el turno se va (macOS sabe cuándo nació)'
+
+
+def test_dos_instantaneas_a_la_vez_y_un_cerrojo_viejo(entorno):
+    import threading
+    hogar, cwd = entorno
+    for n in range(300):
+        (cwd / f'f{n}.txt').write_text('x' * 500 + str(n))
+    almacen = Almacen(hogar, cwd)
+    almacen.preparar()
+    errores = []
+
+    def guardar(nombre):
+        try:
+            Almacen(hogar, cwd).guardar('s1', nombre)
+        except instantaneas.SinInstantanea as exc:
+            errores.append(str(exc))
+    hilos = [threading.Thread(target=guardar, args=('n' + str(i),)) for i in range(3)]
+    [h.start() for h in hilos]
+    [h.join() for h in hilos]
+    assert errores == []
+    # Un git que murió por tiempo deja su .lock: la siguiente instantánea lo quita.
+    (almacen.dir / 'indices' / 's1.lock').write_text('')
+    assert almacen.guardar('s1', 'otra')['commit']
+
+
+def test_una_sesion_nueva_parte_del_indice_mas_reciente(entorno):
+    hogar, cwd = entorno
+    almacen = Almacen(hogar, cwd)
+    almacen.guardar('s1', 'uno')
+    assert not (almacen.dir / 'indices' / 's2').exists()
+    almacen.guardar('s2', 'uno')
+    assert (almacen.dir / 'indices' / 's2').stat().st_size > 0
+
+
+def test_un_archivo_llamado_como_una_cache_se_guarda(entorno):
+    hogar, cwd = entorno
+    (cwd / 'coverage').write_text('no es la carpeta de cobertura\n')
+    (cwd / '.coverage').write_text('sqlite')
+    almacen = Almacen(hogar, cwd)
+    arbol = almacen.arbol(almacen.guardar('s1', 'uno')['commit'])
+    assert 'coverage' in arbol and '.coverage' not in arbol
+
+
+def test_avisa_del_git_push_de_un_subagente(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        carpeta = sesion.dir / 'subagentes'
+        carpeta.mkdir()
+        argumentos = {'argv': ['git', 'push', 'origin', 'main'], 'purpose': 'publicar'}
+        filas = [{'role': 'tool', 'time': time.time(), 'text': 'Inicio run_command · ' + str(argumentos)},
+                 {'role': 'tool', 'time': time.time(), 'text': "Inicio run_command · {'argv': ['curl', 'x"}]
+        (carpeta / 'a1.jsonl').write_text(''.join(json.dumps(f) + '\n' for f in filas))
+    t = sesion.turno('uno', t1)
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {a['tipo'] for a in vista['irreversibles']} == {'publicacion', 'subagente'}

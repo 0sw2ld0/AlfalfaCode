@@ -33,7 +33,8 @@ public struct UndoFile: Equatable, Hashable, Sendable {
     public var path: String
     /// `restaurar`, `recrear` o `borrar`.
     public var action: String
-    /// `editado_despues`, `ajeno` o `grande` en los que se quedan; nil en los restaurables.
+    /// Por qué se queda (`editado_despues`, `ajeno`, `orden`, `grande`, `ignorado`, `repo_anidado`…);
+    /// nil en los restaurables.
     public var reason: String?
 
     public init(path: String, action: String, reason: String? = nil) {
@@ -50,11 +51,19 @@ public struct UndoFile: Equatable, Hashable, Sendable {
         }
     }
 
+    /// Probablemente lo cambió una orden del agente: la hoja lo trae marcado para restaurar.
+    public var suggested: Bool { reason == "orden" }
+
     public var reasonLabel: String {
         switch reason {
         case "editado_despues": return "Lo cambiaste después del turno"
         case "ajeno": return "No lo cambió el agente"
-        case "grande": return "Demasiado grande para compararlo"
+        case "orden": return "Lo cambió una orden del agente, sin huella propia"
+        case "grande": return "Demasiado grande para guardarlo"
+        case "ignorado": return "Está ignorado: no se guarda"
+        case "repo_anidado": return "Está en un repositorio anidado: no se guarda"
+        case "ilegible": return "No se puede leer"
+        case "sin_registro": return "No hay registro de cómo estaba"
         default: return reason ?? ""
         }
     }
@@ -83,13 +92,14 @@ public struct UndoPreview: Equatable, Sendable {
     public var reason: String?
     public var restorable: [UndoFile]
     public var conflicts: [UndoFile]
-    public var large: [String]
+    /// Lo que no se toca porque las instantáneas no lo guardan (`no_cubiertos`).
+    public var untouched: [UndoFile]
     public var warnings: [UndoWarning]
     /// Es el primer mensaje: la conversación vuelve a empezar en una sesión nueva.
     public var firstTurn: Bool
 
     public init(session: String, turn: String? = nil, redoOf: String? = nil, available: Bool, reason: String? = nil,
-                restorable: [UndoFile] = [], conflicts: [UndoFile] = [], large: [String] = [],
+                restorable: [UndoFile] = [], conflicts: [UndoFile] = [], untouched: [UndoFile] = [],
                 warnings: [UndoWarning] = [], firstTurn: Bool = false) {
         self.session = session
         self.turn = turn
@@ -98,7 +108,7 @@ public struct UndoPreview: Equatable, Sendable {
         self.reason = reason
         self.restorable = restorable
         self.conflicts = conflicts
-        self.large = large
+        self.untouched = untouched
         self.warnings = warnings
         self.firstTurn = firstTurn
     }
@@ -111,7 +121,7 @@ public struct UndoPreview: Equatable, Sendable {
         return UndoPreview(session: session, turn: object["turno"] as? String, redoOf: object["deshecho"] as? String,
                            available: object["disponible"] as? Bool ?? false, reason: object["motivo"] as? String,
                            restorable: files(object["restaurables"]), conflicts: files(object["conflictos"]),
-                           large: object["grandes"] as? [String] ?? [], warnings: warnings(object["irreversibles"]),
+                           untouched: files(object["no_cubiertos"]), warnings: warnings(object["irreversibles"]),
                            firstTurn: object["primer_turno"] as? Bool ?? false)
     }
 

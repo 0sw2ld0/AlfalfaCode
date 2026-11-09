@@ -21,6 +21,7 @@ final class UndoTests: XCTestCase {
         XCTAssertEqual(value.restorable, [UndoFile(path: "b.py", action: "borrar")])
         XCTAssertEqual(value.restorable.first?.actionLabel, "se borra")
         XCTAssertEqual(value.conflicts.first?.reasonLabel, "Lo cambiaste después del turno")
+        XCTAssertEqual(value.conflicts.first?.suggested, false)
         XCTAssertEqual(value.warnings.map(\.kind), ["publicacion", "instalacion"])
         XCTAssertEqual(value.warnings.first?.commands, ["git push origin main"])
         XCTAssertFalse(value.nothingToDo)
@@ -75,6 +76,20 @@ final class UndoTests: XCTestCase {
         XCTAssertEqual(step.kept, ["b.py"])
         XCTAssertEqual(step.failed, ["c.py"])
         XCTAssertEqual(timeline.redoableUndo?.id, "u1")
+    }
+
+    func testUntouchedAndSuggestedFiles() {
+        let line = #"{"version":2,"tipo":"deshacer_vista","sesion":"s1","turno":"t","disponible":true,"#
+            + #""restaurables":[],"conflictos":[{"ruta":"gen.json","accion":"borrar","motivo":"orden"}],"#
+            + #""no_cubiertos":[{"ruta":".env","motivo":"ignorado"},{"ruta":"lib/x.py","motivo":"repo_anidado"}],"#
+            + #""irreversibles":[{"tipo":"no_cubierto","titulo":"Cambió archivos que las instantáneas no guardan","#
+            + #""ordenes":[".env","lib/x.py"]}]}"#
+        guard case let .undoPreview(value)? = AlfalfaMessage.decode(line: line) else { return XCTFail("vista") }
+        XCTAssertEqual(value.conflicts.first?.suggested, true)
+        XCTAssertEqual(value.untouched.map(\.path), [".env", "lib/x.py"])
+        XCTAssertEqual(value.untouched.map(\.reasonLabel), ["Está ignorado: no se guarda",
+                                                            "Está en un repositorio anidado: no se guarda"])
+        XCTAssertEqual(value.warnings.first?.kind, "no_cubierto")
     }
 
     func testScopes() {

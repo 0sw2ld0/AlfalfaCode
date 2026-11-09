@@ -416,12 +416,15 @@ carpeta de trabajo en un git aparte, fuera del proyecto:
 `$ALFALFA_HOME/instantaneas/<huella de la carpeta>` (`--git-dir` ahí, `--work-tree`
 en la carpeta). El `.git` del proyecto no se toca y funciona igual en una carpeta que
 no es repositorio. Como guarda la carpeta entera, cubre también lo que cambian las
-órdenes (`run_command`), no sólo las ediciones. Respeta los `.gitignore`, el
-`.git/info/exclude` del proyecto y el ignore global de git; salta las cachés que ya
-conocen los permisos (`__pycache__`, `.pytest_cache`…), las carpetas `.tmp-…/`,
-`node_modules/` y los entornos de Python, y los archivos de más de 5 MB. Las
-instantáneas de más de 30 días se borran, y también las más viejas si el almacén pasa
-de 2 GB. `ALFALFA_INSTANTANEAS=0` las apaga.
+órdenes (`run_command`), no sólo las ediciones. Guarda los bytes tal cual (sin los
+`text`, `eol` ni `working-tree-encoding` de los `.gitattributes`). Respeta los
+`.gitignore`, el `.git/info/exclude` del proyecto y el ignore global de git; salta las
+cachés que ya conocen los permisos (`__pycache__`, `.pytest_cache`…), las carpetas
+`.tmp-…/`, `node_modules/` y los entornos de Python, los repositorios anidados, los
+archivos que no se pueden leer y los de más de 5 MB, y apunta todo lo que deja fuera.
+Las instantáneas de más de 30 días se borran, y también las más viejas si el almacén
+pasa de 2 GB (nunca las de los dos últimos días ni las de deshacer y rehacer).
+`ALFALFA_INSTANTANEAS=0` las apaga; un fallo al guardar una nunca para el turno.
 
 Al pulsar **volver** la app pregunta qué vuelve a antes del mensaje:
 
@@ -432,14 +435,23 @@ Al pulsar **volver** la app pregunta qué vuelve a antes del mensaje:
 
 Antes de tocar nada enseña qué archivos vuelven y cuáles no:
 
-- Sólo se restaura lo que el agente dejó así. Un archivo que cambiaste después del
-  turno (no coincide con lo que dejó el agente: su instantánea final o la huella
-  `after` de la evidencia) o que el agente no tocó se queda como está, salvo que lo
-  marques uno por uno.
+- Sólo se restaura sin preguntar lo que el agente apuntó en la evidencia durante esos
+  turnos y sigue como lo dejó. Lo que cambió sin huella durante un turno con órdenes o
+  subagentes viene marcado como «probablemente una orden», para que lo confirmes. Lo
+  que cambiaste después del turno, lo que otro cambió durante un turno sin órdenes y
+  lo que el agente no tocó se queda como está, salvo que lo marques uno por uno.
+- Nunca borra algo que ya existía al empezar el turno sólo porque las instantáneas no
+  lo guardaban (un `.env` ignorado, un archivo grande, un repositorio anidado): se
+  queda y se avisa.
+- Restaurar no sigue enlaces ni escribe fuera de la carpeta, conserva los permisos y
+  atributos de los archivos que reescribe (sólo cambia su bit de ejecución) y sólo
+  quita carpetas vacías que creó el turno.
 - Dice con honestidad lo que no se deshace, leyendo las órdenes de esos turnos con el
   clasificador de los permisos: `git push` y otras publicaciones, commits y ramas
   (el `.git` no entra en las instantáneas), instalaciones, archivos fuera de la
-  carpeta, llamadas de red, cambios del sistema y herramientas MCP o del navegador.
+  carpeta, llamadas de red, cambios del sistema, herramientas MCP o del navegador,
+  las órdenes de los subagentes y los archivos que cambió el agente fuera de lo que
+  guardan las instantáneas.
 
 Al deshacer se guarda el estado que se quita: la conversación muestra una marca
 «Código deshecho» con **Rehacer**, que lo devuelve con la misma regla (lo que

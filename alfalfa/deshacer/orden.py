@@ -26,7 +26,12 @@ from . import SinInstantanea, deshacer, publica, rehacer, turno_anterior, turno_
 
 ALCANCES = ('todo', 'conversacion', 'codigo')
 MOTIVOS = {'editado_despues': 'lo cambiaste después del turno', 'ajeno': 'no lo cambió el agente',
-           'grande': 'es demasiado grande para compararlo'}
+           'orden': 'lo cambió algo durante un turno con órdenes, sin huella del agente',
+           'grande': 'es demasiado grande para compararlo', 'ignorado': 'ahora está ignorado',
+           'repo_anidado': 'está en un repositorio anidado', 'ilegible': 'no se puede leer',
+           'sin_registro': 'no hay registro de cómo estaba'}
+# Los que se proponen restaurar: probablemente los cambió una orden del agente.
+PROPUESTOS = {'orden'}
 ACCIONES = {'restaurar': 'se restaura', 'recrear': 'se recrea', 'borrar': 'se borra'}
 
 
@@ -134,7 +139,7 @@ def datos_del_paso(paso, vista):
     return {'id': paso['id'], 'paso': paso['tipo'], 'turno': paso.get('turno'), 'de': paso.get('de'),
             'restaurados': paso['restaurados'][:200], 'conservados': paso['conservados'][:200],
             'fallos': paso['fallos'][:50], 'irreversibles': vista.get('irreversibles') or [],
-            'grandes': vista.get('grandes') or []}
+            'grandes': vista.get('grandes') or [], 'no_cubiertos': (vista.get('no_cubiertos') or [])[:50]}
 
 
 def _texto_de_vista(vista, rehacer_=False):
@@ -148,8 +153,8 @@ def _texto_de_vista(vista, rehacer_=False):
     for fila in vista['conflictos']:
         lineas.append('  ' + fila['ruta'] + ' — se queda: ' + MOTIVOS.get(fila['motivo'], fila['motivo'])
                       + ' (--forzar ' + fila['ruta'] + ' para restaurarlo)')
-    for ruta in vista.get('grandes') or []:
-        lineas.append('  ' + ruta + ' — sin instantánea: demasiado grande')
+    for fila in vista.get('no_cubiertos') or []:
+        lineas.append('  ' + fila['ruta'] + ' — no se toca: ' + MOTIVOS.get(fila['motivo'], fila['motivo']))
     for aviso in vista.get('irreversibles') or []:
         lineas.append('No se deshace · ' + aviso['titulo'] + ': ' + '; '.join(aviso['ordenes'][:3]))
     return '\n'.join(lineas)
@@ -159,12 +164,14 @@ def _preguntar(conflictos):
     """En una terminal: ¿restaurar también cada archivo que cambió después? Devuelve las rutas elegidas."""
     elegidas = []
     for fila in conflictos:
+        propuesto = fila['motivo'] in PROPUESTOS
         try:
-            respuesta = input(fila['ruta'] + ' ' + MOTIVOS.get(fila['motivo'], '') + '. ¿Restaurarlo igualmente? '
-                              '[s/N] ')
+            respuesta = input(fila['ruta'] + ': ' + MOTIVOS.get(fila['motivo'], '') + '. ¿Restaurarlo? '
+                              + ('[S/n] ' if propuesto else '[s/N] '))
         except EOFError:
             break
-        if respuesta.strip().lower() in ('s', 'si', 'sí', 'y', 'yes'):
+        respuesta = respuesta.strip().lower()
+        if respuesta in ('s', 'si', 'sí', 'y', 'yes') or (propuesto and not respuesta):
             elegidas.append(fila['ruta'])
     return elegidas
 
@@ -212,6 +219,8 @@ def _rehacer(hogar, args, decir):
         if _interactiva(args) and vista['disponible']:
             print(_texto_de_vista(vista, True))
             forzar += _preguntar(vista['conflictos'])
+            # Mientras contestabas pudo cambiar algo: se vuelve a comparar con el disco.
+            vista = vista_rehacer(hogar, sesion.task, args.deshecho)
         paso = rehacer(hogar, sesion.task, sesion.estado, args.deshecho, forzar, vista=vista)
         texto = resumen(paso, vista)
         sesion.anotar(texto, datos_del_paso(paso, vista))
@@ -238,6 +247,10 @@ def _volver(hogar, args, decir):
             if _interactiva(args):
                 print(_texto_de_vista(vista))
                 args.forzar = list(args.forzar) + _preguntar(vista['conflictos'])
+                # Mientras contestabas pudo cambiar algo: se vuelve a comparar con el disco.
+                vista = vista_deshacer(hogar, origen.task, origen.estado, args.turno)
+                if not vista['disponible']:
+                    raise ValueError(vista.get('motivo') or 'No se puede deshacer el código de ese turno.')
         if alcance == 'codigo' or (alcance == 'todo' and previo is None):
             # En la misma sesión: sólo el código, o el primer mensaje (la conversación empieza de cero).
             paso = deshacer(hogar, origen.task, origen.estado, args.turno, args.forzar, vista=vista)
