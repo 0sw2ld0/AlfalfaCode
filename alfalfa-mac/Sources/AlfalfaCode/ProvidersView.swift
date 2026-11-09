@@ -94,7 +94,7 @@ struct ProvidersView: View {
             }
             section("Alfalfa", status: status("alfalfa"),
                     detail: "Con un código de cortesía, CUY-…@servicio, que trae la dirección del servicio: "
-                        + "cuota mensual de GPT-6 Luna, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
+                        + "cuota mensual de GPT-6 Luna, Claude Haiku 5.5, GLM 5.3 Flash y DeepSeek v4.1 Flash. "
                         + "El código queda atado a este Mac.") {
                 // La dirección del servicio va dentro del código: CUY-XXXX-XXXX-XXXX@servicio.
                 SecureField(status("alfalfa")?.configured == true ? "Código activado · pega otro para cambiarlo"
@@ -113,6 +113,11 @@ struct ProvidersView: View {
                     }
                 }
                 if !model.alfalfaQuotas.isEmpty { QuotaBars(quotas: model.alfalfaQuotas) }
+                HStack(spacing: 14) {
+                    Link("Qué es Alfalfa Cloud", destination: Links.cloud)
+                    Link("Qué datos guarda", destination: Links.privacy)
+                }
+                .font(.system(size: 11.5))
             }
             if let text = model.providersError ?? notice {
                 Text(text).font(.system(size: 12))

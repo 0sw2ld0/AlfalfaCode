@@ -9,6 +9,7 @@ struct SidebarFooter: View {
 
     @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openURL) private var openURL
     @AppStorage(Preferences.Key.displayName) private var savedName = ""
     @State private var reporting = false
 
@@ -51,6 +52,7 @@ struct SidebarFooter: View {
             }
             Divider()
             Button { reporting = true } label: { Label("Reportar un error…", systemImage: "exclamationmark.bubble") }
+            Button { openURL(Links.privacy) } label: { Label("Privacidad", systemImage: "hand.raised") }
         } label: {
             label
         }
