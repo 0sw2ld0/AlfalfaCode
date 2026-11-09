@@ -17,6 +17,8 @@ public struct SessionSummary: Equatable, Identifiable, Sendable {
     public var mode: String?
     /// La sesión que propuso esta (`padre`): sale debajo de ella en la barra lateral.
     public var parent: String?
+    /// Coste estimado en USD con los precios de models.dev; nil sin precio conocido.
+    public var cost: Double?
 
     /// El título propio si lo hay; si no, el encargo.
     public var displayTitle: String? { title ?? task }

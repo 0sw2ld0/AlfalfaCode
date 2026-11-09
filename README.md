@@ -1,7 +1,8 @@
 # AlfalfaCode
 
 Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud),
-de OpenAI con tu propia clave o de un servicio Alfalfa.
+de OpenAI, OpenRouter, OpenCode Zen u otro proveedor compatible con OpenAI con tu
+propia clave, o de un servicio Alfalfa.
 Recibe un encargo, trabaja en la carpeta actual y pregunta antes de ejecutar lo
 que no sea una lectura. La orden es `alfalfa`.
 
@@ -30,6 +31,7 @@ El modelo dice con quién se habla:
 |---|---|
 | `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
 | `openai/gpt-6-luna` | OpenAI, con tu clave de la API (Responses API) |
+| `openrouter/…`, `opencode/…`, `<proveedor>/…` | un proveedor compatible con OpenAI del catálogo, con tu clave |
 | `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
 
 ```bash
@@ -64,6 +66,110 @@ arroba, vale si la dirección ya está guardada o se fija a mano con
 El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
 ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
 enseña una barra con el % de la cuota del mes.
+
+### Catálogo de modelos (models.dev)
+
+AlfalfaCode sabe la ventana de contexto, la salida máxima, si razona y con qué
+esfuerzos, si llama herramientas, si ve imágenes y el precio de cada modelo por el
+catálogo público de [models.dev](https://models.dev) (MIT, de los creadores de
+OpenCode). Funciona así:
+
+- Se baja `https://models.dev/api.json` sin clave, se valida (tamaño máximo,
+  identificadores, URL sólo HTTPS, números finitos) y se guarda reducido en
+  `$ALFALFA_HOME/catalogo/models.dev.json` con su fecha.
+- Se refresca cada 24 horas, al listar los modelos. Sin red vale la última copia;
+  tras un fallo no se reintenta hasta pasada una hora.
+- La primera vez sin internet vale la copia mínima que viaja con el paquete
+  (`alfalfa/catalogo/minimo.json`: OpenAI, Ollama Cloud, OpenRouter, OpenCode Zen
+  y NVIDIA).
+- El motor nunca espera a la red: en cada turno lee la copia que haya.
+- Lo que responde el propio proveedor manda. Por ejemplo, la ventana de
+  `/api/show` de Ollama. El catálogo sólo rellena lo que falta: la ventana que usa
+  la compactación y el tope de salida que se pide.
+
+```bash
+alfalfa --catalogo           # fecha, origen y cuántos modelos gratis hay ahora
+```
+
+Los datos de models.dev y su licencia están en
+[alfalfa/catalogo/PROCEDENCIA.md](alfalfa/catalogo/PROCEDENCIA.md).
+
+### Gratis ahora
+
+El selector de modelos tiene una sección **Gratis ahora**. Entran los modelos con
+coste de entrada y de salida 0 que cumplen todo esto:
+
+- son de un proveedor de nube que habla el formato de OpenAI por HTTPS;
+- llaman herramientas;
+- no están retirados.
+
+Se cuida qué significa ese 0:
+
+- Se excluyen los proveedores locales (LM Studio y similares), donde 0 es «corre
+  en tu máquina».
+- Se excluyen los planes de suscripción (`*-coding-plan`, `*-token-plan`,
+  OpenCode Go), donde 0 es «incluido en el plan».
+- Se excluyen los enrutadores `auto`.
+
+La lista se actualiza sola con el catálogo.
+
+**Gratis no quiere decir privado.** Junto a cada modelo gratis sale el aviso
+«Gratis: puede usar tus datos para entrenar». Muchos proveedores pagan los modelos
+gratis guardando lo que les mandas para entrenar o mejorar sus modelos. No mandes
+nada confidencial a un modelo gratis sin leer antes las condiciones de su
+proveedor.
+
+AlfalfaCode no revende nada: cada petición va desde tu Mac al proveedor, con tu
+clave.
+
+### Proveedores compatibles con OpenAI
+
+OpenRouter, OpenCode Zen y cualquier otro proveedor del catálogo que hable el
+formato de OpenAI funcionan con tu clave y la URL del catálogo.
+
+- Se usa Chat Completions.
+- Se usa la Responses API en los modelos que el catálogo marca así (los GPT de
+  Zen, por ejemplo).
+- Para añadir una clave:
+
+  ```bash
+  alfalfa --guardar-clave openrouter     # pide la clave sin enseñarla
+  alfalfa --guardar-clave opencode       # OpenCode Zen
+  alfalfa --guardar-clave nvidia         # cualquier otro id del catálogo
+  ```
+
+  En la app, en Ajustes ▸ Proveedores. Si eliges en el selector un modelo cuyo
+  proveedor no tiene clave, AlfalfaCode te dice cuál falta (la variable del
+  catálogo, como `OPENROUTER_API_KEY`) y dónde conseguirla, y la guarda ahí mismo.
+- La clave va al Llavero y queda atada a la URL que había al guardarla. Si el
+  catálogo cambiara luego esa URL, la clave no la sigue.
+- Sólo OpenRouter y OpenCode Zen leen también su variable estándar
+  (`OPENROUTER_API_KEY`, `OPENCODE_API_KEY`). De los demás no se lee ninguna
+  variable, porque su nombre viene de un dato externo.
+- Además de los gratis, en el selector salen los modelos de pago que añadas en
+  `proveedores.json`:
+
+  ```json
+  {"openrouter": {"modelos": ["anthropic/claude-sonnet-5"]}}
+  ```
+
+**OpenCode Zen y otras herramientas.** Según su documentación, los modelos de pago
+de Zen se pueden usar desde cualquier agente, pero sus modelos gratis
+«require OpenCode». Por eso los gratis de Zen no salen en «Gratis ahora». Sus
+condiciones de uso también limitan el uso a tu propio uso interno.
+
+### Coste estimado
+
+Con los precios del catálogo, AlfalfaCode estima lo que cuesta cada turno y la
+sesión entera. Usa los tokens de entrada, de salida y de caché que devuelve el
+proveedor.
+
+- La app lo enseña donde ya enseña los tokens: en el panel de la sesión, en
+  `/estado` y en la lista de sesiones.
+- Sólo se estima para quien cobra por token: OpenAI y los compatibles. Ollama local
+  no cuesta nada; Ollama Cloud y el servicio Alfalfa se pagan con su plan o su
+  cuota.
+- Es una estimación, no la factura del proveedor.
 
 ## Usar
 
@@ -465,6 +571,7 @@ versión en sus dependencias.
 | `mcp_cliente/`, `complementos/`, `hooks/` | Servidores MCP, complementos y hooks compatibles con Claude Code |
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
+| `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |
 
 ## Integrarlo en otra aplicación
 
@@ -472,7 +579,7 @@ El arnés no importa nada de quien lo integra. Lo que esa aplicación necesita
 cambiar está en `alfalfa/ajustes.py`: instrucciones por defecto, dónde buscar los
 binarios, cómo llegar al buscador web, qué repositorio da por propio y las URL
 y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`,
-`alfalfa_servicio_url`).
+`clave_compatible`, `alfalfa_servicio_url`).
 También cómo se nombran el runtime y el integrador en los textos (`nombres`), a
 qué ramas puede avanzar un agente con `git merge --ff-only` (`ramas_de_avance`) y
 qué órdenes propias de su proyecto da por seguras (`orden_permitida`). La
@@ -503,3 +610,6 @@ app de Mac está en [alfalfa-mac/TERCEROS.md](alfalfa-mac/TERCEROS.md).
 
 La búsqueda web usa la librería [CuySearch](https://github.com/0sw2ld0/CuySearch)
 (MIT) como dependencia.
+
+El catálogo de modelos viene de [models.dev](https://models.dev) (MIT); ver
+[alfalfa/catalogo/PROCEDENCIA.md](alfalfa/catalogo/PROCEDENCIA.md).

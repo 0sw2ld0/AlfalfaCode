@@ -91,8 +91,19 @@ alfalfa --modelos --json
 ```
 
 `modelos` junta los de cada proveedor configurado: `name` es el que se guarda en la
-sesión (con prefijo `openai/` o `alfalfa/` fuera de Ollama) y `nombre` el visible.
+sesión (con prefijo `openai/`, `alfalfa/` o el del compatible, `openrouter/…`, fuera
+de Ollama) y `nombre` el visible.
 Si un proveedor no responde, los demás se listan igual y su fallo va en `fallos`.
+Del catálogo de models.dev cada fila puede traer `ventana`, `salida_max`, `precio`
+(`entrada` y `salida` en USD por millón de tokens), `razona`, `esfuerzos`,
+`herramientas` y `vision`. Los gratis ahora llegan aunque su proveedor no tenga
+clave, con `gratis: true`, el `aviso` de datos, `nombre_proveedor` y, si falta la
+clave, `falta_clave` (`variable`, `donde`, `texto`).
+
+`turno_terminado`, `fin`, `historial` y cada fila de `sesiones` añaden `coste` (USD
+estimados de la sesión con los precios del catálogo) cuando el modelo tiene precio;
+`turno_terminado` trae también `tokens_turno` y `coste_turno`. Sin precio conocido
+no aparece ningún coste: 0 sería «gratis», no «no se sabe».
 
 Proveedores (las claves y el código se leen por la entrada estándar, nunca en los
 argumentos):

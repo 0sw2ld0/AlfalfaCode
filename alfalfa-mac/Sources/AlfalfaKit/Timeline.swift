@@ -184,6 +184,11 @@ public struct Timeline: Equatable, Sendable {
     }
     public static let subagentStepLimit = 200
     public private(set) var totalTokens = 0
+    /// Coste estimado de la sesión en USD (precios de models.dev); nil si el modelo no cobra por token.
+    public private(set) var totalCost: Double?
+    /// Tokens y coste estimado del último turno terminado.
+    public private(set) var lastTurnTokens: Int?
+    public private(set) var lastTurnCost: Double?
     /// Hora de cada mensaje del agente, por id de elemento: la fila de acciones la enseña.
     public private(set) var agentTimes: [Int: Double] = [:]
     /// Hora y turno de cada mensaje del usuario, por id de elemento: «Hace 12 minutos», volver y bifurcar.
@@ -199,7 +204,8 @@ public struct Timeline: Equatable, Sendable {
 
     /// Conversación de una sesión guardada, lista para seguirla: queda «lista» y el cierre
     /// del último turno conserva sus botones.
-    public init(history events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0) {
+    public init(history events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0,
+                cost: Double? = nil) {
         for event in events { apply(event) }
         if let context {
             contextTokens = context.tokens
@@ -208,6 +214,7 @@ public struct Timeline: Equatable, Sendable {
             contextDetails = context.details
         }
         totalTokens = tokens
+        totalCost = cost
         if let wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
         status = .idle
         compacting = false
@@ -326,6 +333,9 @@ public struct Timeline: Equatable, Sendable {
             }
             // El turno acabó pero el proceso sigue vivo: la caja sigue activa salvo que lo interrumpan.
             totalTokens = outcome.tokens
+            if let cost = outcome.cost { totalCost = cost }
+            lastTurnTokens = outcome.turnTokens
+            lastTurnCost = outcome.turnCost
             if outcome.exitCode == 130 || outcome.state == "interrupted" {
                 status = .interrupted
             } else if outcome.state == "blocked" {
@@ -342,6 +352,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             totalTokens = outcome.tokens
+            if let cost = outcome.cost { totalCost = cost }
             finish(outcome: outcome)
         case let .processes(list):
             processes = list

@@ -105,6 +105,14 @@ struct SidePanel: View {
                 stat("Mensajes", "\(messages)")
                 stat("Acciones", "\(tools)")
                 stat("Tokens gastados en la sesión", compact(timeline.totalTokens))
+                if let cost = timeline.totalCost {
+                    // Con los precios de models.dev: orientativo, no la factura del proveedor.
+                    stat("Coste estimado de la sesión", CatalogFormat.cost(cost))
+                }
+                if let tokens = timeline.lastTurnTokens {
+                    stat("Último turno", compact(tokens) + " tokens"
+                         + (timeline.lastTurnCost.map { " · " + CatalogFormat.cost($0) } ?? ""))
+                }
             }
             .padding(.top, 2)
         }

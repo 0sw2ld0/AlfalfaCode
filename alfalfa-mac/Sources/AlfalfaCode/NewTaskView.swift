@@ -168,8 +168,9 @@ struct NewTaskView: View {
 
     private var modelMenu: some View {
         Menu {
-            ModelMenuItems(groups: model.modelGroups, selected: model.model, label: model.label(for:),
-                           providerName: model.providerName) { model.model = $0 }
+            ModelMenuItems(app: model, groups: model.modelGroups, selected: model.model) { name in
+                model.choose(name) { model.model = $0 }
+            }
             Divider()
             Button("Proveedores…") { openProviders() }
         } label: {

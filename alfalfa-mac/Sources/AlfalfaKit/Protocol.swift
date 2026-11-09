@@ -402,6 +402,11 @@ public struct Outcome: Equatable, Sendable {
     public var wrapUp: WrapUp?
     /// Id del turno que terminó (`turno`).
     public var turn: String?
+    /// Coste estimado de la sesión en USD con los precios de models.dev; nil sin precio conocido.
+    public var cost: Double?
+    /// Tokens y coste estimado del turno que terminó.
+    public var turnTokens: Int?
+    public var turnCost: Double?
 }
 
 /// Respuesta de `alfalfa --buscar-actualizacion --json` y `--actualizar --json`.
@@ -440,14 +445,34 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
     public var name: String
     /// El visible en el selector («GPT-6 Luna - Alfalfa»).
     public var label: String
-    /// `ollama`, `openai` o `alfalfa`.
+    /// `ollama`, `openai`, `alfalfa` o un compatible con OpenAI del catálogo (`openrouter`).
     public var provider: String
+    /// Nombre visible del proveedor («OpenRouter»), para los compatibles del catálogo.
+    public var providerName: String?
+    /// Ventana de contexto: la del proveedor o, si no la da, la del catálogo de models.dev.
+    public var context: Int?
+    /// Precio por millón de tokens, de quien cobra por token.
+    public var price: ModelPrice?
+    /// En «Gratis ahora»: coste 0, de nube y con herramientas.
+    public var free: Bool
+    /// El aviso de datos que acompaña a un modelo gratis.
+    public var notice: String?
+    /// La clave que falta para usarlo, si su proveedor no la tiene.
+    public var missingKey: MissingKey?
     public var id: String { name }
 
-    public init(name: String, label: String? = nil, provider: String = "ollama") {
+    public init(name: String, label: String? = nil, provider: String = "ollama", providerName: String? = nil,
+                context: Int? = nil, price: ModelPrice? = nil, free: Bool = false, notice: String? = nil,
+                missingKey: MissingKey? = nil) {
         self.name = name
         self.label = label ?? name
         self.provider = provider
+        self.providerName = providerName
+        self.context = context
+        self.price = price
+        self.free = free
+        self.notice = notice
+        self.missingKey = missingKey
     }
 }
 
@@ -458,13 +483,25 @@ public struct ProviderStatus: Equatable, Identifiable, Sendable {
     public var configured: Bool
     public var url: String?
     public var hasKey: Bool
+    /// Compatible con OpenAI del catálogo (OpenRouter, OpenCode Zen…): se configura con una clave.
+    public var compatible: Bool
+    /// Nombre de su clave (`OPENROUTER_API_KEY`) y dónde se consigue.
+    public var variable: String?
+    public var keyPage: String?
+    /// Lo que conviene saber de sus condiciones («Los modelos gratis de Zen sólo desde OpenCode»).
+    public var notice: String?
 
-    public init(id: String, name: String, configured: Bool, url: String? = nil, hasKey: Bool = false) {
+    public init(id: String, name: String, configured: Bool, url: String? = nil, hasKey: Bool = false,
+                compatible: Bool = false, variable: String? = nil, keyPage: String? = nil, notice: String? = nil) {
         self.id = id
         self.name = name
         self.configured = configured
         self.url = url
         self.hasKey = hasKey
+        self.compatible = compatible
+        self.variable = variable
+        self.keyPage = keyPage
+        self.notice = notice
     }
 }
 
@@ -517,7 +554,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case finished(Outcome)
     case sessions([SessionSummary])
     /// `alfalfa --historial ID --json`: la conversación guardada y el cierre de su último turno.
-    case history(id: String, events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0)
+    case history(id: String, events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0,
+                 cost: Double? = nil)
     case models([ModelInfo])
     /// `--proveedores --json` y las órdenes que los cambian: el proveedor por defecto y el estado de cada uno.
     case providers(defaultProvider: String, providers: [ProviderStatus])
@@ -600,7 +638,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                      details: details(context))
             }
             return .history(id: id, events: events, wrapUp: wrapUp(object["cierre"]), context: saved,
-                            tokens: object["tokens"] as? Int ?? 0)
+                            tokens: object["tokens"] as? Int ?? 0, cost: amount(object["coste"]))
         case "sesiones":
             guard let rows = object["sesiones"] as? [[String: Any]] else { return nil }
             return .sessions(rows.compactMap(summary))
@@ -609,7 +647,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .models(rows.compactMap { row in
                 guard let name = row["name"] as? String else { return nil }
                 return ModelInfo(name: name, label: text(row["nombre"]) ?? name,
-                                 provider: text(row["proveedor"]) ?? "ollama")
+                                 provider: text(row["proveedor"]) ?? "ollama",
+                                 providerName: text(row["nombre_proveedor"]), context: integer(row["ventana"]),
+                                 price: modelPrice(row["precio"]), free: bool(row["gratis"]) ?? false,
+                                 notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]))
             })
         case "proveedores":
             guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }
@@ -617,7 +658,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
                 guard let id = text(row["id"]) else { return nil }
                 return ProviderStatus(id: id, name: text(row["nombre"]) ?? id,
                                       configured: row["configurado"] as? Bool ?? false,
-                                      url: text(row["url"]), hasKey: row["clave"] as? Bool ?? false)
+                                      url: text(row["url"]), hasKey: row["clave"] as? Bool ?? false,
+                                      compatible: bool(row["compatible"]) ?? false, variable: text(row["variable"]),
+                                      keyPage: text(row["donde"]), notice: text(row["aviso"]))
             })
         case "buscador":
             return webSearch(object).map { .webSearch($0) }
@@ -777,7 +820,27 @@ public enum AlfalfaMessage: Equatable, Sendable {
         guard let state = object["estado"] as? String else { return nil }
         return Outcome(state: state, summary: object["resumen"] as? String ?? "",
                        exitCode: object["codigo_salida"] as? Int ?? 1, tokens: object["tokens"] as? Int ?? 0,
-                       wrapUp: wrapUp(object["cierre"]), turn: text(object["turno"]))
+                       wrapUp: wrapUp(object["cierre"]), turn: text(object["turno"]), cost: amount(object["coste"]),
+                       turnTokens: integer(object["tokens_turno"]), turnCost: amount(object["coste_turno"]))
+    }
+
+    /// Un importe en USD no negativo y finito; nil si no llega o no lo es.
+    private static func amount(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let double = number.doubleValue
+        return double.isFinite && double >= 0 ? double : nil
+    }
+
+    private static func modelPrice(_ value: Any?) -> ModelPrice? {
+        guard let object = value as? [String: Any], let input = amount(object["entrada"]),
+              let output = amount(object["salida"]) else { return nil }
+        return ModelPrice(input: input, output: output)
+    }
+
+    private static func missingKey(_ value: Any?) -> MissingKey? {
+        guard let object = value as? [String: Any], let variable = text(object["variable"]) else { return nil }
+        return MissingKey(variable: variable, url: text(object["donde"]),
+                          text: text(object["texto"]) ?? "Falta la clave \(variable).")
     }
 
     private static func breakdown(_ value: Any?) -> ContextBreakdown? {
@@ -797,7 +860,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                               date: number(row["fecha"]) ?? 0, tokens: row["tokens"] as? Int ?? 0,
                               title: text(row["titulo"]), pinned: bool(row["fijada"]) ?? false,
                               archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]),
-                              parent: text(row["padre"]))
+                              parent: text(row["padre"]), cost: amount(row["coste"]))
     }
 }
 

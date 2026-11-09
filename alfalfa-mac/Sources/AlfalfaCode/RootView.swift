@@ -28,6 +28,7 @@ struct RootView: View {
         .overlay(alignment: .top) { TitleBarArea().frame(height: 28) }
         .ignoresSafeArea(.container, edges: .top)
         .modifier(UpdateAlert())
+        .sheet(item: $model.keyRequest) { request in KeySheet(request: request) }
         .onAppear(perform: openSettingsIfRequested)
     }
 
@@ -273,7 +274,8 @@ struct PastSessionInfo: View {
                     }
                     Text(label).foregroundStyle(Theme.warning)
                     Text(Presentation.abbreviate(summary.cwd ?? "")).font(Theme.mono).foregroundStyle(Theme.secondary)
-                    Text("\(Presentation.shortModel(summary.model ?? "—")) · \(Presentation.effortLabel(summary.effort ?? "—")) · \(summary.tokens) tokens")
+                    Text("\(Presentation.shortModel(summary.model ?? "—")) · \(Presentation.effortLabel(summary.effort ?? "—")) · \(summary.tokens) tokens"
+                         + (summary.cost.map { " · " + CatalogFormat.cost($0) + " estimado" } ?? ""))
                         .foregroundStyle(Theme.muted)
                     if Presentation.resumable(summary.state), summary.cwd != nil {
                         Button { model.resume(summary) } label: {

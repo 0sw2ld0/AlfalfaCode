@@ -76,7 +76,9 @@ final class CompactionTests: XCTestCase {
             + #"{"rol":"user","texto":"Hola","hora":1,"turno":"t1"},"#
             + #"{"rol":"system","texto":"Contexto compactado","hora":2,"compactacion":{"estado":"hecha","motivo":"auto","antes":10,"despues":5,"resumen":"R"}}"#
             + #"],"contexto":{"tokens":5,"limite":100,"umbral":90}}"#
-        guard case let .history(_, events, wrapUp, context, tokens) = decode(line) else { return XCTFail("historial") }
+        guard case let .history(_, events, wrapUp, context, tokens, _) = decode(line) else {
+            return XCTFail("historial")
+        }
         var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens)
         XCTAssertFalse(timeline.compacting)
         XCTAssertEqual(timeline.compactThreshold, 90)

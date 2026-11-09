@@ -2,33 +2,49 @@ import AlfalfaKit
 import SwiftUI
 
 /// Las opciones del selector de modelo, agrupadas por proveedor cuando hay más de uno.
+/// Los modelos del selector: los de cada proveedor y, aparte, «Gratis ahora» con el aviso de datos.
+/// Cada modelo lleva su ventana y su precio del catálogo de models.dev («256K · 0,25/2 $ por M»).
 struct ModelMenuItems: View {
+    @ObservedObject var app: AppModel
     let groups: [(provider: String, names: [String])]
     let selected: String
-    let label: (String) -> String
-    let providerName: (String) -> String
     let choose: (String) -> Void
 
     var body: some View {
         if groups.count > 1 {
             ForEach(groups, id: \.provider) { group in
-                Section(providerName(group.provider)) { items(group.names) }
+                Section(app.providerName(group.provider)) { items(group.names) }
             }
         } else {
             items(groups.first?.names ?? [])
+        }
+        let free = app.freeGroups
+        if !free.isEmpty {
+            Section("Gratis ahora · " + CatalogFormat.freeNotice.lowercased()) {
+                ForEach(free, id: \.provider) { group in
+                    Menu(group.title) { items(group.names) }
+                }
+            }
         }
     }
 
     @ViewBuilder private func items(_ names: [String]) -> some View {
         ForEach(names, id: \.self) { name in
             Button { choose(name) } label: {
-                if name == selected { Label(label(name), systemImage: "checkmark") } else { Text(label(name)) }
+                if name == selected { Label(title(name), systemImage: "checkmark") } else { Text(title(name)) }
             }
         }
     }
+
+    private func title(_ name: String) -> String {
+        let label = app.label(for: name)
+        guard let detail = app.info(for: name).flatMap(CatalogFormat.detail) else { return label }
+        return label + "  ·  " + detail
+    }
 }
 
-/// Ajustes ▸ Proveedores: Ollama con su URL y su clave, OpenAI con la del usuario y el proveedor por defecto.
+/// Ajustes ▸ Proveedores: Ollama con su URL y su clave, OpenAI y los compatibles con OpenAI (OpenRouter,
+/// OpenCode Zen…) con la del usuario, el servicio Alfalfa y el proveedor por defecto.
 /// Las claves van al Llavero a través de `alfalfa`; la app no las guarda ni las vuelve a enseñar.
 struct ProvidersView: View {
     @EnvironmentObject private var model: AppModel
@@ -36,6 +52,8 @@ struct ProvidersView: View {
     @State private var ollamaKey = ""
     @State private var openAIKey = ""
     @State private var alfalfaCode = ""
+    /// Claves que se escriben para los compatibles con OpenAI (OpenRouter, OpenCode Zen…), por id.
+    @State private var compatibleKeys: [String: String] = [:]
     @State private var busy = false
     @State private var notice: String?
 
@@ -70,6 +88,9 @@ struct ProvidersView: View {
                             .disabled(busy)
                     }
                 }
+            }
+            ForEach(model.providers.filter(\.compatible)) { provider in
+                compatibleSection(provider)
             }
             section("Alfalfa", status: status("alfalfa"),
                     detail: "Con un código de cortesía, CUY-…@servicio, que trae la dirección del servicio: "
@@ -107,6 +128,44 @@ struct ProvidersView: View {
     }
 
     private func status(_ id: String) -> ProviderStatus? { model.providers.first { $0.id == id } }
+
+    /// Un compatible con OpenAI del catálogo de models.dev: con tu clave, a su precio.
+    private func compatibleSection(_ provider: ProviderStatus) -> some View {
+        let key = Binding(get: { compatibleKeys[provider.id] ?? "" }, set: { compatibleKeys[provider.id] = $0 })
+        let variable = provider.variable.map { " (\($0))" } ?? ""
+        return section(provider.name, status: provider,
+                       detail: "Compatible con OpenAI, con tu clave\(variable); el uso se cobra en tu cuenta. "
+                           + "Sus modelos gratis salen en «Gratis ahora»: " + CatalogFormat.freeNotice.lowercased()
+                           + ".") {
+            if let notice = provider.notice {
+                Label(notice, systemImage: "info.circle").font(.system(size: 12)).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            SecureField(provider.hasKey ? "Clave guardada · escribe otra para cambiarla"
+                                        : (provider.variable ?? "Clave"), text: key)
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Clave de \(provider.name)")
+            HStack {
+                Button("Guardar") {
+                    Task {
+                        await run {
+                            if await model.saveKey(key.wrappedValue, for: provider.id) {
+                                compatibleKeys[provider.id] = ""
+                                notice = "Clave guardada en el Llavero."
+                            }
+                        }
+                    }
+                }
+                .disabled(busy || key.wrappedValue.isEmpty)
+                if provider.hasKey {
+                    Button("Borrar clave") { Task { await run { await model.deleteKey(for: provider.id) } } }
+                        .disabled(busy)
+                }
+                if let page = provider.keyPage, let url = URL(string: page) {
+                    Link("Conseguir la clave", destination: url).font(.system(size: 12))
+                }
+            }
+        }
+    }
 
     private var defaultPicker: some View {
         HStack {

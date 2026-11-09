@@ -14,8 +14,9 @@ struct ModelSettings: View {
             SettingsBlock(title: "Modelo por defecto",
                           detail: "Cada encargo nuevo empieza con este modelo. Puedes cambiarlo en el encargo.") {
                 Menu {
-                    ModelMenuItems(groups: model.modelGroups, selected: model.defaultModel, label: model.label(for:),
-                                   providerName: model.providerName) { model.defaultModel = $0 }
+                    ModelMenuItems(app: model, groups: model.modelGroups, selected: model.defaultModel) { name in
+                        model.choose(name) { model.defaultModel = $0 }
+                    }
                 } label: {
                     Text(model.label(for: model.defaultModel))
                 }

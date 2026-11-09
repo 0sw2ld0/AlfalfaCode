@@ -36,8 +36,9 @@ struct ComposerToolbar: View {
     /// siguiente turno, como /model en Codex.
     private var modelMenu: some View {
         Menu {
-            ModelMenuItems(groups: groups, selected: session.model, label: app.label(for:),
-                           providerName: app.providerName) { session.change(model: $0) }
+            ModelMenuItems(app: app, groups: groups, selected: session.model) { name in
+                app.choose(name) { session.change(model: $0) }
+            }
         } label: {
             Text(app.label(for: session.model)).font(.system(size: 12.5, design: .monospaced))
         }

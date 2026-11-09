@@ -226,7 +226,9 @@ final class MarkdownTextTests: XCTestCase {
 
     func testRestoredHistoryIsReadyToContinue() {
         let line = #"{"version":2,"tipo":"historial","sesion":"abc","eventos":[{"rol":"user","texto":"Hola","hora":1},{"rol":"agent","texto":"Listo","hora":2}],"cierre":{"resumen":"Hecho.","pregunta":"¿Sigo?","opciones":["Sí"]}}"#
-        guard case let .history("abc", events, wrapUp, _, _)? = AlfalfaMessage.decode(line: line) else { return XCTFail("no decodifica") }
+        guard case let .history("abc", events, wrapUp, _, _, _)? = AlfalfaMessage.decode(line: line) else {
+            return XCTFail("no decodifica")
+        }
         var timeline = Timeline(history: events, wrapUp: wrapUp)
         XCTAssertEqual(timeline.status, .idle)
         XCTAssertEqual(timeline.items.count, 3)

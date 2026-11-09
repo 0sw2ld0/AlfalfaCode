@@ -254,6 +254,13 @@ final class LiveSession: ObservableObject, Identifiable {
             rows.append(InfoRow("Contexto", "aún sin medir"))
         }
         rows.append(InfoRow("Tokens gastados", "\(timeline.totalTokens)"))
+        if let cost = timeline.totalCost {
+            rows.append(InfoRow("Coste estimado", CatalogFormat.cost(cost) + " (precios de models.dev)"))
+        }
+        if let tokens = timeline.lastTurnTokens {
+            rows.append(InfoRow("Último turno", "\(tokens) tokens"
+                                + (timeline.lastTurnCost.map { " · " + CatalogFormat.cost($0) } ?? "")))
+        }
         rows.append(InfoRow("Estado", isDormant ? "guardada; escribe para continuarla" : timeline.status.label))
         if readOnly { rows.append(InfoRow("Permisos", "solo lectura")) }
         timeline.addInfo("Estado de la sesión", rows)

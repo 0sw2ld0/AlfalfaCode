@@ -48,6 +48,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
     @Published private(set) var models: [ModelInfo] = []
+    /// Un modelo elegido cuyo proveedor no tiene clave: la hoja explica cuál falta y la guarda.
+    @Published var keyRequest: KeyRequest?
     /// Ollama, OpenAI y Alfalfa, como los cuenta `alfalfa --proveedores --json`.
     @Published private(set) var providers: [ProviderStatus] = []
     @Published private(set) var defaultProvider = "ollama"
@@ -139,9 +141,10 @@ final class AppModel: ObservableObject {
         models.first { $0.name == name }?.label ?? Presentation.shortModel(name)
     }
 
-    /// Los modelos del selector agrupados por proveedor, en el orden de la lista.
+    /// Los modelos del selector agrupados por proveedor, en el orden de la lista. Los gratis
+    /// van aparte, en «Gratis ahora» (`freeGroups`), salvo el elegido.
     var modelGroups: [(provider: String, names: [String])] {
-        let names = modelChoices
+        let names = modelChoices.filter { name in !(info(for: name)?.free ?? false) || name == model }
         var order: [String] = []
         var groups: [String: [String]] = [:]
         for name in names {
@@ -425,8 +428,8 @@ final class AppModel: ObservableObject {
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
                                                           directory: home)
-            for case let .history(_, events, wrapUp, context, tokens) in messages {
-                session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens),
+            for case let .history(_, events, wrapUp, context, tokens, cost) in messages {
+                session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost),
                                 launcher: launcher, resumable: resumable)
                 historyError[id] = nil
                 return
