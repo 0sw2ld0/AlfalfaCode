@@ -212,10 +212,10 @@ private struct BrowserHost: NSViewRepresentable {
         picker.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(picker, positioned: .above, relativeTo: view)
         NSLayoutConstraint.activate([
-            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            picker.topAnchor.constraint(equalTo: container.topAnchor),
-            picker.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            picker.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            picker.topAnchor.constraint(equalTo: view.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 }
