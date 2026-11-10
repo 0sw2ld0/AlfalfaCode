@@ -65,6 +65,8 @@ PATRONES = (
     (re.compile(r'(?i)(\b[a-z][a-z0-9+.-]*://[^\s:/@\'"]+:)[^\s@/\'"]+(@)'), r'\1' + REDACTADO + r'\2'),
     (re.compile(r'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)'),
      REDACTADO),
+    # JWT: cabecera y carga JSON codificadas en base64url, más su firma.
+    (re.compile(r'\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b'), REDACTADO),
     (re.compile(r'\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}'
                 r'|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})'),
      REDACTADO),

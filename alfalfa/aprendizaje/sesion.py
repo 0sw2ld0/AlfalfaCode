@@ -18,8 +18,6 @@ from .pendientes import Pendientes
 from .rutas import RutaInvalida
 
 MOTIVO = 'aprendizaje'
-# Lo que trae contenido de fuera: con algo de esto en la sesión, nada se guarda sin permiso.
-DE_FUERA = ('web_search', 'read_web')
 ORDEN_APRENDER = re.compile(r'^\s*/(?:aprender|learn)(?:\s+(?P<que>.*))?\s*$', re.S)
 
 MEMORIA_TOOL = schema(
@@ -225,13 +223,17 @@ class Aprendizaje:
     # --- Herramientas ---------------------------------------------------------------------------
 
     def contaminada(self, rt):
-        """La primera herramienta de la sesión que trajo contenido de fuera (web, navegador, MCP)."""
+        """Procedencia compartida con el runtime, también tras compactar o reanudar."""
+        from ..contenido_externo import MOTIVO as EXTERNO
+        if rt.state.get(EXTERNO):
+            return ', '.join(rt.state[EXTERNO][-6:])
+        from ..busqueda_sesiones.lectura import externa
         mcp = getattr(rt, 'mcp', None)
         for mensaje in rt.state.get('messages') or []:
             if not isinstance(mensaje, dict) or mensaje.get('role') != 'tool':
                 continue
             nombre = str(mensaje.get('tool_name') or '')
-            if (nombre in DE_FUERA or nombre.startswith(('browser_', 'mcp__'))
+            if (externa(nombre)
                     or (mcp is not None and _es_propia(mcp, nombre))):
                 return nombre
         return None
@@ -278,16 +280,22 @@ class Aprendizaje:
             return []
         return [t for t in [docs.usuario] + [texto for _, texto in docs.proyecto] if t]
 
-    async def pedir(self, argv, proposito, diff, siempre):
+    async def pedir(self, argv, proposito, diff, siempre, fuente=None):
         """La tarjeta de permiso con el diff entero. `siempre`: tampoco la concede «Omitir permisos»."""
         if len(diff) > MAX_DIFF:
             raise ValueError('El cambio es demasiado grande para enseñarlo entero en la tarjeta: divídelo.')
         aprobacion = self.manager.approval
         if siempre:
             aprobacion = getattr(aprobacion, 'interior', aprobacion)
+        extra = {}
+        if fuente:
+            from ..contenido_externo import MOTIVO as EXTERNO
+            extra = {'motivos': [MOTIVO, EXTERNO], 'justificacion': 'El agente ha leído contenido externo ('
+                     + fuente + '). Puede contener órdenes ajenas al encargo. Revisa el diff; '
+                     'esta aprobación sólo autoriza este cambio.'}
         try:
             await aprobacion({'argv': argv, 'purpose': proposito, 'motivo': MOTIVO, 'motivos': [MOTIVO],
-                              'diff': diff})
+                              'diff': diff, **extra})
         except ValueError:
             raise ValueError('El usuario no lo aprobó: no se guardó. No lo intentes de otra forma.') from None
 
@@ -314,7 +322,7 @@ class Aprendizaje:
         fuente = self.contaminada(rt)
         await self.pedir(['memoria', almacen], 'Guardar en la memoria ' + almacen
                          + (' (esta sesión trajo contenido de fuera con ' + fuente + ')' if fuente else ''),
-                         diff, siempre=True)
+                         diff, siempre=True, fuente=fuente)
         estado = self.memoria.guardar(almacen, entradas)
         self.manager.event(self.manager.task, 'system', 'Memoria · ' + TITULOS[almacen] + ' guardada ('
                            + str(estado['usados']) + '/' + str(estado['limite']) + ' caracteres):\n' + diff)
@@ -341,7 +349,7 @@ class Aprendizaje:
         await self.pedir(['habilidad', accion, alcance + ':' + cambio['nombre']],
                          que + ' «' + cambio['nombre'] + '»' + donde
                          + (' (esta sesión trajo contenido de fuera con ' + fuente + ')' if fuente else ''),
-                         cambio['diff'], siempre=True)
+                         cambio['diff'], siempre=True, fuente=fuente)
         task = self.manager.task
         vigentes = self.vigentes(rt) if alcance == 'proyecto' else []
         resultado = self.habilidades.aplicar(cambio, {'sesion': task.get('id'), 'turno': task.get('turno_actual'),
