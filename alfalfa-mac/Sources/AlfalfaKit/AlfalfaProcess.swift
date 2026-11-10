@@ -64,7 +64,8 @@ public enum Launcher {
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
                                       monthlyBudget: Double? = nil, diagnostics: Bool = true,
-                                      commitSignature: Bool = true, queue: Bool = false, browserEngine: String? = nil,
+                                      commitSignature: Bool = true, queue: Bool = false,
+                                      browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa") -> [String] {
         var arguments = ["--stdio"]
         if queue { arguments.append("--cola-encargos") }

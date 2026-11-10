@@ -44,8 +44,6 @@ final class LiveSession: ObservableObject, Identifiable {
     private(set) var releaseWhenParked = false
     private var lastRefresh = Date.distantPast
 
-    var sessionID: String? { timeline.session?.id ?? resumeID }
-
     /// Sesión guardada abierta sin proceso: el primer mensaje la reanuda con `--reanudar`.
     private var dormantLauncher: URL?
     /// Se llama al despertar una sesión dormida para pasarla a las sesiones vivas.
@@ -57,8 +55,6 @@ final class LiveSession: ObservableObject, Identifiable {
     /// «Seguir en una sesión nueva»: el motor creó la sesión con el resumen; la app la abre.
     var onContinued: ((String) -> Void)?
     var isDormant: Bool { dormantLauncher != nil }
-    /// Se puede escribir: hay proceso abierto o la sesión duerme hasta el siguiente mensaje.
-    var canSend: Bool { timeline.status.isActive || isDormant }
     /// La orden alfalfa con la que arrancó, para reanudarla después.
     private var launcher: URL?
     /// Interrumpida o bloqueada: se puede reanudar sin mensaje. Una completada necesita uno.
@@ -495,8 +491,6 @@ extension LiveSession {
         draftImages = ImageSupport.restoredImages(current: draftImages, returned: parts.images)
     }
 
-    /// El id de un mensaje en cola, compartido con el motor.
-    static func newQueueID() -> String { UUID().uuidString.lowercased() }
 }
 
 // MARK: - Sesiones hijas
@@ -579,5 +573,16 @@ extension LiveSession {
             let reply = await engine.perform(request)
             self?.process?.send(.browserReply(reply))
         }
+    }
+}
+
+// MARK: - Permisos por sitio
+
+extension LiveSession {
+    /// Sólo desde los botones con el alcance visible; nunca concede confianza por una respuesta de la página.
+    func answerSitePermission(_ id: String, scope: String) {
+        guard !answered.contains(id), ["una_vez", "sesion", "proyecto"].contains(scope) else { return }
+        answered.insert(id)
+        process?.send(.permission(id: id, approved: true, site: scope))
     }
 }

@@ -1,5 +1,6 @@
 """Diagnósticos de páginas: límites, redacción y lectura en todos los modos."""
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,15 +10,20 @@ from alfalfa.navegador import Navegador, _url_de_diagnostico
 @pytest.mark.parametrize('modo', ['auto', 'manual', 'ediciones', 'plan', 'omitir'])
 @pytest.mark.parametrize('nombre,accion,clave', [('browser_console', 'consola', 'mensajes'),
                                                ('browser_network', 'red', 'peticiones')])
-def test_diagnosticos_solo_leen_en_todos_los_modos(modo, nombre, accion, clave):
+def test_diagnosticos_solo_leen_en_todos_los_modos(tmp_path, modo, nombre, accion, clave):
     class Runtime:
         task = {'modo': modo}
-        manager = type('Manager', (), {'read_only': False})()
+        manager = SimpleNamespace(read_only=False, home=tmp_path / 'motor')
+        tools = SimpleNamespace(root=tmp_path)
 
         async def approve(self, _):
             pytest.fail('Leer diagnósticos no pide permiso')
 
     async def pedir(action, fields, tiempo):
+        assert fields.pop('sitios') == {'version': 1, 'permitidos': [], 'bloqueados': [], 'estricto': False,
+                                      'visita': None}
+        assert fields.pop('visita_sitio') is None
+        assert fields.pop('visita_id') is None
         assert action == accion and fields == {'limite': 2}
         entrada = {'nivel': 'error', 'texto': 'x' * 3000, 'cuerpo': 'no debe salir'} if clave == 'mensajes' else {
             'url': 'https://usuario:clave@ejemplo.org/404?token=privado&pagina=2#secreto',

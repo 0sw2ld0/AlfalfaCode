@@ -1,0 +1,154 @@
+{
+  "ok": true,
+  "comprobaciones": 37,
+  "pruebas": [
+    {
+      "ok": true,
+      "prueba": "Botones y canal real · una_vez"
+    },
+    {
+      "ok": true,
+      "prueba": "Permiso de acción separado"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Botones y canal real · sesion"
+    },
+    {
+      "ok": true,
+      "prueba": "Permiso de acción separado"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Botones y canal real · proyecto"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes exige diff y permiso correlacionado"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes guarda sólo tras confirmar"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate bloqueada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Bloqueado no contacta con el sitio"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes exige diff y permiso correlacionado"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes guarda sólo tras confirmar"
+    },
+    {
+      "ok": true,
+      "prueba": "Permiso de acción separado"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Botones y canal real · una_vez"
+    },
+    {
+      "ok": true,
+      "prueba": "Permiso de acción separado"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_wait bloqueada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Espera interrumpida no afirma éxito"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_navigate completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes exige diff y permiso correlacionado"
+    },
+    {
+      "ok": true,
+      "prueba": "Ajustes guarda sólo tras confirmar"
+    },
+    {
+      "ok": true,
+      "prueba": "Permiso de acción separado"
+    },
+    {
+      "ok": true,
+      "prueba": "browser_eval completada"
+    },
+    {
+      "ok": true,
+      "prueba": "Alcances esperados consumidos"
+    },
+    {
+      "ok": true,
+      "prueba": "Estricto bloquea subrecurso de sesión anterior"
+    },
+    {
+      "ok": true,
+      "prueba": "Subrecurso bloqueado sin contacto"
+    }
+  ]
+}

@@ -99,6 +99,13 @@ public struct BrowserReply: Equatable, Sendable {
                                   result: [String: Any] = [:]) -> BrowserReply {
         BrowserReply(id: id, body: ["ok": false, "permiso": ["tipo": kind, "detalle": detail], "resultado": result])
     }
+
+    static func sitePermission(_ id: String, url: String, token: String, initiated: Bool,
+                               result: [String: Any]) -> BrowserReply {
+        BrowserReply(id: id, body: ["ok": false, "permiso": ["tipo": "sitio", "url": url, "token": token,
+                                                           "iniciada": initiated],
+                                     "resultado": result])
+    }
 }
 
 /// Qué es una dirección para el navegador: pública, de este Mac o de la red de casa.

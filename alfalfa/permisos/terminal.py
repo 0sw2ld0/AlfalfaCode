@@ -112,6 +112,7 @@ class TerminalApproval:
             return
         # Never read redirected stdin; EOF is a denial, never implicit approval.
         accepted = session = False
+        site_scope = None
         if self.stdin.isatty() and self.stdout.isatty():
             question = ('¿Autorizar esta llamada tras leer contenido externo? [s/N] '
                         if args.get('motivo') == 'contenido_externo' else
@@ -127,6 +128,9 @@ class TerminalApproval:
                         '[s/N] ')
             if args.get('para_sesion'):
                 question = question.replace('[s/N] ', '[s/t/N] (t: también el resto de la sesión) ')
+            if args.get('sitio'):
+                question = ('Sitio: [u] una visita, [t] este origen durante esta sesión, '
+                            '[p] siempre en este proyecto, [N] rechazar: ')
             print(question, end='', file=self.stdout, flush=True)
             # A bounded line, no executor thread left blocked after cancellation.
             # The CLI installs signal handlers so Ctrl-C still cancels this wait.
@@ -140,9 +144,12 @@ class TerminalApproval:
                 respuesta = self.stdin.readline(100).strip().casefold()
                 session = bool(args.get('para_sesion')) and respuesta in ('t', 'todo', 'sesion', 'sesión')
                 accepted = session or respuesta in ('s', 'si', 'sí')
+                if args.get('sitio'):
+                    site_scope = {'u': 'una_vez', 't': 'sesion', 'p': 'proyecto'}.get(respuesta)
+                    accepted = site_scope is not None
             finally:
                 loop.remove_reader(fd)
         if not accepted:
             self.denied += 1
             raise ValueError('Comando rechazado; no se ejecutó. No lo repitas ni reformules para eludir el rechazo.')
-        return 'sesion' if session else None
+        return site_scope or ('sesion' if session else None)

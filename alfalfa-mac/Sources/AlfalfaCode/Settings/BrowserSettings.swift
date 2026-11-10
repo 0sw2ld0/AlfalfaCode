@@ -12,6 +12,8 @@ struct BrowserSettings: View {
             BrowserProfileSettings(project: model.browserProject, profiles: model.browserProfiles,
                                    canChange: model.canChangeBrowserProfile(for: model.browserProject),
                                    change: model.setBrowserProfile, clear: model.clearBrowserProfile)
+            Divider().overlay(Theme.border)
+            BrowserSiteSettings(project: model.browserProject)
         }
     }
 }
