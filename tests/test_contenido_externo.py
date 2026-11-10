@@ -462,3 +462,42 @@ def test_patrones_y_extensiones_inocuos_conservan_valores_y_nombres_del_esquema(
     antes = copy.deepcopy(carga)
     segura = seguridad.preparar(rt, carga)
     assert segura['tools'] == antes['tools'] and carga == antes
+
+
+@pytest.mark.parametrize('argumentos_json', [False, True])
+async def test_historial_de_llamada_conserva_protocolo_y_tapa_argumentos(rt, monkeypatch, argumentos_json):
+    from alfalfa.navegador import TOOLS
+
+    secreto = 'secretoHistoricoFicticio123'
+    ident = 'call-browser-historico'
+    (rt.tools.root / '.env').write_text('FUNCION=browser_navigate\nTIPO=function\nID=' + ident
+                                      + '\nINTERNO=' + secreto + '\n')
+    argumentos = {'url': 'https://example.com/?dato=' + secreto, 'action': 'open'}
+    llamada = {'type': 'function', 'id': ident, 'function': {'name': 'browser_navigate',
+               'arguments': json.dumps(argumentos) if argumentos_json else argumentos}}
+    rt.state['messages'] = [
+        {'role': 'assistant', 'content': 'Texto histórico ' + secreto, 'tool_calls': [llamada]},
+        {'role': 'tool', 'tool_name': 'browser_navigate', 'tool_call_id': ident,
+         'content': json.dumps({'titulo': 'Dato ' + secreto, 'url': 'https://example.com/'})}]
+    carga = {'messages': rt.state['messages'],
+             'tools': [t for t in TOOLS if t['function']['name'] == 'browser_navigate']}
+    antes = copy.deepcopy(carga)
+    enviados = []
+
+    async def proveedor(client, endpoint, payload, **kwargs):
+        enviados.append(payload)
+        return {'message': {'content': 'simulado'}}
+
+    monkeypatch.setattr(rt, '_request', proveedor)
+    await rt.request(None, '/api/chat', carga)
+    assert len(enviados) == 1
+    salida = enviados[0]
+    historica = salida['messages'][0]['tool_calls'][0]
+    assert historica['type'] == 'function' and historica['function']['name'] == 'browser_navigate'
+    assert historica['id'] == ident and salida['messages'][1]['tool_call_id'] == ident
+    assert secreto not in json.dumps(salida)
+    saneados = historica['function']['arguments']
+    if argumentos_json:
+        saneados = json.loads(saneados)
+    assert saneados == {'url': 'https://example.com/?dato=[REDACTADO]', 'action': 'open'}
+    assert carga == antes

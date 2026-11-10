@@ -255,13 +255,30 @@ def _catalogo(herramientas, valores):
     return resultado
 
 
+def _llamadas(llamadas, valores):
+    """Limpia los datos del historial; type/name identifican una llamada ya ejecutada."""
+    resultado = limpiar(llamadas, valores)
+    if not isinstance(llamadas, list) or not isinstance(resultado, list):
+        return resultado
+    for original, limpia in zip(llamadas, resultado):
+        if not isinstance(original, dict) or not isinstance(limpia, dict):
+            continue
+        if 'type' in original:
+            limpia['type'] = copy.deepcopy(original['type'])
+        funcion, saneada = original.get('function'), limpia.get('function')
+        if isinstance(funcion, dict) and isinstance(saneada, dict) and 'name' in funcion:
+            saneada['name'] = copy.deepcopy(funcion['name'])
+    return resultado
+
+
 def preparar(runtime, payload):
     """Última barrera, también para visión, resúmenes y reintentos: no muta el historial."""
     valores = secretos(runtime)
     salida = dict(payload)
     # El modelo, sus opciones y los IDs son protocolo, no texto del encargo.
     # Por ejemplo MODEL=glm en .env no debe cambiar el destino de la petición.
-    salida['messages'] = [dict(m, **{k: limpiar(m[k], valores) for k in ('content', 'tool_calls') if k in m})
+    salida['messages'] = [dict(m, **{k: _llamadas(m[k], valores) if k == 'tool_calls' else limpiar(m[k], valores)
+                                   for k in ('content', 'tool_calls') if k in m})
                           for m in payload.get('messages', ())]
     for mensaje in salida['messages']:
         for llamada in mensaje.get('tool_calls') or ():
