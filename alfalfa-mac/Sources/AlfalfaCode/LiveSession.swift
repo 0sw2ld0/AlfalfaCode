@@ -557,7 +557,7 @@ extension LiveSession {
     @discardableResult
     func openBrowser() -> BrowserEngine {
         if let browser { return browser }
-        let engine = BrowserEngine()
+        let engine = BrowserEngine(dataStore: BrowserProfiles.shared.dataStore(forProject: cwd))
         engine.onAnnotation = { [weak self] annotation, comment in
             self?.addBrowserAnnotation(annotation, comment: comment)
         }
