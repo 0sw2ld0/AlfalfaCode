@@ -1295,6 +1295,9 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
 - `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
 - `browser_read`: la página como árbol de accesibilidad con referencias
   (`- button «Enviar pedido» [e7] (envía el formulario)`) o como texto.
+- `browser_viewport`: `preset` mobile (390×844), tablet (768×1024), desktop (1100×800), o
+  `width` y `height` entre 200 y 4096 píxeles CSS. La vista se escala para caber en el panel.
+  Cambia el tamaño para probar el diseño adaptable; conserva la identidad de AlfalfaCode y no emula un dispositivo.
 - `browser_click` y `browser_type`: por referencia (`ref`) o por el texto visible
   (`target`); `browser_type` también elige en un desplegable y con `submit` pulsa Intro.
 - `browser_scroll`: la página, el contenedor que se desplaza o hasta un elemento.

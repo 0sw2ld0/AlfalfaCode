@@ -11,6 +11,11 @@ import WebKit
 @MainActor
 public final class BrowserEngine: NSObject {
 
+    // MARK: - Constantes
+
+    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
+    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
+
     // MARK: - Propiedades
 
     @Published public private(set) var url: URL?
@@ -27,6 +32,9 @@ public final class BrowserEngine: NSObject {
     @Published public private(set) var notice: String?
     /// El panel del navegador está abierto en la ventana de la sesión.
     @Published public var isPanelOpen = false
+
+    /// Tamaño CSS pedido por el motor; nil conserva el tamaño libre del panel.
+    @Published public private(set) var viewport: CGSize?
 
     public let webView: WKWebView
 
@@ -58,8 +66,6 @@ public final class BrowserEngine: NSObject {
     /// `close()`: ya no hace nada.
     public private(set) var isClosed = false
 
-    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
-    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
     /// Lo que espera una descarga antes de cancelarla (el motor espera 300 s la respuesta).
     var downloadTimeout: TimeInterval = 280
 
@@ -224,6 +230,8 @@ public final class BrowserEngine: NSObject {
             return try await navigate { $0.reload() }
         case "leer":
             return try await evaluate(BrowserScripts.read, request.fields)
+        case "viewport":
+            return try await resizeViewport(request)
         case "pulsar", "escribir":
             return try await interact(request)
         case "desplazar":
@@ -253,6 +261,16 @@ public final class BrowserEngine: NSObject {
         default:
             throw BrowserFailure("Acción del navegador desconocida: \(request.action).")
         }
+    }
+
+    private func resizeViewport(_ request: BrowserRequest) async throws -> [String: Any] {
+        let size = try BrowserViewport.size(request.fields)
+        viewport = size
+        if webView.window === parking { parking?.setContentSize(size) }
+        webView.setFrameSize(size)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        return ["ancho": Int(size.width), "alto": Int(size.height),
+                "nota": "Sólo cambia el tamaño; no emula un dispositivo ni cambia la identidad del navegador."]
     }
 
     private func navigate(_ start: (WKWebView) -> WKNavigation?) async throws -> [String: Any] {
@@ -337,6 +355,7 @@ public final class BrowserEngine: NSObject {
         window.ignoresMouseEvents = true
         let content = window.contentView ?? NSView()
         window.contentView = content
+        if let viewport { window.setContentSize(viewport) }
         webView.frame = content.bounds
         webView.autoresizingMask = [.width, .height]
         content.addSubview(webView)
@@ -442,6 +461,7 @@ extension BrowserEngine {
         case "adelante": return "Yendo a la página siguiente"
         case "recargar": return "Recargando la página"
         case "leer": return "Leyendo la página"
+        case "viewport": return "Cambiando el tamaño de la página"
         case "pulsar": return "Pulsando " + target
         case "escribir": return "Escribiendo en " + target
         case "desplazar": return "Desplazando la página"

@@ -6,7 +6,7 @@ public struct BrowserRequest: Equatable, Sendable {
     // MARK: - Propiedades
 
     public let id: String
-    /// abrir, atras, adelante, recargar, leer, pulsar, escribir, desplazar, captura, js o descargar.
+    /// abrir, atras, adelante, recargar, leer, pulsar, escribir, desplazar, captura, js, descargar o viewport.
     public let action: String
     /// El resto de campos de la petición, como JSON.
     public let json: String

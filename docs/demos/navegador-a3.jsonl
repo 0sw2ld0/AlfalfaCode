@@ -1,0 +1,7 @@
+{"ok":true,"resultado":{"titulo":"Demo A3","url":"http:\/\/127.0.0.1:18463\/"}}
+{"ok":true,"resultado":{"alto":844,"ancho":390,"nota":"Sólo cambia el tamaño; no emula un dispositivo ni cambia la identidad del navegador.","titulo":"Demo A3","url":"http:\/\/127.0.0.1:18463\/"}}
+{"width":390,"height":844,"mobile":true,"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15 AlfalfaCode"}
+{"ok":true,"resultado":{"alto":844,"ancho":390,"titulo":"Demo A3","url":"http:\/\/127.0.0.1:18463\/"}}
+{"ok":true,"resultado":{"alto":800,"ancho":1100,"nota":"Sólo cambia el tamaño; no emula un dispositivo ni cambia la identidad del navegador.","titulo":"Demo A3","url":"http:\/\/127.0.0.1:18463\/"}}
+{"width":1100,"height":800,"mobile":false,"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15 AlfalfaCode"}
+{"ok":true,"resultado":{"alto":800,"ancho":1100,"titulo":"Demo A3","url":"http:\/\/127.0.0.1:18463\/"}}
