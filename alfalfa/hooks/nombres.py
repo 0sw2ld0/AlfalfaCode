@@ -53,6 +53,9 @@ SIN_EQUIVALENTE = {
     'send_input': 'SendMessage de Claude Code; aquí con el nombre de Codex.',
     'close_agent': 'Claude Code no cierra agentes; Codex sí, con close_agent.',
     'list_agents': 'Claude Code no lista sus agentes; Codex sí, con list_agents.',
+    'memoria': 'Claude Code guarda la memoria en CLAUDE.md con sus herramientas de archivos; aquí es un almacén '
+               'propio del arnés.',
+    'habilidad': 'Claude Code no crea habilidades por sí mismo; aquí se guardan en su carpeta con aprobación.',
 }
 
 # Alias que sólo sirven para elegir hooks (hook_names.rs: apply_patch con Write y

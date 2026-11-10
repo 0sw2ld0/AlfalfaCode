@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Las partes de la ventana de Ajustes, en el orden de la lista lateral.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, proveedores, modelo, importar, actualizaciones
+    case general, proveedores, modelo, memoria, importar, actualizaciones
 
     // MARK: - Propiedades
 
@@ -14,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .proveedores: return "Proveedores"
         case .modelo: return "Modelo"
+        case .memoria: return "Memoria"
         case .importar: return "Importar"
         case .actualizaciones: return "Actualizaciones"
         }
@@ -24,6 +25,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .proveedores: return "server.rack"
         case .modelo: return "cpu"
+        case .memoria: return "brain"
         case .importar: return "square.and.arrow.down.on.square"
         case .actualizaciones: return "arrow.down.circle"
         }
@@ -97,6 +99,7 @@ struct SettingsView: View {
         case .general: GeneralSettings()
         case .proveedores: ProvidersView()
         case .modelo: ModelSettings()
+        case .memoria: MemorySettings()
         case .importar: ImportSettings()
         case .actualizaciones: UpdateSettings()
         }

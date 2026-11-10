@@ -250,13 +250,11 @@ def test_unreadable_directory_seals_its_whole_subtree(tmp_path):
     try:
         assert seatbelt.nested_metadata_ancestors(real) == ([], [real + '/hidden'])
         sandbox = SeatbeltSandbox(str(ws), tmpdir=str(tmp_path / 'no'), home='/nonexistent-home')
-        policy, params = sandbox.policy()
+        # Sin poder descartar habilidades con hardlinks previos no se abre para escribir.
+        with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+            sandbox.policy()
     finally:
         hidden.chmod(0o755)
-    assert sealed(policy, params) == {real + '/hidden'}
-    # Sus padres se anclan uno a uno; lo de dentro ya lo cubre el subárbol.
-    assert anchored(policy, params) == outer_ancestors(sandbox)
-    assert real + '/hidden' not in policy
     # Uno ilegible dentro de otro: basta con sellar el exterior.
     (ws / 'hidden' / 'inner').chmod(0)
     hidden.chmod(0)
@@ -543,20 +541,17 @@ def test_real_unreadable_directory_cannot_hide_a_git_from_renaming(tmp_path):
     hidden.chmod(0)
     try:
         # La política se construye con hidden/ ilegible, como la vería el recorrido.
-        command = SeatbeltSandbox(str(root)).command_args(['/bin/sh', '-c', script, 'x', away])
+        with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+            SeatbeltSandbox(str(root)).command_args(['/bin/sh', '-c', script, 'x', away])
         hidden.chmod(0o755)
-        proc = subprocess.run(command, cwd=root, capture_output=True, timeout=30, start_new_session=True)
-        assert proc.returncode != 0, proc.stdout + proc.stderr
-        assert b'Operation not permitted' in proc.stderr
         assert not os.path.lexists(away)
         assert (hooks / 'pre-commit').read_text() == '#!/bin/sh\nexit 0\n'
         for argv in (['/bin/mv', 'hidden/child', 'otro'], ['/bin/rm', '-rf', 'hidden'],
                      ['/bin/mv', 'hidden', 'otro']):
             hidden.chmod(0)
-            command = SeatbeltSandbox(str(root)).command_args(argv)
+            with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+                SeatbeltSandbox(str(root)).command_args(argv)
             hidden.chmod(0o755)
-            proc = subprocess.run(command, cwd=root, capture_output=True, timeout=30, start_new_session=True)
-            assert proc.returncode != 0, (argv, proc.stderr)
         assert (hooks / 'pre-commit').is_file() and not (root / 'otro').exists()
         # Los archivos del subárbol sellado se siguen editando.
         code, output = sandboxed(SeatbeltSandbox(str(root)), ['/bin/sh', '-c', 'echo y > hidden/nota'], root)

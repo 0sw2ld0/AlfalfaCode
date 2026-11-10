@@ -112,12 +112,14 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     case priceWarning(id: Int, PriceWarning, answered: Bool)
     /// El código se deshizo o se rehízo; `redone` cuando un rehacer posterior ya lo devolvió.
     case undo(id: Int, UndoStep, redone: Bool)
+    /// Lo que la revisión al cerrar el turno propone guardar (memoria o habilidad), con su diff.
+    case learning(id: Int, LearningProposal, state: LearningProposalState)
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
              let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
-             let .priceWarning(id, _, _), let .undo(id, _, _): return id
+             let .priceWarning(id, _, _), let .undo(id, _, _), let .learning(id, _, _): return id
         }
     }
 }
@@ -428,6 +430,7 @@ public struct Timeline: Equatable, Sendable {
                 parts.append("---\n\n*Conversación compactada.* Resumen para el modelo:\n\n" + compaction.summary)
             case let .priceWarning(_, warning, _): parts.append("> " + warning.text)
             case let .undo(_, step, _): parts.append("> " + step.text)
+            case let .learning(_, proposal, _): parts.append("> **Aprendizaje propuesto:** " + proposal.title)
             default: break
             }
         }
@@ -538,6 +541,22 @@ public struct Timeline: Equatable, Sendable {
              .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview:
             break
         case let .undone(step): addUndo(step)
+        case let .learningProposal(proposal):
+            // Al reabrir la sesión el motor vuelve a mandar las que siguen esperando: una tarjeta por id.
+            let shown = items.contains { item in
+                if case let .learning(_, other, _) = item { return other.id == proposal.id }
+                return false
+            }
+            if !shown { items.append(.learning(id: nextID(), proposal, state: .pending)) }
+        case let .learningResolved(id, applied, discarded, text):
+            for index in items.indices {
+                if case let .learning(itemID, proposal, .pending) = items[index], proposal.id == id {
+                    let state: LearningProposalState = applied ? .applied(text) : discarded ? .discarded : .failed(text)
+                    items[index] = .learning(id: itemID, proposal, state: state)
+                }
+            }
+        case .memory, .learned, .learnedSkillFiles:
+            break
         }
     }
 

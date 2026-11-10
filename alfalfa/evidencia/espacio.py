@@ -356,6 +356,49 @@ def con_caches(snapshot, guard):
             carpetas[carpeta] = _entries(Path(carpeta), ignorado, snapshot.get('root'))
     return {**snapshot, 'watch': {**snapshot['watch'], 'directories': carpetas, 'ignored': sorted(ignorado)}}
 
+def con_escrituras_del_arnes(snapshot, rutas, borrada=None):
+    """La foto con lo que el propio arnés acaba de escribir o borrar (`rutas`, absolutas: los archivos
+    de una habilidad aprendida del proyecto, en .alfalfa/skills), para que la comprobación no caduque
+    por ellos. `borrada`: la carpeta de la habilidad si se borró entera.
+
+    Sólo vale para una comprobación que seguía vigente justo antes de esa escritura. No se vuelve a
+    listar ninguna carpeta que ya se vigilaba: sólo se le añaden (o quitan) los nombres del camino hacia
+    esas rutas, así que un archivo nuevo de otro proceso la sigue caducando. Las carpetas que creó el
+    arnés pasan a vigilarse con su listado de ahora, y los archivos escritos, con su huella. Sólo deja de
+    vigilarse lo que había dentro de la habilidad borrada; cualquier otra carpeta que falte la caduca.
+    """
+    rutas = [Path(r) for r in rutas]
+    borrada = Path(borrada) if borrada else None
+    raiz = Path(snapshot.get('root') or '/')
+    watch = snapshot['watch']
+    carpetas = {}
+    for nombre, valor in watch['directories'].items():
+        carpeta = Path(nombre)
+        if borrada is not None and (carpeta == borrada or borrada in carpeta.parents) and not carpeta.exists():
+            continue
+        entradas = list(valor)
+        for ruta in rutas:
+            if carpeta not in ruta.parents:
+                continue
+            hijo = ruta.relative_to(carpeta).parts[0]
+            if (carpeta / hijo).exists() and hijo not in entradas:
+                entradas.append(hijo)
+            elif not (carpeta / hijo).exists() and hijo in entradas:
+                entradas.remove(hijo)
+        carpetas[nombre] = sorted(entradas)
+    ignorado = set(watch.get('ignored') or [])
+    for ruta in rutas:
+        for carpeta in reversed(ruta.parents):
+            if carpeta == raiz or raiz not in carpeta.parents or str(carpeta) in carpetas or not carpeta.is_dir():
+                continue
+            # Una carpeta nueva del arnés: su contenido sólo puede ser lo que acaba de escribir.
+            carpetas[str(carpeta)] = _entries(carpeta, ignorado, snapshot.get('root'))
+    archivos = dict(watch['files'])
+    for ruta in rutas:
+        archivos[str(ruta)] = _file(ruta)
+    return {**snapshot, 'watch': {**watch, 'directories': carpetas, 'files': archivos}}
+
+
 # Los revisores nombran su carpeta de capturas a su manera: independent-review,
 # revision-qa, review-current-1848…
 CARPETAS_DEL_REVISOR = ('independent-review',)

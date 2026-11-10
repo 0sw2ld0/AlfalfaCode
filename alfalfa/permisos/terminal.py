@@ -56,6 +56,7 @@ MOTIVO_TERMINAL = {
     'regla': 'regla del usuario',
     'modo': 'el modo pide permiso para cada cambio',
     'edicion': 'edición de archivos (modo Manual)',
+    'aprendizaje': 'guardar lo aprendido (memoria o habilidad)',
 }
 
 
@@ -82,6 +83,9 @@ def describe(args, command):
         lines.append('Regla: ' + str(args['regla']))
     if args.get('justificacion'):
         lines.append('Justificación: ' + str(args['justificacion']))
+    if args.get('diff'):
+        # Entero: lo que se aprueba es exactamente esto (el arnés rechaza antes lo que no cabe).
+        lines.append(str(args['diff']).rstrip('\n'))
     if args.get('reintento_de'):
         lines.append('Reintento del intento ' + str(args['reintento_de']) + ': ' + str(args.get('sin_sandbox', '')))
     elif args.get('fallo_sandbox'):
@@ -110,6 +114,7 @@ class TerminalApproval:
         if self.stdin.isatty() and self.stdout.isatty():
             question = ('Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
                         if args.get('mcp') else
+                        '¿Guardarlo? [s/N] ' if args.get('motivo') == 'aprendizaje' else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
                         if unsandboxed else
                         'Sandbox Seatbelt con red: escribe sólo en la carpeta, $TMPDIR y /private/tmp. ¿Ejecutar? '

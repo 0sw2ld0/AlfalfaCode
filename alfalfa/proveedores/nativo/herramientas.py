@@ -700,7 +700,7 @@ class WorkspaceTools:
         texto = ruta_comparable(ruta)
         return any(texto == h or texto.startswith(h.rstrip('/') + '/') for h in self._hogares)
 
-    def path(self, value='.'):
+    def path(self, value='.', *, escritura=False):
         if not isinstance(value, str) or not value or '\0' in value:
             raise ValueError('Ruta inválida.')
         candidate = self.root / value
@@ -718,10 +718,15 @@ class WorkspaceTools:
         if not resolved.is_relative_to(self.root):
             raise ValueError('La ruta sale del workspace.')
         if self._en_el_hogar(resolved):
-            raise ValueError('Es el hogar de AlfalfaCode (ajustes, claves, hooks y complementos): '
-                             'las herramientas no lo tocan.')
+            raise ValueError('Es el hogar de AlfalfaCode (memoria, habilidades, ajustes y claves): las '
+                             'herramientas no lo tocan. La memoria se cambia con la herramienta memoria.')
         if resolved.is_file() and resolved.stat().st_nlink > 1:
-            raise ValueError('Archivo con enlaces duros: puede compartir contenido con el hogar de AlfalfaCode.')
+            raise ValueError('Archivo con enlaces duros: puede compartir contenido con una carpeta protegida.')
+        if escritura:
+            from ...complementos.rutas_habilidades import es_habilidad
+            if es_habilidad(self.root, resolved):
+                raise ValueError('Las habilidades se cambian con la herramienta habilidad y su tarjeta de aprobación; '
+                                 'no con las herramientas de archivos.')
         return resolved
 
     def files(self, value='.'):
@@ -1022,6 +1027,12 @@ class WorkspaceTools:
             if name == 'abrir_habilidad':
                 return cargador.abrir_habilidad(args['habilidad'])
             return cargador.invocar_comando(args['comando'], args.get('argumentos', ''))
+        if name in ('memoria', 'habilidad'):
+            # Sólo AlfalfaCode (alfalfa/aprendizaje): escribe en su hogar o en .alfalfa/skills.
+            aprendizaje = getattr(self.runtime.manager, 'aprendizaje', None)
+            if aprendizaje is None:
+                raise ValueError('Esta sesión no guarda memoria ni habilidades.')
+            return await aprendizaje.llamar(self.runtime, name, args)
         if name in ('run_command', 'run_checks'):
             return await self.command(args, verification=name == 'run_checks')
         if name in ('app_list', 'app_state', 'app_action'):
@@ -1121,7 +1132,7 @@ class WorkspaceTools:
                         if len(rows) >= 100:
                             return {'matches': rows, 'truncated': True}
             return {'matches': rows, 'truncated': False}
-        path = self.path(args['path'])
+        path = self.path(args['path'], escritura=name != 'read_file')
         if name == 'read_file':
             data, text = self.read(path)
             lines = text.splitlines(keepends=True)
@@ -1154,7 +1165,7 @@ class WorkspaceTools:
             if not backup.exists():
                 atomic_write(backup, before, 0o600)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.path(args['path'])
+        self.path(args['path'], escritura=True)
         latest = digest(path.read_bytes()) if path.exists() else 'NEW'
         if latest != expected:
             raise ValueError('El archivo cambió durante la edición; vuelve a leerlo.')
@@ -1174,7 +1185,7 @@ class WorkspaceTools:
         seen = {}
 
         def current(name):
-            path = self.path(name)
+            path = self.path(name, escritura=True)
             if not path.exists():
                 seen[name] = (path, None, None)
                 return None
@@ -1187,7 +1198,7 @@ class WorkspaceTools:
             raise ValueError(str(exc) + ' No se escribió nada.') from None
         writes = []
         for name, content, action in plan:
-            path, before, _ = seen.get(name) or (self.path(name), None, None)
+            path, before, _ = seen.get(name) or (self.path(name, escritura=True), None, None)
             after = None if content is None else content.encode()
             if after is not None and len(after) > MAX_FILE:
                 raise ValueError('Archivo demasiado grande: ' + name + '. No se escribió nada.')
@@ -1209,7 +1220,7 @@ class WorkspaceTools:
                     path.unlink()
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                self.path(name)
+                self.path(name, escritura=True)
                 atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644)
             change = {'path': str(path.relative_to(self.root)),
                       'before': digest(before) if before is not None else 'NEW',

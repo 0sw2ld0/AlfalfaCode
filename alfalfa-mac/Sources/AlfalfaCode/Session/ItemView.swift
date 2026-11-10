@@ -41,6 +41,8 @@ struct ItemView: View {
             PriceWarningCard(warning: warning, answered: answered, session: session)
         case let .undo(_, step, redone):
             UndoMarker(step: step, redone: redone, session: session)
+        case let .learning(_, proposal, state):
+            LearningCard(proposal: proposal, state: state, session: session)
         }
     }
 

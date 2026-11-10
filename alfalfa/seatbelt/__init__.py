@@ -40,7 +40,8 @@ from ..procesos import comunicar
 # Como Codex: sólo el de /usr/bin, nunca el que aparezca antes en PATH.
 SANDBOX_EXEC = '/usr/bin/sandbox-exec'
 PRIVATE_TMP = '/private/tmp'
-PROTECTED_METADATA = ('.git',)
+# Las carpetas de instrucciones las escribe el arnés tras su tarjeta, fuera de las órdenes.
+PROTECTED_METADATA = ('.git', '.alfalfa', '.agents', '.claude', '.codex')
 PREFLIGHT_SECONDS = 10.0
 # Entradas que se recorren buscando `.git` anidados antes de rendirse.
 SCAN_LIMIT = 200_000
@@ -140,6 +141,15 @@ def regex_hogar(ruta, *, nested=True):
     return '(' + '|'.join('^' + _sin_mayusculas(p.rstrip('/')) + final for p in variantes) + ')'
 
 
+def _filtro_hogar(ruta, *, nested=True):
+    # Cada forma en su literal: juntarlas puede superar el límite del lector SBPL.
+    variantes = dict.fromkeys(unicodedata.normalize(forma, str(ruta)) for forma in ('NFC', 'NFD'))
+    final = '(/.*)?$' if nested else '$'
+    filtros = ['(regex ' + _policy_regex('^' + _sin_mayusculas(p.rstrip('/')) + final) + ')'
+               for p in variantes]
+    return '(require-any ' + ' '.join(filtros) + ')'
+
+
 def antecesores_del_hogar(hogar, raiz):
     while ruta_comparable(hogar) != ruta_comparable(raiz) and _contains(
             ruta_comparable(raiz), ruta_comparable(hogar)):
@@ -225,8 +235,9 @@ class SeatbeltSandbox:
     """
 
     def __init__(self, root, *, network=False, tmpdir=None, home=None, executable=SANDBOX_EXEC, protegidas=()):
+        from ..complementos.rutas_habilidades import carpetas_protegidas
         self.root = root
-        self.protegidas = hogares_protegidos(protegidas)
+        self.protegidas = hogares_protegidos((*protegidas, *(p for p in carpetas_protegidas(root) if p.exists())))
         self.network = network is True
         self.tmpdir = tmpdir
         self.home = home
@@ -262,8 +273,17 @@ class SeatbeltSandbox:
         """(texto de la política, [(clave, ruta)]) en el orden de Codex."""
         roots = self.writable_roots()
         comprobar_enlaces_del_hogar(self.protegidas)
+        from ..complementos.rutas_habilidades import carpetas_descubiertas
+        try:
+            habilidades = carpetas_descubiertas(roots[0], HOME_SCAN_LIMIT)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise SandboxUnavailable('No se pudieron comprobar las carpetas de habilidades del proyecto.') from exc
+        protegidas = hogares_protegidos((*self.protegidas, *habilidades))
+        comprobar_enlaces_del_hogar(protegidas)
         workspace = roots[0]
         protected = [_policy_regex(protected_metadata_name_regex(workspace, name)) for name in PROTECTED_METADATA]
+        protected.extend(_policy_regex(protected_metadata_name_regex(root, name))
+                         for root in roots[1:] for name in PROTECTED_METADATA if name != '.git')
         params, components, anchors = [], [], []
         for index, root in enumerate(roots):
             key = 'WRITABLE_ROOT_' + str(index)
@@ -292,13 +312,13 @@ class SeatbeltSandbox:
                            ' (vnode-type DIRECTORY)))')
         outer = [p for root in roots[1:] for p in _ancestors(os.path.dirname(workspace), root)]
         # También si la sesión se abre dentro del propio hogar: esa raíz queda de solo lectura.
-        hogares = [h for h in self.protegidas if any(
+        hogares = [h for h in protegidas if any(
             _contains(ruta_comparable(root), ruta_comparable(h))
             or _contains(ruta_comparable(h), ruta_comparable(root)) for root in roots)]
         # Ni el hogar ni sus antecesores se pueden mover fuera de la protección.
         for path in sorted({p for h in hogares for root in roots for p in antecesores_del_hogar(h, root)}):
-            anchors.append('(deny file-write-unlink (require-all (regex '
-                           + _policy_regex(regex_hogar(path, nested=False)) + ') (vnode-type DIRECTORY)))')
+            anchors.append('(deny file-write-unlink (require-all '
+                           + _filtro_hogar(path, nested=False) + ' (vnode-type DIRECTORY)))')
         for index, path in enumerate(sorted(set(nested + outer))):
             key = 'PROTECTED_ANCESTOR_' + str(index)
             params.append((key, path))
@@ -322,8 +342,8 @@ class SeatbeltSandbox:
         for index, hogar in enumerate(hogares):
             key = 'ALFALFA_HOME_' + str(index)
             params.append((key, hogar))
-            sections.append('(deny file-write* (subpath (param "' + key + '")) (regex '
-                            + _policy_regex(regex_hogar(hogar)) + '))')
+            sections.append('(deny file-write* (subpath (param "' + key + '")) '
+                            + _filtro_hogar(hogar) + ')')
         sections.append('(deny system-fcntl (fcntl-command 80 110))')
         return '\n'.join(sections), params
 

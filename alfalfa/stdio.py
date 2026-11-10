@@ -19,7 +19,9 @@ SOLO_IMAGENES = 'Mira la imagen adjunta.'
 # Campos opcionales del evento `permiso` (política on-request); los clientes v2
 # anteriores los ignoran.
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
-                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion')
+                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion',
+                 # Guardar memoria o una habilidad aprendida (motivo «aprendizaje»): lo que cambia.
+                 'diff')
 
 
 # Largo máximo del id que la app da a un mensaje en cola.
@@ -88,6 +90,10 @@ class Transport:
         self.pending_settings = {}
         # Peticiones al navegador de la app (alfalfa/navegador.py) que esperan respuesta.
         self.navegador_pendientes = {}
+        # {"tipo":"aprendizaje","id":…,"aplicar":bool}: la tarjeta de una propuesta de la revisión.
+        self.learning = None
+        # El repaso de aprendizaje del último turno, que corre después de `turno_terminado`.
+        self.repaso = None
 
     def clean(self, value):
         from . import proveedores
@@ -145,7 +151,11 @@ class Transport:
         return pending
 
     def interrumpir_turno(self):
-        """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta."""
+        """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta. Entre
+        turnos corta el repaso de aprendizaje, si está en marcha."""
+        if not self.in_turn and self.repaso is not None and not self.repaso.done():
+            self.repaso.cancel()
+            return True
         if self.stopped or not self.in_turn or not self.worker or self.worker.done():
             return False
         self.turno_cortado = True
@@ -339,6 +349,11 @@ class Transport:
                 if not isinstance(activo, bool) or self.diagnostics is None:
                     raise ValueError()
                 self.diagnostics(activo)
+            elif value.get('tipo') == 'aprendizaje':
+                ident, aplicar = value.get('id'), value.get('aplicar')
+                if not isinstance(ident, str) or not isinstance(aplicar, bool) or self.learning is None:
+                    raise ValueError()
+                self.learning(ident, aplicar)
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -488,6 +503,9 @@ async def run(args, transport):
 
         transport.context_mode = cambiar_contexto
         transport.budget = manager.cambiar_presupuesto
+        transport.learning = manager.aprendizaje.resolver
+        # Las propuestas de aprendizaje de esta sesión que siguen esperando vuelven como tarjeta.
+        manager.aprendizaje.reabrir()
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, transport.stop)
@@ -499,6 +517,8 @@ async def run(args, transport):
         # mensaje abre el siguiente. Cancelar o EOF sin turno en curso cierran
         # con el estado del último turno; con turno en curso lo interrumpen.
         while prompt is not None and not transport.stopped:
+            # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
+            await _cancelar_repaso(transport)
             if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
                 transport.compacting = True
                 transport.worker = asyncio.create_task(manager.continuar_en_nueva())
@@ -580,6 +600,9 @@ async def run(args, transport):
             topes = manager.presupuesto.para_el_cliente()
             if topes:
                 transport.emit('presupuesto', **topes)
+            if estado in ('completed', 'blocked'):
+                # Aparte del turno: Detener no lo corta, y el turno ya está cerrado para la app.
+                transport.repaso = asyncio.create_task(manager.repasar())
             # Un «compactar» que llegó tras la última respuesta del turno se hace ya.
             if transport.compact_pending:
                 transport.compact_now, transport.compact_pending = transport.compact_pending, False
@@ -590,6 +613,10 @@ async def run(args, transport):
         if manager:
             manager.task.update(status='failed', summary='Fallo de ejecución')
     finally:
+        if transport.repaso is not None and not transport.repaso.done():
+            # La sesión se cierra: el repaso se deja (el turno ya estaba cerrado).
+            transport.repaso.cancel()
+            await asyncio.gather(transport.repaso, return_exceptions=True)
         if reader_task:
             reader_task.cancel()
             await asyncio.gather(reader_task, return_exceptions=True)
@@ -611,6 +638,13 @@ async def run(args, transport):
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
     return code
+
+
+async def _cancelar_repaso(transport):
+    repaso, transport.repaso = transport.repaso, None
+    if repaso is not None and not repaso.done():
+        repaso.cancel()
+        await asyncio.gather(repaso, return_exceptions=True)
 
 
 def gasto(task, turno=None):
