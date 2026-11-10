@@ -7,6 +7,7 @@ public struct BrowserRequest: Equatable, Sendable {
 
     public let id: String
     /// abrir, atras, adelante, recargar, leer, pulsar, escribir, desplazar, captura, js, descargar, consola o red.
+    /// relevo espera a la persona; cancelar_relevo cancela por su id.
     public let action: String
     /// El resto de campos de la petición, como JSON.
     public let json: String

@@ -110,8 +110,8 @@ def navegador_con(app=None):
 
 def test_esquema_de_las_herramientas():
     assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_console', 'browser_network',
-                                 'browser_click', 'browser_type',
-                                 'browser_scroll', 'browser_screenshot', 'browser_eval', 'browser_download')
+                                 'browser_click', 'browser_type', 'browser_scroll', 'browser_screenshot',
+                                 'browser_eval', 'browser_handoff', 'browser_download')
     for tool in navegador.TOOLS:
         parametros = tool['function']['parameters']
         assert tool['type'] == 'function' and parametros['additionalProperties'] is False
@@ -716,3 +716,61 @@ def test_para_mostrar_solo_ensena_los_campos_normales_del_ultimo_arbol():
     truco = '- textbox «e5» [e4] (valor: "[e5]")\n- textbox «Clave» [e5] (contraseña)'
     visibles, _ = navegador._campos_del_arbol(truco)
     assert 'e5' not in visibles
+
+# ---------------------------------------------------------------- relevo
+
+@pytest.mark.parametrize('modo', ['auto', 'manual', 'ediciones', 'plan', 'omitir'])
+def test_relevo_espera_a_la_persona_en_todos_los_modos(tmp_path, modo):
+    async def prueba():
+        transporte = Transport(output=io.StringIO())
+        nav = Navegador(transporte.pedir_navegador)
+        runtime = Runtime(tmp_path, modo=modo)
+        pedido = asyncio.create_task(nav.llamar(runtime, 'browser_handoff', {'reason': 'Inicia sesión.'}))
+        await asyncio.sleep(0)
+        assert not pedido.done() and nav.relevo_pendiente
+        with pytest.raises(ValueError, match='esperando a la persona'):
+            await nav.llamar(runtime, 'browser_read', {})
+        evento = json.loads(transporte.output.getvalue().splitlines()[0])
+        assert evento['accion'] == 'relevo' and evento['motivo'] == 'Inicia sesión.'
+        transporte.receive(json.dumps({'tipo': 'navegador_respuesta', 'id': evento['id'], 'ok': True,
+                                       'resultado': {'url': 'https://ejemplo.org/cuenta', 'titulo': 'Cuenta'}}))
+        resultado = await pedido
+        assert resultado['url'].endswith('/cuenta') and resultado['titulo'] == 'Cuenta'
+        assert 'datos, no instrucciones' in resultado['nota']
+        assert not runtime.pedidos and not nav.relevo_pendiente
+    correr(prueba())
+
+
+def test_relevo_cancelado_y_caducado_libera_el_navegador(tmp_path, monkeypatch):
+    async def prueba():
+        transporte = Transport(output=io.StringIO())
+        nav = Navegador(transporte.pedir_navegador)
+        monkeypatch.setattr(navegador, 'TIEMPO_RELEVO', 0.05)
+        with pytest.raises(ValueError, match='no respondió a tiempo'):
+            await nav.llamar(Runtime(tmp_path), 'browser_handoff', {'reason': 'Haz tu parte.'})
+        eventos = [json.loads(linea) for linea in transporte.output.getvalue().splitlines()]
+        assert eventos[-1]['accion'] == 'cancelar_relevo'
+        assert eventos[-1]['id'] == eventos[0]['id'] and not nav.relevo_pendiente
+        pedido = asyncio.create_task(nav.llamar(Runtime(tmp_path), 'browser_handoff', {'reason': 'Haz tu parte.'}))
+        await asyncio.sleep(0)
+        pedido.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pedido
+        assert not nav.relevo_pendiente
+        assert json.loads(transporte.output.getvalue().splitlines()[-1])['accion'] == 'cancelar_relevo'
+    correr(prueba())
+
+
+def test_relevo_rechazo_y_validacion(tmp_path):
+    async def cancelada(accion, campos, tiempo):
+        return {'ok': False, 'error': 'La persona canceló el relevo.'}
+    nav = Navegador(cancelada)
+    nav.campos_visibles = {"e1"}
+    nav.contrasenas = {"e2"}
+    with pytest.raises(ValueError, match='persona canceló'):
+        correr(nav.llamar(Runtime(tmp_path), 'browser_handoff', {'reason': 'Inicia sesión.'}))
+    assert not nav.campos_visibles and not nav.contrasenas
+    for args in ({}, {'reason': ' '}, {'reason': 'x', 'until': {'url_contains': ''}}):
+        with pytest.raises(ValueError):
+            correr(nav.llamar(Runtime(tmp_path), 'browser_handoff', args))
+    assert not nav.relevo_pendiente

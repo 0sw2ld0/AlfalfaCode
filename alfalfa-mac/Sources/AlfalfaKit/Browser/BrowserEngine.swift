@@ -33,6 +33,12 @@ public final class BrowserEngine: NSObject {
     /// El panel del navegador está abierto en la ventana de la sesión.
     @Published public var isPanelOpen = false
 
+    @Published public internal(set) var handoff: BrowserHandoff?
+    var handoffContinuation: CheckedContinuation<BrowserReply, Never>?
+    var handoffDeadline: Task<Void, Never>?
+    /// Relevos en la cola: true si el motor ya los canceló antes de que llegaran a ejecutarse.
+    var queuedHandoffs: [String: Bool] = [:]
+
     public let webView: WKWebView
 
     // MARK: - Propiedades privadas
@@ -112,11 +118,31 @@ public final class BrowserEngine: NSObject {
 
     /// Una petición del agente, de una en una. Abre el panel: el usuario ve lo que hace.
     public func perform(_ request: BrowserRequest) async -> BrowserReply {
+        if request.action == "cancelar_relevo" {
+            if queuedHandoffs[request.id] != nil { queuedHandoffs[request.id] = true }
+            cancelHandoff(id: request.id)
+            return .success(request.id, [:])
+        }
+        if handoff != nil {
+            return .failure(request.id, "El navegador está esperando a la persona.")
+        }
+        if request.action == "relevo" {
+            guard queuedHandoffs.count < 100 else {
+                return .failure(request.id, "Hay demasiados relevos pendientes del navegador.")
+            }
+            queuedHandoffs[request.id] = false
+        }
         let previous = tail
         let task = Task { @MainActor [weak self] () -> BrowserReply in
             await previous?.value
             guard let self, !self.isClosed else {
                 return .failure(request.id, "El navegador de la sesión se cerró.")
+            }
+            if request.action == "relevo", self.queuedHandoffs.removeValue(forKey: request.id) == true {
+                return .failure(request.id, "El motor canceló el relevo antes de que empezara.")
+            }
+            guard self.handoff == nil else {
+                return .failure(request.id, "El navegador está esperando a la persona.")
             }
             return await self.performNow(request)
         }
@@ -128,6 +154,8 @@ public final class BrowserEngine: NSObject {
     /// la pantalla y suelta delegados y observadores. Quien lo tiene suelta luego la referencia.
     public func close() {
         guard !isClosed else { return }
+        cancelHandoff()
+        queuedHandoffs.removeAll()
         isClosed = true
         isPanelOpen = false
         activity = nil
@@ -156,6 +184,7 @@ public final class BrowserEngine: NSObject {
         do {
             if request.action == "abrir" { allowedOrigins.formUnion(request.strings("red_local")) }
             await updateRules()
+            if request.action == "relevo" { return await beginHandoff(request) }
             var result = try await run(request)
             if let permission = result.removeValue(forKey: "permiso") as? [String: Any],
                let kind = permission["tipo"] as? String {
@@ -463,6 +492,7 @@ extension BrowserEngine {
         case "captura": return "Haciendo una captura"
         case "js":
             return request.bool("modifica") ? "Ejecutando JavaScript que cambia la página" : "Ejecutando JavaScript"
+        case "relevo": return "Esperando a la persona"
         case "descargar": return "Descargando " + (request.string("url") ?? "")
         default: return request.action
         }

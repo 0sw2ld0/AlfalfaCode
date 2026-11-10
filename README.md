@@ -1285,8 +1285,8 @@ el botón del globo de la cabecera (⇧⌘B). Una franja encima de la página di
 haciendo el agente, y un recuadro verde marca dónde pulsa o escribe.
 
 Cada sesión tiene su propio almacén de datos, no persistente: ni cookies ni cuentas del
-Safari del usuario, y nada queda en disco al cerrar. Para entrar con tus cuentas sigue
-haciendo falta CuyBrowser.
+Safari del usuario, y nada queda en disco al cerrar. Con `browser_handoff` puedes entrar
+a mano en este panel; al cerrar la sesión se pierde el login.
 
 Herramientas, que sólo existen cuando el agente corre dentro de la app (la app arranca
 el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscador web en
@@ -1307,6 +1307,11 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
   `question`, la mira el modelo de visión y vuelve la respuesta.
 - `browser_eval`: JavaScript que lee, en un mundo aislado de sólo lectura que la página
   no ve; con `modifies: true`, en la propia página y con permiso.
+- `browser_handoff`: el agente espera mientras haces tu parte (login, 2FA, captcha o pago).
+  El panel muestra el motivo, **Continuar** (⇧⌘↩) y **Cancelar**. Con `until.url_contains`,
+  Continuar requiere ese fragmento en la dirección. Las acciones del agente se bloquean
+  mientras espera, incluso en Plan; a los cinco minutos o al detener el turno se cancela.
+  El agente nunca resuelve captchas por su cuenta.
 - `browser_download`: descargar a una ruta del proyecto, sólo de direcciones públicas
   (también después de cada redirección y mirando a qué IP resuelve el nombre), hasta
   200 MB y unos 5 minutos; si no, se cancela y no queda nada a medias.

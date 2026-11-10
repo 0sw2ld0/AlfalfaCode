@@ -291,6 +291,9 @@ class Transport:
             raise ValueError('El navegador de la app no respondió a tiempo.') from None
         finally:
             self.navegador_pendientes.pop(ident, None)
+            if accion == 'relevo':
+                # Correlacionado: timeout, interrupción y respuestas tardías no dejan la app bloqueada.
+                self.emit('navegador', id=ident, accion='cancelar_relevo')
 
     def take_settings(self):
         cambios, self.pending_settings = self.pending_settings, {}
