@@ -1290,9 +1290,15 @@ páginas web aunque el Mac no tenga Chrome. Se abre solo cuando lo usa el agente
 el botón del globo de la cabecera (⇧⌘B). Una franja encima de la página dice qué está
 haciendo el agente, y un recuadro verde marca dónde pulsa o escribe.
 
-Cada sesión tiene su propio almacén de datos, no persistente: ni cookies ni cuentas del
-Safari del usuario, y nada queda en disco al cerrar. Con `browser_handoff` puedes entrar
-a mano en este panel; al cerrar la sesión se pierde el login.
+De forma predeterminada cada sesión tiene un almacén aislado, no persistente: al
+cerrar se pierde el login. En **Ajustes → Navegador** puedes elegir **Guardado por
+proyecto** para conservar los accesos que inicies a mano con `browser_handoff`.
+Sólo las sesiones de esa carpeta comparten el perfil, separado de Safari y de los
+otros proyectos; nunca se copian cookies ni cuentas de tus navegadores personales.
+Cambiar de modo cierra las páginas del proyecto. Volver a **Aislado** deja de usar
+los datos guardados; **Borrar los datos del navegador de este proyecto…** los elimina
+tras confirmar, sin borrar los de otros proyectos. Mientras el agente trabaja,
+espera un permiso o está en relevo, estos cambios quedan bloqueados.
 
 Herramientas, que sólo existen cuando el agente corre dentro de la app (la app arranca
 el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscador web en

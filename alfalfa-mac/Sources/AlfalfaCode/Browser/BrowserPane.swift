@@ -20,6 +20,8 @@ struct BrowserPane: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            Text(browser.profileDescription).font(.system(size: 10.5)).foregroundStyle(Theme.secondary)
+                .padding(.vertical, 4).frame(maxWidth: .infinity).background(Theme.card)
             if browser.isLoading {
                 ProgressView(value: browser.progress).progressViewStyle(.linear).tint(Theme.alfalfa)
                     .frame(height: 2).padding(.horizontal, 0)
@@ -114,7 +116,9 @@ struct BrowserPane: View {
         VStack(spacing: 10) {
             Image(systemName: "globe").font(.system(size: 28)).foregroundStyle(Theme.muted)
             Text("Navegador de la sesión").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-            Text("Aislado: sin tus cuentas ni las cookies de Safari. Lo usa el agente y puedes usarlo tú.")
+            Text(browser.profileMode == .project
+                 ? "Usa el perfil guardado de este proyecto. Entra a mano cuando el agente te pase el relevo."
+                 : "Sin tus cuentas ni las cookies de Safari. Lo usa el agente y puedes usarlo tú.")
                 .font(.system(size: 12)).foregroundStyle(Theme.secondary).multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
         }
