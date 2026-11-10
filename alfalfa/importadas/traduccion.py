@@ -28,6 +28,7 @@ Formatos, según su documentación pública:
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -37,7 +38,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ..mcp_cliente import configuracion as configuracion_mcp
-from .formatos import Invalido
+from .formatos import Invalido, leer_texto
 
 ENV_OPENCODE = re.compile(r'\{env:(?P<nombre>[^}]*)\}')
 ENV_CLAUDE = re.compile(r'\$\{(?P<nombre>[A-Za-z_][A-Za-z0-9_]*)(?::-(?P<defecto>[^}]*))?\}')
@@ -322,6 +323,8 @@ def tapar_argumentos(orden):
         texto = argumento
         for secreto in sorted(set(secretos), key=len, reverse=True):  # el más largo primero: no deja restos
             texto = texto.replace(secreto, OCULTO)
+        # La contraseña de usuario:contraseña@ se tapa siempre, aunque sea corta.
+        texto = configuracion_mcp.CONTRASENA_EN_TEXTO.sub(lambda m: m.group('usuario') + ':' + OCULTO + '@', texto)
         tapada.append(texto)
         anterior = argumento
     return tapada
@@ -342,17 +345,93 @@ def _ejecutable(nombre, entorno, carpeta):
     return (Path(encontrado).resolve() if encontrado else None), False
 
 
-def _huella_de_archivo(ruta, tope=16 * 1024 * 1024):
-    """SHA-256 del contenido (o tamaño y fecha si es muy grande): si el binario del repositorio
-    cambia, la autorización deja de valer."""
+def _huella_de_archivo(ruta, bloque=1024 * 1024):
+    """SHA-256 de todo el contenido, leído por bloques (sin tope: un binario grande no puede
+    cambiar conservando tamaño y fecha): si el binario del repositorio cambia, la autorización
+    deja de valer."""
     import hashlib
+    resumen = hashlib.sha256()
     try:
-        datos = Path(ruta).stat()
-        if datos.st_size > tope:
-            return 'tamaño ' + str(datos.st_size) + ' · ' + str(int(datos.st_mtime))
-        return hashlib.sha256(Path(ruta).read_bytes()).hexdigest()
+        with open(ruta, 'rb') as archivo:
+            for trozo in iter(lambda: archivo.read(bloque), b''):
+                resumen.update(trozo)
     except OSError:
         return None
+    return resumen.hexdigest()
+
+
+# Lanzadores de paquetes de Node: ejecutan el binario de `node_modules/.bin` del proyecto si lo hay.
+_LANZADORES = {'npx': 0, 'bunx': 0, 'npm': ('exec', 'x'), 'pnpm': ('dlx', 'exec'), 'yarn': 'dlx'}
+_OPCIONES_CON_VALOR = ('-p', '--package', '-c', '--call', '--workspace', '-w')
+
+
+def _paquete_lanzado(orden):
+    """El selector que pide `npx srv`, `npm exec srv`, `pnpm dlx srv` o `bunx srv`.
+    Conserva ámbito y versión para poder resolver el `bin` del paquete local."""
+    nombre = Path(orden[0]).name
+    if nombre not in _LANZADORES:
+        return None
+    resto = list(orden[1:])
+    subordenes = _LANZADORES[nombre]
+    if subordenes != 0:
+        validas = subordenes if isinstance(subordenes, tuple) else (subordenes,)
+        if not resto or resto[0] not in validas:
+            return None
+        resto = resto[1:]
+    paquete, saltar = None, False
+    for argumento in resto:
+        if saltar:
+            saltar = False
+            continue
+        if argumento == '--':
+            continue
+        if argumento in _OPCIONES_CON_VALOR:
+            saltar = True
+            continue
+        if argumento.startswith('-'):
+            continue
+        paquete = argumento
+        break
+    if not paquete:
+        return None
+    return paquete
+
+
+def _binario_local(paquete, carpeta):
+    """El binario local, también cuando `package.json.bin` le da otro nombre al paquete."""
+    selector = re.fullmatch(r'(?P<nombre>@[^/@]+/[^/@]+|[^/@]+)(?:@[^/]+)?', paquete)
+    if selector is None:
+        return None
+    nombre = selector.group('nombre')
+    corto = nombre.rsplit('/', 1)[-1]
+    for base in (Path(carpeta), *Path(carpeta).parents):
+        binarios = base / 'node_modules' / '.bin'
+        # npm exec primero intenta una orden local directa, sin selector de paquete.
+        candidato = binarios / paquete
+        if '/' not in paquete and '@' not in paquete and candidato.is_file():
+            return candidato.resolve()
+        manifiesto = base / 'node_modules' / nombre / 'package.json'
+        if manifiesto.is_file():
+            try:
+                datos = json.loads(leer_texto(manifiesto))
+                bins = datos.get('bin') if isinstance(datos, dict) else None
+                if isinstance(bins, str):
+                    bins = {corto: bins}
+                if not isinstance(bins, dict) or not bins or not all(
+                        isinstance(k, str) and isinstance(v, str) for k, v in bins.items()):
+                    return None
+                # La misma heurística de npm: único destino (quizá con alias) o clave sin ámbito.
+                inferido = next(iter(bins)) if len(set(bins.values())) == 1 else corto if corto in bins else None
+                if inferido is None:
+                    return None
+                candidato = binarios / inferido
+                return candidato.resolve() if candidato.is_file() else None
+            except (ValueError, OSError):
+                return None
+        candidato = binarios / corto
+        if candidato.exists():
+            return candidato.resolve()
+    return None
 
 
 def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None, entorno=None, repositorio=None):
@@ -396,6 +475,14 @@ def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None,
         if fila['del_repositorio']:
             fila['ejecutable_real'] = str(real)
             fila['ejecutable_huella'] = _huella_de_archivo(real)
+        # Un lanzador de Node (aunque sea el global) ejecuta el binario local del proyecto si existe.
+        paquete = _paquete_lanzado(orden)
+        local = _binario_local(paquete, carpeta or cwd or lugar.base) if paquete else None
+        if local is not None:
+            fila['paquete_local'] = str(local)
+            fila['paquete_huella'] = _huella_de_archivo(local)
+            if any(_dentro(local, Path(r).resolve()) for r in raices):
+                fila['del_repositorio'] = True
         if cwd:
             fila['carpeta'] = cwd
     elif isinstance(url, str):
@@ -434,8 +521,12 @@ def lineas_mcp(definicion, red):
     lineas = []
     if definicion.get('transporte') == 'stdio':
         lineas.append('orden: ' + definicion['orden'])
+        local = definicion.get('paquete_local')
         lineas.append('ejecutable: ' + definicion['ejecutable']
-                      + (' (del repositorio)' if definicion.get('del_repositorio') else ''))
+                      + (' (del repositorio)' if definicion.get('del_repositorio') and not local else ''))
+        if local:
+            lineas.append('ejecuta el paquete local: ' + local
+                          + (' (del repositorio)' if definicion.get('del_repositorio') else ''))
         if definicion.get('carpeta'):
             lineas.append('carpeta (la única que puede escribir): ' + definicion['carpeta'])
         lineas.append('internet: ' + ('sí' if red else 'no'))

@@ -891,12 +891,17 @@ sus argumentos, sin recortar; una de más de 8000 caracteres (contados en crudo)
 usa. La de un servidor del proyecto se ve tal cual se ejecutará. En la de uno tuyo se
 tapan sólo los valores que son claramente una credencial: `--token=…`,
 `NOMBRE_TOKEN=…` (como `docker run -e`), el valor que sigue a `--api-key`, una cabecera
-`Authorization: …` (también tras `--header=` o `-H`), las claves con nombre de credencial
-de un JSON, y de una URL (`http`, `https`, `ws`, `wss`) la contraseña, la consulta, el
-fragmento o un tramo con forma de token. Los caracteres
+(`Authorization: …`, `Cookie: …`, también tras `--header=` o `-H`), un token con prefijo
+conocido (`ghp_`, `github_pat_`, `sk-`, `xoxb-`, `glpat-`…), las claves con nombre de
+credencial de un JSON (y el `value` de un `{"name": "Authorization", …}`), y de una URL de
+cualquier esquema (también `postgresql://`, `mongodb+srv://`, `redis://`) o sin él, la
+contraseña de `usuario:contraseña@` (siempre, aunque sea corta), los valores secretos
+de la consulta o del fragmento y un tramo con forma de token. Los caracteres
 de control salen escritos. También enseña la ruta del ejecutable, avisando si es del
 repositorio, también si un servidor tuyo acaba lanzando un binario del repositorio
-abierto (el `npx` de `node_modules/.bin`); entonces la huella incluye ese binario y su
+abierto. Pasa con un `npx`, `npm exec`, `pnpm dlx` o `bunx` (aunque sean los globales),
+que ejecutan el `node_modules/.bin/<paquete>` del proyecto si existe, buscándolo desde la
+carpeta del proceso hacia arriba. Entonces la huella incluye ese binario y todo su
 contenido, y la autorización no vale en otro repositorio ni si el binario cambia. Si
 la definición declara un PATH, se busca con él, y un tramo vacío cuenta como la
 carpeta del proceso. Por último, la carpeta que podrá escribir, si
