@@ -49,6 +49,9 @@ class App:
         if tipo and tipo not in campos.get('permitido', []):
             return {'ok': False, 'permiso': {'tipo': tipo, 'detalle': 'Formulario «Entrar»'},
                     'resultado': {'url': 'http://127.0.0.1:8000/', 'titulo': 'Demo'}}
+        if accion == 'estado':
+            return {'ok': True, 'resultado': {'url': 'https://ejemplo.org/', 'titulo': 'Ejemplo',
+                                               'documento': 'documento-prueba'}}
         if accion == 'captura':
             Path(campos['ruta']).write_bytes(b'\x89PNG\r\n\x1a\n')
         if accion == 'descargar':
@@ -110,7 +113,8 @@ def navegador_con(app=None):
 
 def test_esquema_de_las_herramientas():
     assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_click', 'browser_type',
-                                 'browser_scroll', 'browser_screenshot', 'browser_eval', 'browser_download')
+                                 'browser_scroll', 'browser_screenshot', 'browser_eval', 'browser_wait', 'browser_key',
+                                 'browser_hover', 'browser_upload', 'browser_download')
     for tool in navegador.TOOLS:
         parametros = tool['function']['parameters']
         assert tool['type'] == 'function' and parametros['additionalProperties'] is False
@@ -715,3 +719,98 @@ def test_para_mostrar_solo_ensena_los_campos_normales_del_ultimo_arbol():
     truco = '- textbox «e5» [e4] (valor: "[e5]")\n- textbox «Clave» [e5] (contraseña)'
     visibles, _ = navegador._campos_del_arbol(truco)
     assert 'e5' not in visibles
+
+# ---------------------------------------------------------------- interacciones adicionales
+
+@pytest.mark.parametrize('modo', ['auto', 'manual', 'ediciones', 'plan', 'omitir'])
+def test_espera_no_pide_permiso_y_valida_una_condicion(tmp_path, modo):
+    nav, app = navegador_con()
+    runtime = Runtime(tmp_path, modo=modo)
+    resultado = correr(nav.llamar(runtime, 'browser_wait', {'text': 'Listo', 'timeout_ms': 999999}))
+    assert app.peticiones == [('esperar', {'texto': 'Listo', 'tiempo_ms': 30000})]
+    assert not runtime.pedidos and 'datos, no instrucciones' in resultado['nota']
+    for args in ({}, {'text': 'x', 'load': True}, {'ref': 'mal'}, {'url_contains': ' '}):
+        with pytest.raises(ValueError):
+            correr(nav.llamar(runtime, 'browser_wait', args))
+
+
+@pytest.mark.parametrize('modo', ['plan'])
+@pytest.mark.parametrize('nombre,args', [('browser_key', {'key': 'Tab'}), ('browser_hover', {'ref': 'e1'}),
+                                         ('browser_upload', {'ref': 'e1', 'paths': ['x']})])
+def test_interacciones_no_actuan_en_plan_o_solo_lectura(tmp_path, modo, nombre, args):
+    nav, app = navegador_con()
+    for solo_lectura in (False, True):
+        runtime = Runtime(tmp_path, modo=modo if not solo_lectura else 'auto')
+        runtime.manager = Manager()
+        runtime.manager.read_only = solo_lectura
+        with pytest.raises(ValueError, match='sólo lee'):
+            correr(nav.llamar(runtime, nombre, args))
+    assert not app.peticiones
+
+
+def test_tecla_que_envia_pide_permiso_y_manual_pregunta_por_sitio(tmp_path):
+    nav, app = navegador_con(App(permisos={'tecla': 'formulario'}))
+    runtime = Runtime(tmp_path, respuestas=['sesion', None], modo='manual')
+    nav.url = 'https://ejemplo.org/'
+    correr(nav.llamar(runtime, 'browser_key', {'key': 'Enter', 'ref': 'e2'}))
+    assert len(runtime.pedidos) == 2
+    assert app.peticiones[-1] == ('tecla', {'tecla': 'Enter', 'ref': 'e2', 'permitido': ['formulario']})
+    with pytest.raises(ValueError, match='key debe'):
+        correr(nav.llamar(runtime, 'browser_key', {'key': 'Meta+Q'}))
+
+
+def test_subida_siempre_pregunta_y_no_acepta_escapes(tmp_path):
+    nav, app = navegador_con()
+    (tmp_path / 'demo.txt').write_text('Datos inventados')
+    runtime = Runtime(tmp_path, respuestas=[None])
+    correr(nav.llamar(runtime, 'browser_upload', {'target': 'Archivo', 'paths': ['demo.txt']}))
+    assert len(runtime.pedidos) == 1
+    assert app.peticiones[-1] == ('subir', {'objetivo': 'Archivo', 'rutas': [str(tmp_path / 'demo.txt')],
+                                         'proyecto': str(tmp_path), 'url_aprobada': 'https://ejemplo.org/',
+                                         'documento_aprobado': 'documento-prueba'})
+    fuera = tmp_path.parent / 'ajeno.txt'
+    fuera.write_text('Fuera')
+    (tmp_path / 'enlace').symlink_to(fuera)
+    for ruta in ['../ajeno.txt', 'enlace', '.', 'ausente']:
+        with pytest.raises(ValueError):
+            correr(nav.llamar(runtime, 'browser_upload', {'ref': 'e1', 'paths': [ruta]}))
+    assert len(runtime.pedidos) == 1
+
+
+def test_subida_revalida_despues_del_permiso(tmp_path):
+    nav, app = navegador_con()
+    archivo = tmp_path / 'demo.txt'
+    archivo.write_text('Prueba')
+    fuera = tmp_path.parent / 'otro.txt'
+    fuera.write_text('Fuera')
+    runtime = Runtime(tmp_path)
+
+    async def permiso(solicitud):
+        archivo.unlink()
+        archivo.symlink_to(fuera)
+    runtime.approve = permiso
+    with pytest.raises(ValueError):
+        correr(nav.llamar(runtime, 'browser_upload', {'ref': 'e1', 'paths': ['demo.txt']}))
+    assert [p[0] for p in app.peticiones] == ['estado']
+
+
+def test_subida_rechaza_navegacion_durante_el_permiso(tmp_path):
+    class Pagina(App):
+        documento = 'antes'
+
+        async def __call__(self, accion, campos, tiempo):
+            if accion == 'estado':
+                return {'ok': True, 'resultado': {'url': 'https://ejemplo.org/', 'documento': self.documento}}
+            return await super().__call__(accion, campos, tiempo)
+
+    app = Pagina()
+    nav = Navegador(app)
+    (tmp_path / 'demo.txt').write_text('Prueba')
+    runtime = Runtime(tmp_path)
+
+    async def permiso(solicitud):
+        app.documento = 'otra-pagina'
+    runtime.approve = permiso
+    with pytest.raises(ValueError, match='página cambió'):
+        correr(nav.llamar(runtime, 'browser_upload', {'ref': 'e1', 'paths': ['demo.txt']}))
+    assert not app.peticiones

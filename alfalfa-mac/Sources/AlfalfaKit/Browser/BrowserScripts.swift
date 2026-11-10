@@ -8,7 +8,8 @@ enum BrowserScripts {
     /// Lo que comparten todos: referencias, visibilidad, rol, nombre accesible y búsqueda.
     static let prelude = #"""
     const A = globalThis.__alfalfa ??= { refs: new Map(), next: 1, doc: null };
-    if (A.doc !== document) { A.refs = new Map(); A.next = 1; A.doc = document; }
+    if (A.doc !== document) { A.refs = new Map(); A.next = 1; A.doc = document; A.documentID = null; }
+    A.documentID ??= String(Date.now()) + ":" + String(Math.random());
     const clean = (t, n = 120) => {
       const s = String(t ?? '').replace(/\s+/g, ' ').trim();
       return s.length > n ? s.slice(0, n - 1) + '…' : s;

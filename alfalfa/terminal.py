@@ -143,7 +143,8 @@ def excluidas():
     return () if web.disponible() else WEB
 
 ESCRITURA = ('write_file', 'edit_file', 'run_command', 'run_checks', 'apply_patch', 'app_action',
-             'browser_click', 'browser_type', 'browser_download', 'browser_eval')
+             'browser_click', 'browser_type', 'browser_download', 'browser_eval',
+             'browser_key', 'browser_hover', 'browser_upload')
 
 
 def engine_text(effort):

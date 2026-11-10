@@ -1302,6 +1302,15 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
   `question`, la mira el modelo de visión y vuelve la respuesta.
 - `browser_eval`: JavaScript que lee, en un mundo aislado de sólo lectura que la página
   no ve; con `modifies: true`, en la propia página y con permiso.
+- `browser_wait`: esperar texto visible, una referencia visible, un fragmento de URL o la
+  carga; una condición por llamada, con un plazo de hasta 30 segundos.
+- `browser_key`: Intro, Escape, Tab o flechas; admite `ref` y `target` para elegir el foco.
+  Si Intro enviaría un formulario, se pregunta antes.
+- `browser_hover`: pasar el puntero por un elemento, con eventos y CSS reales de WebKit,
+  sin mover tu ratón. Requiere que el panel de la app esté visible.
+- `browser_upload`: elegir hasta diez archivos del proyecto en un campo de subida (20 MiB
+  en total). Siempre pide permiso, también si la web los enviaría inmediatamente; no sigue
+  enlaces que salgan del proyecto. Teclas, hover y subida se deshabilitan en Plan y sólo lectura.
 - `browser_download`: descargar a una ruta del proyecto, sólo de direcciones públicas
   (también después de cada redirección y mirando a qué IP resuelve el nombre), hasta
   200 MB y unos 5 minutos; si no, se cancela y no queda nada a medias.

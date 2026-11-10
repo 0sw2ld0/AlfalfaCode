@@ -222,10 +222,20 @@ public final class BrowserEngine: NSObject {
             return try await navigate { $0.goForward() }
         case "recargar":
             return try await navigate { $0.reload() }
+        case "estado":
+            return try await evaluate(BrowserScripts.documentIdentity, [:])
         case "leer":
             return try await evaluate(BrowserScripts.read, request.fields)
         case "pulsar", "escribir":
             return try await interact(request)
+        case "esperar":
+            return try await waitForPage(request)
+        case "tecla":
+            return try await pressKey(request)
+        case "hover":
+            return try await hover(request)
+        case "subir":
+            return try await upload(request)
         case "desplazar":
             return try await evaluate(BrowserScripts.scroll, request.fields)
         case "captura":
@@ -248,8 +258,6 @@ public final class BrowserEngine: NSObject {
             return result
         case "descargar":
             return try await download(request.string("url"), to: request.string("ruta"))
-        case "estado":
-            return [:]
         default:
             throw BrowserFailure("Acción del navegador desconocida: \(request.action).")
         }
@@ -300,7 +308,7 @@ public final class BrowserEngine: NSObject {
         return result
     }
 
-    private func checkBlocked() throws {
+    func checkBlocked() throws {
         if let blockedAddress {
             throw BrowserFailure("La página quiso ir a \(blockedAddress.absoluteString), una dirección local o de la "
                                  + "red de casa que no está aprobada. Ábrela con browser_navigate para preguntar.")
@@ -311,15 +319,15 @@ public final class BrowserEngine: NSObject {
         }
     }
 
-    private func evaluate(_ body: String, _ arguments: [String: Any],
-                          in contentWorld: WKContentWorld? = nil) async throws -> [String: Any] {
+    func evaluate(_ body: String, _ arguments: [String: Any],
+                  in contentWorld: WKContentWorld? = nil) async throws -> [String: Any] {
         let value = try await webView.callAsyncJavaScript(body, arguments: ["args": arguments], in: nil,
                                                           contentWorld: contentWorld ?? world)
         return value as? [String: Any] ?? ["valor": value ?? NSNull()]
     }
 
     /// Espera a que se cumpla la condición, sin bloquear el hilo principal. false si se acabó el tiempo.
-    private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() >= deadline { return false }
@@ -448,6 +456,10 @@ extension BrowserEngine {
         case "captura": return "Haciendo una captura"
         case "js":
             return request.bool("modifica") ? "Ejecutando JavaScript que cambia la página" : "Ejecutando JavaScript"
+        case "esperar": return "Esperando una condición de la página"
+        case "tecla": return "Pulsando " + (request.string("tecla") ?? "")
+        case "hover": return "Pasando el puntero por " + target
+        case "subir": return "Seleccionando archivos aprobados"
         case "descargar": return "Descargando " + (request.string("url") ?? "")
         default: return request.action
         }
