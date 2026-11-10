@@ -11,6 +11,11 @@ import WebKit
 @MainActor
 public final class BrowserEngine: NSObject {
 
+    // MARK: - Constantes
+
+    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
+    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
+
     // MARK: - Propiedades
 
     @Published public private(set) var url: URL?
@@ -32,6 +37,7 @@ public final class BrowserEngine: NSObject {
 
     // MARK: - Propiedades privadas
 
+    private let diagnostics = BrowserDiagnostics()
     private let world = WKContentWorld.world(name: "alfalfa")
     /// Donde corre browser_eval sin permiso: no cambia nada ni lee contraseñas (BrowserScripts.readOnlyWorld).
     private let readingWorld = WKContentWorld.world(name: "alfalfa-lectura")
@@ -58,8 +64,6 @@ public final class BrowserEngine: NSObject {
     /// `close()`: ya no hace nada.
     public private(set) var isClosed = false
 
-    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
-    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
     /// Lo que espera una descarga antes de cancelarla (el motor espera 300 s la respuesta).
     var downloadTimeout: TimeInterval = 280
 
@@ -75,6 +79,10 @@ public final class BrowserEngine: NSObject {
         configuration.userContentController.addUserScript(
             WKUserScript(source: BrowserScripts.readOnlyWorld, injectionTime: .atDocumentStart,
                          forMainFrameOnly: false, in: readingWorld))
+        configuration.userContentController.add(diagnostics, name: BrowserDiagnostics.handler)
+        configuration.userContentController.addUserScript(
+            WKUserScript(source: BrowserDiagnosticsScripts.observe, injectionTime: .atDocumentStart,
+                         forMainFrameOnly: true))
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1100, height: 800), configuration: configuration)
         super.init()
         webView.navigationDelegate = self
@@ -131,6 +139,8 @@ public final class BrowserEngine: NSObject {
         let controller = webView.configuration.userContentController
         controller.removeAllContentRuleLists()
         controller.removeAllUserScripts()
+        controller.removeScriptMessageHandler(forName: BrowserDiagnostics.handler)
+        diagnostics.reset()
         observations.removeAll()
         parking?.contentView = nil
         parking?.close()
@@ -224,6 +234,9 @@ public final class BrowserEngine: NSObject {
             return try await navigate { $0.reload() }
         case "leer":
             return try await evaluate(BrowserScripts.read, request.fields)
+        case "consola", "red":
+            let limit = (request.fields["limite"] as? Int) ?? BrowserDiagnostics.capacity
+            return diagnostics.result(network: request.action == "red", limit: limit)
         case "pulsar", "escribir":
             return try await interact(request)
         case "desplazar":
@@ -442,6 +455,8 @@ extension BrowserEngine {
         case "adelante": return "Yendo a la página siguiente"
         case "recargar": return "Recargando la página"
         case "leer": return "Leyendo la página"
+        case "consola": return "Leyendo la consola de la página"
+        case "red": return "Leyendo las peticiones de red de la página"
         case "pulsar": return "Pulsando " + target
         case "escribir": return "Escribiendo en " + target
         case "desplazar": return "Desplazando la página"
@@ -500,6 +515,7 @@ extension BrowserEngine: WKNavigationDelegate {
     }
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        diagnostics.reset()
         started += 1
     }
 

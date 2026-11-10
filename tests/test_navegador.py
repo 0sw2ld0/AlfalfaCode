@@ -109,7 +109,8 @@ def navegador_con(app=None):
 # ---------------------------------------------------------------- esquema
 
 def test_esquema_de_las_herramientas():
-    assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_click', 'browser_type',
+    assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_console', 'browser_network',
+                                 'browser_click', 'browser_type',
                                  'browser_scroll', 'browser_screenshot', 'browser_eval', 'browser_download')
     for tool in navegador.TOOLS:
         parametros = tool['function']['parameters']
