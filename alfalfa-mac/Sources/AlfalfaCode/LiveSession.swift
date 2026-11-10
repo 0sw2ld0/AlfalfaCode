@@ -109,7 +109,8 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 keepAwake: Preferences().keepAwake, browser: true,
                                                 budget: Preferences().sessionBudget,
                                                 monthlyBudget: Preferences().monthlyBudget,
-                                                diagnostics: Preferences().diagnostics)
+                                                diagnostics: Preferences().diagnostics,
+                                                commitSignature: Preferences().commitSignature)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -487,6 +488,11 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Ver los errores al editar: vale desde la siguiente edición.
     func setDiagnostics(_ on: Bool) {
         process?.send(.diagnostics(on))
+    }
+
+    /// Ajustes ▸ General ▸ Firmar los commits: vale desde el siguiente `git commit`.
+    func setCommitSignature(_ on: Bool) {
+        process?.send(.commitSignature(on))
     }
 }
 

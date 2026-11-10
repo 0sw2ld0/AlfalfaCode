@@ -65,6 +65,8 @@ class Transport:
         self.keep_awake = None
         # {"tipo":"diagnosticos","activo":bool}: el de «Ver los errores al editar», desde la siguiente edición.
         self.diagnostics = None
+        # {"tipo":"firma","activo":bool}: el de «Firmar los commits», desde el siguiente git commit.
+        self.signature = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
@@ -353,6 +355,11 @@ class Transport:
                 if not isinstance(activo, bool) or self.diagnostics is None:
                     raise ValueError()
                 self.diagnostics(activo)
+            elif value.get('tipo') == 'firma':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.signature is None:
+                    raise ValueError()
+                self.signature(activo)
             elif value.get('tipo') == 'aprendizaje':
                 ident, aplicar = value.get('id'), value.get('aplicar')
                 if not isinstance(ident, str) or not isinstance(aplicar, bool) or self.learning is None:
@@ -419,7 +426,7 @@ class Transport:
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager, diagnostics, keep_awake
+    from .terminal import TerminalManager, diagnostics, keep_awake, signature
     manager = None
     reader_task = None
     pipe = None
@@ -437,7 +444,7 @@ async def run(args, transport):
                                   navegador=bool(getattr(args, 'navegador', False)),
                                   budget=getattr(args, 'presupuesto', None),
                                   monthly_budget=getattr(args, 'presupuesto_mes', None),
-                                  diagnosticos=diagnostics(args))
+                                  diagnosticos=diagnostics(args), firma=signature(args))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -495,6 +502,7 @@ async def run(args, transport):
 
         transport.stop_process = detener_proceso
         transport.keep_awake = manager.despierto.cambiar
+        transport.signature = manager.firma.cambiar
         # En solo lectura no hay diagnósticos, pero el interruptor de la app se acepta igual.
         transport.diagnostics = (manager.diagnosticos.cambiar if manager.diagnosticos is not None
                                  else (lambda activo: None))
