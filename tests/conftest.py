@@ -18,6 +18,10 @@ os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
 
+from tests.aislamiento_python import preparar  # noqa: E402
+
+preparar()
+
 
 @pytest.fixture(autouse=True)
 def _sin_llavero_ni_proveedores_del_usuario(tmp_path_factory, monkeypatch):
