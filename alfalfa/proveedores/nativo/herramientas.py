@@ -543,8 +543,12 @@ APPLY_PATCH_TOOL = schema(
 MAX_RECAP = 300
 MAX_ASK = 100
 MAX_OPCION = 30
+# La frase sugerida, como la de la app de Codex: el siguiente mensaje del usuario, en gris en el
+# cuadro vacío. Sólo se envía si el usuario la acepta (Tab) y la manda él.
+MAX_SUGERENCIA = 200
 WRAP_UP_EXAMPLE = {'recap': 'Corregí la suma en suma.py y la prueba pasa. No hice commit.',
-                   'ask': '¿Hago commit del arreglo?', 'options': ['Sí, haz commit', 'Todavía no']}
+                   'ask': '¿Hago commit del arreglo?', 'options': ['Sí, haz commit', 'Todavía no'],
+                   'suggestion': 'Añade también pruebas para la resta y la división por cero.'}
 WRAP_UP_TOOL = schema(
     'wrap_up',
     'Call once at the very end of a turn in which you changed files, ran commands or did multi-step work, '
@@ -554,10 +558,65 @@ WRAP_UP_TOOL = schema(
     'ask (optional, at most 100 characters): ONE short question only when the next move is the user\'s '
     'decision (a go-ahead, a choice, an approval); omit it when nothing waits on the user. options (only with '
     'ask): 1 or 2 replies of 1-4 words the user can click, your recommendation first; a click sends that text '
-    'as the user\'s next message. Still write your full answer as normal text after this call.',
+    'as the user\'s next message. suggestion (optional, one line, at most 200 characters): the complete next '
+    'message the user would most likely send, written as the user in first person and in their language; it '
+    'appears greyed out in the empty input box and is only sent if the user accepts it with Tab and sends it. '
+    'Omit it when the next message is not clear. Never put an authorization in it: no "I authorize", "I '
+    'approve", "yes, push/delete/publish/deploy/merge/send" or any go-ahead for an irreversible or external '
+    'action; for those use ask with options, or no suggestion. Still write your full answer as normal text '
+    'after this call.',
     {'recap': STRING, 'ask': STRING,
-     'options': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 2}},
+     'options': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 2},
+     'suggestion': STRING},
     ['recap'], example=WRAP_UP_EXAMPLE)
+
+# Lo que una sugerencia nunca puede decir por el usuario. Es una red: las instrucciones ya
+# lo prohíben, pero una frase que se acepta con Tab y ↩ no debe poder autorizar nada.
+_AUTORIZACION = re.compile(
+    r'\b(autorizo|autorizamos|autorizad[oa]s?|apruebo|aprobamos|aprobad[oa]s?|consiento|doy\s+(mi\s+|el\s+)?'
+    r'(permiso|visto\s+bueno|ok|aprobación|autorización)|(tienes|tenéis|con)\s+mi\s+(permiso|autorización|'
+    r'aprobación|visto\s+bueno)|te\s+permito|i\s+(hereby\s+)?(authori[sz]e|approve|consent)|authori[sz]ed|'
+    r'approved|(you\s+have|with|i\s+give\s+you)\s+my\s+(permission|approval|consent)|permission\s+granted|'
+    r'sign[\s-]?off)\b', re.IGNORECASE)
+# Un «sí» o «adelante» al principio, seguido de algo que no se deshace o sale fuera.
+_CONFORMIDAD = re.compile(
+    r'^\W*(sí|si(?=\s*[,.!])|vale|ok(ay)?|de\s+acuerdo|adelante|dale|venga|confirm\w*|procede|hazlo|yes|yeah|yep|sure|'
+    r'go\s+ahead|do\s+it|proceed)\b', re.IGNORECASE)
+_ARRIESGADA = re.compile(
+    r'\b(sub[ea]n?|subir|súbel[oa]s?|push\w*|empuj\w*|fusion\w*|merge\w*|mergea\w*|publica[nr]?|publícal[oa]s?|'
+    r'publish\w*|release|lanza[nr]?|despliega\w*|desplegar|deploy\w*|borr[ae]\w*|elimin[ae]\w*|delete\w*|'
+    r'remove\w*|rm|suprim\w*|descart[ae]\w*|discard\w*|drop|envía\w*|enviar|envia\w*|manda\w*|send\w*|'
+    r'post\w*|paga\w*|pay\w*|compra\w*|buy\w*|cierra\w*|cerrar|close\w*|revoca\w*|revoke\w*|resetea\w*|'
+    r'reset\w*|force\w*|fuerza\w*|tag\w*|etiqueta\w*)\b', re.IGNORECASE)
+# Sin «sí» delante también: acciones que salen del equipo o no tienen vuelta atrás.
+_IRREVERSIBLE = re.compile(
+    r'(\b(push|pushea\w*|empuja(r|lo|la|los)?|fusiona(r|lo|la)?|merge|mergea(r|lo|la)?|publish|publica(r|lo|la)?|'
+    r'publícal[oa]s?|despliega(r|lo|la)?|desplegar|deploy|paga(r|lo|la)?|compra(r|lo|la)?|pay|buy|'
+    r'force[-\s]?push\w*)\b|--force\b|\breset\s+--hard\b|\brm\s+-\w*r|'
+    r'\b(sube|subir|súbel[oa]s?)\b.*\b(origin|remoto|github|gitlab|commit|commits|rama|branch|main|master|pr)\b|'
+    r'\b(cierra(r|lo|la)?|cerrar|close)\b.*\b(pr|prs|pull\s+request|issue|incidencia)\b|'
+    r'\b(borra(r|lo|la)?|elimina(r|lo|la)?|delete|remove|suprime)\b.*\b(rama|branch|remot[oa]|repo|repositorio|'
+    r'release|tag|etiqueta|base\s+de\s+datos|database|producción|production|bucket|cuenta|account)\b|'
+    r'\b(envía(lo|la)?|enviar|manda(r|lo|la)?|send)\b.*\b(correo|email|e-mail|mail|mensaje|message|slack)\b)',
+    re.IGNORECASE)
+
+
+def sugerencia_arriesgada(texto):
+    """True si la sugerencia autoriza o da el visto bueno, en nombre del usuario, a algo que no se deshace
+    o que sale fuera (subir, publicar, borrar, desplegar, enviar, pagar…). Esas se descartan."""
+    return bool(_AUTORIZACION.search(texto) or _IRREVERSIBLE.search(texto)
+                or (_CONFORMIDAD.search(texto) and _ARRIESGADA.search(texto)))
+
+
+def sugerencia_de(args):
+    """La sugerencia de wrap_up ya limpia, o None. La que autoriza en nombre del usuario se descarta."""
+    sugerencia = ' '.join(str(args.get('suggestion') or '').split())
+    if not sugerencia:
+        return None
+    if len(sugerencia) > MAX_SUGERENCIA:
+        raise ValueError('suggestion tiene ' + str(len(sugerencia)) + ' caracteres; el máximo es '
+                         + str(MAX_SUGERENCIA) + '. Deja una sola línea corta.')
+    return None if sugerencia_arriesgada(sugerencia) else sugerencia
 
 
 def cierre_de_turno(args):
@@ -580,11 +639,14 @@ def cierre_de_turno(args):
                          + str(MAX_OPCION) + ' caracteres).')
     if len(set(options)) != len(options):
         raise ValueError('Las dos opciones son iguales.')
+    sugerencia = sugerencia_de(args)
     cierre = {'resumen': recap}
     if ask:
         cierre['pregunta'] = ask
     if options:
         cierre['opciones'] = options
+    if sugerencia:
+        cierre['sugerencia'] = sugerencia
     return cierre
 
 
@@ -1014,7 +1076,11 @@ class WorkspaceTools:
             if propuestas:
                 cierre['sesiones'] = propuestas
             self.runtime.task['cierre'] = cierre
-            return {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
+            resultado = {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
+            if str(args.get('suggestion') or '').strip() and 'sugerencia' not in cierre:
+                resultado['sugerencia'] = ('Descartada: autorizaba en nombre del usuario algo irreversible o '
+                                           'externo. Para eso, pregunta con ask y options.')
+            return resultado
         if name == 'propose_session':
             # Tampoco ejecuta nada: la tarjeta sale con el cierre del turno y decide el usuario.
             propuesta = sesion_propuesta(args)
