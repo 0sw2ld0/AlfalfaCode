@@ -147,11 +147,11 @@ final class BrowserSiteState {
         }
         self.pending = nil
         let method = (pending.request.httpMethod ?? "GET").uppercased()
-        // WebKit puede omitir el cuerpo de POST en WKNavigationAction. Nunca convertirlo en GET,
-        // enviar un cuerpo vacío ni volver a pulsar el formulario como efecto de aprobar un sitio.
-        guard ["GET", "HEAD"].contains(method) || pending.request.httpBody != nil else {
-            throw BrowserFailure("Sitio aprobado para el siguiente intento. WebKit no conservó el cuerpo del "
-                                 + "formulario; no se envió ni se repitió. Vuelve a intentar la acción explícitamente.")
+        // Visitar B no autoriza a entregar allí un cuerpo que se aprobó para A, aunque WebKit lo conserve.
+        guard ["GET", "HEAD"].contains(method) else {
+            throw BrowserFailure("Sitio aprobado para el siguiente intento. Visitarlo no autoriza reenviar allí "
+                                 + "un formulario ni su cuerpo. No se envió ni se repitió. "
+                                 + "Repite la acción explícitamente.")
         }
         guard pending.request.httpBodyStream == nil else {
             throw BrowserFailure("Sitio aprobado. No se puede repetir de forma segura un cuerpo en streaming.")

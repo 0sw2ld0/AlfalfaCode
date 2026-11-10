@@ -204,8 +204,12 @@ public final class BrowserEngine: NSObject {
         host()
         activity = Self.describe(request)
         lastActivity = activity
-        siteRequestID = request.id
+        siteRequestID = request.action == "esperar" ? nil : request.id
         defer { activity = nil; siteRequestID = nil }
+        if request.action == "esperar" {
+            blockedAddress = nil
+            blockedDownload = nil
+        }
         do {
             if let reply = try prepareSites(request) { return reply }
             if ["abrir", "reanudar_sitio"].contains(request.action) {

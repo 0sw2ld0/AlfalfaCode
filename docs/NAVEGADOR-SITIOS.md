@@ -71,9 +71,12 @@ WebKit cancela una navegación desconocida antes del contacto y devuelve un perm
 `sitio` con URL y token. Tras la decisión, el motor manda `reanudar_sitio` con ese
 token y la política actual. El token se vincula a la solicitud, al documento y a
 la URL de origen. Rechazar o cancelar manda `cancelar_sitio`; no vuelve a pulsar ni
-a enviar el formulario. Si WebKit no conservó el cuerpo de un POST, se concede el
-sitio para el siguiente intento y se devuelve un error explícito: no se convierte
-en GET ni se envía vacío. Si la acción nueva no llegó a empezar (`iniciada:false`),
+a enviar el formulario. Sólo se reanudan GET y HEAD. Para POST y cualquier otro
+método se concede el sitio para el siguiente intento y se devuelve un error
+explícito, aunque WebKit conserve su cuerpo: visitar B no autoriza a entregarle
+un cuerpo aprobado para A. No se convierte en GET ni se envía vacío.
+Si una espera se interrumpe por una navegación de fondo, no se afirma que su
+condición se cumplió. Si la acción no llegó a completarse (`iniciada:false`),
 se informa de ello para releer la página antes de repetirla.
 
 La consulta `alfalfa --navegador-sitios --json` no modifica nada. El canal interactivo

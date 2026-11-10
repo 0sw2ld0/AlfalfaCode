@@ -10,6 +10,7 @@ extension BrowserEngine {
         let deadline = Date().addingTimeInterval(min(30000, max(1, milliseconds)) / 1000)
         repeat {
             try Task.checkCancellation()
+            try checkBlocked()
             let matched: Bool
             if let fragment = request.string("url_contiene") {
                 matched = webView.url?.absoluteString.contains(fragment) == true
@@ -19,7 +20,7 @@ extension BrowserEngine {
                 let result = try await evaluate(BrowserScripts.waitCondition, request.fields)
                 matched = result["cumplida"] as? Bool == true
             }
-            if matched { return ["cumplida": true] }
+            if matched { try checkBlocked(); return ["cumplida": true] }
             if isClosed { throw BrowserFailure("El navegador de la sesión se cerró.") }
             try await Task.sleep(nanoseconds: 50_000_000)
         } while Date() < deadline

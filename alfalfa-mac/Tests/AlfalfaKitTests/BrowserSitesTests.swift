@@ -17,7 +17,7 @@ final class BrowserSitesTests: XCTestCase {
         XCTAssertEqual(BrowserSitePolicy.origin(URL(string: "https://faß.de/")!), "https://xn--fa-hia.de:443")
     }
 
-    func testPendingTokenPreservesRequestAndRejectsChangedDocumentOrMissingPostBody() throws {
+    func testPendingTokenRejectsPostWithAndWithoutBodyAndChangedDocument() throws {
         let state = BrowserSiteState()
         let source = URL(string: "https://source.test/")!
         let target = URL(string: "https://target.test/submit")!
@@ -30,7 +30,7 @@ final class BrowserSitesTests: XCTestCase {
         let resume = BrowserRequest(id: "resume", action: "reanudar_sitio", fields: [
             "token": token, "url": target.absoluteString])
         XCTAssertThrowsError(try state.take(resume, document: 1, source: source)) { error in
-            XCTAssertTrue((error as? BrowserFailure)?.message.contains("no conservó el cuerpo") == true)
+            XCTAssertTrue((error as? BrowserFailure)?.message.contains("no autoriza reenviar") == true)
         }
         XCTAssertNil(state.pending)
 
@@ -40,13 +40,72 @@ final class BrowserSitesTests: XCTestCase {
         let valid = BrowserRequest(id: "valid", action: "reanudar_sitio", fields: [
             "token": state.pending!.token, "url": target.absoluteString])
         state.policy = try policy(["https://target.test:443"])
-        let preserved = try state.take(valid, document: 2, source: source)
-        XCTAssertEqual(preserved.httpMethod, "POST")
-        XCTAssertEqual(preserved.httpBody, post.httpBody)
+        XCTAssertThrowsError(try state.take(valid, document: 2, source: source))
         state.policy = try policy([])
         _ = try state.intercept(post, document: 2, source: source)
         state.policy = try policy(["https://target.test:443"])
         XCTAssertThrowsError(try state.take(valid, document: 3, source: source))
+    }
+
+    func testWaitInterruptedByBackgroundNavigationDoesNotClaimConditionMatched() async throws {
+        let target = try SiteServer(body: "<title>Destino B</title>")
+        defer { target.stop() }
+        let targetURL = try await target.start()
+        let source = try SiteServer(body: "<title>Esperando A</title><p>Texto inicial</p>")
+        defer { source.stop() }
+        let sourceURL = try await source.start()
+        let engine = BrowserEngine()
+        defer { engine.close() }
+        _ = await engine.perform(BrowserRequest(id: "open", action: "abrir", fields: [
+            "url": sourceURL.absoluteString, "sitios": fields([origin(sourceURL)]),
+            "red_local": [BrowserAddress.origin(of: sourceURL)]]))
+        let waiting = Task {
+            await engine.perform(BrowserRequest(id: "wait", action: "esperar", fields: [
+                "texto": "Texto que nunca aparece", "tiempo_ms": 5000, "sitios": fields([origin(sourceURL)])]))
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        _ = try await engine.webView.evaluateJavaScript("setTimeout(()=>location.href='\(targetURL)', 100)")
+        let paused = await waiting.value
+        XCTAssertEqual(paused.permissionKind, "sitio", paused.json)
+        XCTAssertEqual((paused.object["permiso"] as? [String: Any])?["iniciada"] as? Bool, false, paused.json)
+        XCTAssertNil(paused.result["cumplida"], "Autorizar una navegación no satisface la condición de espera.")
+        XCTAssertEqual(target.connections, 0)
+        let resumed = await engine.perform(BrowserRequest(id: "resume", action: "reanudar_sitio", fields: [
+            "token": engine.sites.pending!.token, "url": targetURL.absoluteString,
+            "sitios": fields([origin(sourceURL), origin(targetURL)]),
+            "red_local": [BrowserAddress.origin(of: targetURL)]]))
+        XCTAssertTrue(resumed.ok, resumed.json)
+        XCTAssertNil(resumed.result["cumplida"], "El motor debe informar de la espera interrumpida, no de éxito.")
+    }
+
+    func testPost307ToNewSiteIsNotReplayedAfterSiteApproval() async throws {
+        let target = try SiteServer(body: "<title>No debe llegar</title>")
+        defer { target.stop() }
+        let targetURL = try await target.start()
+        let html = "<title>Formulario A</title><form action='/redirect' method='post'>"
+            + "<input name='dato' value='ficticio'><button>Enviar</button></form>"
+        let source = try SiteServer(body: html, location: targetURL.absoluteString,
+                                    redirectStatus: 307, redirectPath: "/redirect")
+        defer { source.stop() }
+        let sourceURL = try await source.start()
+        let engine = BrowserEngine()
+        defer { engine.close() }
+        let opened = await engine.perform(BrowserRequest(id: "open", action: "abrir", fields: [
+            "url": sourceURL.absoluteString, "sitios": fields([origin(sourceURL)]),
+            "red_local": [BrowserAddress.origin(of: sourceURL)]]))
+        XCTAssertTrue(opened.ok, opened.json)
+        let paused = await engine.perform(BrowserRequest(id: "post", action: "pulsar", fields: [
+            "objetivo": "Enviar", "permitido": ["formulario"], "sitios": fields([origin(sourceURL)])]))
+        XCTAssertEqual(paused.permissionKind, "sitio", paused.json)
+        XCTAssertEqual(target.connections, 0)
+        let resumed = await engine.perform(BrowserRequest(id: "resume", action: "reanudar_sitio", fields: [
+            "token": engine.sites.pending!.token, "url": targetURL.absoluteString,
+            "sitios": fields([origin(sourceURL), origin(targetURL)]),
+            "red_local": [BrowserAddress.origin(of: targetURL)]]))
+        XCTAssertFalse(resumed.ok, resumed.json)
+        XCTAssertTrue(resumed.error?.contains("no autoriza reenviar") == true, resumed.json)
+        XCTAssertEqual(target.connections, 0, "Visitar B no autoriza a reenviarle el formulario de A.")
+        XCTAssertEqual(source.paths.filter { $0 == "/redirect" }.count, 1, "No se vuelve a enviar el formulario.")
     }
 
     func testOnceExpiresWhenEnteringAnotherApprovedSite() throws {
@@ -192,15 +251,19 @@ private final class SiteServer: @unchecked Sendable {
     let listener: NWListener
     let body: String
     let location: String?
+    let redirectStatus: Int
+    let redirectPath: String?
     private let lock = NSLock()
     private var count = 0
     private var receivedPaths: [String] = []
     var connections: Int { lock.lock(); defer { lock.unlock() }; return count }
     var paths: [String] { lock.lock(); defer { lock.unlock() }; return receivedPaths }
 
-    init(body: String, location: String? = nil) throws {
+    init(body: String, location: String? = nil, redirectStatus: Int = 302, redirectPath: String? = nil) throws {
         self.body = body
         self.location = location
+        self.redirectStatus = redirectStatus
+        self.redirectPath = redirectPath
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -209,12 +272,15 @@ private final class SiteServer: @unchecked Sendable {
             self.lock.lock(); self.count += 1; self.lock.unlock()
             connection.start(queue: .global())
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [self] data, _, _, _ in
+                var requestedPath: String?
                 if let data, let line = String(data: data, encoding: .utf8)?.split(separator: "\r\n").first,
                    let path = line.split(separator: " ").dropFirst().first {
+                    requestedPath = String(path)
                     self.lock.lock(); self.receivedPaths.append(String(path)); self.lock.unlock()
                 }
-                let status = self.location == nil ? "200 OK" : "302 Found"
-                let redirect = self.location.map { "Location: \($0)\r\n" } ?? ""
+                let redirects = self.location != nil && (self.redirectPath == nil || self.redirectPath == requestedPath)
+                let status = redirects ? "\(self.redirectStatus) Redirect" : "200 OK"
+                let redirect = redirects ? "Location: \(self.location!)\r\n" : ""
                 let response = "HTTP/1.1 \(status)\r\n\(redirect)Content-Type: text/html\r\n"
                     + "Access-Control-Allow-Origin: *\r\nContent-Length: \(body.utf8.count)\r\n"
                     + "Connection: close\r\n\r\n" + body
