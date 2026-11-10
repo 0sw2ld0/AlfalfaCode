@@ -22,6 +22,20 @@ PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'rein
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion')
 
 
+# Largo máximo del id que la app da a un mensaje en cola.
+MAX_ID_EN_COLA = 100
+
+
+class EnCola(str):
+    """Un mensaje en cola con el id que le dio la app (`{"tipo":"mensaje","id":…}`). Sigue
+    siendo su texto: el resto del motor lo trata igual que a un mensaje sin id."""
+
+    def __new__(cls, texto, ident):
+        mensaje = super().__new__(cls, texto)
+        mensaje.id = ident
+        return mensaje
+
+
 # Lo que devuelve next_message cuando toca compactar entre turnos.
 COMPACTAR = object()
 # … y cuando toca «Seguir en una sesión nueva» (aviso de tarifa).
@@ -37,6 +51,8 @@ class Transport:
         self.interrupted = False
         # Mensajes aceptados que el motor aún no ha incorporado a su historial.
         self.inbox = []
+        # Ids de todos los mensajes con id aceptados: el que ya no está en `inbox` entró.
+        self.ids_vistos = set()
         self.wake = asyncio.Event()
         # Credenciales declaradas para servidores MCP (mcp_cliente): se redactan igual.
         self.secretos = set()
@@ -138,8 +154,20 @@ class Transport:
         self.worker.cancel()
         return True
 
-    def enviar_ahora(self, text):
-        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente."""
+    def enviar_ahora(self, text, ident=None):
+        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
+        Con `ident` (el id de la app) va justo ese mensaje; si ya no está en la cola (el modelo
+        ya lo leyó) no se corta nada ni se vuelve a enviar."""
+        if ident is not None:
+            if not isinstance(ident, str) or not ident or len(ident) > MAX_ID_EN_COLA:
+                raise ValueError()
+            n = next((n for n, m in enumerate(self.inbox) if getattr(m, 'id', None) == ident), None)
+            if n is None:
+                return
+            self.inbox.insert(0, self.inbox.pop(n))
+            self.interrumpir_turno()
+            self.wake.set()
+            return
         if not isinstance(text, str) or not text.strip():
             raise ValueError()
         if text in self.inbox:
@@ -155,6 +183,23 @@ class Transport:
         """«Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno."""
         if self.in_turn and self.inbox:
             self.redireccion.set()
+
+    def quitar_de_cola(self, ident):
+        """Quitar (o devolver al cuadro para editar) un mensaje en cola. Sólo si aún no entró en
+        el contexto del modelo; la respuesta `quitado_de_cola` dice si se quitó."""
+        if not isinstance(ident, str) or not ident or len(ident) > MAX_ID_EN_COLA:
+            raise ValueError()
+        for n, mensaje in enumerate(self.inbox):
+            if getattr(mensaje, 'id', None) == ident:
+                del self.inbox[n]
+                if not self.inbox:
+                    # Un «Redirigir» pedido por él ya no tiene nada que meter en el turno.
+                    self.redireccion.clear()
+                self.emit('quitado_de_cola', id=ident, quitado=True)
+                return
+        # `entregado`: el modelo ya lo tiene; `desconocido`: nunca llegó a la cola.
+        self.emit('quitado_de_cola', id=ident, quitado=False,
+                  motivo='entregado' if ident in self.ids_vistos else 'desconocido')
 
     def take_messages(self):
         messages, self.inbox = self.inbox, []
@@ -178,9 +223,13 @@ class Transport:
             await self.wake.wait()
         return None
 
-    def message(self, text, images=()):
-        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex."""
+    def message(self, text, images=(), ident=None):
+        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex.
+        `ident`: el id que le da la app para poder quitarlo de la cola; sin él, como siempre."""
         from . import imagenes
+        if ident is not None and not (isinstance(ident, str) and 0 < len(ident) <= MAX_ID_EN_COLA):
+            self.emit('error', texto='`id` tiene que ser texto de hasta 100 caracteres.')
+            return
         if images and not (isinstance(images, list) and all(isinstance(r, str) for r in images)):
             self.emit('error', texto='`imagenes` tiene que ser una lista de rutas.')
             return
@@ -197,6 +246,9 @@ class Transport:
         if self.stopped:
             self.emit('error', texto='La sesión se está cerrando; el mensaje no se entregó.')
         else:
+            if ident is not None:
+                text = EnCola(text, ident)
+                self.ids_vistos.add(ident)
             self.inbox.append(text)
             self.wake.set()
 
@@ -241,11 +293,13 @@ class Transport:
             if value.get('tipo') == 'cancelar':
                 self.stop()
             elif value.get('tipo') == 'mensaje':
-                self.message(value.get('texto'), value.get('imagenes') or [])
+                self.message(value.get('texto'), value.get('imagenes') or [], value.get('id'))
             elif value.get('tipo') == 'enviar_ahora':
-                self.enviar_ahora(value.get('texto'))
+                self.enviar_ahora(value.get('texto'), value.get('id'))
             elif value.get('tipo') == 'redirigir':
                 self.redirigir()
+            elif value.get('tipo') == 'quitar_de_cola':
+                self.quitar_de_cola(value.get('id'))
             elif value.get('tipo') == 'interrumpir':
                 self.interrumpir_turno()
             elif value.get('tipo') == 'ajustes':

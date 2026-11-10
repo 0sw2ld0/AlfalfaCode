@@ -28,6 +28,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var tool: ToolInfo? = nil
     /// El código se deshizo o se rehízo (`deshacer`): la conversación pinta su marca con «Rehacer».
     public var undo: UndoStep? = nil
+    /// El id del mensaje en cola que entrega este eco; permite distinguir textos idénticos.
+    public var queueID: String? = nil
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -685,6 +687,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case undoPreview(UndoPreview)
     /// `--volver` y `--rehacer`: el código se deshizo o se rehízo.
     case undone(UndoStep)
+    /// `quitado_de_cola`: respuesta a «Quitar» o «Editar» de un mensaje en cola. `removed` si se
+    /// quitó; si no, `reason` es `entregado` (el modelo ya lo leyó) o `desconocido`.
+    case unqueued(id: String, removed: Bool, reason: String?)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -721,18 +726,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),
                             details: details(object))
         case "error":
-            if let rejected = object["rechazado"] as? [String: Any] {
-                let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
-                    guard let model = text(row["modelo"]) else { return nil }
-                    return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
-                }
-                return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
-                                                         reason: text(object["motivo"]),
-                                                         text: rejected["texto"] as? String ?? "",
-                                                         images: rejected["imagenes"] as? [String] ?? [],
-                                                         alternatives: alternatives))
-            }
-            return .error(object["texto"] as? String ?? "")
+            return error(object)
         case "turno_terminado":
             return outcome(object).map { .turnFinished($0) }
         case "fin":
@@ -840,6 +834,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
+        case "quitado_de_cola":
+            guard let id = text(object["id"]), let removed = bool(object["quitado"]) else { return nil }
+            return .unqueued(id: id, removed: removed, reason: text(object["motivo"]))
         case "presupuesto":
             return BudgetStatus(object: object).map { .budget($0, cache: CacheSavings(object: object["cache"])) }
         case "subagente_evento":
@@ -881,7 +878,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
         return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
                           compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]),
-                          undo: UndoStep.parse(row["deshacer"], text: text))
+                          undo: UndoStep.parse(row["deshacer"], text: text), queueID: Self.text(row["id_cola"]))
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.
@@ -1023,6 +1020,20 @@ public enum AlfalfaMessage: Equatable, Sendable {
     }
 
     private static func wrapUp(_ value: Any?) -> WrapUp? { WrapUp(cierre: value) }
+
+    /// `error`; con `rechazado`, el mensaje que no abrió turno y vuelve al cuadro.
+    private static func error(_ object: [String: Any]) -> AlfalfaMessage {
+        guard let rejected = object["rechazado"] as? [String: Any] else { return .error(object["texto"] as? String ?? "") }
+        let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
+            guard let model = text(row["modelo"]) else { return nil }
+            return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
+        }
+        return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
+                                                 reason: text(object["motivo"]),
+                                                 text: rejected["texto"] as? String ?? "",
+                                                 images: rejected["imagenes"] as? [String] ?? [],
+                                                 alternatives: alternatives))
+    }
 
     private static func summary(_ row: [String: Any]) -> SessionSummary? {
         guard let id = row["id"] as? String, let state = row["estado"] as? String else { return nil }

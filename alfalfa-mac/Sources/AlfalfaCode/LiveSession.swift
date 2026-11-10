@@ -134,6 +134,11 @@ final class LiveSession: ObservableObject, Identifiable {
             if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta." { pendingDraft = rejection.text }
             draftImages = ImageSupport.restoredImages(current: draftImages, returned: rejection.images)
         }
+        // «Quitar» o «Editar» de un mensaje en cola: el motor lo sacó (o ya lo leyó, y queda el aviso).
+        if case let .unqueued(id, removed, reason) = message,
+           let gone = timeline.unqueued(id: id, removed: removed, reason: reason), gone.action == .edit {
+            returnToComposer(gone.text)
+        }
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
         if case let .browser(request) = message { answerBrowser(request) }
         if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
@@ -193,16 +198,18 @@ final class LiveSession: ObservableObject, Identifiable {
             return
         }
         guard !clean.isEmpty || !images.isEmpty, process != nil else { return }
-        timeline.addUser(ImageTags.join(clean, images: images), queued: true)
-        process?.send(.message(clean, images: images))
+        let queueID = Self.newQueueID()
+        timeline.addUser(ImageTags.join(clean, images: images), queued: true, queueID: queueID)
+        process?.send(.message(clean, images: images, id: queueID))
         draftImages = []
     }
 
     /// «Enviar ahora» de un mensaje en cola, como en Claude Code: el turno en marcha se corta y
     /// este mensaje abre el siguiente. La sesión sigue abierta.
-    func sendNow(_ text: String) {
+    /// Con `item`, va el id con el que se encoló: el motor adelanta justo ese mensaje.
+    func sendNow(_ text: String, item: Int? = nil) {
         guard process != nil, timeline.status.isRunning else { return }
-        process?.send(.sendNow(text))
+        process?.send(.sendNow(text, id: item.flatMap { timeline.queueIDs[$0] }))
     }
 
     /// «Redirigir», como steer de Codex: el modelo deja lo que estaba pensando y lee ya los
@@ -216,8 +223,9 @@ final class LiveSession: ObservableObject, Identifiable {
     func reply(_ text: String) {
         if isDormant { wake(with: text); return }
         guard process != nil, timeline.status.isActive, !timeline.status.isRunning else { return }
-        timeline.addUser(text, queued: true)
-        process?.send(.message(text))
+        let queueID = Self.newQueueID()
+        timeline.addUser(text, queued: true, queueID: queueID)
+        process?.send(.message(text, id: queueID))
     }
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
@@ -395,6 +403,31 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 }
 
+// MARK: - Mensajes en cola
+
+extension LiveSession {
+    /// «Quitar» (X) y «Editar» de un mensaje en cola. Se pide al motor, que sólo lo saca si aún
+    /// no entró en el contexto; sin proceso no hay cola en el motor y se quita ya.
+    func unqueue(item: Int, action: UnqueueAction) {
+        if process == nil {
+            if let text = timeline.removeQueued(item: item), action == .edit { returnToComposer(text) }
+            return
+        }
+        guard let id = timeline.requestUnqueue(item: item, action: action) else { return }
+        process?.send(.unqueue(id))
+    }
+
+    /// Como el rechazo por imágenes: el texto se suma a lo que haya en el cuadro y las imágenes, a las suyas.
+    fileprivate func returnToComposer(_ text: String) {
+        let parts = ImageTags.split(text)
+        if !parts.text.isEmpty { pendingDraft = parts.text }
+        draftImages = ImageSupport.restoredImages(current: draftImages, returned: parts.images)
+    }
+
+    /// El id de un mensaje en cola, compartido con el motor.
+    static func newQueueID() -> String { UUID().uuidString.lowercased() }
+}
+
 // MARK: - Sesiones hijas
 
 extension LiveSession {
@@ -414,8 +447,9 @@ extension LiveSession {
             return
         }
         guard process != nil else { return }
-        timeline.addUser(note, queued: true)
-        process?.send(.message(note))
+        let queueID = Self.newQueueID()
+        timeline.addUser(note, queued: true, queueID: queueID)
+        process?.send(.message(note, id: queueID))
     }
 }
 

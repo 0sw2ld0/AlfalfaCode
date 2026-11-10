@@ -4,12 +4,14 @@ import Foundation
 public enum AlfalfaCommand: Equatable, Sendable {
     /// `session`: aprobar también lo mismo durante el resto de la sesión.
     case permission(id: String, approved: Bool, session: Bool = false)
-    case message(String, images: [String] = [])
+    case message(String, images: [String] = [], id: String? = nil)
     case cancel
     /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
-    case sendNow(String)
+    case sendNow(String, id: String? = nil)
     /// «Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno.
     case redirect
+    /// Quita el mensaje si aún no entró en el contexto del modelo.
+    case unqueue(String)
     /// Compactar (`/compactar`, «Compactar sesión»): ya entre turnos, o antes de la siguiente
     /// respuesta del modelo si hay uno en marcha. Las instrucciones centran el resumen.
     case compact(instructions: String? = nil)
@@ -36,12 +38,16 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .permission(id, approved, session):
             object = approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
                 : ["tipo": "permiso", "id": id, "aprobado": approved]
-        case let .message(text, images):
-            object = images.isEmpty ? ["tipo": "mensaje", "texto": text]
-                : ["tipo": "mensaje", "texto": text, "imagenes": images]
+        case let .message(text, images, id):
+            var fields: [String: Any] = ["tipo": "mensaje", "texto": text]
+            if !images.isEmpty { fields["imagenes"] = images }
+            if let id { fields["id"] = id }
+            object = fields
         case .cancel: object = ["tipo": "cancelar"]
-        case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
+        case let .sendNow(text, id):
+            object = id.map { ["tipo": "enviar_ahora", "texto": text, "id": $0] } ?? ["tipo": "enviar_ahora", "texto": text]
         case .redirect: object = ["tipo": "redirigir"]
+        case let .unqueue(id): object = ["tipo": "quitar_de_cola", "id": id]
         case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]
         case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
