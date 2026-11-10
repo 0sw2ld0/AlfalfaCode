@@ -207,18 +207,20 @@ def _guardar(ident, sello, modelos, ahora):
     _memoria[ident] = {'fecha': ahora, 'huella': sello, 'modelos': modelos}
 
 
-def _toca_intentar(ident, ahora):
+def _toca_intentar(ident, ahora, sello):
     try:
-        return ahora - ruta(ident).with_suffix('.intento').stat().st_mtime >= REINTENTO
-    except OSError:
+        camino = ruta(ident).with_suffix('.intento')
+        # Cambiar la clave o la URL debe probar la cuenta nueva sin heredar el enfriamiento anterior.
+        return camino.read_text(encoding='ascii') != sello or ahora - camino.stat().st_mtime >= REINTENTO
+    except (OSError, UnicodeError):
         return True
 
 
-def _marcar_intento(ident):
+def _marcar_intento(ident, sello):
     try:
         camino = ruta(ident).with_suffix('.intento')
         camino.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        camino.touch()
+        camino.write_text(sello, encoding='ascii')
     except OSError:
         pass
 
@@ -235,8 +237,8 @@ def modelos(ident, url, clave, bajar, red=True):
     propio = guardado if guardado and guardado['huella'] == sello else None
     ahora = time.time()
     viejo = propio is None or ahora - propio['fecha'] >= CADA
-    if red and viejo and _toca_intentar(ident, ahora):
-        _marcar_intento(ident)
+    if red and viejo and _toca_intentar(ident, ahora, sello):
+        _marcar_intento(ident, sello)
         try:
             filas = bajar()
         except Exception:

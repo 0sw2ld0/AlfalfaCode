@@ -88,7 +88,7 @@ def esfuerzos_de(modelo):
     if modelo in CATALOGO:
         return list(CATALOGO[modelo]['esfuerzos'])
     info = lista_api.info('anthropic', modelo) or {}
-    if info.get('esfuerzos'):
+    if isinstance(info.get('esfuerzos'), list):
         return list(info['esfuerzos'])
     from .. import catalogo
     ficha = catalogo.ficha('anthropic', modelo) or {}
@@ -101,6 +101,8 @@ def esfuerzo_para(modelo, esfuerzo, pensar):
         return None
     nivel = 'low' if pensar is False else (esfuerzo if esfuerzo in ESFUERZOS else 'medium')
     admitidos = esfuerzos_de(modelo)
+    if admitidos == []:
+        return None
     if admitidos:
         # El más cercano por debajo de entre los que admite (Opus 4.6 no tiene `xhigh`).
         return elegir_esfuerzo(admitidos, nivel) or nivel
@@ -335,10 +337,11 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
             cuerpo['tools'] = herramientas
     betas = []
     nivel = esfuerzo_para(modelo, esfuerzo, payload.get('think'))
-    if nivel:
+    if adaptativo(modelo):
         # Los modelos que razonan no admiten temperature, top_p ni top_k: no se mandan.
         cuerpo['thinking'] = {'type': 'adaptive', 'display': 'summarized'}
-        cuerpo['output_config'] = {'effort': nivel}
+        if nivel:
+            cuerpo['output_config'] = {'effort': nivel}
         if _FAMILIA_5.match(modelo):
             cuerpo['thinking']['block_binding'] = {'prefix_mismatch_behavior': 'drop_block'}
             betas.append(BETA_BLOQUES)

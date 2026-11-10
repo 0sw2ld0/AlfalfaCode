@@ -125,7 +125,6 @@ def test_con_clave_openai_ofrece_los_modelos_de_chat_de_la_cuenta(monkeypatch, m
     proveedores.obtener('openai').modelos()
     assert len(api.peticiones) == 1
     llavero.guardar('openai', 'sk-otra-456')
-    lista_api.ruta('openai').with_suffix('.intento').unlink()
     proveedores.obtener('openai').modelos()
     assert len(api.peticiones) == 2
 
@@ -181,6 +180,15 @@ def test_el_transporte_de_openai_pide_el_esfuerzo_del_modelo(models_dev):
     asyncio.run(turno('gpt-5'))
     asyncio.run(turno('gpt-4o'))
     assert vistos[0]['reasoning']['effort'] == 'high' and 'reasoning' not in vistos[1]
+
+
+def test_anthropic_respeta_que_el_modelo_no_admite_esfuerzo(monkeypatch, models_dev):
+    modelo = 'claude-adaptativo-sin-esfuerzo'
+    fila = {'id': modelo, 'adaptativo': True, 'esfuerzos': []}
+    monkeypatch.setattr(lista_api, 'info', lambda ident, nombre: fila)
+    cuerpo, _ = anthropic.traducir_peticion({'model': modelo, 'messages': []}, 'high')
+    assert cuerpo['thinking']['type'] == 'adaptive'
+    assert 'effort' not in cuerpo.get('output_config', {})
 
 
 def _claude(ident, nombre, esfuerzos=None, imagen=True, ventana=1000000, salida=128000, ciclo='active',
