@@ -407,3 +407,33 @@ Para tareas independientes puedes usar `"modo": "paralelo", "paralelos": 2`.
 La CLI muestra el ID de la sesión de la cola al empezar. Con
 `alfalfa --reanudar ID --cola-encargos` continúas una cola guardada. Ctrl-C
 la detiene conservando el estado para reanudarla.
+
+## Capturas antes y después
+
+Al probar una interfaz, abre su estado inicial antes de editar. Si durante el turno
+usas el navegador y cambias archivos web, el cierre conserva una captura inicial y
+otra final de la misma página y tamaño. Recarga la página para comprobar los cambios:
+el cierre sólo toma la imagen de lo que quedó visible, sin recargar ni navegar por su cuenta.
+Funciona con los motores que ofrecen `browser_screenshot`, con sus permisos habituales.
+
+Para una app propia de Mac, pide `app_state` con captura antes de editar y después
+de reconstruirla. Se reutilizan esas imágenes de la misma app y ventana; al cerrar
+no se abre ni se captura ninguna app adicional. Los recortes con zoom no se comparan.
+La ruta del ejecutable identifica la app aunque la vuelvas a abrir con otro proceso;
+si no se conoce esa ruta, la comparación se limita al mismo proceso.
+
+La tarjeta de cierre muestra «Antes» y «Después»; puedes ampliarlas con un clic.
+También quedan en el historial del turno. Si falta una imagen, cambió la página o
+la ventana, o hubo una edición posterior a la última captura de Mac, aparece
+«Comparación incompleta». Sin uso de la interfaz o sin cambios de código pertinentes
+no se añade esta tarjeta. Las instantáneas del código deben estar activadas para
+situar las imágenes en el turno; no se reutilizan imágenes de turnos anteriores.
+
+Las capturas son archivos privados locales de la sesión. Guardarlas no hace llamadas
+al modelo ni añade permisos; las capturas automáticas no abren diálogos nuevos.
+Comparten el tope de 50 capturas guardadas del navegador en esa carpeta: una imagen
+antigua puede dejar de estar disponible. Son datos visuales, no una aprobación de
+las pruebas ni una comprobación de que la app se reconstruyó correctamente.
+
+La [demo reproducible](demos/interfaz-a13/README.md) cambia un botón de rojo a verde
+con WebKit y muestra ambas imágenes en la tarjeta.

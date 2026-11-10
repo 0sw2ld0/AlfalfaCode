@@ -1125,7 +1125,11 @@ class WorkspaceTools:
             navegador = getattr(self.runtime.manager, 'navegador', None)
             if navegador is None:
                 raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
-            return await navegador.llamar(self.runtime, name, args)
+            resultado = await navegador.llamar(self.runtime, name, args)
+            pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+            if pruebas is not None:
+                await pruebas.navegador(self.runtime, name, resultado)
+            return resultado
         if name in ('spawn_agent', 'wait_agent', 'send_input', 'close_agent', 'list_agents'):
             subagentes = getattr(self.runtime.manager, 'subagentes', None)
             if subagentes is None:
