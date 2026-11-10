@@ -358,7 +358,10 @@ def test_un_servidor_lento_no_frena_el_turno(servidor, sesion, monkeypatch):
         inicio = time.monotonic()
         primero = await escribir(rt, 'e.py', 'e = ERROR\n')
         tardo = time.monotonic() - inicio
-        await asyncio.sleep(1.5)  # el servidor sigue arrancando mientras el agente trabaja
+        # El servidor sigue arrancando mientras el agente trabaja. Esperar su señal,
+        # no el tiempo nominal del simulado: la carga del Mac también cuenta.
+        (cliente,) = rt.manager.diagnosticos.servidores.values()
+        await asyncio.wait_for(asyncio.shield(cliente.arrancar()), 15)
         segundo = await escribir(rt, 'f.py', 'f = ERROR\n')
         await rt.manager.cerrar_diagnosticos()
         return primero, tardo, segundo
@@ -402,7 +405,15 @@ def test_cancelar_el_turno_no_deja_nada_colgado(servidor, sesion, monkeypatch):
 
     async def cancelada():
         tarea = asyncio.ensure_future(escribir(rt, 'h.py', 'h = 1\n'))
-        await asyncio.sleep(1.0)   # el servidor arrancó y no contesta a los diagnósticos
+        async def esperando_diagnosticos():
+            while not rt.manager.diagnosticos.servidores:
+                await asyncio.sleep(0.01)
+            (cliente,) = rt.manager.diagnosticos.servidores.values()
+            await asyncio.shield(cliente.arrancar())
+            while 'textDocument/diagnostic' not in servidor.read_text():
+                await asyncio.sleep(0.01)
+        # La cancelación se prueba durante una petición muda, con el arranque acabado.
+        await asyncio.wait_for(esperando_diagnosticos(), 15)
         tarea.cancel()
         await asyncio.gather(tarea, return_exceptions=True)
         (cliente,) = rt.manager.diagnosticos.servidores.values()

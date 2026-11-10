@@ -130,4 +130,3 @@ def pytest_sessionfinish(session, exitstatus):
         session.exitstatus = 1
         print('\nERROR: la suite creó ' + _CACHE_DEL_USUARIO + '; una prueba no redirigió la caché de '
               'sourcekit-lsp (bórrala y busca cuál).')
-
