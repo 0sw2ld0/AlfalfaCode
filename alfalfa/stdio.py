@@ -22,7 +22,7 @@ SOLO_IMAGENES = 'Mira la imagen adjunta.'
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion',
                  # Guardar memoria o una habilidad aprendida (motivo «aprendizaje»): lo que cambia.
-                 'diff')
+                 'diff', 'sitio')
 
 
 # Largo máximo del id que la app da a un mensaje en cola.
@@ -69,6 +69,7 @@ class Transport:
         self.signature = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
+        self.for_site = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
         # siguiente inferencia. True, o el texto de las instrucciones del usuario.
         self.compact_pending = False
@@ -118,13 +119,14 @@ class Transport:
         print(json.dumps(self.clean(dict(version=VERSION, tipo=tipo, **fields)), ensure_ascii=False),
               file=self.output, flush=True)
 
-    def resolve(self, ident, approved, reason, session=False):
+    def resolve(self, ident, approved, reason, session=False, site=None):
         """`session`: el usuario aprobó para el resto de la sesión (sólo si la petición lo ofrecía)."""
         future = self.pending.pop(ident)
         self.emit('permiso_resuelto', id=ident, aprobado=approved, motivo=reason,
-                  **({'sesion': True} if approved and session else {}))
+                  **({'sesion': True} if approved and session else {}),
+                  **({'sitio': site} if approved and site else {}))
         if not future.done():
-            future.set_result('sesion' if approved and session else approved)
+            future.set_result(site if approved and site else 'sesion' if approved and session else approved)
 
     def stop(self):
         if self.stopped:
@@ -406,9 +408,13 @@ class Transport:
                 if not isinstance(ident, str) or ident not in self.pending:
                     raise ValueError()
                 approved = value.get('aprobado') is True
+                site = value.get('sitio')
+                if site is not None and (ident not in self.for_site or site not in ('una_vez', 'sesion', 'proyecto')):
+                    raise ValueError()
                 session = value.get('sesion') is True and ident in self.for_session
                 self.for_session.discard(ident)
-                self.resolve(ident, approved, 'Respuesta del cliente', session=session)
+                self.for_site.discard(ident)
+                self.resolve(ident, approved, 'Respuesta del cliente', session=session, site=site)
             else:
                 raise ValueError()
         except (ValueError, TypeError):
@@ -429,6 +435,8 @@ class Transport:
                 transport.pending[ident] = future
                 if args.get('para_sesion'):
                     transport.for_session.add(ident)
+                if isinstance(args.get('sitio'), dict):
+                    transport.for_site.add(ident)
                 if transport.stopped:
                     transport.resolve(ident, False, 'Sesión interrumpida')
                 # Las excepciones on-request (motivo) siempre esperan al cliente.
@@ -440,13 +448,14 @@ class Transport:
                     approved = await future
                 finally:
                     transport.for_session.discard(ident)
+                    transport.for_site.discard(ident)
                     if ident in transport.pending:
                         transport.resolve(ident, False, 'Sesión interrumpida' if transport.stopped
                                           else 'Sin respuesta a tiempo')
                 if not approved:
                     self.denied += 1
                     raise ValueError('Comando rechazado; no se ejecutó.')
-                return approved if approved == 'sesion' else None
+                return approved if approved in ('una_vez', 'sesion', 'proyecto') else None
 
         return Approval()
 

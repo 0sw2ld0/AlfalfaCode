@@ -3,7 +3,7 @@ import Foundation
 /// Entradas hacia el proceso hijo: una línea JSON por mensaje.
 public enum AlfalfaCommand: Equatable, Sendable {
     /// `session`: aprobar también lo mismo durante el resto de la sesión.
-    case permission(id: String, approved: Bool, session: Bool = false)
+    case permission(id: String, approved: Bool, session: Bool = false, site: String? = nil)
     case message(String, images: [String] = [], id: String? = nil)
     case cancel
     /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
@@ -42,8 +42,9 @@ public enum AlfalfaCommand: Equatable, Sendable {
     public var line: String {
         let object: [String: Any]
         switch self {
-        case let .permission(id, approved, session):
-            object = approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
+        case let .permission(id, approved, session, site):
+            object = approved && site != nil ? ["tipo": "permiso", "id": id, "aprobado": true, "sitio": site!]
+                : approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
                 : ["tipo": "permiso", "id": id, "aprobado": approved]
         case let .message(text, images, id):
             var fields: [String: Any] = ["tipo": "mensaje", "texto": text]

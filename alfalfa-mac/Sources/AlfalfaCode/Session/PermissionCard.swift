@@ -44,10 +44,14 @@ struct PermissionCard: View {
                 RunningLine(since: running.since)
             }
             if case .pending = state {
-                HStack(spacing: 10) {
-                    approve
-                    if request.forSession { allowForSession }
-                    deny
+                if request.site != nil {
+                    BrowserSitePermissionButtons(request: request, session: session)
+                } else {
+                    HStack(spacing: 10) {
+                        approve
+                        if request.forSession { allowForSession }
+                        deny
+                    }
                 }
             }
         }

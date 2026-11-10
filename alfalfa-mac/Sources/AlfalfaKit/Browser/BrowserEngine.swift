@@ -57,6 +57,10 @@ public final class BrowserEngine: NSObject {
     private let readingWorld = WKContentWorld.world(name: "alfalfa-lectura")
     /// Orígenes locales o de la red de casa («host:puerto») que aprobó el motor o escribió el usuario.
     private var allowedOrigins: Set<String> = []
+    let sites = BrowserSiteState()
+    var siteError: String?
+    var siteRequestID: String?
+    var siteDocumentURL: URL?
     private var started = 0
     private var finished = 0
     /// La navegación que lanzó el agente y espera (sólo esa: las de la página o del usuario no se apuntan).
@@ -72,6 +76,7 @@ public final class BrowserEngine: NSObject {
     /// Las reglas que bloquean los subrecursos locales (BrowserRules) y para qué orígenes se compilaron.
     private var rules: WKContentRuleList?
     private var rulesOrigins: Set<String>?
+    private var rulesPolicy: BrowserSitePolicy?
     /// La última petición del agente: la siguiente espera a que acabe (tras un tiempo agotado en el motor,
     /// dos peticiones no se pisan).
     private var tail: Task<Void, Never>?
@@ -103,7 +108,9 @@ public final class BrowserEngine: NSObject {
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         observations = [
-            webView.observe(\.url) { [weak self] view, _ in MainActor.assumeIsolated { self?.url = view.url } },
+            webView.observe(\.url) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.url = view.url; self?.trackSiteURL(view) }
+            },
             webView.observe(\.title) { [weak self] view, _ in
                 MainActor.assumeIsolated { self?.title = view.title ?? "" }
             },
@@ -126,6 +133,10 @@ public final class BrowserEngine: NSObject {
 
     /// Una petición del agente, de una en una. Abre el panel: el usuario ve lo que hace.
     public func perform(_ request: BrowserRequest) async -> BrowserReply {
+        if request.action == "cancelar_sitio" {
+            if sites.pending?.token == request.string("token") { sites.pending = nil }
+            return .success(request.id, [:])
+        }
         if request.action == "cancelar_relevo" {
             cancelHandoff(id: request.id)
             return .success(request.id, [:])
@@ -166,6 +177,7 @@ public final class BrowserEngine: NSObject {
         guard !isClosed else { return }
         cancelHandoff()
         queuedHandoffs.removeAll()
+        sites.pending = nil
         isClosed = true
         cancelAnnotation()
         isPanelOpen = false
@@ -192,10 +204,19 @@ public final class BrowserEngine: NSObject {
         host()
         activity = Self.describe(request)
         lastActivity = activity
-        defer { activity = nil }
+        siteRequestID = request.action == "esperar" ? nil : request.id
+        defer { activity = nil; siteRequestID = nil }
+        if request.action == "esperar" {
+            blockedAddress = nil
+            blockedDownload = nil
+        }
         do {
-            if request.action == "abrir" { allowedOrigins.formUnion(request.strings("red_local")) }
-            await updateRules()
+            if let reply = try prepareSites(request) { return reply }
+            if ["abrir", "reanudar_sitio"].contains(request.action) {
+                allowedOrigins.formUnion(request.strings("red_local"))
+            }
+            try await updateRules()
+            siteError = nil
             guard !isClosed else { return .failure(request.id, "El navegador de la sesión se cerró.") }
             if request.action == "relevo" {
                 guard queuedHandoffs[request.id] != true else {
@@ -212,6 +233,7 @@ public final class BrowserEngine: NSObject {
             result.merge(state()) { mine, _ in mine }
             return .success(request.id, result)
         } catch {
+            if let reply = sites.permission(request.id, result: state()) { return reply }
             return .failure(request.id, Self.message(for: error), result: state())
         }
     }
@@ -226,8 +248,10 @@ public final class BrowserEngine: NSObject {
         notice = nil
         allowedOrigins.insert(BrowserAddress.origin(of: url))
         Task {
-            await updateRules()
-            webView.load(URLRequest(url: url))
+            do {
+                try await updateRules()
+                webView.load(URLRequest(url: url))
+            } catch { notice = Self.message(for: error) }
         }
     }
 
@@ -242,28 +266,34 @@ public final class BrowserEngine: NSObject {
     // MARK: - Métodos privados
 
     /// Pone las reglas de la red local al día con los orígenes aprobados, antes de cargar nada.
-    private func updateRules() async {
-        guard rulesOrigins != allowedOrigins else { return }
+    private func updateRules() async throws {
+        guard rulesOrigins != allowedOrigins || rulesPolicy != sites.policy else { return }
         let origins = allowedOrigins
         do {
-            let list = try await BrowserRules.compile(allowing: origins)
+            let list = try await BrowserRules.compile(allowing: origins, sites: sites.policy)
             let controller = webView.configuration.userContentController
             if let rules { controller.remove(rules) }
             controller.add(list)
             rules = list
             rulesOrigins = origins
+            rulesPolicy = sites.policy
         } catch {
-            notice = "No se pudieron preparar las reglas que bloquean la red local: " + error.localizedDescription
+            throw BrowserFailure("No se pudieron preparar las reglas del navegador; no se permite la acción: "
+                                 + error.localizedDescription)
         }
     }
 
     /// La página en la que está: va en todas las respuestas.
-    private func state() -> [String: Any] {
-        ["url": webView.url?.absoluteString ?? "", "titulo": webView.title ?? ""]
+    func state() -> [String: Any] {
+        var result: [String: Any] = ["url": webView.url?.absoluteString ?? "", "titulo": webView.title ?? ""]
+        if let consumed = sites.reportedConsumption { result["visita_consumida"] = consumed }
+        return result
     }
 
     private func run(_ request: BrowserRequest) async throws -> [String: Any] {
         switch request.action {
+        case "reanudar_sitio":
+            return try await resumeSite(request)
         case "abrir":
             guard let text = request.string("url"), let url = URL(string: text),
                   ["http", "https"].contains(url.scheme ?? "") else {
@@ -325,6 +355,12 @@ public final class BrowserEngine: NSObject {
         }
     }
 
+    private func resumeSite(_ request: BrowserRequest) async throws -> [String: Any] {
+        let resumed = try sites.take(request, document: annotationNavigation,
+                                     source: siteDocumentURL)
+        return try await navigate { $0.load(resumed) }
+    }
+
     private func resizeViewport(_ request: BrowserRequest) async throws -> [String: Any] {
         let size = try BrowserViewport.size(request.fields)
         viewport = size
@@ -348,13 +384,16 @@ public final class BrowserEngine: NSObject {
             expectedOutcome = nil
         }
         let loaded = await waitUntil(timeout: 30) { [unowned self] in
-            if expectedOutcome != nil || blockedAddress != nil || blockedDownload != nil { return true }
+            if expectedOutcome != nil || blockedAddress != nil || blockedDownload != nil
+                || sites.pending != nil || siteError != nil { return true }
             // Dentro del mismo documento (#ancla, pushState) no hay didFinish: si en medio segundo no empezó
             // ninguna carga y no está cargando, ya está.
             return Date().timeIntervalSince(begin) > 0.5 && started == startedBefore && !webView.isLoading
         }
         try checkBlocked()
-        if case let .some(.some(error)) = expectedOutcome { throw BrowserFailure("No se pudo abrir la página: \(error)") }
+        if case let .some(.some(error)) = expectedOutcome {
+            throw BrowserFailure("No se pudo abrir la página: \(error)")
+        }
         return loaded ? [:] : ["nota": "La página sigue cargando; léela igualmente o espera y vuelve a leerla."]
     }
 
@@ -381,6 +420,8 @@ public final class BrowserEngine: NSObject {
     }
 
     func checkBlocked() throws {
+        if let siteError { throw BrowserFailure(siteError) }
+        if sites.pending != nil { throw BrowserFailure("El motor debe autorizar este sitio antes de visitarlo.") }
         if let blockedAddress {
             throw BrowserFailure("La página quiso ir a \(blockedAddress.absoluteString), una dirección local o de la "
                                  + "red de casa que no está aprobada. Ábrela con browser_navigate para preguntar.")
@@ -484,11 +525,14 @@ extension BrowserEngine {
             throw BrowserFailure("Sólo se descarga de direcciones http o https.")
         }
         if let reason = Self.downloadBlockReason(for: url) { throw BrowserFailure(reason) }
+        if let policy = sites.policy, !policy.permits(url) {
+            throw BrowserFailure("El motor no autorizó el sitio de la descarga.")
+        }
         guard let path, path.hasPrefix("/"), !FileManager.default.fileExists(atPath: path) else {
             throw BrowserFailure("La descarga necesita una ruta absoluta que no exista.")
         }
         let destination = URL(fileURLWithPath: path)
-        let waiter = DownloadWaiter(destination: destination, limit: Self.maxDownloadBytes)
+        let waiter = DownloadWaiter(destination: destination, limit: Self.maxDownloadBytes, sites: sites.policy)
         downloads.append(waiter)
         defer { downloads.removeAll { $0 === waiter } }
         let download = await webView.startDownload(using: URLRequest(url: url))
@@ -566,6 +610,18 @@ extension BrowserEngine: WKNavigationDelegate {
         if action.targetFrame?.isMainFrame ?? true {
             let scheme = url.scheme ?? ""
             guard ["http", "https", "about", "blob", "data"].contains(scheme) else { return decisionHandler(.cancel) }
+            do {
+                if try sites.intercept(action.request, document: annotationNavigation,
+                                       source: siteDocumentURL, owner: siteRequestID) {
+                    notice = "El motor debe pedir permiso antes de visitar este sitio: " + url.absoluteString
+                    return decisionHandler(.cancel)
+                }
+            } catch {
+                sites.pending = nil
+                siteError = Self.message(for: error)
+                notice = siteError
+                return decisionHandler(.cancel)
+            }
             if scheme == "http" || scheme == "https", BrowserAddress.kind(of: url) != .publicInternet,
                !allowedOrigins.contains(BrowserAddress.origin(of: url)) {
                 blockedAddress = url
@@ -593,6 +649,18 @@ extension BrowserEngine: WKNavigationDelegate {
         annotationNavigation += 1
         cancelAnnotation()
         started += 1
+    }
+
+    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        siteDocumentURL = webView.url
+        if sites.commitVisit(at: webView.url) {
+            Task {
+                do { try await updateRules() } catch {
+                    siteError = Self.message(for: error)
+                    webView.stopLoading()
+                }
+            }
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -665,13 +733,15 @@ struct BrowserFailure: Error {
 private final class DownloadWaiter: NSObject {
     private let destination: URL
     private let limit: Int64
+    private let sites: BrowserSitePolicy?
     private var continuation: CheckedContinuation<Void, Error>?
     private var download: WKDownload?
     private var observation: NSKeyValueObservation?
 
-    init(destination: URL, limit: Int64) {
+    init(destination: URL, limit: Int64, sites: BrowserSitePolicy?) {
         self.destination = destination
         self.limit = limit
+        self.sites = sites
     }
 
     func wait(for download: WKDownload, timeout: TimeInterval) async throws {
@@ -718,6 +788,11 @@ extension DownloadWaiter: WKDownloadDelegate {
     func download(_ download: WKDownload, willPerformHTTPRedirection response: HTTPURLResponse,
                   newRequest request: URLRequest,
                   decisionHandler: @escaping @MainActor (WKDownload.RedirectPolicy) -> Void) {
+        if let url = request.url, let sites, !sites.permits(url) {
+            decisionHandler(.cancel)
+            fail(BrowserFailure("La descarga redirigía a un sitio sin permiso. No se contactó con ese sitio."))
+            return
+        }
         if let url = request.url, let reason = BrowserEngine.downloadBlockReason(for: url) {
             decisionHandler(.cancel)
             fail(BrowserFailure("La descarga redirigía a otra dirección. " + reason))
@@ -728,6 +803,11 @@ extension DownloadWaiter: WKDownloadDelegate {
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping @MainActor (URL?) -> Void) {
+        if let url = response.url, let sites, !sites.permits(url) {
+            completionHandler(nil)
+            fail(BrowserFailure("El sitio de la descarga no está autorizado."))
+            return
+        }
         if let url = response.url, let reason = BrowserEngine.downloadBlockReason(for: url) {
             completionHandler(nil)
             fail(BrowserFailure(reason))

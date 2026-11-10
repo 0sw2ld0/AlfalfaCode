@@ -1133,6 +1133,8 @@ def main(argv=None):
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--json', action='store_true')
     listing = parser.add_mutually_exclusive_group()
+    listing.add_argument('--navegador-sitios', action='store_true',
+                         help='Consultar los sitios de este proyecto; con --stdio, editar desde Ajustes con permiso')
     listing.add_argument('--sesiones', action='store_true')
     listing.add_argument('--modelos', action='store_true')
     listing.add_argument('--complementos', action='store_true', help='Listar complementos autorizados sin ejecutarlos')
@@ -1178,6 +1180,9 @@ def main(argv=None):
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen):
         parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni imágenes')
+    if args.navegador_sitios:
+        from .navegador_sitios_orden import orden
+        return orden(args, home_dir())
     if (args.autorizar or args.retirar or args.sin_internet) and not args.importar:
         parser.error('--autorizar, --retirar y --sin-internet sólo valen con --importar')
     if args.importar:
