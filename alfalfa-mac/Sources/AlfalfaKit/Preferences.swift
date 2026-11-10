@@ -17,6 +17,7 @@ public struct Preferences {
         public static let sessionBudget = "ajustes.presupuestoSesion"
         public static let monthlyBudget = "ajustes.presupuestoMes"
         public static let diagnostics = "ajustes.diagnosticos"
+        public static let commitSignature = "ajustes.firmaCommits"
         public static let section = "ajustes.seccion"
     }
 
@@ -74,6 +75,13 @@ public struct Preferences {
     public var diagnostics: Bool {
         get { defaults.object(forKey: Key.diagnostics) as? Bool ?? true }
         nonmutating set { defaults.set(newValue, forKey: Key.diagnostics) }
+    }
+
+    /// Firmar los commits: el agente añade «Co-Authored-By: AlfalfaCode» a cada `git commit`.
+    /// Encendido si nunca se tocó.
+    public var commitSignature: Bool {
+        get { defaults.object(forKey: Key.commitSignature) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.commitSignature) }
     }
 
     // MARK: - Inicializadores

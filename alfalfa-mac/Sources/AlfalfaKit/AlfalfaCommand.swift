@@ -27,6 +27,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case keepAwake(Bool)
     /// El interruptor de Ajustes ▸ General: ver los errores al editar. Vale desde la siguiente edición.
     case diagnostics(Bool)
+    /// El interruptor de Ajustes ▸ General: firmar los commits del agente. Vale desde el siguiente `git commit`.
+    case commitSignature(Bool)
     /// Ajustes ▸ General ▸ Presupuesto: los topes en dólares (nil, sin tope). Vale ya, también a mitad de turno.
     case budget(session: Double?, month: Double?)
     /// La respuesta del navegador propio a una petición `navegador`.
@@ -55,6 +57,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
         case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
         case let .diagnostics(on): object = ["tipo": "diagnosticos", "activo": on]
+        case let .commitSignature(on): object = ["tipo": "firma", "activo": on]
         case let .budget(session, month):
             object = ["tipo": "presupuesto", "sesion": session.map { $0 as Any } ?? NSNull(),
                       "mes": month.map { $0 as Any } ?? NSNull()]

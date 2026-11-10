@@ -1271,6 +1271,13 @@ class WorkspaceTools:
                              'llevaría esos caracteres y no existe. Repite la orden con argv = '
                              + json.dumps(corregido, ensure_ascii=False) + '. No se ejecutó.')
         str(args['purpose'])  # sin propósito, KeyError como antes; aquí no se usa
+        # La firma de AlfalfaCode en un `git commit` (alfalfa/firma.py), antes del permiso:
+        # la tarjeta enseña la orden que de verdad se ejecuta.
+        from ... import firma
+        firmada = firma.firmar(argv, firma.texto(self.runtime.manager))
+        if firmada is not argv:
+            argv = firmada
+            args = {**args, 'argv': list(argv)}
         revision = self.runtime.state.get('workspace_revision', 0)
         guard_identity = expensive_operation_identity(argv)
         guard_key = None

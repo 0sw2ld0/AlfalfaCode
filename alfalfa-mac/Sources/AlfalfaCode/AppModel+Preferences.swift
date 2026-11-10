@@ -94,6 +94,17 @@ extension AppModel {
         }
     }
 
+    /// Firmar los commits. Las sesiones abiertas lo aplican desde su siguiente `git commit`;
+    /// las nuevas lo reciben al arrancar (`--sin-firma`).
+    var commitSignature: Bool {
+        get { preferences.commitSignature }
+        set {
+            objectWillChange.send()
+            preferences.commitSignature = newValue
+            for session in live { session.setCommitSignature(newValue) }
+        }
+    }
+
     /// El proveedor del modelo elegido, como lo pone el pie de la barra lateral.
     var currentProviderName: String {
         providerName(ModelProvider.id(of: model, in: models))
