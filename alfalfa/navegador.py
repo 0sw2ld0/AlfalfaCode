@@ -3,9 +3,9 @@
 La app de AlfalfaCode tiene un panel con un WKWebView (el motor de Safari, ya en
 macOS) y un almacén de datos aislado por sesión: ni cookies ni cuentas del Safari
 del usuario. Las herramientas `browser_*` sólo existen cuando el motor corre
-dentro de la app (`--stdio --navegador`); en la terminal no se ofrecen y el agente
-sigue con CuyBrowser, que es lo que hace falta para entrar con las cuentas del
-usuario.
+dentro de la app (`--stdio --navegador`), o explícitamente con el segundo motor
+HTTP (`--motor-navegador cuybrowser`, en navegador_cuybrowser.py). Ambos usan
+perfiles propios; nunca las cookies de navegadores personales.
 
 El motor decide los permisos y la app sólo ejecuta. Mismo criterio que el resto
 del arnés:

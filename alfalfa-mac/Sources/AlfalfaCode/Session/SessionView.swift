@@ -137,7 +137,12 @@ struct SessionView: View {
                 }
             if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
             if session.isDormant { dormantHint }
-            BrowserToggle(browser: session.browser, terminals: terminals) { session.openBrowser() }
+            if session.browserBackend == "cuybrowser" {
+                Label("CuyBrowser", systemImage: "globe").font(.caption).foregroundStyle(Theme.secondary)
+                    .help("Chromium se abre en su propia ventana, con un perfil de este proyecto.")
+            } else {
+                BrowserToggle(browser: session.browser, terminals: terminals) { session.openBrowser() }
+            }
             TerminalToggle(terminals: terminals)
             folderButton
         }

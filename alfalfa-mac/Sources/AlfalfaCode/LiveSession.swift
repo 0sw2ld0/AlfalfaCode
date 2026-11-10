@@ -38,6 +38,7 @@ final class LiveSession: ObservableObject, Identifiable {
     /// El navegador propio de la sesión (herramientas browser_* del agente), con su almacén de datos aislado.
     /// Se crea con la primera petición del agente o al pulsar el globo (`openBrowser`).
     @Published private(set) var browser: BrowserEngine?
+    let browserBackend = BrowserEnginePreferences().engine
     private var process: AlfalfaProcess?
     /// El usuario se fue de la sesión: al quedar libre se cierra stdin del proceso.
     private(set) var releaseWhenParked = false
@@ -105,16 +106,15 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
-        let arguments = Launcher.stdioArguments(task: task, resume: resumeID,
-                                                model: resumeID == nil || settingsChanged ? model : nil,
-                                                effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
-                                                images: images.map(\.path), mode: mode, wait: wait,
-                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake, browser: true,
-                                                budget: Preferences().sessionBudget,
-                                                monthlyBudget: Preferences().monthlyBudget,
-                                                diagnostics: Preferences().diagnostics,
-                                                commitSignature: Preferences().commitSignature, queue: queue)
+        let arguments = Launcher.stdioArguments(
+            task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
+            effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
+            images: images.map(\.path), mode: mode, wait: wait,
+            parent: parentSessionID, title: parentSessionID == nil ? nil : title,
+            keepAwake: Preferences().keepAwake, browser: true,
+            budget: Preferences().sessionBudget, monthlyBudget: Preferences().monthlyBudget,
+            diagnostics: Preferences().diagnostics, commitSignature: Preferences().commitSignature, queue: queue,
+            browserEngine: browserBackend, cuyBrowserProfile: BrowserEnginePreferences().profile)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }

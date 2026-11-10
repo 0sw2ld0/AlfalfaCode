@@ -1058,7 +1058,7 @@ class WorkspaceTools:
         if name.startswith('browser_'):
             navegador = getattr(self.runtime.manager, 'navegador', None)
             if navegador is None:
-                raise ValueError('El navegador propio sólo existe dentro de la app de AlfalfaCode.')
+                raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
             return await navegador.llamar(self.runtime, name, args)
         if name in ('spawn_agent', 'wait_agent', 'send_input', 'close_agent', 'list_agents'):
             subagentes = getattr(self.runtime.manager, 'subagentes', None)

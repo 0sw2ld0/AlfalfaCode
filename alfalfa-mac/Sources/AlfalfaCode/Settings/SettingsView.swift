@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Las partes de la ventana de Ajustes, en el orden de la lista lateral.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, proveedores, modelo, memoria, importar, actualizaciones
+    case general, navegador, proveedores, modelo, memoria, importar, actualizaciones
 
     // MARK: - Propiedades
 
@@ -12,6 +12,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return "General"
+        case .navegador: return "Navegador"
         case .proveedores: return "Proveedores"
         case .modelo: return "Modelo"
         case .memoria: return "Memoria"
@@ -23,6 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: return "gearshape"
+        case .navegador: return "globe"
         case .proveedores: return "server.rack"
         case .modelo: return "cpu"
         case .memoria: return "brain"
@@ -97,6 +99,7 @@ struct SettingsView: View {
     @ViewBuilder private var detail: some View {
         switch selected {
         case .general: GeneralSettings()
+        case .navegador: BrowserSettings()
         case .proveedores: ProvidersView()
         case .modelo: ModelSettings()
         case .memoria: MemorySettings()
