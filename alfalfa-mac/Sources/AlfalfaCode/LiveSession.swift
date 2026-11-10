@@ -24,6 +24,9 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published var draftImages: [URL] = []
     /// Texto que la vista pone en el cuadro al abrir la sesión (volver a un mensaje).
     @Published var pendingDraft: String?
+    /// El principio del mensaje al que se llega desde la búsqueda de la barra lateral: la vista lo
+    /// busca en la conversación, lleva ahí el desplazamiento y lo borra.
+    @Published var searchAnchor: String?
     /// «Este modelo no ve imágenes» al pegar o soltar una con un modelo sin visión.
     let imageNotice = ImageNotice()
 

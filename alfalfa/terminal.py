@@ -1130,6 +1130,9 @@ def main(argv=None):
     orden_de_deshacer.argumentos(parser, listing)
     from .aprendizaje import orden as orden_de_aprendizaje
     orden_de_aprendizaje.argumentos(parser, listing)
+
+    from .busqueda_sesiones import orden as orden_de_busqueda
+    orden_de_busqueda.argumentos(parser, listing)
     args = parser.parse_args(argv)
     if (args.autorizar or args.retirar or args.sin_internet) and not args.importar:
         parser.error('--autorizar, --retirar y --sin-internet sólo valen con --importar')
@@ -1143,6 +1146,9 @@ def main(argv=None):
         parser.error('--texto sólo vale con --memoria o --aprendido')
     if orden_de_aprendizaje.pedida(args):
         return orden_de_aprendizaje.orden(args, home_dir())
+
+    if orden_de_busqueda.pedida(args):
+        return orden_de_busqueda.orden(args)
     if args.descartar_no_relevantes and not args.aligerar_sesiones:
         parser.error('--descartar-no-relevantes sólo vale con --aligerar-sesiones')
     if args.aligerar_sesiones:

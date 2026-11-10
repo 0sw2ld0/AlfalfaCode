@@ -4,6 +4,7 @@ import json
 import os
 import re
 import signal
+import sqlite3
 import sys
 import time
 from contextlib import redirect_stdout
@@ -800,6 +801,11 @@ def gestionar(args):
             transport.emit('sesion_cambiada', id=ident, **{'marcas': marcar(ident, campo, valor)})
         elif args.eliminar_sesion:
             destino = eliminar(args.eliminar_sesion)
+            try:
+                from .busqueda_sesiones import quitar
+                quitar(args.eliminar_sesion)
+            except (OSError, ValueError, sqlite3.Error):
+                pass  # la próxima actualización del índice la quita igual: ya no está en disco
             transport.emit('sesion_cambiada', id=args.eliminar_sesion, eliminada=True, papelera=str(destino))
         else:
             from . import sesiones as registro

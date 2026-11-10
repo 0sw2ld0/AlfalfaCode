@@ -92,10 +92,14 @@ struct SessionView: View {
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: session.timeline.items.count) {
+                // Abierta desde la búsqueda de la barra lateral: al mensaje encontrado, no al final.
+                if scrollToSearch(proxy) { return }
                 if let last = session.timeline.items.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
+            .onChange(of: session.searchAnchor) { _ = scrollToSearch(proxy) }
+            .onAppear { _ = scrollToSearch(proxy) }
             .onChange(of: session.timeline.compacting) { _, compacting in
                 if compacting { withAnimation { proxy.scrollTo("compactando", anchor: .bottom) } }
             }
@@ -103,6 +107,16 @@ struct SessionView: View {
     }
 
     // MARK: - Métodos privados
+
+    /// Lleva la conversación al mensaje de un resultado de búsqueda. Si la conversación ya está
+    /// pintada y no lo tiene (un resultado de una herramienta), se olvida y se queda donde estaba.
+    private func scrollToSearch(_ proxy: ScrollViewProxy) -> Bool {
+        guard let anchor = session.searchAnchor, !session.timeline.items.isEmpty else { return false }
+        session.searchAnchor = nil
+        guard let id = session.timeline.itemID(matching: anchor) else { return false }
+        DispatchQueue.main.async { withAnimation { proxy.scrollTo(id, anchor: .top) } }
+        return true
+    }
 
     private func header(_ terminals: SessionTerminals) -> some View {
         HStack(spacing: 10) {

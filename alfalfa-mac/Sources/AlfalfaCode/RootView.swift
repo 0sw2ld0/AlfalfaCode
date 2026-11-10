@@ -57,7 +57,7 @@ struct SidebarView: View {
                 sidebarButton("plus", "Nuevo encargo", selected: model.route == .new) { model.route = .new }
                 sidebarButton("magnifyingglass", "Buscar", selected: searching) {
                     searching.toggle()
-                    if !searching { model.search = "" }
+                    if !searching { model.search = ""; model.contentSearch = nil }
                 }
                 if searching {
                     TextField("Buscar sesiones", text: $model.search)
@@ -74,6 +74,7 @@ struct SidebarView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    if searching { ContentSearchResults() }
                     ForEach(model.groups) { group in
                         Button {
                             if collapsed.contains(group.folder) { collapsed.remove(group.folder) } else { collapsed.insert(group.folder) }
@@ -100,6 +101,7 @@ struct SidebarView: View {
             SidebarFooter()
         }
         .background(Theme.sidebar)
+        .task(id: model.search) { await model.searchContent(searching ? model.search : "") }
         .alert("Renombrar sesión", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Título", text: $newTitle)
             Button("Renombrar") { if let row = renaming { model.rename(row, to: newTitle) }; renaming = nil }
@@ -299,5 +301,55 @@ struct PastSessionInfo: View {
         } else {
             Color.clear
         }
+    }
+}
+
+// MARK: - Búsqueda en las conversaciones
+
+/// Los mensajes de las sesiones guardadas que tienen lo buscado (`alfalfa --buscar-sesiones`), debajo
+/// del cuadro de búsqueda. Al pulsar uno se abre su sesión en ese mensaje.
+struct ContentSearchResults: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        let query = model.search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.count >= SessionSearch.minimumLength {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("En las conversaciones").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    .padding(.horizontal, 10).padding(.top, 4).padding(.bottom, 4)
+                if let found = model.contentSearch, found.query == query {
+                    if found.hits.isEmpty {
+                        note(model.searchingContent ? "Buscando…" : "Ningún mensaje lo menciona.")
+                    }
+                    ForEach(found.hits) { hit in row(hit) }
+                    if !found.upToDate { note("Aún se están indexando sesiones antiguas.") }
+                } else {
+                    note("Buscando…")
+                }
+                Divider().overlay(Theme.border).padding(.horizontal, 10).padding(.vertical, 6)
+            }
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(Theme.secondary).padding(.horizontal, 10).padding(.bottom, 4)
+    }
+
+    private func row(_ hit: SessionSearchHit) -> some View {
+        Button { model.open(hit) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(hit.title).lineLimit(1).truncationMode(.tail)
+                Text(hit.fragment.split(whereSeparator: \.isNewline).joined(separator: " "))
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(2)
+                Text(hit.roleLabel + (hit.external ? " · de fuera" : "") + (hit.date > 0 ? " · "
+                    + Date(timeIntervalSince1970: hit.date).formatted(date: .abbreviated, time: .shortened) : ""))
+                    .font(.system(size: 11)).foregroundStyle(Theme.muted)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(hit.folder.map { Presentation.abbreviate($0) } ?? hit.title)
     }
 }

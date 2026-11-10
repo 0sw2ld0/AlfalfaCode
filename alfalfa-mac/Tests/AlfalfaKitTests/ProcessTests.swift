@@ -26,6 +26,25 @@ final class ProcessTests: XCTestCase {
         XCTAssertNotNil(collected.exit, "el proceso no terminó")
     }
 
+    func testCancellingAQueryTerminatesItsProcess() async throws {
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent("alfalfa-pid-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: marker) }
+        let launcher = try script("echo $$ > '\(marker.path)'\nexec sleep 30\n")
+        let task = Task {
+            try await AlfalfaProcess.query(launcher: launcher, arguments: [], directory: FileManager.default.temporaryDirectory)
+        }
+        let deadline = Date().addingTimeInterval(10)
+        while !FileManager.default.fileExists(atPath: marker.path) && Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let pid = try XCTUnwrap(Int32(String(contentsOf: marker, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        let started = Date()
+        task.cancel()
+        _ = try? await task.value
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10, "la consulta cancelada siguió esperando")
+        XCTAssertNotEqual(kill(pid, 0), 0, "el proceso sigue vivo")
+    }
+
     func testReadsStdoutAndWritesStdinAsJSONL() async throws {
         let launcher = try script("""
         echo '{"version":2,"tipo":"sesion","id":"x","cwd":"'"$(pwd)"'","modelo":"m","esfuerzo":"low"}'

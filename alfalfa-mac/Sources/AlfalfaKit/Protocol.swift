@@ -712,6 +712,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// se descartó (no se deduce del texto).
     case learningResolved(id: String, applied: Bool, discarded: Bool = false, text: String)
 
+    /// `--buscar-sesiones CONSULTA --json`: fragmentos de las conversaciones guardadas.
+    case sessionSearch(SessionSearch)
+
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
     public static func decode(line: String) -> AlfalfaMessage? {
@@ -868,6 +871,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return UndoPreview.parse(object).map(Self.undoPreview)
         case "deshecho":
             return UndoStep.parse(object, text: object["texto"] as? String ?? "").map(Self.undone)
+        case "busqueda_sesiones":
+            return SessionSearch(object: object).map(Self.sessionSearch)
         case "sesion_cambiada":
             guard let id = text(object["id"]) else { return nil }
             if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }
