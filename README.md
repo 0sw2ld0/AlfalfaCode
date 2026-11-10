@@ -1295,6 +1295,11 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
 - `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
 - `browser_read`: la página como árbol de accesibilidad con referencias
   (`- button «Enviar pedido» [e7] (envía el formulario)`) o como texto.
+- `browser_console`: los últimos mensajes de consola, errores sin capturar y rechazos de promesas.
+- `browser_network`: peticiones `fetch`, XHR y recursos observados (método, URL, estado y duración),
+  sin cuerpos ni cabeceras y con parámetros sensibles de URL redactados. Es observación desde la página,
+  no un HAR completo: puede omitir tráfico anterior, de marcos, workers o iniciado fuera de estos mecanismos.
+  Ambas herramientas sólo leen, guardan hasta 200 entradas por navegación y aceptan `limit`.
 - `browser_click` y `browser_type`: por referencia (`ref`) o por el texto visible
   (`target`); `browser_type` también elige en un desplegable y con `submit` pulsa Intro.
 - `browser_scroll`: la página, el contenedor que se desplaza o hasta un elemento.
