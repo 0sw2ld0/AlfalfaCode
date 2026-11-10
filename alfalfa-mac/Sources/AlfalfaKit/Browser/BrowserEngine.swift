@@ -259,7 +259,7 @@ public final class BrowserEngine: NSObject {
 
     /// La página en la que está: va en todas las respuestas.
     private func state() -> [String: Any] {
-        ["url": webView.url?.absoluteString ?? "", "titulo": webView.title ?? ""]
+        ["url": webView.url?.absoluteString ?? "", "titulo": webView.title ?? "", "perfil": profileMode.rawValue]
     }
 
     private func run(_ request: BrowserRequest) async throws -> [String: Any] {
