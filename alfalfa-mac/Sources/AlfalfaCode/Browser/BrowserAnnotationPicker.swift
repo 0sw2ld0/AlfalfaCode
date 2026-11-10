@@ -13,7 +13,9 @@ enum BrowserAnnotationPicker {
                 : CGRect(x: converted.minX, y: browser.webView.bounds.height - converted.maxY,
                          width: converted.width, height: converted.height)
             Task { @MainActor in
+                guard view.window != nil, browser.isSelectingAnnotation else { return }
                 do { try await browser.selectAnnotation(in: area) } catch {
+                    guard view.window != nil, browser.isSelectingAnnotation else { return }
                     browser.cancelAnnotation()
                     let alert = NSAlert()
                     alert.messageText = "No se pudo seleccionar el elemento"

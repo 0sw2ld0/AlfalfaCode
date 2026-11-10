@@ -9,6 +9,7 @@ public struct BrowserRequest: Equatable, Sendable {
     /// abrir, atras, adelante, recargar, leer, pulsar, escribir, desplazar, captura, js o descargar.
     /// consola y red leen diagnósticos; viewport cambia el tamaño CSS.
     /// relevo espera a la persona; cancelar_relevo cancela por su id.
+    /// estado identifica el documento; esperar, tecla, hover y subir amplían la interacción.
     public let action: String
     /// El resto de campos de la petición, como JSON.
     public let json: String

@@ -127,7 +127,6 @@ public final class BrowserEngine: NSObject {
     /// Una petición del agente, de una en una. Abre el panel: el usuario ve lo que hace.
     public func perform(_ request: BrowserRequest) async -> BrowserReply {
         if request.action == "cancelar_relevo" {
-            if queuedHandoffs[request.id] != nil { queuedHandoffs[request.id] = true }
             cancelHandoff(id: request.id)
             return .success(request.id, [:])
         }
@@ -146,7 +145,10 @@ public final class BrowserEngine: NSObject {
             guard let self, !self.isClosed else {
                 return .failure(request.id, "El navegador de la sesión se cerró.")
             }
-            if request.action == "relevo", self.queuedHandoffs.removeValue(forKey: request.id) == true {
+            defer {
+                if request.action == "relevo" { self.queuedHandoffs.removeValue(forKey: request.id) }
+            }
+            if request.action == "relevo", self.queuedHandoffs[request.id] == true {
                 return .failure(request.id, "El motor canceló el relevo antes de que empezara.")
             }
             guard self.handoff == nil else {
@@ -194,7 +196,13 @@ public final class BrowserEngine: NSObject {
         do {
             if request.action == "abrir" { allowedOrigins.formUnion(request.strings("red_local")) }
             await updateRules()
-            if request.action == "relevo" { return await beginHandoff(request) }
+            guard !isClosed else { return .failure(request.id, "El navegador de la sesión se cerró.") }
+            if request.action == "relevo" {
+                guard queuedHandoffs[request.id] != true else {
+                    return .failure(request.id, "El motor canceló el relevo antes de que empezara.")
+                }
+                return await beginHandoff(request)
+            }
             var result = try await run(request)
             if let permission = result.removeValue(forKey: "permiso") as? [String: Any],
                let kind = permission["tipo"] as? String {
@@ -271,6 +279,8 @@ public final class BrowserEngine: NSObject {
             return try await navigate { $0.goForward() }
         case "recargar":
             return try await navigate { $0.reload() }
+        case "estado":
+            return try await evaluate(BrowserScripts.documentIdentity, [:])
         case "leer":
             return try await evaluate(BrowserScripts.read, request.fields)
         case "consola", "red":
@@ -280,6 +290,14 @@ public final class BrowserEngine: NSObject {
             return try await resizeViewport(request)
         case "pulsar", "escribir":
             return try await interact(request)
+        case "esperar":
+            return try await waitForPage(request)
+        case "tecla":
+            return try await pressKey(request)
+        case "hover":
+            return try await hover(request)
+        case "subir":
+            return try await upload(request)
         case "desplazar":
             return try await evaluate(BrowserScripts.scroll, request.fields)
         case "captura":
@@ -302,8 +320,6 @@ public final class BrowserEngine: NSObject {
             return result
         case "descargar":
             return try await download(request.string("url"), to: request.string("ruta"))
-        case "estado":
-            return [:]
         default:
             throw BrowserFailure("Acción del navegador desconocida: \(request.action).")
         }
@@ -364,7 +380,7 @@ public final class BrowserEngine: NSObject {
         return result
     }
 
-    private func checkBlocked() throws {
+    func checkBlocked() throws {
         if let blockedAddress {
             throw BrowserFailure("La página quiso ir a \(blockedAddress.absoluteString), una dirección local o de la "
                                  + "red de casa que no está aprobada. Ábrela con browser_navigate para preguntar.")
@@ -375,15 +391,15 @@ public final class BrowserEngine: NSObject {
         }
     }
 
-    private func evaluate(_ body: String, _ arguments: [String: Any],
-                          in contentWorld: WKContentWorld? = nil) async throws -> [String: Any] {
+    func evaluate(_ body: String, _ arguments: [String: Any],
+                  in contentWorld: WKContentWorld? = nil) async throws -> [String: Any] {
         let value = try await webView.callAsyncJavaScript(body, arguments: ["args": arguments], in: nil,
                                                           contentWorld: contentWorld ?? world)
         return value as? [String: Any] ?? ["valor": value ?? NSNull()]
     }
 
     /// Espera a que se cumpla la condición, sin bloquear el hilo principal. false si se acabó el tiempo.
-    private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() >= deadline { return false }
@@ -517,6 +533,10 @@ extension BrowserEngine {
         case "js":
             return request.bool("modifica") ? "Ejecutando JavaScript que cambia la página" : "Ejecutando JavaScript"
         case "relevo": return "Esperando a la persona"
+        case "esperar": return "Esperando una condición de la página"
+        case "tecla": return "Pulsando " + (request.string("tecla") ?? "")
+        case "hover": return "Pasando el puntero por " + target
+        case "subir": return "Seleccionando archivos aprobados"
         case "descargar": return "Descargando " + (request.string("url") ?? "")
         default: return request.action
         }

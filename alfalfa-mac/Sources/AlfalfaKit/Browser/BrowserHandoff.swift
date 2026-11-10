@@ -24,6 +24,7 @@ extension BrowserEngine {
     }
 
     public func cancelHandoff(id: String? = nil) {
+        if let id, queuedHandoffs[id] != nil { queuedHandoffs[id] = true }
         guard let handoff, id == nil || id == handoff.id else { return }
         finishHandoff(.failure(handoff.id, "La persona canceló el relevo del navegador."))
     }

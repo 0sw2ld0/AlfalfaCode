@@ -1,4 +1,5 @@
 @testable import AlfalfaKit
+import Combine
 import XCTest
 
 @MainActor
@@ -85,6 +86,46 @@ final class BrowserHandoffTests: XCTestCase {
         let reply = await handoff.value
         XCTAssertFalse(reply.ok)
         XCTAssertTrue(reply.error?.contains("antes de que empezara") ?? false)
+        XCTAssertNil(engine.handoff)
+        XCTAssertTrue(engine.queuedHandoffs.isEmpty)
+    }
+
+    func testCancelDuringPreparationDoesNotShowTheHandoff() async throws {
+        let engine = BrowserEngine()
+        defer { engine.close() }
+        var appeared = false
+        let appearance = engine.$handoff.sink { if $0 != nil { appeared = true } }
+        // activity se publica antes de preparar reglas; la cancelación real llega sin otra tarea ni temporizador.
+        let cancellation = engine.$activity.sink { [weak engine] activity in
+            guard activity != nil else { return }
+            XCTAssertNil(engine?.handoff)
+            engine?.cancelHandoff(id: "relevo")
+        }
+        defer { appearance.cancel(); cancellation.cancel() }
+        let reply = await engine.perform(BrowserRequest(id: "relevo", action: "relevo",
+                                                        fields: ["motivo": "Espera.", "tiempo": 0.05]))
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("antes de que empezara") ?? false, reply.json)
+        XCTAssertFalse(appeared)
+        XCTAssertNil(engine.handoff)
+        XCTAssertTrue(engine.queuedHandoffs.isEmpty)
+    }
+
+    func testCloseDuringPreparationDoesNotShowTheHandoff() async throws {
+        let engine = BrowserEngine()
+        var appeared = false
+        let appearance = engine.$handoff.sink { if $0 != nil { appeared = true } }
+        let closing = engine.$activity.sink { [weak engine] activity in
+            guard activity != nil else { return }
+            engine?.close()
+        }
+        defer { appearance.cancel(); closing.cancel() }
+        let reply = await engine.perform(BrowserRequest(id: "relevo", action: "relevo",
+                                                        fields: ["motivo": "Espera.", "tiempo": 0.05]))
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "El navegador de la sesión se cerró.")
+        XCTAssertTrue(engine.isClosed)
+        XCTAssertFalse(appeared)
         XCTAssertNil(engine.handoff)
         XCTAssertTrue(engine.queuedHandoffs.isEmpty)
     }
