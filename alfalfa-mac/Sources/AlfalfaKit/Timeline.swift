@@ -237,6 +237,7 @@ public struct Timeline: Equatable, Sendable {
     /// Una compilación o un script largo tarda: la tarjeta lo enseña en vez de parecer colgada.
     public private(set) var runningPermission: RunningCommand?
     public private(set) var finished = false
+    public var taskQueue: TaskQueue?
     private var counter = 0
 
     public init() {}
@@ -446,6 +447,11 @@ public struct Timeline: Equatable, Sendable {
 
     public mutating func apply(_ message: AlfalfaMessage) {
         switch message {
+        case let .taskQueue(queue):
+            taskQueue = queue
+            if let tokens = queue.sessionTokens { totalTokens = tokens }
+            if let cost = queue.sessionCost { totalCost = cost }
+            status = queue.running ? (pendingPermissions.isEmpty ? .working : .waitingPermission) : .idle
         case let .codeReview(review):
             if let tokens = review.sessionTokens { totalTokens = tokens }
             if let cost = review.sessionCost { totalCost = cost }
@@ -729,6 +735,7 @@ public struct Timeline: Equatable, Sendable {
 
     /// El proceso salió. Si no hubo `fin`, o salió con 130, la sesión queda interrumpida.
     public mutating func processExited(code: Int32) {
+        taskQueue?.recover()
         runningPermission = nil
         // Sin proceso nadie responderá: «Quitar» y «Editar» vuelven a valer (y ya quitan aquí).
         unqueuing.removeAll()

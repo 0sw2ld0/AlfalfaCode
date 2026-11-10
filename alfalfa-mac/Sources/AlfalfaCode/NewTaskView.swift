@@ -13,6 +13,7 @@ struct NewTaskView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var focused: Bool
     @State private var importingOllama = false
+    @State private var planningQueue = false
     /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
     @Environment(\.openSettings) private var openSettings
@@ -29,6 +30,13 @@ struct NewTaskView: View {
                     }
                     folders
                     ollamaButton
+                    Button { planningQueue = true } label: { Label("Cola de encargos", systemImage: "list.number") }
+                        .disabled(model.folder == nil || model.launcher == nil || model.firstRun != nil)
+                        .sheet(isPresented: $planningQueue) {
+                            TaskQueueEditor(folder: model.folder ?? "") { tasks, mode, parallelism in
+                                model.startQueue(tasks: tasks, mode: mode, parallelism: parallelism)
+                            }
+                        }
                     resumeList
                 }
                 Spacer(minLength: 0)

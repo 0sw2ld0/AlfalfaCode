@@ -21,6 +21,9 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var answered: Set<String> = []
     @Published private(set) var stopping = false
     @Published private(set) var reviewingCode = false
+    @Published private(set) var workingQueue = false
+    private var pendingQueueAction: TaskQueueAction?
+    private var previousQueueID: String?
     /// Imágenes elegidas para la próxima indicación.
     @Published var draftImages: [URL] = []
     /// Texto que la vista pone en el cuadro al abrir la sesión (volver a un mensaje).
@@ -100,7 +103,7 @@ final class LiveSession: ObservableObject, Identifiable {
         self.mode = mode
     }
 
-    func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false) {
+    func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
         let arguments = Launcher.stdioArguments(task: task, resume: resumeID,
                                                 model: resumeID == nil || settingsChanged ? model : nil,
@@ -111,7 +114,7 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 budget: Preferences().sessionBudget,
                                                 monthlyBudget: Preferences().monthlyBudget,
                                                 diagnostics: Preferences().diagnostics,
-                                                commitSignature: Preferences().commitSignature)
+                                                commitSignature: Preferences().commitSignature, queue: queue)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -132,8 +135,17 @@ final class LiveSession: ObservableObject, Identifiable {
 
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
+        if case let .taskQueue(queue) = message,
+           pendingQueueAction.map({ queue.acknowledges($0, previousID: previousQueueID) }) ?? true {
+            pendingQueueAction = nil
+            workingQueue = queue.running
+        }
         if case let .codeReview(review) = message { reviewingCode = review.state == "revisando" }
-        if case .error = message { reviewingCode = false }
+        if case .error = message {
+            pendingQueueAction = nil
+            reviewingCode = false
+            workingQueue = timeline.taskQueue?.running == true
+        }
         onChange?()
         // El motor no abrió turno con ese mensaje: vuelve al cuadro, con sus imágenes.
         if case let .messageRejected(rejection) = message {
@@ -148,7 +160,7 @@ final class LiveSession: ObservableObject, Identifiable {
         }
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
         if case let .browser(request) = message { answerBrowser(request) }
-        if releaseWhenParked, !reviewingCode, process != nil, timeline.liveProcesses.isEmpty,
+        if releaseWhenParked, !reviewingCode, !workingQueue, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
         }
@@ -165,6 +177,8 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     private func exited(code: Int32, stderr: String) {
+        workingQueue = false
+        pendingQueueAction = nil
         reviewingCode = false
         timeline.processExited(code: code)
         let detail = stderr.split(separator: "\n").suffix(3).joined(separator: "\n")
@@ -237,6 +251,22 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
+
+    func queue(_ action: TaskQueueAction, tasks: [String] = [], mode: String = "serie", parallelism: Int = 2,
+               initial: Bool = false) {
+        guard canSend else { return }
+        if (action == .prepare || action == .start) && !initial {
+            guard !timeline.status.isRunning, !reviewingCode, !workingQueue else { return }
+        }
+        if isDormant { openWaiting() }
+        guard let process else { return }
+        if action == .prepare || action == .start {
+            workingQueue = true
+            pendingQueueAction = action
+            previousQueueID = timeline.taskQueue?.id
+        }
+        process.send(.taskQueue(action, tasks: tasks, mode: mode, parallelism: parallelism))
+    }
 
     func reviewCode(_ review: CodeReview, model: String) {
         guard review.canRequest, canSend, !reviewingCode, !timeline.status.isRunning,
@@ -401,7 +431,7 @@ final class LiveSession: ObservableObject, Identifiable {
     /// Bifurcar o volver a un mensaje lo necesitan; con un turno en marcha no se toca.
     func releaseProcess() async -> Bool {
         guard process != nil else { return true }
-        guard !timeline.status.isRunning, !reviewingCode else { return false }
+        guard !timeline.status.isRunning, !reviewingCode, !workingQueue else { return false }
         shutdown(interrupt: false)
         for _ in 0..<100 where process != nil {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -421,7 +451,7 @@ final class LiveSession: ObservableObject, Identifiable {
         guard process != nil else { return }
         // Un juego o un servidor en segundo plano se cerraría con el proceso: se queda abierto.
         guard timeline.liveProcesses.isEmpty else { return }
-        if reviewingCode { releaseWhenParked = true; return }
+        if reviewingCode || workingQueue { releaseWhenParked = true; return }
         switch ReleasePolicy.onLeave(status: timeline.status) {
         case .closeNow: shutdown(interrupt: false)
         case .cancelAndClose: shutdown()
@@ -434,7 +464,7 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// Hay un proceso vivo esperando órdenes, sin turno ni permiso en curso.
     var isParked: Bool {
-        process != nil && !reviewingCode && ReleasePolicy.isParked(timeline.status)
+        process != nil && !reviewingCode && !workingQueue && ReleasePolicy.isParked(timeline.status)
     }
 }
 

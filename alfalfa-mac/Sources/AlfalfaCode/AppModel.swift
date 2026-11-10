@@ -404,12 +404,20 @@ final class AppModel: ObservableObject {
         open(session, launcher: launcher, task: nil)
     }
 
-    private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = []) {
+    func startQueue(tasks: [String], mode: String, parallelism: Int) {
+        guard let folder, let launcher else { return }
+        let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: "Cola de encargos", resumeID: nil,
+                                  model: model, effort: effort, readOnly: readOnly, mode: self.mode)
+        open(session, launcher: launcher, task: nil, queue: true)
+        session.queue(.prepare, tasks: tasks, mode: mode, parallelism: parallelism, initial: true)
+    }
+
+    private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = [], queue: Bool = false) {
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         watchFamily(session)
         live.insert(session, at: 0)
         route = .live(session.id)
-        session.start(launcher: launcher, task: task, images: images)
+        session.start(launcher: launcher, task: task, images: images, queue: queue)
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             await reload()
@@ -456,7 +464,12 @@ final class AppModel: ObservableObject {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
                                                           directory: home)
             for case let .history(_, events, wrapUp, context, tokens, cost) in messages {
-                session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost),
+                var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost)
+                for case var .taskQueue(queue) in messages {
+                    queue.recover()
+                    timeline.taskQueue = queue
+                }
+                session.restore(timeline,
                                 launcher: launcher, resumable: resumable)
                 historyError[id] = nil
                 return

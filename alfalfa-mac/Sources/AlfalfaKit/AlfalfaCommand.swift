@@ -37,6 +37,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case learning(id: String, apply: Bool)
     case reviewCode(turn: String, model: String)
     case cancelCodeReview
+    case taskQueue(TaskQueueAction, tasks: [String] = [], mode: String = "serie", parallelism: Int = 2)
 
     public var line: String {
         let object: [String: Any]
@@ -67,6 +68,10 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .learning(id, apply): object = ["tipo": "aprendizaje", "id": id, "aplicar": apply]
         case let .reviewCode(turn, model): object = ["tipo": "revisar_codigo", "turno": turn, "modelo": model]
         case .cancelCodeReview: object = ["tipo": "cancelar_revision_codigo"]
+        case let .taskQueue(action, tasks, mode, parallelism):
+            var fields: [String: Any] = ["tipo": "encargos", "accion": action.rawValue]
+            if action == .prepare { fields.merge(["encargos": tasks, "modo": mode, "paralelos": parallelism]) { _, v in v } }
+            object = fields
         case let .compact(instructions):
             object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
         case let .settings(model, effort, mode):
