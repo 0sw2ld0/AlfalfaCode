@@ -16,7 +16,7 @@ struct WrapUpCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
-                Text(MarkdownText.inline(wrapUp.recap.isEmpty ? "Sesiones propuestas" : wrapUp.recap))
+                Text(MarkdownText.inline(title))
                     .font(.system(size: 13.5)).foregroundStyle(Theme.secondary)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -43,6 +43,11 @@ struct WrapUpCard: View {
             if let proof = wrapUp.interfaceProof {
                 InterfaceProofCard(proof: proof)
             }
+            if let offer = wrapUp.browserExport {
+                BrowserExportCard(offer: offer, blocked: offer.id.flatMap { session.browserExportBlock($0) },
+                                  save: session.exportBrowserTest(id:path:))
+                .id(offer.id)
+            }
             if let review = wrapUp.review {
                 CodeReviewCard(review: review, canReply: canReply, session: session)
             }
@@ -55,6 +60,11 @@ struct WrapUpCard: View {
 
     private var canReply: Bool {
         !answered && session.canSend && !session.timeline.status.isRunning
+    }
+
+    private var title: String {
+        if !wrapUp.recap.isEmpty { return wrapUp.recap }
+        return wrapUp.sessions.isEmpty ? "Cierre del turno" : "Sesiones propuestas"
     }
 
     // MARK: - Métodos privados

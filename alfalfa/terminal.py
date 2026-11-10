@@ -254,6 +254,10 @@ class TerminalManager:
             self.navegador = Navegador(transport.pedir_navegador)
         elif motor_navegador is not None:
             raise ValueError('WebKit requiere la app de Mac; en terminal elige --motor-navegador cuybrowser.')
+        self.exportacion_navegador = None
+        if transport is not None and self.navegador is not None:
+            from .navegador_exportar import ExportacionNavegador
+            self.exportacion_navegador = ExportacionNavegador(self)
         # «Prevent sleep while running» de Codex: el Mac no se duerme por inactividad mientras
         # trabaja un turno. None lee ALFALFA_MANTENER_DESPIERTO (encendido por defecto).
         from .despierto import MantenerDespierto
@@ -840,6 +844,8 @@ class TerminalManager:
         # también al cancelar o fallar; si el proceso muere, macOS la suelta con él.
         self.despierto.empezar()
         try:
+            if self.exportacion_navegador is not None:
+                await self.transport.cancelar_exportacion()
             return await self._run(prompt, eco)
         finally:
             self.despierto.terminar()
@@ -861,6 +867,8 @@ class TerminalManager:
         # El cierre (wrap_up) es de cada turno: el del anterior ya no vale.
         self.task.pop('cierre', None)
         turno = registro.abrir_turno(self.task, prompt, len(rt.state.get('messages', [])))
+        if self.exportacion_navegador is not None:
+            self.exportacion_navegador.empezar()
         # Para el coste y los tokens de este turno: lo gastado antes de empezarlo.
         antes = (self.task.get('total_tokens') or 0, self.task.get('coste_usd'))
         # Entero en la transcripción: el turno sólo guarda el principio y el historial que se
@@ -924,6 +932,8 @@ class TerminalManager:
                 self.task.update(self.transport.clean(self.task))
                 rt.state.update(self.transport.clean(rt.state))
             rt.evidence.finish(error=self.task.get('summary') if self.task['status'] != 'completed' else None)
+            if self.exportacion_navegador is not None:
+                self.exportacion_navegador.terminar()
             registro.cerrar_turno(self.task, turno['id'], self.task['status'], len(rt.state.get('messages', [])),
                                   cierre=self.task.get('cierre'),
                                   gasto=registro.gasto_del_turno(self.task, *antes))

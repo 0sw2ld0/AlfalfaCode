@@ -266,7 +266,7 @@ extension BrowserScripts {
     el.dispatchEvent(new PointerEvent('pointerup', opts));
     el.dispatchEvent(new MouseEvent('mouseup', opts));
     el.click();
-    return { elemento: describe(el) };
+    return form ? { elemento: describe(el), envio_formulario: true } : { elemento: describe(el) };
     """#
 
 }
