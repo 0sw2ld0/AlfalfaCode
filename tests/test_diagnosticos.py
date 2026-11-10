@@ -750,11 +750,16 @@ def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, mo
     ruta = 'Sources/Demo/Suma.swift'
 
     async def ediciones():
-        primero = await escribir(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + 1\n}\n')
+        valido = 'public func suma(_ a: Int) -> Int {\n    return a + 1\n}\n'
+        primero = await escribir(rt, ruta, valido)
         # Ya no se mide el plazo: hasta que el paquete esté preparado y el servidor arrancado, cada edición
-        # dice que no contestó; con un plazo holgado llega el error.
+        # dice que no contestó. Se espera con código válido para fijar la línea base antes de crear el error.
         monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', '20')
-        segundo = await hasta_que_conteste(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + "b"\n}\n')
+        listo = await hasta_que_conteste(rt, ruta, valido)
+        assert 'sourcekit-lsp' in listo['diagnosticos'].get('revisado_con', []), listo
+        assert listo['diagnosticos']['errores'] == 0, listo
+        assert listo['diagnosticos'].get('ya_habia', 0) == 0, listo
+        segundo = await escribir(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + "b"\n}\n')
         await rt.manager.cerrar_diagnosticos()
         return primero, segundo
     primero, segundo = asyncio.run(ediciones())

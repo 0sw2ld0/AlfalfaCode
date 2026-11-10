@@ -8,6 +8,7 @@ termine el trabajo de los PR 33–37.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -153,6 +154,16 @@ async def autorizar(runtime, nombre, args):
         raise ValueError('Acción rechazada tras leer contenido externo. No se ejecutó; no la reformules.')
 
 
+def _texto_limpio(valor, valores):
+    escapados = [json.dumps(v, ensure_ascii=False)[1:-1] for v in valores]
+    for secreto in sorted(set(valores) | set(escapados), key=len, reverse=True):
+        if len(secreto) < 8:
+            valor = re.sub(r'(?<![\w])' + re.escape(secreto) + r'(?![\w])', REDACTADO, valor)
+        else:
+            valor = valor.replace(secreto, REDACTADO)
+    return tapar(valor)
+
+
 def limpiar(valor, valores, *, datos=False):
     """Copia los valores textuales sin alterar claves, SHA256, IDs ni bloques opacos."""
     if isinstance(valor, str):
@@ -167,13 +178,7 @@ def limpiar(valor, valores, *, datos=False):
                 return json.dumps(limpiar(objeto, valores, datos=True), ensure_ascii=False)
         # El contenido de una herramienta suele ser JSON serializado: un valor
         # con comillas, barras o saltos también debe taparse allí.
-        escapados = [json.dumps(v, ensure_ascii=False)[1:-1] for v in valores]
-        for secreto in sorted(set(valores) | set(escapados), key=len, reverse=True):
-            if len(secreto) < 8:
-                valor = re.sub(r'(?<![\w])' + re.escape(secreto) + r'(?![\w])', REDACTADO, valor)
-            else:
-                valor = valor.replace(secreto, REDACTADO)
-        return tapar(valor)
+        return _texto_limpio(valor, valores)
     if isinstance(valor, list):
         return [limpiar(v, valores, datos=datos) for v in valor]
     if isinstance(valor, dict):
@@ -184,13 +189,96 @@ def limpiar(valor, valores, *, datos=False):
     return valor
 
 
+def _metadatos(descriptor, valores):
+    _comprobar_datos((v for k, v in descriptor.items() if str(k).startswith('x-')), valores)
+    for campo in ('description', 'title', 'examples', '$comment'):
+        if campo in descriptor:
+            descriptor[campo] = limpiar(descriptor[campo], valores, datos=True)
+
+
+def _dato_sensible(valor, valores):
+    if isinstance(valor, str):
+        if _texto_limpio(valor, valores) != valor:
+            return True
+        if valor.lstrip().startswith(('{', '[')):
+            try:
+                return _dato_sensible(json.loads(valor), valores)
+            except ValueError:
+                pass
+        return False
+    if isinstance(valor, list):
+        return any(_dato_sensible(v, valores) for v in valor)
+    if isinstance(valor, dict):
+        return any((CLAVE_SENSIBLE.search(str(k)) and v not in (None, '', [], {}))
+                   or _dato_sensible(k, valores) or _dato_sensible(v, valores) for k, v in valor.items())
+    return False
+
+
+def _comprobar_datos(datos, valores):
+    if any(_dato_sensible(valor, valores) for valor in datos):
+        raise ValueError('No se envió la petición: un dato sensible del catálogo no se puede sanear '
+                         'sin cambiar el contrato de la herramienta.')
+
+
+def _esquema(esquema, valores):
+    """Sanea anotaciones; rechaza datos sensibles cuyo cambio alteraría el contrato."""
+    if isinstance(esquema, list):
+        for sub in esquema:
+            _esquema(sub, valores)
+    if not isinstance(esquema, dict):
+        return
+    _comprobar_datos((esquema[c] for c in ('enum', 'const', 'default', 'pattern') if c in esquema), valores)
+    _metadatos(esquema, valores)
+    for campo in ('properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas', 'dependencies'):
+        mapa = esquema.get(campo)
+        if isinstance(mapa, dict):
+            if campo == 'patternProperties':
+                _comprobar_datos(mapa, valores)  # Estas claves son patrones, no nombres de propiedades.
+            for sub in mapa.values():
+                _esquema(sub, valores)
+    for campo in ('items', 'additionalItems', 'contains', 'additionalProperties', 'unevaluatedProperties',
+                  'unevaluatedItems', 'propertyNames', 'contentSchema', 'not', 'if', 'then', 'else',
+                  'allOf', 'anyOf', 'oneOf', 'prefixItems'):
+        _esquema(esquema.get(campo), valores)
+
+
+def _catalogo(herramientas, valores):
+    resultado = copy.deepcopy(herramientas)
+    for tool in resultado:
+        _metadatos(tool, valores)
+        funcion = tool.get('function', tool)
+        if not isinstance(funcion, dict):
+            continue
+        _metadatos(funcion, valores)
+        for campo in ('parameters', 'input_schema'):
+            _esquema(funcion.get(campo), valores)
+    return resultado
+
+
+def _llamadas(llamadas, valores):
+    """Limpia los datos del historial; type/name identifican una llamada ya ejecutada."""
+    resultado = limpiar(llamadas, valores)
+    if not isinstance(llamadas, list) or not isinstance(resultado, list):
+        return resultado
+    for original, limpia in zip(llamadas, resultado):
+        if not isinstance(original, dict) or not isinstance(limpia, dict):
+            continue
+        if 'type' in original:
+            limpia['type'] = copy.deepcopy(original['type'])
+        funcion, saneada = original.get('function'), limpia.get('function')
+        if isinstance(funcion, dict) and isinstance(saneada, dict) and 'name' in funcion:
+            saneada['name'] = copy.deepcopy(funcion['name'])
+    return resultado
+
+
 def preparar(runtime, payload):
     """Última barrera, también para visión, resúmenes y reintentos: no muta el historial."""
     valores = secretos(runtime)
     salida = dict(payload)
     # El modelo, sus opciones y los IDs son protocolo, no texto del encargo.
     # Por ejemplo MODEL=glm en .env no debe cambiar el destino de la petición.
-    salida['messages'] = [dict(m, **{k: limpiar(m[k], valores) for k in ('content', 'tool_calls') if k in m})
+    salida['messages'] = [dict(m, **{k: _llamadas(m[k], valores) if k == 'tool_calls' else limpiar(m[k], valores)
+                                   for k in ('content', 'tool_calls') if k in m})
                           for m in payload.get('messages', ())]
     for mensaje in salida['messages']:
         for llamada in mensaje.get('tool_calls') or ():
@@ -198,7 +286,7 @@ def preparar(runtime, payload):
             if 'arguments' in funcion:
                 funcion['arguments'] = limpiar(funcion['arguments'], valores, datos=True)
     if 'tools' in payload:
-        salida['tools'] = limpiar(payload['tools'], valores)
+        salida['tools'] = _catalogo(payload['tools'], valores)
         for tool in salida['tools']:
             funcion = tool.get('function', {})
             if str(funcion.get('name', '')).startswith('mcp__'):

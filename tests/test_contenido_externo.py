@@ -1,5 +1,6 @@
 """Inyecciones y secretos con proyectos temporales y un proveedor HTTP simulado."""
 import asyncio
+import copy
 import io
 import json
 from types import SimpleNamespace
@@ -287,3 +288,216 @@ def test_claves_tambien_se_tapan_como_nombre_de_campo_y_no_cambian_los_esquemas(
     segura = seguridad.preparar(rt, carga)
     assert CLAVES[0] not in json.dumps(segura)
     assert segura['tools'] == carga['tools']
+
+
+def test_env_no_reescribe_nombre_tipos_ni_valores_semanticos_del_catalogo(rt):
+    (rt.tools.root / '.env').write_text('TIPO=string\nFUNCION=browser_navigate\nCAMPO=description\nWRAPPER=function\n'
+                                      'PROTO=type\n')
+    schema = {'type': 'object', 'properties': {
+        'description': {'type': 'string', 'enum': ['opcion_uno', 'opcion_dos'], 'default': 'opcion_uno'},
+        'type': {'type': 'string', 'const': 'tipo_literal'},
+        'token': {'type': 'string'},
+        'const': {'const': {'clave_uno': 'dato_uno', 'clave_dos': 'dato_dos'}},
+        'default': {'default': {'clave_uno': 'dato_uno', 'clave_dos': 'dato_dos'}}},
+        'required': ['description', 'const', 'type'], 'additionalProperties': False}
+    tool = {'type': 'function', 'function': {'name': 'browser_navigate', 'parameters': schema}}
+    carga = {'messages': [], 'tools': [tool]}
+    antes = copy.deepcopy(carga)
+    segura = seguridad.preparar(rt, carga)
+    assert segura['tools'] == antes['tools']
+    assert carga == antes
+
+
+@pytest.mark.parametrize('mcp', [False, True])
+def test_metadatos_del_catalogo_y_subesquemas_se_tapan_sin_mutar_el_original(rt, mcp):
+    secreto = 'secretoDescriptivoFicticio123'
+    nombre = 'mcp__servidor__leer' if mcp else 'browser_navigate'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\nFUNCION=' + nombre + '\n')
+    anotaciones = {'description': secreto, 'title': secreto, '$comment': secreto,
+                  'examples': [{secreto: secreto, 'text': secreto, 'token': 'valorNoEnEnv456'}]}
+    texto = dict(anotaciones, type='string')
+    schema = dict(anotaciones, type='object', properties={
+        'description': texto, 'lista': {'type': 'array', 'items': texto},
+        'variante': {'anyOf': [texto, {'type': 'null'}]},
+        'referida': {'$ref': '#/$defs/type'}}, **{'$defs': {'type': texto}})
+    tool = {'type': 'function', 'function': dict(anotaciones, name=nombre, parameters=schema)}
+    carga = {'messages': [], 'tools': [tool]}
+    antes = copy.deepcopy(carga)
+    segura = seguridad.preparar(rt, carga)
+    funcion = segura['tools'][0]['function']
+    assert secreto not in json.dumps(segura)
+    assert funcion['examples'][0]['token'] == '[REDACTADO]'
+    assert funcion['name'] == nombre
+    assert funcion['parameters']['properties']['description']['type'] == 'string'
+    assert funcion['parameters']['properties']['referida']['$ref'] == '#/$defs/type'
+    assert carga == antes
+    if mcp:
+        assert funcion['description'].startswith(seguridad.AVISO)
+        assert 'buscar_herramientas' in rt.state[seguridad.MOTIVO]
+
+
+def test_tuplas_heredadas_y_catalogo_plano_conservan_el_contrato(rt):
+    secreto = 'secretoDeEjemploFicticio123'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\nTIPO=string\n')
+    schema = {'type': 'array', 'items': [{'type': 'string', 'description': secreto}],
+              'additionalItems': {'type': 'object', 'properties': {'title': {'type': 'string', 'title': secreto}}},
+              'default': [{'description': 'dato_uno', 'examples': ['dato_dos']}],
+              'definitions': {'description': {'type': 'string', '$comment': secreto}}}
+    carga = {'messages': [], 'tools': [{'name': 'leer', 'input_schema': schema, 'description': secreto}]}
+    segura = seguridad.preparar(rt, carga)
+    tool = segura['tools'][0]
+    assert secreto not in json.dumps(segura)
+    assert tool['name'] == 'leer'
+    assert tool['input_schema']['items'][0]['type'] == 'string'
+    assert tool['input_schema']['default'] == schema['default']
+    assert tool['input_schema']['additionalItems']['properties']['title']['type'] == 'string'
+
+
+@pytest.mark.parametrize('campo', ['enum', 'const', 'default'])
+@pytest.mark.parametrize('en_clave', [False, True])
+async def test_dato_semantico_con_secreto_rechaza_antes_de_enviar_sin_filtrarlo(rt, monkeypatch, campo, en_clave):
+    secreto = 'secretoFicticio123'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\n')
+    valor = {secreto: 'dato_ficticio'} if en_clave else secreto
+    parametro = {'type': 'object' if en_clave else 'string', campo: [valor] if campo == 'enum' else valor}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'mcp__servidor__leer',
+             'parameters': {'type': 'object', 'properties': {'dato': parametro}}}}]}
+    antes = copy.deepcopy(carga)
+    enviados = []
+
+    async def proveedor(*args, **kwargs):
+        enviados.append(args)
+
+    monkeypatch.setattr(rt, '_request', proveedor)
+    with pytest.raises(ValueError, match='No se envió') as error:
+        await rt.request(None, '/api/chat', carga)
+    assert secreto not in str(error.value)
+    assert not enviados
+    assert carga == antes
+
+
+@pytest.mark.parametrize('campo', ['enum', 'const', 'default'])
+def test_json_literal_semantico_sin_secreto_no_se_reformatea_ni_rechaza(rt, campo):
+    (rt.tools.root / '.env').write_text('INTERNO=otroSecretoFicticio123\nTIPO=string\n')
+    valor = '{"a":1,"msg":"[REDACTADO]"}'
+    parametro = {'type': 'string', campo: [valor] if campo == 'enum' else valor}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'leer',
+             'parameters': {'type': 'object', 'properties': {'dato': parametro}}}}]}
+    segura = seguridad.preparar(rt, carga)
+    assert segura['tools'] == carga['tools']
+
+
+@pytest.mark.parametrize('campo', ['enum', 'const', 'default'])
+def test_secreto_escapado_en_json_semantico_tambien_rechaza_sin_filtrarlo(rt, campo):
+    secreto = 'secretoFicticio123'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\n')
+    valor = '{"text":"\\u0073ecretoFicticio123"}'
+    parametro = {'type': 'string', campo: [valor] if campo == 'enum' else valor}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'leer',
+             'parameters': {'type': 'object', 'properties': {'dato': parametro}}}}]}
+    with pytest.raises(ValueError, match='No se envió') as error:
+        seguridad.preparar(rt, carga)
+    assert secreto not in str(error.value)
+    assert valor not in str(error.value)
+
+
+@pytest.mark.parametrize('campo', ['enum', 'const', 'default'])
+def test_clave_sensible_escapada_en_json_no_filtra_un_valor_opaco(rt, campo):
+    valor = '{"to\\u006ben":"valorOpacoNoEnEnv123"}'
+    parametro = {'type': 'string', campo: [valor] if campo == 'enum' else valor}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'leer',
+             'parameters': {'type': 'object', 'properties': {'dato': parametro}}}}]}
+    with pytest.raises(ValueError, match='No se envió') as error:
+        seguridad.preparar(rt, carga)
+    assert 'valorOpacoNoEnEnv123' not in str(error.value)
+    assert valor not in str(error.value)
+
+
+@pytest.mark.parametrize('posicion', ['tool', 'function', 'schema', 'property'])
+async def test_extensiones_semanticas_con_secreto_no_se_envian_ni_se_reescriben(rt, monkeypatch, posicion):
+    secreto = 'secretoDeExtensionFicticio123'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\n')
+    child = {'type': 'string'}
+    schema = {'type': 'object', 'properties': {'description': child}}
+    function = {'name': 'browser_navigate', 'parameters': schema}
+    tool = {'type': 'function', 'function': function}
+    descriptor = {'tool': tool, 'function': function, 'schema': schema, 'property': child}[posicion]
+    descriptor['x-configuracion'] = {'valor': secreto}
+    carga = {'messages': [], 'tools': [tool]}
+    antes = copy.deepcopy(carga)
+    enviados = []
+
+    async def proveedor(*args, **kwargs):
+        enviados.append(args)
+
+    monkeypatch.setattr(rt, '_request', proveedor)
+    with pytest.raises(ValueError, match='No se envió') as error:
+        await rt.request(None, '/api/chat', carga)
+    assert secreto not in str(error.value)
+    assert not enviados and carga == antes
+
+
+@pytest.mark.parametrize('posicion', ['pattern', 'patternProperties'])
+def test_patrones_con_secreto_se_rechazan_sin_cambiar_su_semantica(rt, posicion):
+    secreto = 'secretoDePatronFicticio123'
+    (rt.tools.root / '.env').write_text('INTERNO=' + secreto + '\n')
+    pattern = '^' + secreto + '$'
+    schema = {'type': 'string', 'pattern': pattern} if posicion == 'pattern' else {
+        'type': 'object', 'patternProperties': {pattern: {'type': 'string'}}}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'leer', 'parameters': schema}}]}
+    antes = copy.deepcopy(carga)
+    with pytest.raises(ValueError, match='No se envió') as error:
+        seguridad.preparar(rt, carga)
+    assert secreto not in str(error.value)
+    assert carga == antes
+
+
+def test_patrones_y_extensiones_inocuos_conservan_valores_y_nombres_del_esquema(rt):
+    (rt.tools.root / '.env').write_text('INTERNO=otroSecretoDePrueba123\nTIPO=string\nPROTO=type\n')
+    schema = {'type': 'object', 'properties': {'type': {'type': 'string', 'pattern': r'^opcion_[a-z]+$'}},
+              'patternProperties': {r'^campo_[a-z]+$': {'type': 'string'}},
+              'required': ['type'], 'x-datos': {'modo': 'estable'}, 'additionalProperties': False}
+    carga = {'messages': [], 'tools': [{'type': 'function', 'function': {'name': 'leer', 'parameters': schema},
+                                      'x-version': 'propia'}]}
+    antes = copy.deepcopy(carga)
+    segura = seguridad.preparar(rt, carga)
+    assert segura['tools'] == antes['tools'] and carga == antes
+
+
+@pytest.mark.parametrize('argumentos_json', [False, True])
+async def test_historial_de_llamada_conserva_protocolo_y_tapa_argumentos(rt, monkeypatch, argumentos_json):
+    from alfalfa.navegador import TOOLS
+
+    secreto = 'secretoHistoricoFicticio123'
+    ident = 'call-browser-historico'
+    (rt.tools.root / '.env').write_text('FUNCION=browser_navigate\nTIPO=function\nID=' + ident
+                                      + '\nINTERNO=' + secreto + '\n')
+    argumentos = {'url': 'https://example.com/?dato=' + secreto, 'action': 'open'}
+    llamada = {'type': 'function', 'id': ident, 'function': {'name': 'browser_navigate',
+               'arguments': json.dumps(argumentos) if argumentos_json else argumentos}}
+    rt.state['messages'] = [
+        {'role': 'assistant', 'content': 'Texto histórico ' + secreto, 'tool_calls': [llamada]},
+        {'role': 'tool', 'tool_name': 'browser_navigate', 'tool_call_id': ident,
+         'content': json.dumps({'titulo': 'Dato ' + secreto, 'url': 'https://example.com/'})}]
+    carga = {'messages': rt.state['messages'],
+             'tools': [t for t in TOOLS if t['function']['name'] == 'browser_navigate']}
+    antes = copy.deepcopy(carga)
+    enviados = []
+
+    async def proveedor(client, endpoint, payload, **kwargs):
+        enviados.append(payload)
+        return {'message': {'content': 'simulado'}}
+
+    monkeypatch.setattr(rt, '_request', proveedor)
+    await rt.request(None, '/api/chat', carga)
+    assert len(enviados) == 1
+    salida = enviados[0]
+    historica = salida['messages'][0]['tool_calls'][0]
+    assert historica['type'] == 'function' and historica['function']['name'] == 'browser_navigate'
+    assert historica['id'] == ident and salida['messages'][1]['tool_call_id'] == ident
+    assert secreto not in json.dumps(salida)
+    saneados = historica['function']['arguments']
+    if argumentos_json:
+        saneados = json.loads(saneados)
+    assert saneados == {'url': 'https://example.com/?dato=[REDACTADO]', 'action': 'open'}
+    assert carga == antes

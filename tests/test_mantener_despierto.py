@@ -252,7 +252,8 @@ def _sesion(tmp_path, *argumentos):
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]), ALFALFA_HOME=str(tmp_path / 'home'))
     env.pop('ALFALFA_MANTENER_DESPIERTO', None)
     proc = subprocess.Popen([sys.executable, '-c', SESION_QUE_ESPERA, *argumentos], cwd=proyecto, env=env,
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=False, bufsize=0)
     return proc, proyecto
 
 
@@ -261,7 +262,7 @@ def _hasta(proc, tipo):
     while True:
         assert select.select([proc.stdout], [], [], 30)[0], 'stdout timeout'
         linea = proc.stdout.readline()
-        assert linea, 'el proceso se cerró: ' + proc.stderr.read()
+        assert linea, 'el proceso se cerró: ' + proc.stderr.read().decode('utf-8', 'replace')
         filas.append(json.loads(linea))
         if filas[-1]['tipo'] == tipo:
             return filas
