@@ -237,6 +237,8 @@ public struct Timeline: Equatable, Sendable {
     /// Una compilación o un script largo tarda: la tarjeta lo enseña en vez de parecer colgada.
     public private(set) var runningPermission: RunningCommand?
     public private(set) var finished = false
+    /// El usuario ya escribió algo encima de la frase sugerida: no vuelve hasta el próximo cierre.
+    public private(set) var suggestionDismissed = false
     private var counter = 0
 
     public init() {}
@@ -259,7 +261,7 @@ public struct Timeline: Equatable, Sendable {
         totalCost = cost
         // Una sesión guardada no está trabajando: lo que quedó sin resultado, quedó cortado.
         closeOpenCalls()
-        if let wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
+        if let wrapUp { appendWrapUp(wrapUp) }
         status = .idle
         compacting = false
     }
@@ -376,6 +378,26 @@ public struct Timeline: Equatable, Sendable {
         return nil
     }
 
+    /// La frase sugerida del último cierre, para el cuadro vacío, como en la app de Codex. Nil en
+    /// cuanto el usuario escribe, manda otro mensaje (la caja queda contestada) o hay un turno en marcha.
+    public var suggestion: String? {
+        guard !suggestionDismissed, !status.isRunning else { return nil }
+        for item in items.reversed() {
+            switch item {
+            case let .wrapUp(_, wrapUp, answered): return answered ? nil : wrapUp.suggestion
+            case .user: return nil
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    /// El usuario escribió en el cuadro: la sugerencia se va hasta el siguiente cierre.
+    public mutating func dismissSuggestion() {
+        guard suggestion != nil else { return }
+        suggestionDismissed = true
+    }
+
     /// Quita la caja de cierre (la ✕ de la tarjeta).
     public mutating func dismissWrapUp(id: Int) {
         items.removeAll { if case .wrapUp(id, _, _) = $0 { return true } else { return false } }
@@ -394,6 +416,12 @@ public struct Timeline: Equatable, Sendable {
                 items[index] = .priceWarning(id: id, warning, answered: true)
             }
         }
+    }
+
+    /// Cada cierre trae su propia sugerencia: la descartada del anterior no la tapa.
+    private mutating func appendWrapUp(_ wrapUp: WrapUp) {
+        items.append(.wrapUp(id: nextID(), wrapUp, answered: false))
+        suggestionDismissed = false
     }
 
     /// Un mensaje nuevo deja contestadas las cajas anteriores: sus botones ya no aplican.
@@ -501,7 +529,7 @@ public struct Timeline: Equatable, Sendable {
             if !outcome.summary.isEmpty && outcome.exitCode != 0 && !showsAgentText(outcome.summary) {
                 items.append(.notice(id: nextID(), text: BlockedSummary.readable(outcome.summary)))
             }
-            if let wrapUp = outcome.wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
+            if let wrapUp = outcome.wrapUp { appendWrapUp(wrapUp) }
         case let .finished(outcome):
             runningPermission = nil
             compacting = false
