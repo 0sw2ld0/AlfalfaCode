@@ -442,6 +442,8 @@ async def run(args, transport):
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                                   navegador=bool(getattr(args, 'navegador', False)),
+                                  motor_navegador=getattr(args, 'motor_navegador', None),
+                                  perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
                                   budget=getattr(args, 'presupuesto', None),
                                   monthly_budget=getattr(args, 'presupuesto_mes', None),
                                   diagnosticos=diagnostics(args), firma=signature(args))
