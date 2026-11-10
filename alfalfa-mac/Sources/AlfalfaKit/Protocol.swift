@@ -642,6 +642,7 @@ public struct WebSearchSettings: Equatable, Sendable {
 
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
 public enum AlfalfaMessage: Equatable, Sendable {
+    case codeReview(CodeReview)
     case session(SessionInfo)
     case event(AgentEvent)
     case permission(PermissionRequest)
@@ -730,6 +731,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
               object["version"] as? Int == protocolVersion,
               let kind = object["tipo"] as? String else { return nil }
         switch kind {
+        case "revision_codigo":
+            return CodeReview(value: object["revision"]).map(Self.codeReview)
         case "sesion":
             return sessionInfo(object).map(Self.session)
         case "evento":

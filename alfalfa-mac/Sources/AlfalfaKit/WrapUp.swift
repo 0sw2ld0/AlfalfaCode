@@ -10,14 +10,17 @@ public struct WrapUp: Equatable, Sendable {
     public var ask: String?
     public var options: [String]
     public var sessions: [SessionProposal]
+    public var review: CodeReview?
 
     // MARK: - Inicializadores
 
-    public init(recap: String, ask: String? = nil, options: [String] = [], sessions: [SessionProposal] = []) {
+    public init(recap: String, ask: String? = nil, options: [String] = [], sessions: [SessionProposal] = [],
+                review: CodeReview? = nil) {
         self.recap = recap
         self.ask = ask
         self.options = options
         self.sessions = sessions
+        self.review = review
     }
 
     /// El `cierre` de `turno_terminado` o del historial; nil si no trae ni resumen ni sesiones.
@@ -28,7 +31,8 @@ public struct WrapUp: Equatable, Sendable {
         guard !recap.isEmpty || !sessions.isEmpty else { return nil }
         let ask = recap.isEmpty ? nil : Self.text(object["pregunta"])
         let options = ask == nil ? [] : (object["opciones"] as? [Any] ?? []).compactMap { Self.text($0) }.prefix(2)
-        self.init(recap: recap, ask: ask, options: Array(options), sessions: sessions)
+        self.init(recap: recap, ask: ask, options: Array(options), sessions: sessions,
+                  review: CodeReview(value: object["revision_codigo"]))
     }
 
     // MARK: - Métodos privados

@@ -960,6 +960,8 @@ class WorkspaceTools:
             return None
 
     async def _call(self, name, args):
+        if self.runtime.task.get('revision_diff'):
+            raise ValueError('El revisor sólo recibe el diff congelado: no puede invocar herramientas.')
         if self.runtime.task.get('conversation_only'):
             self.runtime.reject_conversation_tool(name)
         if name in self.runtime.excluded_tools:

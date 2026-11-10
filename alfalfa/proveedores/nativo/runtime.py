@@ -881,7 +881,9 @@ class NativeRuntime:
 
     async def _retry_or_raise(self, clas, error_text, attempt, deadline, retry_after=None, cause=None):
         """Espera sin bloquear y falla si ya no cabe otra llamada en la sesión."""
-        if attempt >= MAX_TRANSPORT_ATTEMPTS:
+        # La revisión voluntaria reserva una única respuesta: un fallo incierto
+        # no debe repetir la inferencia ni gastar otra salida máxima sin otro clic.
+        if attempt >= (1 if self.task.get('revision_diff') else MAX_TRANSPORT_ATTEMPTS):
             self._log_transport_exhausted(attempt, 'attempt_limit')
             error = self._provider_failure(clas, error_text, intentos=attempt)
             if cause is not None:
