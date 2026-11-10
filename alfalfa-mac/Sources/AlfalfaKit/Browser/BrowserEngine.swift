@@ -38,6 +38,8 @@ public final class BrowserEngine: NSObject {
     var handoffDeadline: Task<Void, Never>?
     /// Relevos en la cola: true si el motor ya los canceló antes de que llegaran a ejecutarse.
     var queuedHandoffs: [String: Bool] = [:]
+    /// Tamaño CSS pedido por el motor; nil conserva el tamaño libre del panel.
+    @Published public private(set) var viewport: CGSize?
 
     public let webView: WKWebView
 
@@ -266,6 +268,8 @@ public final class BrowserEngine: NSObject {
         case "consola", "red":
             let limit = (request.fields["limite"] as? Int) ?? BrowserDiagnostics.capacity
             return diagnostics.result(network: request.action == "red", limit: limit)
+        case "viewport":
+            return try await resizeViewport(request)
         case "pulsar", "escribir":
             return try await interact(request)
         case "desplazar":
@@ -295,6 +299,16 @@ public final class BrowserEngine: NSObject {
         default:
             throw BrowserFailure("Acción del navegador desconocida: \(request.action).")
         }
+    }
+
+    private func resizeViewport(_ request: BrowserRequest) async throws -> [String: Any] {
+        let size = try BrowserViewport.size(request.fields)
+        viewport = size
+        if webView.window === parking { parking?.setContentSize(size) }
+        webView.setFrameSize(size)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        return ["ancho": Int(size.width), "alto": Int(size.height),
+                "nota": "Sólo cambia el tamaño; no emula un dispositivo ni cambia la identidad del navegador."]
     }
 
     private func navigate(_ start: (WKWebView) -> WKNavigation?) async throws -> [String: Any] {
@@ -379,6 +393,7 @@ public final class BrowserEngine: NSObject {
         window.ignoresMouseEvents = true
         let content = window.contentView ?? NSView()
         window.contentView = content
+        if let viewport { window.setContentSize(viewport) }
         webView.frame = content.bounds
         webView.autoresizingMask = [.width, .height]
         content.addSubview(webView)
@@ -486,6 +501,7 @@ extension BrowserEngine {
         case "leer": return "Leyendo la página"
         case "consola": return "Leyendo la consola de la página"
         case "red": return "Leyendo las peticiones de red de la página"
+        case "viewport": return "Cambiando el tamaño de la página"
         case "pulsar": return "Pulsando " + target
         case "escribir": return "Escribiendo en " + target
         case "desplazar": return "Desplazando la página"

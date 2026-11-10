@@ -1300,6 +1300,9 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
   sin cuerpos ni cabeceras y con parámetros sensibles de URL redactados. Es observación desde la página,
   no un HAR completo: puede omitir tráfico anterior, de marcos, workers o iniciado fuera de estos mecanismos.
   Ambas herramientas sólo leen, guardan hasta 200 entradas por navegación y aceptan `limit`.
+- `browser_viewport`: `preset` mobile (390×844), tablet (768×1024), desktop (1100×800), o
+  `width` y `height` entre 200 y 4096 píxeles CSS. La vista se escala para caber en el panel.
+  Cambia el tamaño para probar el diseño adaptable; conserva la identidad de AlfalfaCode y no emula un dispositivo.
 - `browser_click` y `browser_type`: por referencia (`ref`) o por el texto visible
   (`target`); `browser_type` también elige en un desplegable y con `submit` pulsa Intro.
 - `browser_scroll`: la página, el contenedor que se desplaza o hasta un elemento.

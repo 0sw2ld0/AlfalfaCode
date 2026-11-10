@@ -110,8 +110,8 @@ def navegador_con(app=None):
 
 def test_esquema_de_las_herramientas():
     assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_console', 'browser_network',
-                                 'browser_click', 'browser_type', 'browser_scroll', 'browser_screenshot',
-                                 'browser_eval', 'browser_handoff', 'browser_download')
+                                 'browser_viewport', 'browser_click', 'browser_type', 'browser_scroll',
+                                 'browser_screenshot', 'browser_eval', 'browser_handoff', 'browser_download')
     for tool in navegador.TOOLS:
         parametros = tool['function']['parameters']
         assert tool['type'] == 'function' and parametros['additionalProperties'] is False
