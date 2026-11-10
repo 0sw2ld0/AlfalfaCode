@@ -115,6 +115,10 @@ def descripcion(nombre, args):
         return 'Proponer una sesión aparte'
     if nombre == 'buscar_herramientas':
         return 'Cargar herramientas'
+    if nombre == 'buscar_sesiones':
+        if _texto(args.get('alrededor'), 40):
+            return 'Leer una sesión anterior alrededor de un resultado'
+        return 'Buscar en sesiones anteriores «' + _texto(args.get('consulta'), 80) + '»'
     if isinstance(nombre, str) and nombre.startswith('browser_'):
         return _del_navegador(nombre, args)
     if isinstance(nombre, str) and nombre.startswith('mcp__'):

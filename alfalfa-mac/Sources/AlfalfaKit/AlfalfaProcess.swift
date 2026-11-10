@@ -224,10 +224,26 @@ public final class AlfalfaProcess: @unchecked Sendable {
     /// `input` va por la entrada estándar (una clave para `--guardar-clave`), nunca en los argumentos.
     /// `progress` recibe cada mensaje según llega (en otra cola), y `started` el proceso, para
     /// poder pararlo (`--conectar` espera a que el usuario autorice en el navegador).
+    /// Si se cancela la tarea que espera, el proceso se termina: una búsqueda vieja no sigue corriendo.
     public static func query(launcher: URL, arguments: [String], directory: URL,
                              input: String? = nil,
                              progress: (@Sendable (AlfalfaMessage) -> Void)? = nil,
                              started: (@Sendable (AlfalfaProcess) -> Void)? = nil) async throws -> [AlfalfaMessage] {
+        let running = RunningBox()
+        return try await withTaskCancellationHandler {
+            try await run(launcher: launcher, arguments: arguments, directory: directory, input: input,
+                          progress: progress) { process in
+                running.set(process)
+                started?(process)
+            }
+        } onCancel: {
+            running.cancel()
+        }
+    }
+
+    private static func run(launcher: URL, arguments: [String], directory: URL, input: String?,
+                            progress: (@Sendable (AlfalfaMessage) -> Void)?,
+                            started: @escaping @Sendable (AlfalfaProcess) -> Void) async throws -> [AlfalfaMessage] {
         try await withCheckedThrowingContinuation { continuation in
             let process = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: directory)
             let box = MessageBox()
@@ -246,13 +262,36 @@ public final class AlfalfaProcess: @unchecked Sendable {
             }
             do {
                 try process.start()
-                started?(process)
+                started(process)
                 if let input { process.write(line: input) }
                 process.closeInput()
             } catch {
                 continuation.resume(throwing: error)
             }
         }
+    }
+}
+
+/// El proceso de una consulta, para terminarlo si se cancela la tarea (también antes de arrancar).
+private final class RunningBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: AlfalfaProcess?
+    private var cancelled = false
+
+    func set(_ process: AlfalfaProcess) {
+        lock.lock()
+        self.process = process
+        let stop = cancelled
+        lock.unlock()
+        if stop { process.terminate() }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let process = self.process
+        lock.unlock()
+        process?.terminate()
     }
 }
 

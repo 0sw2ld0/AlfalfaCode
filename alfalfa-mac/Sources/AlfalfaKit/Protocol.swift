@@ -690,6 +690,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `quitado_de_cola`: respuesta a «Quitar» o «Editar» de un mensaje en cola. `removed` si se
     /// quitó; si no, `reason` es `entregado` (el modelo ya lo leyó) o `desconocido`.
     case unqueued(id: String, removed: Bool, reason: String?)
+    /// `--buscar-sesiones CONSULTA --json`: fragmentos de las conversaciones guardadas.
+    case sessionSearch(SessionSearch)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -847,6 +849,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return UndoPreview.parse(object).map(Self.undoPreview)
         case "deshecho":
             return UndoStep.parse(object, text: object["texto"] as? String ?? "").map(Self.undone)
+        case "busqueda_sesiones":
+            return SessionSearch(object: object).map(Self.sessionSearch)
         case "sesion_cambiada":
             guard let id = text(object["id"]) else { return nil }
             if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }

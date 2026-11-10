@@ -79,6 +79,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var newSnapshot: GitSnapshot?
     @Published private(set) var newOllama: Bool?
     @Published var search = ""
+    /// Resultados de buscar `search` dentro de las conversaciones (`--buscar-sesiones`).
+    @Published var contentSearch: SessionSearch?
+    @Published var searchingContent = false
+    /// Ancla de búsqueda para una sesión guardada que aún no se ha abierto.
+    var pendingAnchors: [String: String] = [:]
     @Published var showArchived = false
     @Published var sessionError: String?
     @Published var update: UpdateCheck?
@@ -441,6 +446,7 @@ final class AppModel: ObservableObject {
         }
         dormant[summary.id] = session
         session.pendingDraft = pendingDrafts.removeValue(forKey: summary.id)
+        session.searchAnchor = pendingAnchors.removeValue(forKey: summary.id)
         let resumable = Presentation.resumable(summary.state)
         Task { await loadHistory(summary.id, into: session, launcher: launcher, resumable: resumable) }
     }

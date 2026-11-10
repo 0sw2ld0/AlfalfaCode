@@ -535,7 +535,7 @@ public struct Timeline: Equatable, Sendable {
         // Lo resuelve `unqueued(id:removed:reason:)`, que devuelve el texto quitado a la sesión.
         case .unqueued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview:
+             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview, .sessionSearch:
             break
         case let .undone(step): addUndo(step)
         }

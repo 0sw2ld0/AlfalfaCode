@@ -53,6 +53,7 @@ SIN_EQUIVALENTE = {
     'send_input': 'SendMessage de Claude Code; aquí con el nombre de Codex.',
     'close_agent': 'Claude Code no cierra agentes; Codex sí, con close_agent.',
     'list_agents': 'Claude Code no lista sus agentes; Codex sí, con list_agents.',
+    'buscar_sesiones': 'Claude Code no busca en sus sesiones anteriores; es session_search de Hermes Agent.',
 }
 
 # Alias que sólo sirven para elegir hooks (hook_names.rs: apply_patch con Write y

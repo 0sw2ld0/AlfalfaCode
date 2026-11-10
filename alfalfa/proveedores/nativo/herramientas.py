@@ -19,6 +19,7 @@ import time
 from contextlib import ExitStack
 from pathlib import Path
 
+from ...busqueda_sesiones.herramienta import TOOL as BUSCAR_SESIONES_TOOL
 from ...evidencia.operaciones import classify_operation, is_forbidden_merge_heads_recipe
 from ...permisos.rutas import PRIVADOS_DEL_ESPACIO, privado_del_espacio
 from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
@@ -640,7 +641,8 @@ def _neutral(tool):
 
 
 ON_REQUEST_TOOLS = [_neutral(_on_request(tool)) for tool in TOOLS] + [
-    APPLY_PATCH_TOOL, WRAP_UP_TOOL, PROPOSE_SESSION_TOOL, COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS
+    APPLY_PATCH_TOOL, WRAP_UP_TOOL, PROPOSE_SESSION_TOOL, COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS + [
+    BUSCAR_SESIONES_TOOL]
 
 # Herramientas de sesión para los complementos autorizados.
 # Sólo las ofrece un runtime con cargador de complementos; sin él no se
@@ -1091,6 +1093,9 @@ class WorkspaceTools:
         if name == 'inspect_image':
             path = self.path(args['path'])
             return await self.runtime.vision(path, args['question'])
+        if name == 'buscar_sesiones':
+            from ...busqueda_sesiones.herramienta import llamar
+            return await llamar(self.runtime, args)
         if name == 'web_search':
             from . import web
             return await web.buscar(args['query'], args.get('domains'))
