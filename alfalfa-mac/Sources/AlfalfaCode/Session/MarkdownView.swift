@@ -2,18 +2,20 @@ import AlfalfaKit
 import SwiftUI
 
 /// Texto del agente con Markdown, como lo pinta Codex: títulos, citas, listas, tareas,
-/// tablas, separadores, código y formato en línea.
+/// tablas, separadores, código y formato en línea. Las imágenes y vídeos locales que cita
+/// se ven en la conversación, como en la app de Codex.
 struct MarkdownView: View {
 
     // MARK: - Propiedades
 
     let text: String
-    /// Carpeta de la sesión: ahí se ejecutan los bloques de terminal.
+    /// Carpeta de la sesión: ahí se ejecutan los bloques de terminal y se buscan las rutas
+    /// relativas de las imágenes.
     var folder: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(MarkdownText.blocks(text).enumerated()), id: \.offset) { _, block in
+            ForEach(Array(MarkdownText.blocks(text, folder: folder).enumerated()), id: \.offset) { _, block in
                 view(for: block)
             }
         }
@@ -52,6 +54,8 @@ struct MarkdownView: View {
             MarkdownTable(header: header, rows: rows)
         case .rule:
             Divider().overlay(Theme.border).padding(.vertical, 4)
+        case let .media(items):
+            MediaGallery(items: items)
         }
     }
 
