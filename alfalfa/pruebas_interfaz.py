@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from . import deshacer
+from .navegador import Navegador
 
 WEB = {'.html', '.htm', '.css', '.scss', '.sass', '.less', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
        '.vue', '.svelte', '.astro', '.php', '.erb', '.hbs', '.jinja', '.jinja2', '.j2', '.svg', '.json',
@@ -76,6 +77,8 @@ def leer_png(ruta, raiz):
 
 class _SinPermisosNuevos:
     """La captura automática sólo aprovecha el navegador ya autorizado, sin nuevos diálogos ni arranques."""
+    captura_automatica = True
+
     def __init__(self, runtime):
         self.runtime = runtime
 
@@ -95,12 +98,14 @@ class PruebasInterfaz:
         self.usados = set()
         self.notas = {}
         self.intentos = 0
+        self.intento_previo_edicion = False
         self.lock = asyncio.Lock()
 
     def empezar(self, runtime, ident):
         self.runtime, self.ident = runtime, ident
         self.web = self.mac = None
         self.usados, self.notas, self.intentos = set(), {}, 0
+        self.intento_previo_edicion = False
 
     def _turno(self):
         return next(t for t in self.manager.task['turnos'] if t['id'] == self.ident)
@@ -120,36 +125,74 @@ class PruebasInterfaz:
     def _imagen(self, resultado):
         return leer_png(resultado['captura'], self.manager.directory)
 
+    def _turno_web(self, runtime):
+        return (self.ident and runtime.task['id'] == self.runtime.task['id']
+                and not Navegador._solo_lee(runtime) and not runtime.task.get('revision_diff')
+                and not runtime.task.get('conversation_only')
+                and runtime.task.get('status') not in ('failed', 'interrupted')
+                and 'browser_screenshot' not in getattr(runtime, 'excluded_tools', ()))
+
+    def _navegador_disponible(self):
+        navegador = self.manager.navegador
+        cerrado = hasattr(navegador, 'process') and getattr(navegador, 'http', None) is None
+        return (navegador is not None and not cerrado and not getattr(navegador, 'relevo_pendiente', False)
+                and not getattr(self.manager.transport, 'stopped', False)
+                and (getattr(navegador, 'url', None) or '').startswith(('http://', 'https://')))
+
     async def navegador(self, runtime, nombre, resultado):
-        if not self.ident or runtime.task['id'] != self.runtime.task['id'] or nombre == 'browser_handoff':
+        if (not self._turno_web(runtime) or nombre == 'browser_handoff' or not isinstance(resultado, dict)
+                or resultado.get('ok') is False or 'error' in resultado or 'permiso' in resultado):
             return
         self.usados.add('web')
-        if self.web is not None or self.intentos >= 3:
+        if self.web is not None:
             return
         async with self.lock:
-            if self.web is not None:
+            if self.web is not None or not self._turno_web(runtime) or not self._navegador_disponible():
                 return
-            navegador = self.manager.navegador
-            if not getattr(navegador, 'url', None):
+            if nombre == 'browser_screenshot':
+                await self._guardar_antes(runtime, resultado)
+            elif self.intentos < 3:
+                self.intentos += 1
+                await self._guardar_antes(runtime)
+
+    async def antes_de_editar(self, runtime, rutas):
+        if ('web' not in self.usados or self.intento_previo_edicion or not self._turno_web(runtime)
+                or not self._navegador_disponible() or not relevantes(rutas, 'web')):
+            return
+        async with self.lock:
+            if (self.intento_previo_edicion or not self._turno_web(runtime) or not self._navegador_disponible()
+                    or (self.web and self.web['url'] == self.manager.navegador.url)):
                 return
-            self.intentos += 1
-            try:
-                almacen, antes, ahora = await asyncio.to_thread(self._estado)
-                if relevantes(almacen.cambios(antes, ahora), 'web'):
-                    self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
-                    return
-                if nombre != 'browser_screenshot':
-                    resultado = await asyncio.wait_for(
-                        navegador.llamar(_SinPermisosNuevos(runtime), 'browser_screenshot', {}), TIEMPO)
-                # Una edición concurrente durante la captura tampoco puede convertirse en el «antes».
-                almacen, antes, ahora = await asyncio.to_thread(self._estado)
-                if relevantes(almacen.cambios(antes, ahora), 'web'):
-                    self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
-                    return
-                png, tamano = self._imagen(resultado)
-                self.web = dict(png=png, tamano=tamano, url=navegador.url)
-            except (ValueError, OSError, KeyError, asyncio.TimeoutError, deshacer.SinInstantanea):
-                self.notas['web'] = 'No se pudo guardar una captura previa del navegador.'
+            self.intento_previo_edicion = True
+            await self._guardar_antes(runtime)
+
+    async def _capturar(self, runtime):
+        if not self._turno_web(runtime) or not self._navegador_disponible():
+            raise ValueError('El navegador no está disponible para una captura automática.')
+        return await asyncio.wait_for(self.manager.navegador.llamar(
+            _SinPermisosNuevos(runtime), 'browser_screenshot', {}), TIEMPO)
+
+    async def _guardar_antes(self, runtime, resultado=None):
+        navegador = self.manager.navegador
+        url = navegador.url
+        try:
+            almacen, antes, ahora = await asyncio.to_thread(self._estado)
+            if relevantes(almacen.cambios(antes, ahora), 'web'):
+                self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
+                return
+            if resultado is None:
+                resultado = await self._capturar(runtime)
+            # Una edición concurrente durante la captura tampoco puede convertirse en el «antes».
+            almacen, antes, ahora = await asyncio.to_thread(self._estado)
+            if relevantes(almacen.cambios(antes, ahora), 'web'):
+                self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
+                return
+            if navegador is not self.manager.navegador or url != navegador.url:
+                raise ValueError('La página cambió durante la captura previa.')
+            png, tamano = self._imagen(resultado)
+            self.web = dict(png=png, tamano=tamano, url=url)
+        except (ValueError, OSError, KeyError, asyncio.TimeoutError, deshacer.SinInstantanea):
+            self.notas['web'] = 'No se pudo guardar una captura previa del navegador.'
 
     async def app(self, runtime, app, resultado):
         if (not self.ident or runtime.task['id'] != self.runtime.task['id']
@@ -228,18 +271,16 @@ class PruebasInterfaz:
         if not self.web:
             self.notas.setdefault('web', 'Falta la captura previa del navegador.')
             return
-        cerrado = hasattr(navegador, 'process') and getattr(navegador, 'http', None) is None
-        if (cerrado or getattr(self.manager.transport, 'stopped', False)
-                or getattr(navegador, 'relevo_pendiente', False)):
+        if not self._turno_web(self.runtime) or not self._navegador_disponible():
             self.notas['web'] = 'No se capturó el cierre: el navegador estaba cerrado o en relevo a la persona.'
             return
         try:
             if navegador.url != self.web['url']:
                 raise ValueError('Otra página')
-            resultado = await asyncio.wait_for(
-                navegador.llamar(_SinPermisosNuevos(self.runtime), 'browser_screenshot', {}), TIEMPO)
+            resultado = await self._capturar(self.runtime)
             png, tamano = self._imagen(resultado)
-            if navegador.url != self.web['url'] or tamano != self.web['tamano']:
+            if (navegador is not self.manager.navegador or navegador.url != self.web['url']
+                    or tamano != self.web['tamano']):
                 raise ValueError('Otra página o tamaño')
             titulo = 'Navegador · ' + (urlsplit(navegador.url).hostname or 'página')
             pares.append(self._archivar('web', titulo, self.web['png'], png, tamano, archivos))
