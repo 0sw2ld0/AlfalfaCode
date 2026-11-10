@@ -6,9 +6,14 @@ import AppKit
 enum BrowserAnnotationPicker {
     static func makeView(browser: BrowserEngine) -> AnnotationSelectionView {
         let view = AnnotationSelectionView()
-        view.select = { rect in
+        view.select = { [weak view] rect in
+            guard let view else { return }
+            let converted = browser.webView.convert(rect, from: view)
+            let area = browser.webView.isFlipped ? converted
+                : CGRect(x: converted.minX, y: browser.webView.bounds.height - converted.maxY,
+                         width: converted.width, height: converted.height)
             Task { @MainActor in
-                do { try await browser.selectAnnotation(in: rect) } catch {
+                do { try await browser.selectAnnotation(in: area) } catch {
                     browser.cancelAnnotation()
                     let alert = NSAlert()
                     alert.messageText = "No se pudo seleccionar el elemento"
