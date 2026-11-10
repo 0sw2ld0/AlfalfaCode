@@ -194,6 +194,14 @@ def test_los_dieciséis_y_escritura_plan(tmp_path, api):
     assert not api.calls and browser.process.started == 0
 
 
+def test_descripcion_navigate_es_del_motor_chromium_persistente(tmp_path):
+    browser, _, _ = setup(tmp_path)
+    tool = next(t for t in browser.tools if t['function']['name'] == 'browser_navigate')
+    description = tool['function']['description']
+    assert 'persistent Chromium profile' in description
+    assert 'WebKit' not in description and 'opt-in' not in description
+
+
 @pytest.mark.parametrize('field,value', [('approval', 'cli'), ('confirm', []), ('attach', {'enabled': True}),
                                        ('sensitive_fields', {'block_typing': False})])
 def test_politica_no_se_rebaja(tmp_path, api, field, value):
