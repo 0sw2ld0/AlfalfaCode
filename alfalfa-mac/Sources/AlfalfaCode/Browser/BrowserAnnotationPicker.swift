@@ -1,12 +1,10 @@
 import AlfalfaKit
 import AppKit
-import SwiftUI
 
 /// La selección pertenece a la app: ningún clic ni arrastre llega a los controles de la página.
-struct BrowserAnnotationPicker: NSViewRepresentable {
-    let browser: BrowserEngine
-
-    func makeNSView(context: Context) -> AnnotationSelectionView {
+@MainActor
+enum BrowserAnnotationPicker {
+    static func makeView(browser: BrowserEngine) -> AnnotationSelectionView {
         let view = AnnotationSelectionView()
         view.select = { rect in
             Task { @MainActor in
@@ -23,7 +21,6 @@ struct BrowserAnnotationPicker: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: AnnotationSelectionView, context: Context) {}
 }
 
 final class AnnotationSelectionView: NSView {

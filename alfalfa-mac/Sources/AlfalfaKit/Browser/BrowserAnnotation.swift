@@ -27,6 +27,7 @@ public struct BrowserAnnotation: Equatable, Sendable {
 
 extension BrowserEngine {
     public func cancelAnnotation() {
+        annotationSelection += 1
         isSelectingAnnotation = false
         annotation = nil
     }
@@ -38,6 +39,7 @@ extension BrowserEngine {
         }
         let originalURL = webView.url
         let navigation = annotationNavigation
+        let selection = annotationSelection
         let fields: [String: Any] = ["x": area.midX, "y": area.midY,
                                      "area": area.width > 5 || area.height > 5]
         let value = try await webView.callAsyncJavaScript(
@@ -57,6 +59,7 @@ extension BrowserEngine {
         config.rect = crop
         config.snapshotWidth = NSNumber(value: min(crop.width, 1200))
         let image = try await webView.takeSnapshot(configuration: config)
+        guard selection == annotationSelection else { return }
         guard originalURL == webView.url, navigation == annotationNavigation, !isLoading else {
             throw BrowserFailure("La página cambió durante la selección; vuelve a elegir el elemento.")
         }

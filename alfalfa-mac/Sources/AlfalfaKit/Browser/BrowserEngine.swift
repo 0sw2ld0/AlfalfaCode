@@ -35,6 +35,7 @@ public final class BrowserEngine: NSObject {
     @Published public var annotation: BrowserAnnotation?
     public var onAnnotation: ((BrowserAnnotation, String) -> Void)?
     var annotationNavigation = 0
+    var annotationSelection = 0
 
     public let webView: WKWebView
 
@@ -145,6 +146,7 @@ public final class BrowserEngine: NSObject {
     }
 
     private func performNow(_ request: BrowserRequest) async -> BrowserReply {
+        if isSelectingAnnotation { cancelAnnotation() }
         isPanelOpen = true
         host()
         activity = Self.describe(request)

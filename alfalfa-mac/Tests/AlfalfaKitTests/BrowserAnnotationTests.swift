@@ -88,4 +88,13 @@ final class BrowserAnnotationTests: XCTestCase {
         XCTAssertFalse(click.ok)
         XCTAssertNil(engine.annotation)
     }
+
+    func testAgentActionRemovesThePickerSoThePersonCanUseThePage() async throws {
+        let engine = try await page()
+        defer { engine.close() }
+        engine.isSelectingAnnotation = true
+        _ = await engine.perform(BrowserRequest(id: "agent", action: "estado"))
+        XCTAssertFalse(engine.isSelectingAnnotation)
+        XCTAssertNil(engine.annotation)
+    }
 }

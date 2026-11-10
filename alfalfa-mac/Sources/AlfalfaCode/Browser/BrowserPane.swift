@@ -31,7 +31,6 @@ struct BrowserPane: View {
             ZStack {
                 Color.white
                 BrowserHost(view: browser.webView)
-                if browser.isSelectingAnnotation { BrowserAnnotationPicker(browser: browser) }
                 if browser.url == nil { emptyState }
             }
         }
@@ -76,7 +75,8 @@ struct BrowserPane: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(editing ? Theme.alfalfa.opacity(0.6) : Theme.border))
             .padding(.horizontal, 4)
-            button("text.bubble", "Comentar un elemento o un área", enabled: browser.url != nil) {
+            button("text.bubble", "Comentar un elemento o un área",
+                   enabled: browser.url != nil && browser.activity == nil && !browser.isLoading) {
                 browser.cancelAnnotation()
                 browser.isSelectingAnnotation = true
             }
@@ -170,6 +170,7 @@ private struct BrowserHost: NSViewRepresentable {
 
     func updateNSView(_ container: NSView, context: Context) {
         if view.superview !== container { attach(to: container) }
+        updateSelection(in: container)
     }
 
     private func attach(to container: NSView) {
@@ -181,6 +182,26 @@ private struct BrowserHost: NSViewRepresentable {
             view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             view.topAnchor.constraint(equalTo: container.topAnchor),
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        updateSelection(in: container)
+    }
+
+    /// El selector vive junto al WKWebView: al escalar o centrar la página conserva sus coordenadas CSS.
+    private func updateSelection(in container: NSView) {
+        let current = container.subviews.first { $0 is AnnotationSelectionView }
+        guard let browser = view.navigationDelegate as? BrowserEngine, browser.isSelectingAnnotation else {
+            current?.removeFromSuperview()
+            return
+        }
+        guard current == nil else { return }
+        let picker = BrowserAnnotationPicker.makeView(browser: browser)
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(picker, positioned: .above, relativeTo: view)
+        NSLayoutConstraint.activate([
+            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            picker.topAnchor.constraint(equalTo: container.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
     }
 }
