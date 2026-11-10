@@ -1060,3 +1060,107 @@ def test_una_carpeta_0555_que_borra_el_agente_vuelve_con_su_contenido(entorno):
     finally:
         if (cwd / 'solo').exists():
             os.chmod(cwd / 'solo', 0o755)
+
+
+# MARK: - Seguimiento del PR 22
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root atraviesa cualquier carpeta')
+@pytest.mark.parametrize('modo', [0o400, 0o600])
+def test_una_carpeta_legible_pero_no_atravesable_no_deja_sin_instantanea(entorno, modo):
+    hogar, cwd = entorno
+    (cwd / 'nx').mkdir()
+    (cwd / 'nx' / 'f.txt').write_text('mío\n')
+    os.chmod(cwd / 'nx', modo)
+    try:
+        sesion = Sesion(hogar, cwd)
+        sesion.turno('uno', lambda c, e: escribir(e, c, 'app.py', 'print(2)\n'))
+        datos = sesion.task['turnos'][0]['instantanea']
+        assert datos['antes'] and datos['despues'] and 'errores' not in datos
+        assert Almacen(hogar, cwd).excluidos(datos['antes'])['ilegibles'] == ['nx/']
+    finally:
+        os.chmod(cwd / 'nx', 0o755)
+
+
+def test_lo_adoptado_sigue_adoptado_aunque_el_agente_lo_escriba_despues(entorno):
+    hogar, cwd = entorno
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        escribir(e, c, 'app.py', 'print(2)\n')
+        (c / 'app.py').write_text('print(2)  # del usuario\n')
+        e['changes'].append({'path': 'app.py', 'before': sha('print(2)\n'),
+                             'after': sha('print(2)  # del usuario\n'), 'via': 'run_command'})
+    t = sesion.turno('uno', t1, llamadas=[['make']])
+    sesion.turno('dos', lambda c, e: escribir(e, c, 'app.py', 'print(2)  # del usuario\nprint(3)\n'))
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {(c['ruta'], c['motivo']) for c in vista['conflictos']} == {('app.py', 'adoptado')}
+
+
+def test_avisa_de_los_permisos_de_un_ignorado_dentro_de_una_carpeta_ignorada(entorno):
+    hogar, cwd = entorno
+    (cwd / '.gitignore').write_text('secretos/\n')
+    (cwd / 'secretos').mkdir()
+    (cwd / 'secretos' / '.env').write_text('A=1\n')
+    os.chmod(cwd / 'secretos' / '.env', 0o600)
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: os.chmod(c / 'secretos' / '.env', 0o644),
+                     llamadas=[['chmod', '644', 'secretos/.env']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert ('secretos/.env', 'ignorado') in {(n['ruta'], n['motivo']) for n in vista['no_cubiertos']}
+
+
+def test_el_chmod_de_una_carpeta_vacia_se_deshace(entorno):
+    import stat
+    hogar, cwd = entorno
+    (cwd / 'vacia').mkdir()
+    os.chmod(cwd / 'vacia', 0o700)
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: os.chmod(c / 'vacia', 0o755), llamadas=[['chmod', '755', 'vacia']])
+    vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+    assert {(c['ruta'], c['accion']) for c in vista['conflictos']} == {('vacia/', 'permisos')}
+    deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['vacia/'], vista=vista)
+    assert stat.S_IMODE(os.stat(cwd / 'vacia').st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root lee cualquier carpeta')
+def test_un_chmod_000_de_una_carpeta_con_archivos_se_deshace(entorno):
+    import stat
+    hogar, cwd = entorno
+    (cwd / 'datos').mkdir()
+    (cwd / 'datos' / 'a.txt').write_text('a\n')
+    sesion = Sesion(hogar, cwd)
+    t = sesion.turno('uno', lambda c, e: os.chmod(c / 'datos', 0), llamadas=[['chmod', '000', 'datos']])
+    try:
+        vista = deshacer.vista_deshacer(hogar, sesion.task, sesion.estado, t)
+        assert {(c['ruta'], c['accion'], c['motivo']) for c in vista['conflictos']} == {
+            ('datos/', 'permisos', 'orden')}
+        assert vista['restaurables'] == [] and vista['no_cubiertos'] == []
+        deshacer.deshacer(hogar, sesion.task, sesion.estado, t, forzar=['datos/'], vista=vista)
+        assert stat.S_IMODE(os.stat(cwd / 'datos').st_mode) == 0o755
+        assert (cwd / 'datos' / 'a.txt').read_text() == 'a\n'
+    finally:
+        os.chmod(cwd / 'datos', 0o755)
+
+
+def test_restaura_dentro_de_una_carpeta_0555_que_sigue_existiendo(entorno):
+    import shutil
+    import stat
+    hogar, cwd = entorno
+    (cwd / 'solo' / 'sub').mkdir(parents=True)
+    (cwd / 'solo' / 'sub' / 'f.txt').write_text('f\n')
+    os.chmod(cwd / 'solo', 0o555)
+    sesion = Sesion(hogar, cwd)
+
+    def t1(c, e):
+        os.chmod(c / 'solo', 0o755)
+        shutil.rmtree(c / 'solo' / 'sub')
+        os.chmod(c / 'solo', 0o555)
+        e['changes'].append({'path': 'solo/sub/f.txt', 'before': sha('f\n'), 'after': 'DELETED'})
+    t = sesion.turno('uno', t1)
+    try:
+        paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t)
+        assert not paso['fallos'], paso['fallos']
+        assert (cwd / 'solo' / 'sub' / 'f.txt').read_text() == 'f\n'
+        assert stat.S_IMODE(os.stat(cwd / 'solo').st_mode) == 0o555, 'vuelve a su modo al terminar'
+    finally:
+        os.chmod(cwd / 'solo', 0o755)

@@ -203,6 +203,9 @@ def _dejado(almacen, pasos):
         registrados = paso['registrados']
         for ruta, estado in almacen.cambios(antes, despues).items():
             dejado[ruta] = estado
+            if origen.get(ruta) == ADOPTADO:
+                # Una huella que tomó una orden puede llevar lo tuyo; escribirlo después no lo limpia.
+                continue
             if registrados is True or (registrados is not None and registrados.get(ruta) == 'propio'):
                 origen[ruta] = AGENTE
             elif registrados is not None and registrados.get(ruta) == 'adoptado':
@@ -264,14 +267,23 @@ def _solo_permisos(almacen, task, turno, pasos, antes, ahora, excluidos_antes, e
                 archivos[ruta] = ({'ruta': ruta, 'accion': 'permisos', 'motivo': motivo('modos', ruta)},
                                   en_antes[ruta])
     carpetas = {}
-    candidatas = distintos('modos_carpetas', 0o755)
+    if isinstance(antes_.get('carpetas'), dict) and isinstance(ahora_.get('carpetas'), dict):
+        # Todas las carpetas conocidas (también las vacías y las ilegibles): basta con que estén en las dos.
+        candidatas = sorted(c for c in set(antes_['carpetas']) & set(ahora_['carpetas'])
+                            if antes_['carpetas'][c] != ahora_['carpetas'][c])
+        existian = set(candidatas)
+    else:
+        candidatas = distintos('modos_carpetas', 0o755)
+        existian = set(almacen.entradas(antes, candidatas)) if candidatas else set()
     if candidatas:
-        en_antes = almacen.entradas(antes, candidatas)
         for carpeta in candidatas:
             path = almacen.cwd / carpeta
-            if en_antes.get(carpeta) and path.is_dir() and not path.is_symlink():
-                fila = {'ruta': carpeta + '/', 'accion': 'permisos', 'motivo': motivo('modos_carpetas', carpeta, 0o755)}
-                carpetas[carpeta + '/'] = (fila, antes_['modos_carpetas'].get(carpeta, 0o755))
+            if carpeta in existian and path.is_dir() and not path.is_symlink():
+                clave = 'carpetas' if isinstance(final.get('carpetas'), dict) and 'carpetas' in ahora_ \
+                    else 'modos_carpetas'
+                fila = {'ruta': carpeta + '/', 'accion': 'permisos', 'motivo': motivo(clave, carpeta, 0o755)}
+                modo = (antes_.get('carpetas') or {}).get(carpeta, antes_['modos_carpetas'].get(carpeta, 0o755))
+                carpetas[carpeta + '/'] = (fila, modo)
     ignorados = {ruta: 'ignorado' for ruta in distintos('modos_ignorados')
                  if (almacen.cwd / ruta).exists() and ruta in (antes_.get('modos_ignorados') or {})}
     return archivos, carpetas, ignorados
@@ -349,8 +361,16 @@ def vista_deshacer(hogar, task, estado, ident):
     ultimas = huella(estado)
     creados = _creados(task, estado, turno)
     no_cubiertos = _no_cubiertos_registrados(almacen, task, estado, turno, excluidos_antes)
+    archivos, carpetas, ignorados = _solo_permisos(almacen, task, turno, pasos, datos['antes'], ahora['commit'],
+                                                   excluidos_antes, excluidos_ahora, objetivo)
     for ruta in sorted(objetivo):
         destino, actual = objetivo[ruta], actuales.get(ruta)
+        if actual is None and cubre(excluidos_ahora, ruta) == 'ilegible':
+            # Está dentro de una carpeta que ahora no se puede leer (un `chmod 000`): si la carpeta
+            # cambió de permisos, deshacer ese cambio la devuelve entera; si no, sólo se avisa.
+            if not any(ruta.startswith(c) for c in carpetas):
+                no_cubiertos[ruta] = 'ilegible'
+            continue
         if '160000' in (destino or ('',))[0] + (actual or ('',))[0]:
             continue  # Un repositorio anidado no es contenido de esta carpeta.
         fila = {'ruta': ruta, 'accion': _accion(destino, actual)}
@@ -384,8 +404,6 @@ def vista_deshacer(hogar, task, estado, ident):
             vista['restaurables'].append(fila)
         else:
             vista['conflictos'].append(dict(fila, motivo=EDITADO if ruta in dejado else AJENO))
-    archivos, carpetas, ignorados = _solo_permisos(almacen, task, turno, pasos, datos['antes'], ahora['commit'],
-                                                   excluidos_antes, excluidos_ahora, objetivo)
     for ruta, (fila, entrada) in archivos.items():
         vista['conflictos'].append(fila)
         objetivo[ruta] = entrada
