@@ -497,7 +497,7 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
     (tmp_path / 'basura').mkdir()
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]), ALFALFA_HOME=str(tmp_path / 'home'))
     proc = subprocess.Popen([sys.executable, '-c', STDIO_SESSION], cwd=tmp_path, env=env, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False, bufsize=0)
     rows = []
     try:
         while True:
@@ -505,7 +505,7 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
             row = json.loads(proc.stdout.readline())
             rows.append(row)
             if row['tipo'] == 'permiso':
-                proc.stdin.write(json.dumps(dict(tipo='permiso', id=row['id'], aprobado=True)) + '\n')
+                proc.stdin.write((json.dumps(dict(tipo='permiso', id=row['id'], aprobado=True)) + '\n').encode('utf-8'))
                 proc.stdin.flush()
             if row['tipo'] == 'turno_terminado':
                 break
