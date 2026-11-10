@@ -498,6 +498,9 @@ extension LiveSession {
     func openBrowser() -> BrowserEngine {
         if let browser { return browser }
         let engine = BrowserEngine()
+        engine.onAnnotation = { [weak self] annotation, comment in
+            self?.addBrowserAnnotation(annotation, comment: comment)
+        }
         browser = engine
         return engine
     }

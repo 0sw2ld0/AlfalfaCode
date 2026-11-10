@@ -11,6 +11,9 @@ import WebKit
 @MainActor
 public final class BrowserEngine: NSObject {
 
+    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
+    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
+
     // MARK: - Propiedades
 
     @Published public private(set) var url: URL?
@@ -27,6 +30,11 @@ public final class BrowserEngine: NSObject {
     @Published public private(set) var notice: String?
     /// El panel del navegador está abierto en la ventana de la sesión.
     @Published public var isPanelOpen = false
+    /// Selección hecha por la persona; el comentario sólo llega al compositor cuando lo confirma.
+    @Published public var isSelectingAnnotation = false
+    @Published public var annotation: BrowserAnnotation?
+    public var onAnnotation: ((BrowserAnnotation, String) -> Void)?
+    var annotationNavigation = 0
 
     public let webView: WKWebView
 
@@ -58,8 +66,6 @@ public final class BrowserEngine: NSObject {
     /// `close()`: ya no hace nada.
     public private(set) var isClosed = false
 
-    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
-    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
     /// Lo que espera una descarga antes de cancelarla (el motor espera 300 s la respuesta).
     var downloadTimeout: TimeInterval = 280
 
@@ -121,6 +127,7 @@ public final class BrowserEngine: NSObject {
     public func close() {
         guard !isClosed else { return }
         isClosed = true
+        cancelAnnotation()
         isPanelOpen = false
         activity = nil
         webView.stopLoading()
@@ -500,6 +507,8 @@ extension BrowserEngine: WKNavigationDelegate {
     }
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        annotationNavigation += 1
+        cancelAnnotation()
         started += 1
     }
 

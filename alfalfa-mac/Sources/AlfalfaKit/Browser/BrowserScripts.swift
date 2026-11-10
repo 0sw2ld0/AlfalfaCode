@@ -158,7 +158,7 @@ extension BrowserScripts {
       const text = (document.body?.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
       return { texto: text.slice(0, max), recortado: text.length > max };
     }
-    A.refs = new Map(); A.next = 1;
+    // Las anotaciones del usuario y las lecturas comparten referencias hasta la siguiente navegación.
     const CONTEXT = new Set(['form', 'navigation', 'main', 'dialog']);
     const lines = [];
     let size = 0, cut = false, last = '';

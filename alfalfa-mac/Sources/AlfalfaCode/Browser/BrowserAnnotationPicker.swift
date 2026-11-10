@@ -1,0 +1,69 @@
+import AlfalfaKit
+import AppKit
+import SwiftUI
+
+/// La selección pertenece a la app: ningún clic ni arrastre llega a los controles de la página.
+struct BrowserAnnotationPicker: NSViewRepresentable {
+    let browser: BrowserEngine
+
+    func makeNSView(context: Context) -> AnnotationSelectionView {
+        let view = AnnotationSelectionView()
+        view.select = { rect in
+            Task { @MainActor in
+                do { try await browser.selectAnnotation(in: rect) } catch {
+                    browser.cancelAnnotation()
+                    let alert = NSAlert()
+                    alert.messageText = "No se pudo seleccionar el elemento"
+                    alert.informativeText = error.localizedDescription
+                    alert.addButton(withTitle: "Aceptar")
+                    if let window = browser.webView.window { _ = await alert.beginSheetModal(for: window) }
+                }
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ view: AnnotationSelectionView, context: Context) {}
+}
+
+final class AnnotationSelectionView: NSView {
+    var select: ((CGRect) -> Void)?
+    override var isFlipped: Bool { true }
+    private var start: CGPoint?
+    private var selection = CGRect.zero
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
+
+    override func mouseDown(with event: NSEvent) {
+        start = convert(event.locationInWindow, from: nil)
+        selection = .zero
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let start else { return }
+        let end = convert(event.locationInWindow, from: nil)
+        selection = CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
+                           width: abs(start.x - end.x), height: abs(start.y - end.y))
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let start else { return }
+        mouseDragged(with: event)
+        select?(selection.width > 5 || selection.height > 5
+            ? selection : CGRect(x: start.x, y: start.y, width: 0, height: 0))
+        self.start = nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.systemGreen.withAlphaComponent(0.06).setFill()
+        dirtyRect.fill()
+        if selection.width > 0 || selection.height > 0 {
+            NSColor.systemGreen.withAlphaComponent(0.18).setFill()
+            selection.fill()
+            NSColor.systemGreen.setStroke()
+            NSBezierPath(rect: selection).stroke()
+        }
+    }
+}

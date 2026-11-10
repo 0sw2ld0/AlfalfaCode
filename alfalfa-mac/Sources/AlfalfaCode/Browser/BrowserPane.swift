@@ -27,9 +27,11 @@ struct BrowserPane: View {
             }
             if let line = agentLine { agentBanner(line) }
             if let notice = browser.notice { noticeBanner(notice) }
+            BrowserAnnotationCard(browser: browser)
             ZStack {
                 Color.white
                 BrowserHost(view: browser.webView)
+                if browser.isSelectingAnnotation { BrowserAnnotationPicker(browser: browser) }
                 if browser.url == nil { emptyState }
             }
         }
@@ -38,6 +40,7 @@ struct BrowserPane: View {
         .background(Theme.sidebar)
         .onChange(of: browser.url) { _, url in if !editing { address = url?.absoluteString ?? "" } }
         .onAppear { address = browser.url?.absoluteString ?? "" }
+        .onChange(of: browser.url) { browser.cancelAnnotation() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Navegador")
     }
@@ -73,6 +76,10 @@ struct BrowserPane: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(editing ? Theme.alfalfa.opacity(0.6) : Theme.border))
             .padding(.horizontal, 4)
+            button("text.bubble", "Comentar un elemento o un área", enabled: browser.url != nil) {
+                browser.cancelAnnotation()
+                browser.isSelectingAnnotation = true
+            }
             button("xmark", "Cerrar el navegador (la página sigue abierta)") { browser.isPanelOpen = false }
         }
         .padding(.horizontal, 8).frame(height: 40)
