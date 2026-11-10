@@ -73,6 +73,12 @@ def herramientas():
         raise PaqueteNoPreparable('no se encontró la cadena de Swift: ' + (str(exc) or type(exc).__name__)) from None
 
 
+async def herramientas_sin_bloquear():
+    """`herramientas()` en un hilo: la primera vez llama a xcrun y swiftc, y con la máquina cargada eso
+    bloquearía el bucle de eventos y el plazo de la edición no podría saltar."""
+    return await asyncio.to_thread(herramientas)
+
+
 def _dentro(ruta, paquete):
     real, base = os.path.realpath(ruta), os.path.realpath(paquete)
     return real == base or real.startswith(base.rstrip(os.sep) + os.sep)
@@ -223,7 +229,7 @@ async def en_el_sandbox(argv, sandbox, env, cwd, plazo, temporal):
 
 async def describir(paquete, sandbox, env):
     """El manifiesto evaluado por SwiftPM en el sandbox, como datos (sin opciones de compilación)."""
-    h = herramientas()
+    h = await herramientas_sin_bloquear()
     with tempfile.TemporaryDirectory(prefix='alfalfa-paquete-', ignore_cleanup_errors=True) as temporal:
         salida = await en_el_sandbox([h['swift'], 'package', '--package-path', str(paquete), '--scratch-path',
                                       os.path.join(temporal, 'compilacion'), 'describe', '--type', 'json'],
@@ -237,7 +243,7 @@ async def describir(paquete, sandbox, env):
 async def compilar_modulos(objetivos_, destino, sandbox, env, version):
     """Los módulos de los objetivos de los que dependen otros, compilados en el sandbox con opciones fijas
     y copiados a `destino`. Devuelve los que faltan (no compilaron)."""
-    h = herramientas()
+    h = await herramientas_sin_bloquear()
     Path(destino).mkdir(mode=0o700, parents=True, exist_ok=True)
     faltan = []
     with tempfile.TemporaryDirectory(prefix='alfalfa-paquete-', ignore_cleanup_errors=True) as temporal:

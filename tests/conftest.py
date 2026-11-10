@@ -18,6 +18,10 @@ os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
 
+from tests.aislamiento_python import preparar  # noqa: E402
+
+preparar()
+
 
 @pytest.fixture(autouse=True)
 def _sin_llavero_ni_proveedores_del_usuario(tmp_path_factory, monkeypatch):
@@ -97,3 +101,32 @@ def _como_con_ollama(monkeypatch):
     test_primera_vez lo quita donde prueba la bienvenida."""
     from alfalfa import primera_vez
     monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: True)
+
+
+@pytest.fixture(autouse=True)
+def _sourcekit_en_un_temporal(tmp_path_factory, monkeypatch):
+    """Ninguna prueba compila en el ~/Library/Caches/alfalfa/sourcekit de quien corre la suite.
+
+    La carpeta temporal tiene la misma forma que la de verdad (…/Library/Caches/alfalfa/sourcekit), así
+    que el TMPDIR de sourcekit-lsp contiene «alfalfa» como en el Mac del usuario: un manifiesto que mire
+    eso se porta en las pruebas como se portaría de verdad. Una sola para toda la suite, para que la caché
+    de módulos del SDK se haga una vez.
+    """
+    import hashlib
+
+    from alfalfa import diagnosticos
+    base = tmp_path_factory.getbasetemp() / 'Library' / 'Caches' / 'alfalfa' / 'sourcekit'
+    monkeypatch.setattr(diagnosticos, 'carpeta_de_sourcekit',
+                        lambda raiz: base / hashlib.sha256(str(raiz).encode()).hexdigest()[:16])
+
+
+_CACHE_DEL_USUARIO = os.path.join(os.path.expanduser('~'), 'Library', 'Caches', 'alfalfa')
+_HABIA_CACHE = os.path.exists(_CACHE_DEL_USUARIO)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Si la suite creó ~/Library/Caches/alfalfa, alguna prueba lanzó sourcekit-lsp sin redirigir su caché."""
+    if not _HABIA_CACHE and os.path.exists(_CACHE_DEL_USUARIO):
+        session.exitstatus = 1
+        print('\nERROR: la suite creó ' + _CACHE_DEL_USUARIO + '; una prueba no redirigió la caché de '
+              'sourcekit-lsp (bórrala y busca cuál).')

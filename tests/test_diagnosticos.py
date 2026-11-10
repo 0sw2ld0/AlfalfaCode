@@ -8,6 +8,7 @@ sourcekit-lsp de verdad si este Mac lo tiene. Lo que escribe sourcekit-lsp va a
 carpetas temporales, nunca a ~/Library/Caches.
 """
 import asyncio
+import contextlib
 import hashlib
 import io
 import json
@@ -47,15 +48,6 @@ def guion(carpeta, nombre, codigo):
     return ruta
 
 
-@pytest.fixture(autouse=True)
-def _sin_cache_real(tmp_path_factory, monkeypatch):
-    """Ninguna prueba compila en ~/Library/Caches/alfalfa de quien corre la suite. Una carpeta temporal de
-    toda la suite, para que la caché de módulos del SDK de sourcekit-lsp se haga una sola vez."""
-    base = tmp_path_factory.getbasetemp() / 'cache-sourcekit-de-la-suite'
-    monkeypatch.setattr(modulo, 'carpeta_de_sourcekit',
-                        lambda raiz: base / hashlib.sha256(str(raiz).encode()).hexdigest()[:16])
-
-
 @pytest.fixture
 def simulados(tmp_path, monkeypatch):
     """Qué servidor simulado responde a cada nombre: {nombre: ruta}. Ningún linter del PATH entra."""
@@ -88,6 +80,11 @@ def simulados(tmp_path, monkeypatch):
                                        'type': tipo, 'path': str(carpeta.relative_to(paquete_)), 'sources': fuentes})
         return {'tools_version': '5.9', 'targets': objetivos_}
     monkeypatch.setattr(paquete, 'describir', describir)
+    # Ni xcrun ni swiftc de verdad: con la máquina cargada la primera llamada puede tardar segundos, y estas
+    # pruebas usan servidores simulados que no compilan nada.
+    monkeypatch.setattr(paquete, 'herramientas', lambda: {
+        'swift': '/usr/bin/swift', 'swiftc': '/usr/bin/swiftc', 'sdk': '/SDK', 'plataforma': '/Plataforma',
+        'triple': 'arm64-apple-macosx26.0'})
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
     monkeypatch.setenv('LSP_SIMULADO_REGISTRO', str(tmp_path / 'metodos.txt'))
     # Con la suite cargada (sourcekit-lsp de verdad en otras pruebas) los simulados pueden pasar de 3 s;
@@ -361,7 +358,10 @@ def test_un_servidor_lento_no_frena_el_turno(servidor, sesion, monkeypatch):
         inicio = time.monotonic()
         primero = await escribir(rt, 'e.py', 'e = ERROR\n')
         tardo = time.monotonic() - inicio
-        await asyncio.sleep(1.5)  # el servidor sigue arrancando mientras el agente trabaja
+        # El servidor sigue arrancando mientras el agente trabaja. Esperar su señal,
+        # no el tiempo nominal del simulado: la carga del Mac también cuenta.
+        (cliente,) = rt.manager.diagnosticos.servidores.values()
+        await asyncio.wait_for(asyncio.shield(cliente.arrancar()), 15)
         segundo = await escribir(rt, 'f.py', 'f = ERROR\n')
         await rt.manager.cerrar_diagnosticos()
         return primero, tardo, segundo
@@ -405,7 +405,15 @@ def test_cancelar_el_turno_no_deja_nada_colgado(servidor, sesion, monkeypatch):
 
     async def cancelada():
         tarea = asyncio.ensure_future(escribir(rt, 'h.py', 'h = 1\n'))
-        await asyncio.sleep(1.0)   # el servidor arrancó y no contesta a los diagnósticos
+        async def esperando_diagnosticos():
+            while not rt.manager.diagnosticos.servidores:
+                await asyncio.sleep(0.01)
+            (cliente,) = rt.manager.diagnosticos.servidores.values()
+            await asyncio.shield(cliente.arrancar())
+            while 'textDocument/diagnostic' not in servidor.read_text():
+                await asyncio.sleep(0.01)
+        # La cancelación se prueba durante una petición muda, con el arranque acabado.
+        await asyncio.wait_for(esperando_diagnosticos(), 15)
         tarea.cancel()
         await asyncio.gather(tarea, return_exceptions=True)
         (cliente,) = rt.manager.diagnosticos.servidores.values()
@@ -675,11 +683,13 @@ def test_sourcekit_pide_salir_del_sandbox_una_vez_por_raiz(sourcekit, sesion, pe
     assert 'diagnosticos' not in cuarto
 
 
-def test_sourcekit_en_omitir_permisos_no_pregunta(sourcekit, sesion):
+def test_sourcekit_en_omitir_permisos_no_pregunta(sourcekit, sesion, monkeypatch):
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', '30')   # holgado: aquí no se prueba el plazo
     raiz, rt = sesion
     rt.task['modo'] = 'omitir'
     resultado = editar(rt, 'a.swift', 'let a = ERROR\n')
-    assert resultado['diagnosticos']['errores'] == 1
+    assert resultado['diagnosticos']['errores'] == 1, resultado
+    assert resultado['diagnosticos']['revisado_con'] == ['sourcekit-lsp'], resultado
 
 
 def test_dos_paquetes_swift_en_un_parche(sourcekit, sesion, permisos):
@@ -716,9 +726,23 @@ def test_sourcekit_lsp_de_verdad(sesion, permisos, monkeypatch, tmp_path):
 
 @pytest.mark.skipif(SOURCEKIT is None, reason='sourcekit-lsp no está instalado')
 def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, monkeypatch, tmp_path):
+    """La primera edición de un paquete (que hay que preparar en el sandbox y donde sourcekit-lsp arranca) no
+    espera a los diagnósticos más del plazo que se le da, y la siguiente trae el error. Se mide lo que tarda
+    `tras_editar` frente a ese plazo, con margen para una máquina cargada, no un tiempo absoluto."""
+    plazo = 1.0   # más corto que preparar el paquete: si se esperara a la preparación, se notaría
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
-    monkeypatch.delenv('ALFALFA_DIAGNOSTICOS_ESPERA', raising=False)   # los 3 s de siempre
+    monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', str(plazo))
     monkeypatch.setattr(linters, '_programa', lambda *a, **k: (None, False))
+    duraciones = []
+    original = Diagnosticos.tras_editar
+
+    async def cronometrada(self, *args, **kwargs):
+        inicio = time.monotonic()
+        try:
+            return await original(self, *args, **kwargs)
+        finally:
+            duraciones.append(time.monotonic() - inicio)
+    monkeypatch.setattr(Diagnosticos, 'tras_editar', cronometrada)
     raiz, rt = sesion
     (raiz / 'Sources' / 'Demo').mkdir(parents=True)
     (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\nimport PackageDescription\n'
@@ -726,16 +750,19 @@ def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, mo
     ruta = 'Sources/Demo/Suma.swift'
 
     async def ediciones():
-        inicio = time.monotonic()
         primero = await escribir(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + 1\n}\n')
-        tardo = time.monotonic() - inicio
-        # Hasta que el paquete esté preparado y el servidor arrancado, cada edición dice que no contestó.
+        # Ya no se mide el plazo: hasta que el paquete esté preparado y el servidor arrancado, cada edición
+        # dice que no contestó; con un plazo holgado llega el error.
+        monkeypatch.setenv('ALFALFA_DIAGNOSTICOS_ESPERA', '20')
         segundo = await hasta_que_conteste(rt, ruta, 'public func suma(_ a: Int) -> Int {\n    return a + "b"\n}\n')
         await rt.manager.cerrar_diagnosticos()
-        return primero, tardo, segundo
-    primero, tardo, segundo = asyncio.run(ediciones())
-    assert tardo < 3.8, 'la primera edición pasó del plazo de 3 s'
-    assert 'diagnosticos' in primero
+        return primero, segundo
+    primero, segundo = asyncio.run(ediciones())
+    assert duraciones[0] < plazo + 2.5, ('la primera edición esperó ' + str(round(duraciones[0], 2))
+                                         + ' s a los diagnósticos con un plazo de ' + str(plazo) + ' s')
+    diagnosticos = primero['diagnosticos']
+    assert 'errores' in diagnosticos and 'avisos' in diagnosticos, primero
+    assert diagnosticos.get('revisado_con') or 'no contestó en 1 s' in ' '.join(diagnosticos['sin_respuesta'])
     assert segundo['diagnosticos']['errores'] >= 1, segundo
     assert segundo['diagnosticos']['nuevos'][0].startswith(ruta + ':2:'), segundo
     assert not (raiz / '.build').exists() and not (raiz / '.swiftpm').exists(), 'nadie abrió el paquete con SwiftPM'
@@ -1019,3 +1046,46 @@ def test_los_manifiestos_del_verificador_no_ejecutan_nada(sesion, permisos, monk
     assert not [n for n in nuevas if 'alfalfa' in n.lower() or 'evil' in n.lower() or 'marca' in n.lower()]
     de_sourcekit = [p for p in pedidas if p['motivo'] != 'edicion']   # Manual también pregunta cada edición
     assert len(de_sourcekit) == (0 if modo == 'omitir' else 1)
+
+
+@pytest.mark.skipif(SOURCEKIT is None or SWIFT is None, reason='sourcekit-lsp o swift no están instalados')
+@pytest.mark.parametrize('manifiesto', ['dlsym', 'silgen'])
+def test_control_los_manifiestos_atacan_si_sourcekit_los_evaluara(tmp_path, manifiesto):
+    """Control de la prueba anterior: con el diseño viejo (sourcekit-lsp en modo SwiftPM, que evalúa el
+    manifiesto) y un TMPDIR como el de producción (…/Library/Caches/alfalfa/sourcekit/…/tmp), evil SÍ se
+    ejecuta. Si un día deja de hacerlo (otra cadena de Swift, otro símbolo), la prueba anterior ya no
+    demostraría nada y hay que rehacer los manifiestos. Sólo escribe su marca en un temporal."""
+    raiz = tmp_path / 'paquete'
+    (raiz / 'Sources' / 'Demo').mkdir(parents=True)
+    (raiz / 'herr').mkdir()
+    marca = tmp_path / 'marca-de-evil'
+    (raiz / 'herr' / 'evil').write_text('#!/bin/sh\ntouch ' + str(marca) + '\nexit 1\n')
+    (raiz / 'herr' / 'evil').chmod(0o755)
+    (raiz / 'Package.swift').write_text((MANIFIESTOS_MALICIOSOS / (manifiesto + '.swift')).read_text()
+                                        .replace('EVIL', str(raiz / 'herr' / 'evil')))
+    fuente = raiz / 'Sources' / 'Demo' / 'a.swift'
+    texto = ('@freestanding(expression) public macro evil() -> Int = #externalMacro(module: "Evil", type: "Evil")\n'
+             'public let x: Int = #evil()\n')
+    fuente.write_text(texto)
+    cache = tmp_path / 'Library' / 'Caches' / 'alfalfa' / 'sourcekit' / 'control'
+    (cache / 'tmp').mkdir(parents=True)
+    entorno = dict(os.environ, TMPDIR=str(cache / 'tmp') + os.sep, CLANG_MODULE_CACHE_PATH=str(cache / 'modulos'),
+                   SWIFTPM_MODULECACHE_OVERRIDE=str(cache / 'modulos'))
+    assert 'alfalfa' in entorno['TMPDIR'] and 'alfalfa-paquete' not in entorno['TMPDIR']
+
+    async def con_el_diseno_viejo():
+        cliente = lsp.ClienteLSP('sourcekit-lsp', [SOURCEKIT], raiz, env=entorno, idioma_de=lambda r: 'swift',
+                                 opciones={'backgroundIndexing': False,
+                                           'swiftPM': {'scratchPath': str(cache / 'compilacion')}}, carga=True)
+        try:
+            await cliente.arrancar()
+            await cliente.abrir(fuente, texto)
+            fin = asyncio.get_running_loop().time() + 90
+            while not marca.exists() and asyncio.get_running_loop().time() < fin:
+                with contextlib.suppress(asyncio.TimeoutError, lsp.ServidorCaido):
+                    await cliente.diagnosticos(fuente, asyncio.get_running_loop().time() + 10)
+                await asyncio.sleep(0.5)
+        finally:
+            await cliente.cerrar()
+    asyncio.run(con_el_diseno_viejo())
+    assert marca.exists(), 'con el diseño viejo evil debería ejecutarse: el manifiesto de prueba ya no ataca'
