@@ -966,6 +966,8 @@ class WorkspaceTools:
             raise ValueError('Herramienta no configurada o deshabilitada: ' + name)
         mcp = getattr(self.runtime, 'mcp', None)
         if mcp is not None and mcp.es_propia(name) and not self.runtime.task.get('review'):
+            from ...contenido_externo import autorizar
+            await autorizar(self.runtime, name, args if isinstance(args, dict) else {})
             # El gestor valida contra el esquema cargado y pide el permiso.
             return await mcp.llamar(name, args)
         # Se trabaja con la versión normalizada; lo que envió el modelo queda intacto.
@@ -974,6 +976,8 @@ class WorkspaceTools:
         if self.runtime.task.get('review') and name in ('write_file', 'edit_file', 'run_command', 'run_checks',
                                                         'apply_patch', 'app_action'):
             raise ValueError('Revisión de solo lectura: esta herramienta está deshabilitada.')
+        from ...contenido_externo import autorizar
+        await autorizar(self.runtime, name, args)
         if name == 'update_plan':
             pasos, explicacion = plan_valido(args)
             texto = texto_del_plan(pasos, explicacion)
@@ -1063,7 +1067,8 @@ class WorkspaceTools:
             if name == 'wait_agent':
                 return await subagentes.esperar(args)
             if name == 'send_input':
-                return await subagentes.enviar(args)
+                from ...contenido_externo import MOTIVO
+                return await subagentes.enviar(args, origenes=self.runtime.state.get(MOTIVO, ()))
             if name == 'close_agent':
                 return await subagentes.cerrar(args)
             return subagentes.listar()

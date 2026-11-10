@@ -372,6 +372,11 @@ class Subagentes:
                 historia.pop()  # la llamada que lanza este subagente aún no tiene resultado
             from .proveedores.nativo.historial import Mensajes
             sub.rt.state['messages'] = Mensajes([{'role': 'system', 'content': ''}] + historia[-200:])
+        # Delegar no limpia la procedencia: también el hijo pide permiso por
+        # acciones propuestas a partir de datos que recibió el principal.
+        from .contenido_externo import MOTIVO, restaurar
+        sub.rt.state[MOTIVO] = list(padre_rt.state.get(MOTIVO, ()))
+        restaurar(sub.rt)
         self.agentes[ident] = sub
         self.gestor.event(principal, 'system', 'Subagente ' + ident + ' (' + nombre_tipo + ', ' + task['model']
                           + ') empezó: ' + nombre)
@@ -529,7 +534,7 @@ class Subagentes:
                              'o ciérralo con close_agent.')
         return datos
 
-    async def enviar(self, args):
+    async def enviar(self, args, *, origenes=()):
         sub = self._buscar(args.get('agent'))
         mensaje = str(args.get('message') or '').strip()
         if not mensaje:
@@ -538,6 +543,10 @@ class Subagentes:
             raise ValueError('message es demasiado largo (máximo ' + str(MAX_MENSAJE) + ' caracteres).')
         if sub.estado == 'cerrado':
             raise ValueError('El subagente ' + sub.id + ' está cerrado; lanza otro con spawn_agent.')
+        from .contenido_externo import MOTIVO
+        contaminado = list(dict.fromkeys(list(sub.rt.state.get(MOTIVO, ())) + list(origenes)))
+        sub.rt.state[MOTIVO] = contaminado
+        sub.rt.save()
         if sub.vivo and args.get('interrupt') is not True:
             sub.cola.append(mensaje)
             return dict(sub.resultado(), note='Lo leerá antes de su siguiente respuesta.')
@@ -548,6 +557,7 @@ class Subagentes:
         if len(self.vivos()) >= MAX_VIVOS:
             raise ValueError('Ya hay ' + str(MAX_VIVOS) + ' subagentes trabajando; espera o cierra alguno.')
         sub.rt = self._runtime(sub, self.tipos().get(sub.tipo, TIPOS_INTEGRADOS['general']))
+        sub.rt.state[MOTIVO] = contaminado
         self._empezar(sub, mensaje)
         if args.get('background') is True:
             return dict(sub.resultado(), note='Trabaja en paralelo; recoge su informe con wait_agent.')

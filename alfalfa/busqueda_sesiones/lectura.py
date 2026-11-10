@@ -31,7 +31,10 @@ MAX_TEXTO_HERRAMIENTA = 4000
 HUELLA = 64
 # Llamada que no se pudo leer (una línea más larga que el lote): cualquier salida cuenta como secreta.
 COMODIN = '*'
-EXTERNAS = frozenset({'read_web', 'web_search', 'wait_agent', 'send_input', 'spawn_agent'})
+EXTERNAS = frozenset({'read_web', 'web_search', 'wait_agent', 'send_input', 'spawn_agent', 'list_agents',
+                     'read_file', 'search', 'list_files', 'inspect_image', 'app_state',
+                     'run_command', 'run_checks', 'command_status', 'abrir_habilidad', 'invocar_comando',
+                     'buscar_sesiones', 'buscar_herramientas', 'app_list'})
 ID_VALIDO = re.compile(r'^[A-Za-z0-9_-]{1,80}$')
 # Mensajes de «usuario» que escribe el arnés (sesiones sin `user_messages`).
 PREFIJOS_DEL_ARNES = ('Estado verificado por el runtime', 'Contexto añadido por los hooks',

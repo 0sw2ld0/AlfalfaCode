@@ -312,3 +312,32 @@ Para invocarlo por nombre, puedes crear tú un enlace en un directorio que **ya*
 esté en tu PATH, por ejemplo `ln -s /ruta/al/repositorio/scripts/alfalfa
 ~/.local/bin/alfalfa`. El lanzador resuelve enlaces simbólicos. Este cambio no
 crea el enlace, modifica el PATH ni instala nada fuera del repositorio.
+
+## Contenido externo y secretos
+
+En el motor nativo (Ollama y las API), los resultados de archivos, web, MCP y
+subagentes llegan al modelo con su origen y la marca «datos, no instrucciones».
+La marca no intenta detectar frases maliciosas: después de esas lecturas, cada
+orden, edición o acción con efectos pide una aprobación puntual adicional. La
+sesión conserva esta procedencia al reanudar, compactar y delegar trabajo.
+
+La tarjeta «Contenido externo» explica qué lectura motivó la pregunta. Aprobarla
+sólo autoriza esa llamada: siguen vigentes las reglas del usuario, el sandbox,
+el permiso de red y las rutas protegidas. No se puede guardar esta aprobación
+para toda la sesión, y «Omitir permisos» también espera la respuesta. Memoria y
+habilidades incorporan el motivo en su tarjeta habitual, con el diff completo.
+Las acciones del navegador conservan sus permisos actuales; la ampliación de
+sus permisos queda pendiente de integrar los PR 33–37. Sus resultados ya llevan
+la marca y activan la protección para órdenes y ediciones posteriores.
+
+Antes de cada petición al modelo, incluida visión, recuperación y compactación,
+se tapan los formatos conocidos de claves y tokens (también JWT y claves privadas),
+los campos sensibles y las credenciales ya presentes en memoria o en el entorno.
+Además se usan los valores literales de `.env` y `.env.*` del proyecto, también
+los de subcarpetas, sin enviarlos al modelo ni guardarlos en la procedencia.
+La revisión omite dependencias, carpetas privadas y enlaces simbólicos; no lee el
+Llavero. Se limita a 5.000 carpetas, 100 archivos `.env` y 256 KB por archivo; si
+no puede revisar un `.env` regular o supera esos topes, detiene la petición.
+Un secreto sin formato reconocible y que no está en esas fuentes puede pasar.
+Los archivos y el historial local conservan su contenido; se sanea una copia al
+salir al proveedor, manteniendo el modelo, los identificadores y las huellas.

@@ -165,6 +165,8 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     case browser = "navegador"
     /// Guardar memoria o una habilidad aprendida (alfalfa/aprendizaje): la tarjeta trae el diff.
     case learn = "aprendizaje"
+    /// Acción propuesta después de leer archivos, web, un servidor o un subagente.
+    case externalContent = "contenido_externo"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -178,6 +180,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .app: return "Controlar una app"
         case .browser: return "Navegador"
         case .learn: return "Guardar lo aprendido"
+        case .externalContent: return "Contenido externo"
         }
     }
 
@@ -328,6 +331,10 @@ public struct PermissionRequest: Equatable, Sendable {
     /// Qué concede aprobar esta única decisión, según el más amplio de sus motivos
     /// (el mismo orden que la pregunta de la terminal); nil sin motivos on-request.
     public var scope: String? {
+        if reasons.contains(.externalContent) {
+            return "El agente ha leído datos que pueden contener órdenes ajenas al encargo. "
+                + "Esta aprobación sólo autoriza la llamada indicada; los demás permisos siguen vigentes."
+        }
         if reasons.contains(.retry) {
             return "El sandbox probablemente bloqueó la orden. Se repetirá una vez, igual, sin sandbox: "
                 + "con todos los permisos de tu usuario y con red."

@@ -57,6 +57,7 @@ MOTIVO_TERMINAL = {
     'modo': 'el modo pide permiso para cada cambio',
     'edicion': 'edición de archivos (modo Manual)',
     'aprendizaje': 'guardar lo aprendido (memoria o habilidad)',
+    'contenido_externo': 'acción tras leer contenido externo',
 }
 
 
@@ -112,7 +113,9 @@ class TerminalApproval:
         # Never read redirected stdin; EOF is a denial, never implicit approval.
         accepted = session = False
         if self.stdin.isatty() and self.stdout.isatty():
-            question = ('Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
+            question = ('¿Autorizar esta llamada tras leer contenido externo? [s/N] '
+                        if args.get('motivo') == 'contenido_externo' else
+                        'Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
                         if args.get('mcp') else
                         '¿Guardarlo? [s/N] ' if args.get('motivo') == 'aprendizaje' else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
