@@ -1,11 +1,6 @@
-Volver a un mensaje también deshace los cambios del código, y se puede rehacer.
-Tope de gasto por sesión y por mes, y el ahorro de la caché a la vista.
-Después de cada edición el agente ve los errores del lenguaje y del linter del proyecto.
-Los proyectos preparados para OpenCode, Codex o Claude Code funcionan sin tocar nada.
-Con tu propia clave, todos los modelos de tu cuenta de OpenAI y de Anthropic.
-Memoria y habilidades aprendidas de cada sesión, siempre con tu aprobación.
-Buscar en tus sesiones anteriores, con las claves y contraseñas tapadas.
-Mensajes en cola: copiar, editar, redirigir, quitar y enviar ahora.
-Indicador de actividad con la hoja de alfalfa.
-Se instala con Homebrew o con una sola orden; la web pasa a alfalfacode.cuycoders.dev.
-Más protecciones: la carpeta ~/.alfalfa queda fuera del alcance del agente.
+El agente ve la consola y las peticiones de red del navegador propio.
+Cuando hace falta que tú hagas algo en una página (iniciar sesión, un captcha), te pasa el navegador y sigue después.
+Prueba las páginas en tamaño de móvil, tableta o escritorio, con la vista a escala.
+Señala un elemento o un área de la página con un comentario para decirle al agente qué cambiar.
+En el navegador también espera, pulsa teclas, pasa el ratón y sube archivos.
+Los commits que hace el agente llevan la firma de AlfalfaCode como coautor; se quita en Ajustes ▸ General.
