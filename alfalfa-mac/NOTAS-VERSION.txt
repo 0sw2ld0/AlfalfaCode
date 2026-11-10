@@ -1,7 +1,11 @@
-Claude con tu propia clave de Anthropic: Haiku 5.5, Sonnet 5.5 y Opus 5.5, con caché de prompts.
-Navegador propio dentro de la app para que el agente abra, lea y pruebe páginas sin Chrome.
-La lista de modelos dice cuáles ven imágenes y avisa antes de mandar una a un modelo que no las ve.
-Modos Ahorro y Contexto completo para los modelos que cobran más por contexto largo, como GPT-6 Luna y Claude Haiku 5.5.
-Las órdenes del agente se agrupan y cada una dice para qué sirve.
-Sesiones mucho más ligeras: la conversación y la evidencia van en archivos que sólo crecen.
-Enlaces a la privacidad y a Alfalfa Cloud en el menú de la cuenta y en Proveedores.
+Volver a un mensaje también deshace los cambios del código, y se puede rehacer.
+Tope de gasto por sesión y por mes, y el ahorro de la caché a la vista.
+Después de cada edición el agente ve los errores del lenguaje y del linter del proyecto.
+Los proyectos preparados para OpenCode, Codex o Claude Code funcionan sin tocar nada.
+Con tu propia clave, todos los modelos de tu cuenta de OpenAI y de Anthropic.
+Memoria y habilidades aprendidas de cada sesión, siempre con tu aprobación.
+Buscar en tus sesiones anteriores, con las claves y contraseñas tapadas.
+Mensajes en cola: copiar, editar, redirigir, quitar y enviar ahora.
+Indicador de actividad con la hoja de alfalfa.
+Se instala con Homebrew o con una sola orden; la web pasa a alfalfacode.cuycoders.dev.
+Más protecciones: la carpeta ~/.alfalfa queda fuera del alcance del agente.
