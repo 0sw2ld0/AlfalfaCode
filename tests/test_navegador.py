@@ -9,6 +9,7 @@ import pytest
 
 from alfalfa import navegador
 from alfalfa.navegador import Navegador, destino, parece_que_cambia
+from alfalfa.navegador_sitios import Sitios
 from alfalfa.permisos import modos, sesion
 from alfalfa.proveedores.nativo.herramientas import WorkspaceTools
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
@@ -44,6 +45,12 @@ class App:
         self.permisos = dict(permisos or {})
 
     async def __call__(self, accion, campos, tiempo):
+        # La política se prueba en test_navegador_sitios; aquí se verifica y se separa del payload de cada acción.
+        campos = dict(campos)
+        if 'sitios' in campos:
+            assert campos.pop('sitios')['version'] == 1
+            campos.pop('visita_sitio')
+            campos.pop('visita_id')
         self.peticiones.append((accion, campos))
         tipo = self.permisos.get(accion)
         if tipo and tipo not in campos.get('permitido', []):
@@ -86,6 +93,13 @@ class Runtime:
     def __init__(self, tmp_path, respuestas=(), modo='auto', capacidades=()):
         self.task = {'modo': modo, 'runtime_capabilities': list(capacidades)}
         self.manager = Manager()
+        self.manager.home = tmp_path / 'motor'
+        # Las pruebas anteriores aíslan otros permisos: estos sitios están aprobados explícitamente.
+        Sitios(self.manager.home, tmp_path).guardar({'permitidos': [
+            'https://ejemplo.org', 'https://e.org', 'https://otra.org',
+            'http://127.0.0.1:8000', 'http://127.0.0.1:9000', 'http://127.0.0.1:80',
+            'http://127.0.0.1.nip.io:8000', 'http://127.0.0.1.nip.io:80',
+            'http://10.0.0.1', 'http://[::ffff:127.0.0.1]']})
         self.respuestas = list(respuestas)
         self.pedidos = []
         self.directory = tmp_path / 'sesion'
@@ -190,7 +204,7 @@ def test_javascript_que_cambia(script):
 
 # ---------------------------------------------------------------- permisos
 
-def test_navegar_a_una_pagina_publica_no_pregunta(tmp_path):
+def test_navegar_a_una_pagina_publica_aprobada_no_repite_permiso(tmp_path):
     nav, app = navegador_con()
     rt = Runtime(tmp_path)
     resultado = correr(nav.llamar(rt, 'browser_navigate', {'url': 'https://ejemplo.org/'}))
@@ -502,6 +516,8 @@ def test_turno_con_captura_adjunta_la_imagen(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     m = TerminalManager('Mira la página.', home=tmp_path / 'alfalfa', transport=Transport(io.StringIO()),
                         navegador=True)
+    # Esta prueba verifica la imagen en el contexto, con el sitio ya aprobado en este proyecto.
+    Sitios(m.home, tmp_path).conceder('https://ejemplo.org/', 'proyecto')
     app = App()
     m.navegador.pedir = app
     payloads = []

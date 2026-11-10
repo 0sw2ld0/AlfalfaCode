@@ -555,7 +555,7 @@ public struct Timeline: Equatable, Sendable {
                     items[index] = .learning(id: itemID, proposal, state: state)
                 }
             }
-        case .memory, .learned, .learnedSkillFiles:
+        case .memory, .learned, .learnedSkillFiles, .browserSiteSettings:
             break
         }
     }

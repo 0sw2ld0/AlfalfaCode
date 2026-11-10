@@ -303,11 +303,14 @@ public struct PermissionRequest: Equatable, Sendable {
     public var app: AppTarget?
     /// Lo que cambia al guardar memoria o una habilidad aprendida (motivo `aprendizaje`).
     public var diff: String?
+    /// Origen exacto y proyecto; habilita los cuatro alcances del permiso de navegación.
+    public var site: BrowserSitePermission?
 
     public init(id: String, argv: [String], purpose: String, reason: PermissionReason? = nil,
                 reasons: [PermissionReason]? = nil, justification: String? = nil, rule: String? = nil,
                 retryOf: String? = nil, detail: String? = nil, mcp: McpCall? = nil, forSession: Bool = false,
-                app: AppTarget? = nil, diff: String? = nil) {
+                app: AppTarget? = nil, diff: String? = nil, site: BrowserSitePermission? = nil) {
+        self.site = site
         self.diff = diff
         self.forSession = forSession
         self.app = app
@@ -702,6 +705,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case unqueued(id: String, removed: Bool, reason: String?)
     /// `alfalfa --memoria --json`: los tres almacenes de memoria y los ajustes de aprendizaje.
     case memory(MemoryState)
+    case browserSiteSettings(BrowserSiteSettingsState)
     /// `alfalfa --aprendido --json`: habilidades aprendidas, propuestas sin revisar y ajustes.
     case learned(LearnedState)
     /// `alfalfa --aprendido ver NOMBRE --json`: los archivos de una habilidad aprendida.
@@ -723,6 +727,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
               object["version"] as? Int == protocolVersion,
               let kind = object["tipo"] as? String else { return nil }
         switch kind {
+        case "navegador_sitios":
+            return BrowserSiteSettingsState(object).map { .browserSiteSettings($0) }
         case "sesion":
             return sessionInfo(object).map(Self.session)
         case "evento":
@@ -740,7 +746,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                                  justification: text(object["justificacion"]), rule: text(object["regla"]),
                                                  retryOf: text(object["reintento_de"]), detail: text(object["sin_sandbox"]),
                                                  mcp: mcpCall(object["mcp"]), forSession: bool(object["para_sesion"]) ?? false,
-                                                 app: appTarget(object["app"]), diff: text(object["diff"])))
+                                                 app: appTarget(object["app"]), diff: text(object["diff"]),
+                                                 site: BrowserSitePermission(object["sitio"])))
         case "permiso_resuelto":
             guard let id = object["id"] as? String, let approved = bool(object["aprobado"]) else { return nil }
             return .permissionResolved(id: id, approved: approved, reason: object["motivo"] as? String ?? "",

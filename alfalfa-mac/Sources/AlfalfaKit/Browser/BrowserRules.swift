@@ -35,16 +35,46 @@ public enum BrowserRules {
 
     /// El JSON de las reglas para los orígenes aprobados («host:puerto»).
     public static func json(allowing origins: Set<String>) -> String {
+        json(allowing: origins, sites: nil)
+    }
+
+    static func json(allowing origins: Set<String>, sites: BrowserSitePolicy?) -> String {
         let prefix = "^[a-z]+://([^/@]*@)?"
         let approved = origins.sorted().map { prefix + pattern(forOrigin: $0) }
-        var rules: [[String: Any]] = localHosts.map { host in
+        var rules: [[String: Any]] = []
+        if let sites, sites.strict {
+            rules.append(["trigger": ["url-filter": "^https?://"], "action": ["type": "block"]])
+            for origin in sites.allowed.sorted() where URL(string: origin).map({ !sites.blocks($0) }) == true {
+                rules.append(["trigger": ["url-filter": exactPattern(origin)],
+                              "action": ["type": "ignore-previous-rules"]])
+            }
+            if let visitRule = visitException(sites) { rules.append(visitRule) }
+        }
+        // Las excepciones de sitios van ANTES de la barrera local; no pueden levantarla.
+        rules += localHosts.map { host in
             var trigger: [String: Any] = ["url-filter": prefix + host]
             if !approved.isEmpty { trigger["unless-top-url"] = approved }
             return ["trigger": trigger, "action": ["type": "block"]]
         }
         // Lo que viene de un origen aprobado tampoco se bloquea (también su propio documento).
-        for pattern in approved {
+        let exceptions: [String]
+        if let sites, sites.strict {
+            exceptions = sites.allowed.sorted().filter { value in
+                guard let url = URL(string: value) else { return false }
+                return origins.contains(BrowserAddress.origin(of: url)) && !sites.blocks(url)
+            }.map(exactPattern)
+        } else { exceptions = approved }
+        for pattern in exceptions {
             rules.append(["trigger": ["url-filter": pattern], "action": ["type": "ignore-previous-rules"]])
+        }
+        if let sites, sites.strict, let visit = sites.visit, let url = URL(string: visit.origin),
+           origins.contains(BrowserAddress.origin(of: url)), let visitRule = visitException(sites) {
+            rules.append(visitRule)
+        }
+        if let sites, sites.strict {
+            for origin in sites.denied.sorted() {
+                rules.append(["trigger": ["url-filter": exactPattern(origin)], "action": ["type": "block"]])
+            }
         }
         let data = (try? JSONSerialization.data(withJSONObject: rules, options: [.sortedKeys])) ?? Data("[]".utf8)
         return String(decoding: data, as: UTF8.self)
@@ -60,6 +90,23 @@ public enum BrowserRules {
         return escapedHost + ":" + port + "/"
     }
 
+    static func exactPattern(_ origin: String) -> String {
+        guard let url = URL(string: origin), let scheme = url.scheme, let host = url.host, let port = url.port else {
+            return "^$"
+        }
+        let normalPort = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
+        return "^" + scheme + "://" + escape(host)
+            + (normalPort ? "(:" + String(port) + ")?/" : ":" + String(port) + "/")
+    }
+
+    /// Un lease no autoriza recursos desde otro origen mientras llega el aviso de commit.
+    private static func visitException(_ sites: BrowserSitePolicy) -> [String: Any]? {
+        guard let visit = sites.visit, let url = URL(string: visit.origin), !sites.blocks(url) else { return nil }
+        let pattern = exactPattern(visit.origin)
+        return ["trigger": ["url-filter": pattern, "if-top-url": [pattern]],
+                "action": ["type": "ignore-previous-rules"]]
+    }
+
     private static func escape(_ text: String) -> String {
         var out = ""
         for character in text {
@@ -72,8 +119,9 @@ public enum BrowserRules {
     /// Compila (o reutiliza) la lista para esos orígenes. Va a un almacén propio en la carpeta temporal,
     /// con el nombre según los orígenes: dos sesiones con los mismos permisos comparten la misma.
     @MainActor
-    static func compile(allowing origins: Set<String>) async throws -> WKContentRuleList {
-        let text = json(allowing: origins)
+    static func compile(allowing origins: Set<String>, sites: BrowserSitePolicy? = nil)
+        async throws -> WKContentRuleList {
+        let text = json(allowing: origins, sites: sites)
         let digest = SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
         let identifier = "alfalfa-red-local-" + digest.prefix(24)
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("alfalfa-reglas-navegador")
