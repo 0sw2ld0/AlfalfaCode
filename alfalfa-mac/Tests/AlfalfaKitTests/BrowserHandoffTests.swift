@@ -66,6 +66,29 @@ final class BrowserHandoffTests: XCTestCase {
         }
     }
 
+    func testCancelOfAQueuedHandoffDoesNotAppearLater() async throws {
+        let engine = BrowserEngine()
+        defer { engine.close() }
+        let script = "await new Promise(r => setTimeout(r, 300)); return 1"
+        let previous = Task {
+            await engine.perform(BrowserRequest(id: "anterior", action: "js", fields: ["codigo": script]))
+        }
+        try await Task.sleep(nanoseconds: 30_000_000)
+        let handoff = Task {
+            await engine.perform(BrowserRequest(id: "relevo", action: "relevo", fields: ["motivo": "Espera."]))
+        }
+        for _ in 0..<100 where engine.queuedHandoffs["relevo"] == nil {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        _ = await engine.perform(BrowserRequest(id: "relevo", action: "cancelar_relevo"))
+        _ = await previous.value
+        let reply = await handoff.value
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("antes de que empezara") ?? false)
+        XCTAssertNil(engine.handoff)
+        XCTAssertTrue(engine.queuedHandoffs.isEmpty)
+    }
+
     private func waitForHandoff(_ engine: BrowserEngine) async throws {
         for _ in 0..<100 where engine.handoff == nil { try await Task.sleep(nanoseconds: 20_000_000) }
         XCTAssertNotNil(engine.handoff)

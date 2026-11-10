@@ -36,6 +36,8 @@ public final class BrowserEngine: NSObject {
     @Published public internal(set) var handoff: BrowserHandoff?
     var handoffContinuation: CheckedContinuation<BrowserReply, Never>?
     var handoffDeadline: Task<Void, Never>?
+    /// Relevos en la cola: true si el motor ya los canceló antes de que llegaran a ejecutarse.
+    var queuedHandoffs: [String: Bool] = [:]
 
     public let webView: WKWebView
 
@@ -112,17 +114,27 @@ public final class BrowserEngine: NSObject {
     /// Una petición del agente, de una en una. Abre el panel: el usuario ve lo que hace.
     public func perform(_ request: BrowserRequest) async -> BrowserReply {
         if request.action == "cancelar_relevo" {
+            if queuedHandoffs[request.id] != nil { queuedHandoffs[request.id] = true }
             cancelHandoff(id: request.id)
             return .success(request.id, [:])
         }
         if handoff != nil {
             return .failure(request.id, "El navegador está esperando a la persona.")
         }
+        if request.action == "relevo" {
+            guard queuedHandoffs.count < 100 else {
+                return .failure(request.id, "Hay demasiados relevos pendientes del navegador.")
+            }
+            queuedHandoffs[request.id] = false
+        }
         let previous = tail
         let task = Task { @MainActor [weak self] () -> BrowserReply in
             await previous?.value
             guard let self, !self.isClosed else {
                 return .failure(request.id, "El navegador de la sesión se cerró.")
+            }
+            if request.action == "relevo", self.queuedHandoffs.removeValue(forKey: request.id) == true {
+                return .failure(request.id, "El motor canceló el relevo antes de que empezara.")
             }
             guard self.handoff == nil else {
                 return .failure(request.id, "El navegador está esperando a la persona.")
@@ -138,6 +150,7 @@ public final class BrowserEngine: NSObject {
     public func close() {
         guard !isClosed else { return }
         cancelHandoff()
+        queuedHandoffs.removeAll()
         isClosed = true
         isPanelOpen = false
         activity = nil
