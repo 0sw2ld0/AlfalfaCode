@@ -25,6 +25,7 @@ struct BrowserPane: View {
             } else {
                 Divider().overlay(Theme.border)
             }
+            if let handoff = browser.handoff { BrowserHandoffCard(browser: browser, handoff: handoff) }
             if let line = agentLine { agentBanner(line) }
             if let notice = browser.notice { noticeBanner(notice) }
             ZStack {

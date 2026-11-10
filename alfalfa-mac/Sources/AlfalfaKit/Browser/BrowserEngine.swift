@@ -11,6 +11,11 @@ import WebKit
 @MainActor
 public final class BrowserEngine: NSObject {
 
+    // MARK: - Constantes
+
+    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
+    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
+
     // MARK: - Propiedades
 
     @Published public private(set) var url: URL?
@@ -27,6 +32,10 @@ public final class BrowserEngine: NSObject {
     @Published public private(set) var notice: String?
     /// El panel del navegador está abierto en la ventana de la sesión.
     @Published public var isPanelOpen = false
+
+    @Published public internal(set) var handoff: BrowserHandoff?
+    var handoffContinuation: CheckedContinuation<BrowserReply, Never>?
+    var handoffDeadline: Task<Void, Never>?
 
     public let webView: WKWebView
 
@@ -58,8 +67,6 @@ public final class BrowserEngine: NSObject {
     /// `close()`: ya no hace nada.
     public private(set) var isClosed = false
 
-    /// Tope de una descarga: más grande, se cancela y se borra lo descargado.
-    public static let maxDownloadBytes: Int64 = 200 * 1024 * 1024
     /// Lo que espera una descarga antes de cancelarla (el motor espera 300 s la respuesta).
     var downloadTimeout: TimeInterval = 280
 
@@ -104,11 +111,21 @@ public final class BrowserEngine: NSObject {
 
     /// Una petición del agente, de una en una. Abre el panel: el usuario ve lo que hace.
     public func perform(_ request: BrowserRequest) async -> BrowserReply {
+        if request.action == "cancelar_relevo" {
+            cancelHandoff(id: request.id)
+            return .success(request.id, [:])
+        }
+        if handoff != nil {
+            return .failure(request.id, "El navegador está esperando a la persona.")
+        }
         let previous = tail
         let task = Task { @MainActor [weak self] () -> BrowserReply in
             await previous?.value
             guard let self, !self.isClosed else {
                 return .failure(request.id, "El navegador de la sesión se cerró.")
+            }
+            guard self.handoff == nil else {
+                return .failure(request.id, "El navegador está esperando a la persona.")
             }
             return await self.performNow(request)
         }
@@ -120,6 +137,7 @@ public final class BrowserEngine: NSObject {
     /// la pantalla y suelta delegados y observadores. Quien lo tiene suelta luego la referencia.
     public func close() {
         guard !isClosed else { return }
+        cancelHandoff()
         isClosed = true
         isPanelOpen = false
         activity = nil
@@ -146,6 +164,7 @@ public final class BrowserEngine: NSObject {
         do {
             if request.action == "abrir" { allowedOrigins.formUnion(request.strings("red_local")) }
             await updateRules()
+            if request.action == "relevo" { return await beginHandoff(request) }
             var result = try await run(request)
             if let permission = result.removeValue(forKey: "permiso") as? [String: Any],
                let kind = permission["tipo"] as? String {
@@ -448,6 +467,7 @@ extension BrowserEngine {
         case "captura": return "Haciendo una captura"
         case "js":
             return request.bool("modifica") ? "Ejecutando JavaScript que cambia la página" : "Ejecutando JavaScript"
+        case "relevo": return "Esperando a la persona"
         case "descargar": return "Descargando " + (request.string("url") ?? "")
         default: return request.action
         }
