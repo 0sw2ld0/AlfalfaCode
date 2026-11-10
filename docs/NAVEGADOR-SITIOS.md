@@ -82,3 +82,7 @@ se informa de ello para releer la página antes de repetirla.
 La consulta `alfalfa --navegador-sitios --json` no modifica nada. El canal interactivo
 `--navegador-sitios --stdio` sólo guarda tras una respuesta de permiso con el ID
 de la propuesta pendiente. No hay herramienta del modelo para ampliar las listas.
+
+Un adaptador de CuyBrowser debe comprobar capacidades de origen exacto, leases y
+red local antes de ejecutar. El modo estricto de subrecursos no está soportado por
+CuyBrowser y debe rechazarse explícitamente, sin sustituirlo por reglas de host.
