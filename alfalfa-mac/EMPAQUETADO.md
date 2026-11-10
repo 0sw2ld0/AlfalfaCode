@@ -188,9 +188,10 @@ No hace commit ni push. Se niega a escribir en un clon del tap si el bottle no e
 release, porque la fórmula de ese tap no se podría instalar. En las plantillas del
 repositorio sólo avisa.
 
-Las plantillas de `distribucion/homebrew` apuntan ahora a v0.99.1. Esa release sólo trae el
-DMG y `version.json`, no el bottle, así que **no se publican así**. El tap se crea con la
-primera release que lleve el bottle (`publicar.sh` lo pone en la orden `gh release create`).
+El tap `0sw2ld0/homebrew-tap` existe desde v0.99.2, la primera release con bottle. Las
+plantillas de `distribucion/homebrew` apuntan a esa versión. Cada release lleva además una
+copia del DMG llamada `AlfalfaCode.dmg`: el botón «Descargar para Mac» de la web enlaza a
+`releases/latest/download/AlfalfaCode.dmg` (`publicar.sh` la deja en `dist/`).
 
 `.github/workflows/tap.yml` lo hace solo al publicar una release, o a mano con su versión:
 

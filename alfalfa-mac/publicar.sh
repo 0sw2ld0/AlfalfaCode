@@ -128,8 +128,13 @@ PY
 # --- 7. Bottle de Homebrew de la CLI: el motor del DMG tal cual (ver distribucion/botella.sh) ----
 BOTELLA="dist/alfalfa-$VERSION.arm64_sonoma.bottle.tar.gz"
 echo "bottle de la fórmula alfalfa → $BOTELLA ($(../distribucion/botella.sh "$DMG" "$VERSION" dist))"
+
+# --- 8. Copia con nombre fijo: el botón «Descargar para Mac» de la web apunta a
+#        releases/latest/download/AlfalfaCode.dmg, que sólo existe si cada release la trae.
+FIJO="dist/AlfalfaCode.dmg"
+cp "$DMG" "$FIJO"
 echo
 echo "Para publicarlo (la release tiene que quedar como «Latest»; el actualizador lee releases/latest):"
-echo "  gh release create $ETIQUETA $DMG dist/version.json $BOTELLA --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
+echo "  gh release create $ETIQUETA $DMG $FIJO dist/version.json $BOTELLA --latest --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
 echo "Al publicarla, .github/workflows/tap.yml pone el tap 0sw2ld0/homebrew-tap (cask y fórmula) en $VERSION."
 echo "instalar.sh (curl) no necesita nada más: lee version.json y el DMG de la última release."
