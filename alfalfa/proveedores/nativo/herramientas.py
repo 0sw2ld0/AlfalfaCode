@@ -788,6 +788,10 @@ class WorkspaceTools:
             raise ValueError('Archivo con enlaces duros: puede compartir contenido con una carpeta protegida.')
         if escritura:
             from ...complementos.rutas_habilidades import es_habilidad
+            from ...seatbelt import ruta_comparable
+            if any(ruta_comparable(resolved) == ruta_comparable(p)
+                   for p in getattr(self.runtime.manager, 'rutas_equipo', ())):
+                raise ValueError('La configuración de equipo se edita fuera de la sesión de AlfalfaCode.')
             if es_habilidad(self.root, resolved):
                 raise ValueError('Las habilidades se cambian con la herramienta habilidad y su tarjeta de aprobación; '
                                  'no con las herramientas de archivos.')
@@ -974,6 +978,29 @@ class WorkspaceTools:
         return digest(identity.encode())
 
     async def call(self, name, args):
+        auditoria = getattr(self.runtime.manager, 'auditoria_equipo', None)
+        if auditoria is None:
+            return await self._call_con_diagnosticos(name, args)
+        specs = list(self.runtime.tool_specs) + list(getattr(self.runtime, 'complementos_tools', ()))
+        conocida = any(s.get('function', {}).get('name') == name for s in specs)
+        mcp = getattr(self.runtime, 'mcp', None)
+        etiqueta = 'mcp' if mcp is not None and mcp.es_propia(name) else name if conocida else 'desconocida'
+        with auditoria.herramienta(self.runtime.task, etiqueta) as registro:
+            resultado = await self._call_con_diagnosticos(name, args)
+            salida = resultado if isinstance(resultado, dict) else {}
+            fallo = 'error' in salida or salida.get('exit_code') or salida.get('timed_out') or salida.get('ok') is False
+            registro['estado'] = 'error' if fallo else 'terminada'
+            if type(salida.get('exit_code')) is int:
+                registro['codigo_salida'] = salida['exit_code']
+            operacion = salida.get('operation_id')
+            if name in ('run_command', 'run_checks') and isinstance(operacion, str):
+                if re.fullmatch(r'operation-[0-9]{6,12}', operacion):
+                    registro['operacion'] = operacion
+            if salida.get('en_segundo_plano') is True:
+                registro['segundo_plano'] = True
+            return resultado
+
+    async def _call_con_diagnosticos(self, name, args):
         result = await self._call(name, args)
         if name in EDICIONES and isinstance(result, dict) and 'error' not in result:
             # Los errores de lo que se acaba de editar, en el resultado del mismo paso

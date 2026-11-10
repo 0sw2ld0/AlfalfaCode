@@ -102,16 +102,20 @@ class TerminalApproval:
         self.denied = 0
 
     async def __call__(self, args):
+        from ..auditoria_equipo import marcar_respuesta
+
         command = shlex.join(args['argv'])
         print(describe(args, command), file=self.stdout, flush=True)
         # Ejecutar sin sandbox, y cualquier excepción on-request, nunca se concede en automático.
         unsandboxed = bool(args.get('sin_sandbox'))
         folder = self.root / args['cwd'] if isinstance(args.get('cwd'), str) and args['cwd'] not in ('', '.') else None
         if self.auto and not unsandboxed and not args.get('motivo') and solo_lectura(args['argv'], self.root, folder):
+            marcar_respuesta('solo_lectura')
             print('AlfalfaCode · Lectura aprobada automáticamente.', file=self.stdout, flush=True)
             return
         # Never read redirected stdin; EOF is a denial, never implicit approval.
         accepted = session = False
+        marcar_respuesta('sin_respuesta')
         site_scope = None
         if self.stdin.isatty() and self.stdout.isatty():
             question = ('¿Autorizar esta llamada tras leer contenido externo? [s/N] '
@@ -141,7 +145,9 @@ class TerminalApproval:
             loop.add_reader(fd, lambda: ready.done() or ready.set_result(None))
             try:
                 await ready
-                respuesta = self.stdin.readline(100).strip().casefold()
+                linea = self.stdin.readline(100)
+                respuesta = linea.strip().casefold()
+                marcar_respuesta('terminal' if linea else 'sin_respuesta')
                 session = bool(args.get('para_sesion')) and respuesta in ('t', 'todo', 'sesion', 'sesión')
                 accepted = session or respuesta in ('s', 'si', 'sí')
                 if args.get('sitio'):

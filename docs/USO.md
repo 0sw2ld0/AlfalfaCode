@@ -437,3 +437,70 @@ las pruebas ni una comprobación de que la app se reconstruyó correctamente.
 
 La [demo reproducible](demos/interfaz-a13/README.md) cambia un botón de rojo a verde
 con WebKit y muestra ambas imágenes en la tarjeta.
+
+## Reglas de equipo
+
+Guarda `.alfalfa/equipo.toml` en la raíz del proyecto y súbelo al repositorio
+para compartir la política. AlfalfaCode lo busca en la raíz del worktree Git,
+también si abres una subcarpeta. En una carpeta sin Git, lo busca en la carpeta
+de trabajo. Se usa la misma política en la app de Mac y en la CLI.
+
+```toml
+modelos = ["qwen3:8b", "openai/gpt-5.4-mini"]
+
+[permisos]
+modos = ["manual", "ediciones", "plan"]
+
+[presupuesto]
+sesion = 2.50
+mes = 20
+
+[[regla]]
+patron = ["git", "push"]
+decision = "preguntar"
+
+[[regla]]
+patron = ["git", "reset", "--hard"]
+decision = "prohibida"
+```
+
+- **Modelos.** La lista compara el identificador completo y su proveedor.
+  `qwen3:8b` y `ollama/qwen3:8b` nombran el mismo modelo. Si tu elección o tu modelo
+  habitual queda fuera, la sesión muestra las opciones permitidas para que elijas.
+  También se valida el modelo de los subagentes,
+  la revisión de código y las peticiones auxiliares, como el repaso de aprendizaje.
+  Con una lista de modelos o un tope de equipo, las imágenes usan la visión del
+  modelo de la sesión, si la admite.
+- **Permisos.** Puedes limitar los modos a `auto`, `manual`, `ediciones`, `plan` u
+  `omitir`. Si abres sin elegir un modo y el habitual queda fuera, se usa el
+  primer modo permitido que sea más estricto. Si todos relajan los permisos,
+  la sesión requiere una elección explícita. Las reglas de prefijo para `run_command` y `run_checks`
+  admiten `preguntar` y `prohibida`. Se combinan con tus reglas personales y
+  gana la más estricta. Una regla de equipo que pregunta requiere una respuesta
+  incluso en «Omitir permisos». El sandbox, las reglas de contenido externo y
+  las demás comprobaciones de permisos siguen aplicándose.
+  Consulta la decisión de las reglas con `alfalfa --comprobar-orden <orden>`.
+- **Topes.** Los importes son dólares positivos. Se aplica el menor de cada
+  tope de equipo y tu tope personal. El mensual usa el gasto de este Mac que ya
+  muestra AlfalfaCode. Los modelos de pago sin precio conocido se rechazan si
+  hay un tope de equipo. El corte usa el presupuesto existente, que estima la
+  entrada antes de pedirla y contabiliza la respuesta con las métricas del
+  proveedor. El gasto se calcula en cada instalación.
+
+Cada campo es opcional. Si falta el archivo, se usan tus ajustes. Si el archivo
+es inválido, se indica el error al abrir la sesión. La política se carga al
+abrir o reanudar y se conserva durante esa sesión. Los subagentes y los encargos
+en cola heredan la política de la sesión que los lanza. Para aplicar una edición
+del archivo, vuelve a abrir la sesión. Si cambió la política, caducan los
+permisos guardados para esa sesión.
+
+La app y la CLI indican dónde consultar `equipo.jsonl`, dentro de la carpeta
+privada de la sesión. Cada fila indica la sesión, el agente, el turno y la
+huella de la política. El registro enlaza el inicio y resultado de cada
+herramienta con sus decisiones de permiso. Una respuesta de la terminal o del
+cliente de la app se atribuye a la cuenta local que ejecuta AlfalfaCode. Las
+aprobaciones automáticas indican su origen y las reutilizaciones enlazan con
+el permiso de sesión guardado. Las órdenes incluyen el identificador de su
+registro de ejecución para consultar el detalle cuando haga falta. El JSONL
+omite argumentos, mensajes, salidas y contenido de archivos. Se guarda
+localmente y queda fuera del repositorio.

@@ -180,7 +180,8 @@ class ColaEncargos:
                 transport=transporte, parent=self.manager.task['id'], read_only=self.manager.read_only,
                 compact_limit=self.manager.compact_limit, firma=self.manager.firma.activa(), auto=self.manager.auto,
                 keep_awake=self.manager.despierto.activo,
-                diagnosticos=self.manager.diagnosticos.activos() if self.manager.diagnosticos else False)
+                diagnosticos=self.manager.diagnosticos.activos() if self.manager.diagnosticos else False,
+                reglas_equipo=self.manager.equipo)
             self.gestores[ident] = hijo
             hijo.task['titulo'] = fila['titulo']
             hijo.presupuesto = self.manager.presupuesto

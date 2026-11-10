@@ -11,6 +11,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from uuid import uuid4
 
+from .equipo import ErrorDeEquipo
 from .permisos.terminal import solo_lectura
 
 VERSION = 2
@@ -126,6 +127,8 @@ class Transport:
                   **({'sesion': True} if approved and session else {}),
                   **({'sitio': site} if approved and site else {}))
         if not future.done():
+            future.origen_equipo = {'Respuesta del cliente': 'cliente_stdio', 'solo_lectura': 'solo_lectura',
+                                    'Sesión interrumpida': 'interrumpido'}.get(reason, 'sin_respuesta')
             future.set_result(site if approved and site else 'sesion' if approved and session else approved)
 
     def stop(self):
@@ -446,6 +449,8 @@ class Transport:
                     transport.resolve(ident, True, 'solo_lectura')
                 try:
                     approved = await future
+                    from .auditoria_equipo import marcar_respuesta
+                    marcar_respuesta(getattr(future, 'origen_equipo', 'sin_respuesta'))
                 finally:
                     transport.for_session.discard(ident)
                     transport.for_site.discard(ident)
@@ -498,6 +503,7 @@ async def run(args, transport):
                        **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}),
                        **({'continuada_de': manager.task['continuada_de']['sesion']}
                           if isinstance(manager.task.get('continuada_de'), dict) else {}))
+        manager.anunciar_equipo()
         # Los topes y lo gastado en la sesión y en el mes, para el panel y los Ajustes.
         topes = manager.presupuesto.para_el_cliente()
         if topes:
@@ -565,7 +571,7 @@ async def run(args, transport):
                 return
             try:
                 if accion == 'preparar':
-                    manager.task.update(transport.take_settings())
+                    manager.aplicar_ajustes(transport.take_settings())
                     manager.cola_encargos.preparar(valor.get('encargos'), valor.get('modo', 'serie'),
                                                     valor.get('paralelos', 2))
                 elif accion == 'iniciar':
@@ -659,7 +665,10 @@ async def run(args, transport):
             manager.approval.denied = 0
             cambios = transport.take_settings()
             if cambios:
-                manager.task.update(cambios)
+                try:
+                    manager.aplicar_ajustes(cambios)
+                except ErrorDeEquipo as exc:
+                    transport.emit('error', texto=str(exc))
                 manager.save()
                 transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                                modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
@@ -711,6 +720,11 @@ async def run(args, transport):
             if transport.compact_pending:
                 transport.compact_now, transport.compact_pending = transport.compact_pending, False
             prompt = await transport.next_message()
+    except ErrorDeEquipo as exc:
+        code = 1
+        transport.emit('error', texto=str(exc))
+        if manager:
+            manager.task.update(status='failed', summary=str(exc))
     except Exception:
         code = 1
         transport.emit('error', texto='No se pudo iniciar o ejecutar la sesión.')
@@ -1004,7 +1018,7 @@ def history(ident):
 
 def check_command(argv):
     """`alfalfa --comprobar-orden ARGV`: lo que deciden las reglas, como `codex execpolicy check`."""
-    from . import reglas
+    from . import equipo, reglas
     from .terminal import home_dir
     home = home_dir()
     transport = Transport(sys.stdout)
@@ -1012,8 +1026,10 @@ def check_command(argv):
         transport.emit('error', texto='Indica la orden que quieres comprobar.')
         return 1
     try:
-        evaluation = reglas.desde_hogar(home).evaluar(list(argv))
-    except reglas.ReglasInvalidas as exc:
+        personales = reglas.desde_hogar(home)
+        politica = equipo.cargar(Path.cwd())
+        evaluation = (politica.combinar(personales) if politica else personales).evaluar(list(argv))
+    except (reglas.ReglasInvalidas, ErrorDeEquipo) as exc:
         transport.emit('error', texto=str(exc))
         return 1
     transport.emit('reglas', orden=list(argv), **evaluation.como_dict())

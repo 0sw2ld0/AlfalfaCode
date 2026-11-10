@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import httpx
 
-from . import __version__, agents_md, deshacer, procesos, proveedores
+from . import __version__, agents_md, deshacer, equipo, procesos, proveedores
 from . import reglas as reglas_usuario
 from . import sesiones as registro
 from .hooks import HooksDeSesion, motor_de_sesion
@@ -231,14 +231,20 @@ def private_directory(path):
     return path
 
 
+_CARGAR_EQUIPO = object()
+
+
 class TerminalManager:
     TERMINADAS = {'completed', 'failed', 'interrupted', 'blocked'}
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
-                 cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa'):
+                 cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', reglas_equipo=_CARGAR_EQUIPO):
         cwd = Path(cwd or Path.cwd()).resolve()
+        self.equipo = equipo.cargar(cwd) if reglas_equipo is _CARGAR_EQUIPO else reglas_equipo
+        self.rutas_equipo = (self.equipo.ruta, equipo.raiz_proyecto(cwd) / equipo.ORIGEN) if self.equipo else ()
+        self.auditoria_equipo = None
         self.transport = transport
         self.auto = auto
         # La firma de AlfalfaCode en los `git commit` del agente (alfalfa/firma.py). None lee ALFALFA_FIRMA.
@@ -322,6 +328,18 @@ class TerminalManager:
                     raise ValueError('Modo desconocido: ' + str(mode))
                 self.task['modo'] = mode
             self.task.setdefault('modo', modos.AUTO)
+            if self.equipo:
+                self.equipo.comprobar_modelo(self.task['model'])
+                self.task['modo'] = self.equipo.modo_inicial(modos.modo_de(self.task), mode is not None)
+                from .auditoria_equipo import Auditoria
+                self.auditoria_equipo = Auditoria(self)
+            huella_equipo = self.equipo.huella if self.equipo else None
+            if self.task.get('equipo_sha256') != huella_equipo:
+                from .permisos.sesion import CAMPO
+                self.task.pop(CAMPO, None)
+                self.task.pop('equipo_sha256', None)
+                if huella_equipo:
+                    self.task['equipo_sha256'] = huella_equipo
             # Los errores de lo que acaba de editar, en el resultado de la edición (alfalfa/diagnosticos).
             # None decide ALFALFA_DIAGNOSTICOS o los ajustes.json del proyecto y del usuario.
             from .diagnosticos import Diagnosticos
@@ -337,7 +355,7 @@ class TerminalManager:
             # subagentes usan este mismo, así que lo que gastan cuenta para ella.
             from .presupuesto import Presupuesto
             self.presupuesto = Presupuesto(base, self.task, sesion=budget, mes=monthly_budget,
-                                           aviso=self._aviso_presupuesto)
+                                           aviso=self._aviso_presupuesto, equipo=self.equipo)
             from .subagentes import Subagentes
             self.subagentes = Subagentes(self)
             self.approval = TerminalApproval(self.task['cwd'], auto)
@@ -348,6 +366,8 @@ class TerminalManager:
             # Reglas de órdenes del usuario ($ALFALFA_HOME/reglas.toml): un archivo
             # inválido no arranca la sesión, para no perder una prohibición en silencio.
             self.reglas = reglas_usuario.desde_hogar(base)
+            if self.equipo:
+                self.reglas = self.equipo.combinar(self.reglas)
             # El cargador es exclusivo de esta sesión; no hay escaneo del cwd ni del integrador.
             from .complementos import CargadorComplementos
             self.complementos = CargadorComplementos(base, self.task['cwd']).cargar()
@@ -377,7 +397,8 @@ class TerminalManager:
             if not read_only:
                 motor = motor_de_sesion(base, self.task['cwd'],
                                         fuentes_complementos=self.complementos.fuentes_hooks(),
-                                        sandbox=lambda raiz: SeatbeltSandbox(raiz, network=False, protegidas=(base,)))
+                                        sandbox=lambda raiz: SeatbeltSandbox(
+                                            raiz, network=False, protegidas=(base, *self.rutas_equipo)))
                 if motor.activo() or motor.diagnosticos:
                     self.hooks = HooksDeSesion(motor, self, self.task, reanudada=bool(resume))
             # Memoria y habilidades aprendidas (alfalfa/aprendizaje): la memoria entra congelada.
@@ -391,6 +412,8 @@ class TerminalManager:
             self.pruebas_interfaz = PruebasInterfaz(self)
             self.aprendizaje.congelar(self.task)
             private_directory(private_directory(self.directory / 'native') / ident)
+            if self.auditoria_equipo:
+                self.auditoria_equipo.anotar(self.task, 'sesion')
             self.save()
         except BaseException:
             self.close()
@@ -434,6 +457,17 @@ class TerminalManager:
         self.presupuesto.cambiar(**topes)
         if self.transport is not None:
             self.transport.emit('presupuesto', **self.presupuesto.estado())
+
+    def aplicar_ajustes(self, cambios):
+        if self.equipo:
+            self.equipo.comprobar_modelo(cambios.get('model', self.task['model']))
+            self.equipo.comprobar_modo(cambios.get('modo', self.task['modo']))
+        self.task.update(cambios)
+
+    def anunciar_equipo(self):
+        if self.auditoria_equipo:
+            self.event(self.task, 'system', 'Reglas de equipo activas (' + equipo.ORIGEN + '). Registro local: '
+                       + str(self.auditoria_equipo.ruta))
 
     def save(self):
         self.task['updated_at'] = time.time()
@@ -691,7 +725,7 @@ class TerminalManager:
                              # Red cerrada: sólo un permiso «red» de la política
                              # on-request abre la variante con red para ese intento.
                              process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False,
-                                                             protegidas=(self.home,)),
+                                                             protegidas=(self.home, *self.rutas_equipo)),
                              command_policy=OnRequestPolicy(self.reglas),
                              tolerant_edit=True, mcp=self.mcp, complementos=self.complementos,
                              project_docs=self.project_docs(), hooks=self.hooks,
@@ -820,12 +854,17 @@ class TerminalManager:
         las ve, ni hay visión delegada que las describa, el texto del rechazo y los modelos
         que sí las ven [(id, nombre)]. None si se puede seguir (también si no se sabe)."""
         from . import ajustes, imagenes
-        if not imagenes.rutas_etiquetadas(prompt) or ajustes.vision_delegada():
+        if not imagenes.rutas_etiquetadas(prompt):
+            return None
+        if (not self.equipo or not self.equipo.exige_vision_propia) and ajustes.vision_delegada():
             return None
         modelo = self.task.get('model')
         if await proveedores.vision_del_modelo(modelo) is not False:
             return None
         sugeridos = await asyncio.to_thread(proveedores.con_vision, modelo)
+        if self.equipo and self.equipo.modelos:
+            permitidos = {proveedores.separar(m) for m in self.equipo.modelos}
+            sugeridos = [(m, nombre) for m, nombre in sugeridos or [] if proveedores.separar(m) in permitidos]
         return proveedores.texto_sin_vision(modelo, sugeridos), sugeridos or []
 
     async def run(self, prompt, eco=False):
@@ -847,6 +886,9 @@ class TerminalManager:
                 self.transport.in_turn = False
 
     async def _run(self, prompt, eco=False):
+        if self.transport is None and not getattr(self, '_equipo_anunciado', False):
+            self.anunciar_equipo()
+            self._equipo_anunciado = True
         if self.mcp is not None:
             # Una vez por sesión: los servidores siguen conectados entre turnos.
             try:
@@ -1268,6 +1310,15 @@ def main(argv=None):
         from .stdio import entry
         return entry(args)
     nueva = not args.reanudar and not args.bifurcar
+    if nueva and not args.modelo:
+        try:
+            politica = equipo.cargar(Path.cwd())
+            if politica and politica.modelos:
+                args.modelo = modelo_por_defecto()
+                politica.comprobar_modelo(args.modelo)
+        except equipo.ErrorDeEquipo as exc:
+            print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
+            return 1
     if nueva and not args.modelo:
         from . import primera_vez
         if primera_vez.sin_proveedor():

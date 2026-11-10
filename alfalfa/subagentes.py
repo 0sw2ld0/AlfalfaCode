@@ -358,13 +358,17 @@ class Subagentes:
         if nombre_tipo not in tipos:
             raise ValueError('No existe el tipo de agente «' + nombre_tipo + '». Hay: ' + ', '.join(tipos) + '.')
         tipo = tipos[nombre_tipo]
+        modelo = str(args.get('model') or tipo.get('modelo') or self.gestor.task.get('model'))
+        equipo = getattr(self.gestor, 'equipo', None)
+        if equipo:
+            equipo.comprobar_modelo(modelo)
         self._contador += 1
         ident = 'a' + str(self._contador)
         nombre = ' '.join(str(args.get('description') or '').split())[:80] or mensaje.split('\n')[0][:60]
         principal = self.gestor.task
         task = dict(id=principal['id'] + '-' + ident, cwd=principal['cwd'], objective=mensaje, status='created',
                     provider='ollama', runner='native',
-                    model=str(args.get('model') or tipo.get('modelo') or principal.get('model')),
+                    model=modelo,
                     effort=str(args.get('reasoning_effort') or tipo.get('esfuerzo') or principal.get('effort')
                                or 'medium'),
                     modo=principal.get('modo'), subagente_de=principal['id'],
@@ -436,7 +440,8 @@ class Subagentes:
                            process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
                                         'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
                                         'ALFALFA_SESION': sub.task['id']},
-                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False, protegidas=(gestor.home,)),
+                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False,
+                                                           protegidas=(gestor.home, *gestor.rutas_equipo)),
                            command_policy=OnRequestPolicy(gestor.reglas), tolerant_edit=True,
                            complementos=gestor.complementos, project_docs=gestor.project_docs(),
                            compaction='codex', compact_limit=gestor.compact_limit)

@@ -37,10 +37,14 @@ def claves_de_edicion(rutas):
     return [json.dumps(['edicion', str(r)], ensure_ascii=False, separators=(',', ':')) for r in rutas]
 
 
-def aprobadas(task, claves):
+def aprobadas(task, claves, *, registrar=True):
     """Todas las claves están aprobadas para la sesión (ninguna clave: no)."""
     guardadas = task.get(CAMPO) if isinstance(task, dict) else None
-    return bool(claves) and isinstance(guardadas, list) and all(c in guardadas for c in claves)
+    aprobada = bool(claves) and isinstance(guardadas, list) and all(c in guardadas for c in claves)
+    if aprobada and registrar:
+        from ..auditoria_equipo import permiso_sesion
+        permiso_sesion('permiso_reutilizado', task, claves)
+    return aprobada
 
 
 def recordar(task, claves):
@@ -51,3 +55,5 @@ def recordar(task, claves):
         if c not in guardadas:
             guardadas.append(c)
     del guardadas[:-MAXIMO]
+    from ..auditoria_equipo import permiso_sesion
+    permiso_sesion('permiso_guardado', task, claves)
