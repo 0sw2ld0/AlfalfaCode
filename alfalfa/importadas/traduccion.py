@@ -28,6 +28,7 @@ Formatos, según su documentación pública:
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -37,7 +38,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ..mcp_cliente import configuracion as configuracion_mcp
-from .formatos import Invalido
+from .formatos import Invalido, leer_texto
 
 ENV_OPENCODE = re.compile(r'\{env:(?P<nombre>[^}]*)\}')
 ENV_CLAUDE = re.compile(r'\$\{(?P<nombre>[A-Za-z_][A-Za-z0-9_]*)(?::-(?P<defecto>[^}]*))?\}')
@@ -365,8 +366,8 @@ _OPCIONES_CON_VALOR = ('-p', '--package', '-c', '--call', '--workspace', '-w')
 
 
 def _paquete_lanzado(orden):
-    """El binario que pide `npx srv`, `npm exec srv`, `pnpm dlx srv` o `bunx srv` (sin versión ni
-    ámbito: `@org/srv@1.2` → `srv`), o None si la orden no es de un lanzador."""
+    """El selector que pide `npx srv`, `npm exec srv`, `pnpm dlx srv` o `bunx srv`.
+    Conserva ámbito y versión para poder resolver el `bin` del paquete local."""
     nombre = Path(orden[0]).name
     if nombre not in _LANZADORES:
         return None
@@ -393,14 +394,41 @@ def _paquete_lanzado(orden):
         break
     if not paquete:
         return None
-    sin_ambito = paquete.rsplit('/', 1)[-1] if paquete.startswith('@') else paquete
-    return sin_ambito.split('@', 1)[0] or None
+    return paquete
 
 
 def _binario_local(paquete, carpeta):
-    """`node_modules/.bin/<paquete>` desde la carpeta del proceso hacia arriba, como npx."""
+    """El binario local, también cuando `package.json.bin` le da otro nombre al paquete."""
+    selector = re.fullmatch(r'(?P<nombre>@[^/@]+/[^/@]+|[^/@]+)(?:@[^/]+)?', paquete)
+    if selector is None:
+        return None
+    nombre = selector.group('nombre')
+    corto = nombre.rsplit('/', 1)[-1]
     for base in (Path(carpeta), *Path(carpeta).parents):
-        candidato = base / 'node_modules' / '.bin' / paquete
+        binarios = base / 'node_modules' / '.bin'
+        # npm exec primero intenta una orden local directa, sin selector de paquete.
+        candidato = binarios / paquete
+        if '/' not in paquete and '@' not in paquete and candidato.is_file():
+            return candidato.resolve()
+        manifiesto = base / 'node_modules' / nombre / 'package.json'
+        if manifiesto.is_file():
+            try:
+                datos = json.loads(leer_texto(manifiesto))
+                bins = datos.get('bin') if isinstance(datos, dict) else None
+                if isinstance(bins, str):
+                    bins = {corto: bins}
+                if not isinstance(bins, dict) or not bins or not all(
+                        isinstance(k, str) and isinstance(v, str) for k, v in bins.items()):
+                    return None
+                # La misma heurística de npm: único destino (quizá con alias) o clave sin ámbito.
+                inferido = next(iter(bins)) if len(set(bins.values())) == 1 else corto if corto in bins else None
+                if inferido is None:
+                    return None
+                candidato = binarios / inferido
+                return candidato.resolve() if candidato.is_file() else None
+            except (ValueError, OSError):
+                return None
+        candidato = binarios / corto
         if candidato.exists():
             return candidato.resolve()
     return None
@@ -452,10 +480,9 @@ def definicion_mcp(herramienta, entrada, lugar, cwd, ambitos=None, carpeta=None,
         local = _binario_local(paquete, carpeta or cwd or lugar.base) if paquete else None
         if local is not None:
             fila['paquete_local'] = str(local)
+            fila['paquete_huella'] = _huella_de_archivo(local)
             if any(_dentro(local, Path(r).resolve()) for r in raices):
                 fila['del_repositorio'] = True
-                fila['ejecutable_real'] = str(local)
-                fila['ejecutable_huella'] = _huella_de_archivo(local)
         if cwd:
             fila['carpeta'] = cwd
     elif isinstance(url, str):

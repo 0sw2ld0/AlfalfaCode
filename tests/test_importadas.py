@@ -6,6 +6,7 @@ configuraciones (~/.codex, ~/.config/opencode, ~/.claude) de quien corre la suit
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -930,3 +931,71 @@ def test_la_huella_de_un_binario_grande_cubre_todo_su_contenido(tmp_path):
     os.utime(grande, ns=(antes.st_atime_ns, antes.st_mtime_ns))
     assert os.stat(grande).st_size == antes.st_size and os.stat(grande).st_mtime_ns == antes.st_mtime_ns
     assert traduccion._huella_de_archivo(grande) != huella
+
+
+# Revisión: resolución real de npx y huellas independientes.
+
+@pytest.mark.skipif(shutil.which('npx') is None, reason='requiere npx instalado, se ejecuta sin red')
+def test_npx_con_nombre_de_binario_distinto_invalida_autorizacion(tmp_path, casa):
+    raiz = tmp_path / 'p'
+    (raiz / '.git').mkdir(parents=True)
+    paquete = raiz / 'node_modules' / '@demo' / 'srv'
+    paquete.mkdir(parents=True)
+    (paquete / 'package.json').write_text(json.dumps({
+        'name': '@demo/srv', 'version': '1.0.0', 'bin': {'cli-distinto': 'cli.js'}}))
+    programa = paquete / 'cli.js'
+    programa.write_text('#!/usr/bin/env node\nconsole.log("original");\n')
+    programa.chmod(0o755)
+    binarios = raiz / 'node_modules' / '.bin'
+    binarios.mkdir()
+    (binarios / 'cli-distinto').symlink_to(programa)
+    (raiz / 'package.json').write_text(json.dumps({'name': 'prueba', 'version': '1.0.0',
+                                                'dependencies': {'@demo/srv': '1.0.0'}}))
+    npx = shutil.which('npx')
+    assert npx is not None
+    resultado = subprocess.run([npx, '--offline', '--yes', '@demo/srv'], cwd=raiz, capture_output=True,
+                               text=True, timeout=20,
+                               env={'PATH': os.environ['PATH'], 'HOME': str(casa),
+                                    'npm_config_cache': str(tmp_path / 'npm-cache'),
+                                    'npm_config_userconfig': str(tmp_path / 'npmrc')})
+    assert resultado.returncode == 0, resultado.stderr
+    assert resultado.stdout.strip() == 'original'
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = "npx"\nargs = ["@demo/srv"]\n')
+    hogar = tmp_path / 'alfalfa'
+    imp = Importadas(raiz, hogar)
+    imp.autorizar([elemento(imp, 'mcp', 'mio')])
+    programa.write_text('#!/usr/bin/env node\nconsole.log("cambiado");\n')
+    assert elemento(Importadas(raiz, hogar), 'mcp', 'mio').estado == 'cambio'
+
+
+def test_el_paquete_no_sustituye_la_huella_del_lanzador(tmp_path, casa):
+    raiz = tmp_path / 'p'
+    (raiz / '.git').mkdir(parents=True)
+    lanzador = raiz / 'npx'
+    lanzador.write_text('#!/bin/sh\necho original\n')
+    lanzador.chmod(0o755)
+    binarios = raiz / 'node_modules' / '.bin'
+    binarios.mkdir(parents=True)
+    (binarios / 'srv').write_text('programa de demo\n')
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = '
+                                               + json.dumps(str(lanzador)) + '\nargs = ["srv"]\n')
+    hogar = tmp_path / 'alfalfa'
+    imp = Importadas(raiz, hogar)
+    imp.autorizar([elemento(imp, 'mcp', 'mio')])
+    lanzador.write_text('#!/bin/sh\necho cambiado\n')
+    assert elemento(Importadas(raiz, hogar), 'mcp', 'mio').estado == 'cambio'
+
+
+def test_no_se_inicia_un_ejecutable_que_no_se_puede_huellar(tmp_path, casa, monkeypatch):
+    raiz = tmp_path / 'p'
+    (raiz / '.git').mkdir(parents=True)
+    programa = raiz / 'srv'
+    programa.write_text('#!/bin/sh\ntrue\n')
+    programa.chmod(0o755)
+    (casa / '.codex' / 'config.toml').write_text('[mcp_servers.mio]\ncommand = ' + json.dumps(str(programa)) + '\n')
+    monkeypatch.setattr(traduccion, '_huella_de_archivo', lambda ruta: None)
+    imp = Importadas(raiz, tmp_path / 'alfalfa')
+    e = elemento(imp, 'mcp', 'mio')
+    assert e.valor is None and 'huella' in e.problema
+    imp.autorizar([e])
+    assert e.estado == 'invalido' and imp.servidores_mcp() == []

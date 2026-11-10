@@ -368,6 +368,10 @@ class Importadas:
             elemento.problema = ('la orden ocupa más de ' + str(traduccion.MAX_ORDEN) + ' caracteres y no se puede '
                                  'revisar entera; no se usa')
             elemento.valor = None
+        if any(elemento.definicion.get(ruta) is not None and elemento.definicion.get(huella) is None
+               for ruta, huella in (('ejecutable_real', 'ejecutable_huella'), ('paquete_local', 'paquete_huella'))):
+            elemento.problema = 'no se pudo calcular la huella del ejecutable local; no se usa'
+            elemento.valor = None
         elemento.detalle = traduccion.visible(prefijo) + traduccion.resumen_mcp(elemento.definicion)
         # La huella cubre la definición cruda y la carpeta ya resuelta: lo que se va a usar.
         # Con el ejecutable del repositorio que acabaría lanzando (y su contenido): la misma
@@ -375,6 +379,9 @@ class Importadas:
         elemento.crudo = {'entrada': entrada, 'cwd': cwd,
                           'ejecutable': [elemento.definicion.get('ejecutable_real'),
                                          elemento.definicion.get('ejecutable_huella')]}
+        if elemento.definicion.get('paquete_local') is not None:
+            elemento.crudo['paquete'] = [elemento.definicion['paquete_local'],
+                                        elemento.definicion.get('paquete_huella')]
         self._anadir(elemento)
 
     def _agente(self, herramienta, origen, ambito, nombre, datos, cuerpo=''):
