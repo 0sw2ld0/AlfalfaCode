@@ -82,7 +82,7 @@ def test_si_api_show_no_responde_vale_el_catalogo_de_ollama_cloud(monkeypatch):
 def test_openai_lo_dice_por_su_catalogo_y_no_sabe_de_un_modelo_anadido(monkeypatch):
     from alfalfa.proveedores import configuracion
     monkeypatch.setattr(configuracion, 'de', lambda ident: {'modelos': ['gpt-inventado-9']})
-    filas = {f['name']: f['vision'] for f in openai.OpenAI().modelos()}
+    filas = {f['name']: f['vision'] for f in openai.OpenAI().modelos() if f['recomendado']}
     assert filas == {'openai/gpt-6-luna': True, 'openai/gpt-inventado-9': None}
     assert openai.mostrar('gpt-inventado-9')['vision_conocida'] is False
     assert proveedores.vision_de(openai.mostrar('gpt-inventado-9')) is None
@@ -95,7 +95,7 @@ def test_anthropic_lo_dice_por_su_catalogo_y_no_sabe_de_un_modelo_anadido_sin_fi
     externas = {'claude-con-ficha': {'id': 'claude-con-ficha', 'nombre': 'Con ficha', 'vision': False}}
     monkeypatch.setattr(configuracion, 'de', lambda ident: {'modelos': ['claude-inventado-9', 'claude-con-ficha']})
     monkeypatch.setattr(catalogo, 'ficha', lambda proveedor, modelo: externas.get(modelo))
-    filas = {f['name']: f['vision'] for f in anthropic.Anthropic().modelos()}
+    filas = {f['name']: f['vision'] for f in anthropic.Anthropic().modelos() if f['recomendado']}
     assert filas == {'anthropic/claude-haiku-5-5': True, 'anthropic/claude-sonnet-5-5': True,
                      'anthropic/claude-opus-5-5': True, 'anthropic/claude-inventado-9': None,
                      'anthropic/claude-con-ficha': False}

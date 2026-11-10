@@ -121,6 +121,9 @@ null si no se sabe (sale de `/api/show` en Ollama, del propio proveedor, del ser
 Alfalfa o del catálogo). Los gratis ahora llegan aunque su proveedor no tenga
 clave, con `gratis: true`, el `aviso` de datos, `nombre_proveedor` y, si falta la
 clave, `falta_clave` (`variable`, `donde`, `texto`).
+Las filas de OpenAI y Anthropic llevan `recomendado`: true para los recomendados
+(los propios y los añadidos a mano en `proveedores.json`), que van primero, y false
+para el resto de modelos de la cuenta («Más modelos» en la app).
 
 `turno_terminado`, `fin`, `historial` y cada fila de `sesiones` añaden `coste` (USD
 estimados de la sesión con los precios del catálogo) cuando el modelo tiene precio;

@@ -33,6 +33,23 @@ final class CatalogTests: XCTestCase {
         XCTAssertNil(CatalogFormat.detail(rows[2]))
     }
 
+    func testRecommendedAndMoreModelsOfAProvider() {
+        let line = #"{"version":2,"tipo":"modelos","modelos":["#
+            + #"{"name":"openai/gpt-6-luna","nombre":"GPT-6 Luna","proveedor":"openai","recomendado":true},"#
+            + #"{"name":"openai/gpt-7-nuevo","proveedor":"openai","recomendado":false,"vision":null},"#
+            + #"{"name":"openai/gpt-5","nombre":"GPT-5","proveedor":"openai","recomendado":false},"#
+            + #"{"name":"glm-5.3-flash:cloud","proveedor":"ollama"}]}"#
+        guard case let .models(rows)? = AlfalfaMessage.decode(line: line) else { return XCTFail("modelos") }
+        XCTAssertEqual(rows.map(\.recommended), [true, false, false, nil])
+        XCTAssertNil(rows[1].vision, "un modelo que nadie describe: no se sabe si ve imágenes")
+        let openAI = ModelMenuSplit.split(["openai/gpt-6-luna", "openai/gpt-7-nuevo", "openai/gpt-5"], in: rows)
+        XCTAssertEqual(openAI.recommended, ["openai/gpt-6-luna"])
+        XCTAssertEqual(openAI.more, ["openai/gpt-7-nuevo", "openai/gpt-5"])
+        let ollama = ModelMenuSplit.split(["glm-5.3-flash:cloud", "no-listado"], in: rows)
+        XCTAssertEqual(ollama.recommended, ["glm-5.3-flash:cloud", "no-listado"])
+        XCTAssertTrue(ollama.more.isEmpty)
+    }
+
     func testFormats() {
         XCTAssertEqual(CatalogFormat.window(1_000_000), "1M")
         XCTAssertEqual(CatalogFormat.window(1_050_000), "1,05M")

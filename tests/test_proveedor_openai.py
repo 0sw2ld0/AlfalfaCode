@@ -104,15 +104,21 @@ def test_sin_clave_openai_no_sale_en_la_lista_y_con_clave_si():
     assert not proveedores.obtener('openai').configurado()
     llavero.guardar('openai', 'sk-prueba-123')
     filas = proveedores.obtener('openai').modelos()
-    assert [{k: f[k] for k in ('name', 'model', 'proveedor', 'nombre')} for f in filas] == [
-        {'name': 'openai/gpt-6-luna', 'model': 'openai/gpt-6-luna', 'proveedor': 'openai', 'nombre': 'GPT-6 Luna'}]
+    # Sin red (la suite no sale), la lista de la cuenta no llega: Luna arriba y debajo lo de models.dev.
+    assert [{k: f[k] for k in ('name', 'model', 'proveedor', 'nombre', 'recomendado')} for f in filas
+            if f['recomendado']] == [{'name': 'openai/gpt-6-luna', 'model': 'openai/gpt-6-luna',
+                                      'proveedor': 'openai', 'nombre': 'GPT-6 Luna', 'recomendado': True}]
+    assert filas[0]['name'] == 'openai/gpt-6-luna' and len(filas) > 1
     # La ventana propia manda sobre la del catálogo; el precio es del catálogo y el tramo caro, de los dos.
     assert filas[0]['ventana'] == 1_050_000
     assert filas[0]['barato_hasta'] == 272_000
     assert filas[0]['tarifa_larga'] == {'entrada': 2.0, 'salida': 1.5}
     assert filas[0]['precio']['entrada'] > 0
+    # Los que el usuario añade a mano van con los recomendados, justo debajo de los propios.
     configuracion.cambiar('openai', 'modelos', ['gpt-6-sol'])
-    assert [f['name'] for f in proveedores.obtener('openai').modelos()][-1] == 'openai/gpt-6-sol'
+    filas = proveedores.obtener('openai').modelos()
+    assert [f['name'] for f in filas if f['recomendado']] == ['openai/gpt-6-luna', 'openai/gpt-6-sol']
+    assert [f['name'] for f in filas].count('openai/gpt-6-sol') == 1
 
 
 def test_la_url_de_openai_es_configurable_pero_con_https():

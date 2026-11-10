@@ -4,6 +4,8 @@ import SwiftUI
 /// Las opciones del selector de modelo, agrupadas por proveedor cuando hay más de uno.
 /// Los modelos del selector: los de cada proveedor y, aparte, «Gratis ahora» con el aviso de datos.
 /// Cada modelo lleva su ventana y su precio del catálogo de models.dev («256K · 0,25/2 $ por M»).
+/// Con la clave de OpenAI o Anthropic, dentro de su grupo van arriba los recomendados y el resto de
+/// modelos de la cuenta en el submenú «Más modelos».
 struct ModelMenuItems: View {
     @ObservedObject var app: AppModel
     let groups: [(provider: String, names: [String])]
@@ -13,10 +15,10 @@ struct ModelMenuItems: View {
     var body: some View {
         if groups.count > 1 {
             ForEach(groups, id: \.provider) { group in
-                Section(app.providerName(group.provider)) { items(group.names) }
+                providerSection(group.provider, names: group.names, titled: true)
             }
-        } else {
-            items(groups.first?.names ?? [])
+        } else if let group = groups.first {
+            providerSection(group.provider, names: group.names, titled: false)
         }
         let free = app.freeGroups
         if !free.isEmpty {
@@ -24,6 +26,21 @@ struct ModelMenuItems: View {
                 ForEach(free, id: \.provider) { group in
                     Menu(group.title) { items(group.names) }
                 }
+            }
+        }
+    }
+
+    /// Un proveedor: sus modelos tal cual o, si la lista separa recomendados, éstos con
+    /// «· recomendados» en el título y los demás en el submenú «Más modelos (N)».
+    @ViewBuilder private func providerSection(_ provider: String, names: [String], titled: Bool) -> some View {
+        let parts = ModelMenuSplit.split(names, in: app.models)
+        let name = app.providerName(provider)
+        if parts.more.isEmpty {
+            if titled { Section(name) { items(names) } } else { items(names) }
+        } else {
+            Section(name + " · recomendados") {
+                items(parts.recommended)
+                Menu("Más modelos de \(name) (\(parts.more.count))") { items(parts.more) }
             }
         }
     }
