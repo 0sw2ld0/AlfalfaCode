@@ -371,6 +371,9 @@ class ControlDeApps:
             resultado['captura'] = datos['captura']
         elif datos.get('captura_error'):
             resultado['captura_error'] = datos['captura_error']
+        pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+        if pruebas is not None:
+            await pruebas.app(self.runtime, app, resultado)
         return resultado
 
     async def estado(self, args):

@@ -40,6 +40,9 @@ struct WrapUpCard: View {
             ForEach(wrapUp.sessions) { proposal in
                 SessionProposalCard(proposal: proposal, canReply: canReply, session: session)
             }
+            if let proof = wrapUp.interfaceProof {
+                InterfaceProofCard(proof: proof)
+            }
             if let review = wrapUp.review {
                 CodeReviewCard(review: review, canReply: canReply, session: session)
             }

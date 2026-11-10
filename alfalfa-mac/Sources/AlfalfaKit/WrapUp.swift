@@ -14,6 +14,7 @@ public struct WrapUp: Equatable, Sendable {
     public var sessions: [SessionProposal]
     public var review: CodeReview?
     public var suggestion: String?
+    public var interfaceProof: InterfaceProof?
 
     // MARK: - Inicializadores
 
@@ -25,6 +26,7 @@ public struct WrapUp: Equatable, Sendable {
         self.sessions = sessions
         self.review = review
         self.suggestion = suggestion
+        self.interfaceProof = nil
     }
 
     /// El `cierre` de `turno_terminado` o del historial; nil si no trae ni resumen ni sesiones.
@@ -41,6 +43,7 @@ public struct WrapUp: Equatable, Sendable {
         }
         self.init(recap: recap, ask: ask, options: Array(options), sessions: sessions,
                   review: CodeReview(value: object["revision_codigo"]), suggestion: suggestion)
+        interfaceProof = InterfaceProof(value: object["prueba_interfaz"])
     }
 
     // MARK: - Métodos privados

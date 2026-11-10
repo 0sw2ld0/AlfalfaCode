@@ -95,6 +95,11 @@ propio: no mueve el del usuario ni trae la app al frente. La primera vez que
 tocas una app se pregunta al usuario; los navegadores sólo se miran, terminales
 y editores sólo se miran y admiten clics, y contraseñas y Ajustes del Sistema
 están bloqueados.
+Si vas a cambiar una interfaz, mírala antes de editar y vuelve a mirarla tras
+reconstruirla o recargarla. El cierre conserva el antes y el después del navegador
+cuando hay cambios web; para una app propia de Mac, usa app_state con captura de
+la misma ventana antes y después del último cambio. Las capturas son evidencia
+visual, no pruebas aprobadas: comprueba también la consola y las pruebas pertinentes.
 Todas las herramientas que lanzan procesos comparten la política de aprobación.
 Una denegación no autoriza reintentar por otra herramienta. No hay herramientas
 web disponibles en esta terminal. Un error requiere diagnóstico;
@@ -382,6 +387,8 @@ class TerminalManager:
             self.revision_codigo = RevisionCodigo(self)
             from .encargos import ColaEncargos
             self.cola_encargos = ColaEncargos(self)
+            from .pruebas_interfaz import PruebasInterfaz
+            self.pruebas_interfaz = PruebasInterfaz(self)
             self.aprendizaje.congelar(self.task)
             private_directory(private_directory(self.directory / 'native') / ident)
             self.save()
@@ -879,6 +886,7 @@ class TerminalManager:
         try:
             # El código de la carpeta antes del turno, para poder volver a este mensaje con él.
             await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'], rt.state)
+            self.pruebas_interfaz.empezar(rt, turno['id'])
             # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
             expandido = self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt)
             pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
@@ -922,6 +930,7 @@ class TerminalManager:
             # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
             # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
             await asyncio.to_thread(deshacer.al_terminar_turno, self.home, self.task, turno['id'], rt.state)
+            await self.pruebas_interfaz.terminar()
             self.revision_codigo.ofrecer(turno)
             rt._record_context_details()
             if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
