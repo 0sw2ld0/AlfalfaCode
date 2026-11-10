@@ -1,5 +1,6 @@
 import AlfalfaKit
 import AppKit
+import Combine
 import SwiftUI
 import WebKit
 
@@ -160,11 +161,24 @@ struct BrowserPane: View {
 /// El WKWebView de la sesión dentro de SwiftUI. La vista es del navegador, no de SwiftUI: al cerrar
 /// el panel o cambiar de sesión la página sigue cargada.
 private struct BrowserHost: NSViewRepresentable {
+    final class Coordinator {
+        var selection: AnyCancellable?
+    }
+
     let view: WKWebView
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
         attach(to: container)
+        if let browser = view.navigationDelegate as? BrowserEngine {
+            context.coordinator.selection = browser.$isSelectingAnnotation.sink { [weak container] selecting in
+                MainActor.assumeIsolated {
+                    if let container { updateSelection(in: container, selecting: selecting) }
+                }
+            }
+        }
         return container
     }
 
@@ -187,9 +201,9 @@ private struct BrowserHost: NSViewRepresentable {
     }
 
     /// El selector vive junto al WKWebView: al escalar o centrar la página conserva sus coordenadas CSS.
-    private func updateSelection(in container: NSView) {
+    private func updateSelection(in container: NSView, selecting: Bool? = nil) {
         let current = container.subviews.first { $0 is AnnotationSelectionView }
-        guard let browser = view.navigationDelegate as? BrowserEngine, browser.isSelectingAnnotation else {
+        guard let browser = view.navigationDelegate as? BrowserEngine, selecting ?? browser.isSelectingAnnotation else {
             current?.removeFromSuperview()
             return
         }
