@@ -222,8 +222,10 @@ class TerminalManager:
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
-                 navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None):
+                 navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None, cwd=None):
+        cwd = Path(cwd or Path.cwd()).resolve()
         self.transport = transport
+        self.auto = auto
         # La firma de AlfalfaCode en los `git commit` del agente (alfalfa/firma.py). None lee ALFALFA_FIRMA.
         from .firma import Firma
         self.firma = Firma(firma)
@@ -277,11 +279,11 @@ class TerminalManager:
                 # `--esperar` sólo abre la sesión: el turno lo trae el siguiente mensaje.
                 if self.task['status'] == 'completed' and not objective and not wait:
                     raise ValueError('La sesión ya terminó correctamente; reanúdala con un mensaje nuevo.')
-                if Path(self.task['cwd']).resolve() != Path.cwd().resolve():
+                if Path(self.task['cwd']).resolve() != cwd:
                     raise ValueError('Reanuda desde la carpeta original: ' + self.task['cwd'])
             else:
                 model = model or modelo_por_defecto()
-                self.task = dict(id=ident, cwd=str(Path.cwd().resolve()), objective=objective,
+                self.task = dict(id=ident, cwd=str(cwd), objective=objective,
                                  status='created', provider=proveedores.separar(model)[0], runner='native',
                                  model=model, effort=effort or 'medium')
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
@@ -363,6 +365,8 @@ class TerminalManager:
             self.aprendizaje = Aprendizaje(self)
             from .revision_codigo import RevisionCodigo
             self.revision_codigo = RevisionCodigo(self)
+            from .encargos import ColaEncargos
+            self.cola_encargos = ColaEncargos(self)
             self.aprendizaje.congelar(self.task)
             private_directory(private_directory(self.directory / 'native') / ident)
             self.save()
@@ -1029,7 +1033,9 @@ def signature(args):
 
 async def execute(args):
     resolve_fork(args)
-    manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
+    cola = getattr(args, 'cola_encargos', None)
+    manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None else None),
+                              resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
@@ -1043,6 +1049,17 @@ async def execute(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
+        if cola is not None:
+            print('AlfalfaCode · Sesión de la cola: ' + manager.task['id'], flush=True)
+            if cola:
+                from .encargos import leer_archivo
+                manager.cola_encargos.preparar(*leer_archivo(cola))
+            manager.cola_encargos.iniciar()
+            await manager.cola_encargos.worker
+            print(manager.cola_encargos.datos['resumen'], flush=True)
+            if current.cancelling():
+                return 130
+            return 0 if manager.cola_encargos.datos['estado'] == 'completada' else 1
         rechazo = await manager.sin_vision(args.encargo or '')
         if rechazo:
             print('AlfalfaCode · Error: ' + rechazo[0], file=sys.stderr)
@@ -1053,7 +1070,10 @@ async def execute(args):
         sys.stdout.flush()
         await manager.repasar()
         return codigo
+    except asyncio.CancelledError:
+        return 130
     finally:
+        await manager.cola_encargos.detener()
         # Como Codex al cerrar: los procesos en segundo plano terminan con la sesión.
         await manager.fondo.detener_todos()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -1106,6 +1126,9 @@ def main(argv=None):
                         help='No firmar como coautor a AlfalfaCode en los git commit del agente '
                              '(también ALFALFA_FIRMA=0)')
     parser.add_argument('--stdio', action='store_true')
+    parser.add_argument('--cola-encargos', nargs='?', const='', metavar='JSON',
+                        help='Ejecutar una cola desde un archivo JSON; sin archivo, reanudar la cola de '
+                             '--reanudar ID o preparar una cola desde la app con --stdio')
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--json', action='store_true')
@@ -1151,6 +1174,10 @@ def main(argv=None):
     from .busqueda_sesiones import orden as orden_de_busqueda
     orden_de_busqueda.argumentos(parser, listing)
     args = parser.parse_args(argv)
+    if args.cola_encargos == '' and not args.stdio and not args.reanudar:
+        parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
+    if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen):
+        parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni imágenes')
     if (args.autorizar or args.retirar or args.sin_internet) and not args.importar:
         parser.error('--autorizar, --retirar y --sin-internet sólo valen con --importar')
     if args.importar:
@@ -1212,10 +1239,10 @@ def main(argv=None):
                 print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
                 return 1
             if not args.modelo:
-                return 1 if args.encargo else 0
-            if not args.encargo:
+                return 1 if args.encargo or args.cola_encargos is not None else 0
+            if not args.encargo and args.cola_encargos is None:
                 return 0
-    if not args.encargo and not args.reanudar and not args.bifurcar:
+    if not args.encargo and not args.reanudar and not args.bifurcar and args.cola_encargos is None:
         parser.error('indica un encargo o --reanudar ID')
     try:
         return asyncio.run(execute(args))

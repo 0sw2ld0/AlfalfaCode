@@ -99,6 +99,8 @@ class Transport:
         self.repaso = None
         self.revisar_codigo = None
         self.revision_codigo = None
+        self.encargos = None
+        self.cola_encargos = None
 
     def clean(self, value):
         from . import proveedores
@@ -128,6 +130,8 @@ class Transport:
         if self.stopped:
             return
         self.stopped = True
+        if self.cola_encargos is not None and self.cola_encargos.activa:
+            self.cola_encargos.worker.cancel()
         if self.revision_codigo is not None and not self.revision_codigo.done():
             self.revision_codigo.cancel()
         self.wake.set()
@@ -160,6 +164,9 @@ class Transport:
     def interrumpir_turno(self):
         """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta. Entre
         turnos corta el repaso de aprendizaje, si está en marcha."""
+        if self.cola_encargos is not None and self.cola_encargos.activa:
+            asyncio.create_task(self.cola_encargos.detener())
+            return True
         if not self.in_turn and self.revision_codigo is not None and not self.revision_codigo.done():
             self.revision_codigo.cancel()
             return True
@@ -380,6 +387,10 @@ class Transport:
             elif value.get('tipo') == 'cancelar_revision_codigo':
                 if self.revision_codigo is not None and not self.revision_codigo.done():
                     self.revision_codigo.cancel()
+            elif value.get('tipo') == 'encargos':
+                if self.encargos is None:
+                    raise ValueError()
+                self.encargos(value)
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -450,8 +461,11 @@ async def run(args, transport):
     try:
         from .terminal import resolve_fork
         resolve_fork(args)
-        esperar = bool(getattr(args, 'esperar', False)) and bool(args.reanudar) and not args.encargo
-        manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
+        cola = getattr(args, 'cola_encargos', None)
+        esperar = ((bool(getattr(args, 'esperar', False)) and bool(args.reanudar))
+                   or cola is not None) and not args.encargo
+        manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None else None),
+                                  resume=args.reanudar, model=args.modelo,
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
@@ -516,11 +530,10 @@ async def run(args, transport):
             asyncio.ensure_future(detener())
 
         transport.stop_process = detener_proceso
-        transport.keep_awake = manager.despierto.cambiar
-        transport.signature = manager.firma.cambiar
+        transport.keep_awake = lambda activo: manager.cola_encargos.cambiar('despierto', activo)
+        transport.signature = lambda activo: manager.cola_encargos.cambiar('firma', activo)
         # En solo lectura no hay diagnósticos, pero el interruptor de la app se acepta igual.
-        transport.diagnostics = (manager.diagnosticos.cambiar if manager.diagnosticos is not None
-                                 else (lambda activo: None))
+        transport.diagnostics = lambda activo: manager.cola_encargos.cambiar('diagnosticos', activo)
 
         def cambiar_contexto(modo):
             try:
@@ -531,9 +544,42 @@ async def run(args, transport):
         transport.context_mode = cambiar_contexto
         transport.budget = manager.cambiar_presupuesto
         transport.learning = manager.aprendizaje.resolver
+        transport.cola_encargos = manager.cola_encargos
+
+        def encargos(valor):
+            accion = valor.get('accion')
+            if accion in ('preparar', 'iniciar') and (transport.in_turn or transport.compacting or transport.inbox
+                    or transport.revision_codigo is not None and not transport.revision_codigo.done()):
+                transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de iniciar la cola.')
+                return
+            try:
+                if accion == 'preparar':
+                    manager.task.update(transport.take_settings())
+                    manager.cola_encargos.preparar(valor.get('encargos'), valor.get('modo', 'serie'),
+                                                    valor.get('paralelos', 2))
+                elif accion == 'iniciar':
+                    manager.cola_encargos.iniciar()
+                elif accion == 'pausar':
+                    manager.cola_encargos.pausar()
+                elif accion == 'detener':
+                    asyncio.create_task(manager.cola_encargos.detener())
+                elif accion == 'cancelar':
+                    manager.cola_encargos.cancelar()
+                else:
+                    raise ValueError('Acción de cola desconocida.')
+            except ValueError as exc:
+                transport.emit('error', texto=str(exc))
+
+        transport.encargos = encargos
+        manager.cola_encargos.avisar()
+        if cola:
+            from .encargos import leer_archivo
+            manager.cola_encargos.preparar(*leer_archivo(cola))
+            manager.cola_encargos.iniciar()
 
         def pedir_revision(ident, modelo):
             if (transport.in_turn or transport.compacting or transport.inbox
+                    or manager.cola_encargos.activa
                     or transport.revision_codigo is not None and not transport.revision_codigo.done()):
                 transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de revisar el cierre.')
                 return
@@ -565,6 +611,7 @@ async def run(args, transport):
             # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
             await _cancelar_repaso(transport)
             await _cancelar_revision(transport)
+            await manager.cola_encargos.detener()
             if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
                 transport.compacting = True
                 transport.worker = asyncio.create_task(manager.continuar_en_nueva())
@@ -674,6 +721,7 @@ async def run(args, transport):
             loop.remove_signal_handler(sig)
         task = manager.task if manager else {}
         if manager:
+            await manager.cola_encargos.detener()
             # Como Codex al salir: los procesos en segundo plano se cierran con la sesión.
             await manager.fondo.detener_todos()
             await manager.close_mcp()
@@ -933,6 +981,8 @@ def history(ident):
         eventos += propios
     cierre = turnos[-1].get('cierre') if turnos else None
     extra = {'cierre': cierre} if isinstance(cierre, dict) else {}
+    if task.get('cola_encargos'):
+        extra['encargos'] = task['cola_encargos']
     if isinstance(task.get('context_tokens'), int) and isinstance(task.get('context_limit'), int):
         from .terminal import desglose_de
         extra['contexto'] = dict(tokens=task['context_tokens'], limite=task['context_limit'], **desglose_de(task))
@@ -981,7 +1031,11 @@ def entry(args):
             return 1
     if getattr(args, 'historial', None):
         try:
-            transport.emit('historial', sesion=args.historial, **history(args.historial))
+            datos = history(args.historial)
+            cola = datos.pop('encargos', None)
+            transport.emit('historial', sesion=args.historial, **datos)
+            if cola:
+                transport.emit('encargos', cola=cola)
             return 0
         except Exception:
             transport.emit('error', texto='No se pudo leer el historial de esa sesión.')

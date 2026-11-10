@@ -644,6 +644,7 @@ public struct WebSearchSettings: Equatable, Sendable {
 public enum AlfalfaMessage: Equatable, Sendable {
     case codeReview(CodeReview)
     case session(SessionInfo)
+    case taskQueue(TaskQueue)
     case event(AgentEvent)
     case permission(PermissionRequest)
     /// `session`: se aprobó también para el resto de la sesión.
@@ -765,6 +766,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return outcome(object).map { .turnFinished($0) }
         case "fin":
             return outcome(object).map { .finished($0) }
+        case "encargos":
+            guard let queue = TaskQueue(value: object["cola"]) else { return nil }
+            return .taskQueue(queue)
         case "historial":
             guard let id = object["sesion"] as? String, let rows = object["eventos"] as? [[String: Any]] else { return nil }
             let events = rows.compactMap(agentEvent)

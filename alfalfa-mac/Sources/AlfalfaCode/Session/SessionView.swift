@@ -8,6 +8,7 @@ struct SessionView: View {
 
     @ObservedObject var session: LiveSession
     var notice: String?
+    @State private var planningQueue = false
 
     var body: some View {
         let terminals = TerminalHub.shared.terminals(for: session)
@@ -15,6 +16,7 @@ struct SessionView: View {
             VStack(spacing: 0) {
                 header(terminals)
                 conversation.environment(\.runInTerminal) { terminals.run($0) }
+                if let queue = session.timeline.taskQueue { TaskQueueCard(queue: queue, session: session) }
                 Composer(session: session)
             }
             .frame(maxWidth: .infinity)
@@ -83,7 +85,8 @@ struct SessionView: View {
                     }
                     if session.timeline.compacting { CompactingLine().id("compactando") }
                     // Sin herramienta en curso: el modelo piensa desde el último mensaje.
-                    if liveWork == nil, status.isRunning, status != .waitingPermission, !session.timeline.compacting {
+                    if liveWork == nil, status.isRunning, status != .waitingPermission, !session.timeline.compacting,
+                       session.timeline.taskQueue?.running != true {
                         LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince)).id("pensando")
                     }
                 }
@@ -123,6 +126,15 @@ struct SessionView: View {
             LeafIcon()
             Text(session.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
             Spacer()
+            Button { planningQueue = true } label: { Image(systemName: "list.number") }
+                .help("Preparar una cola de encargos").accessibilityLabel("Cola de encargos")
+                .disabled(!session.canSend || session.timeline.status.isRunning || session.reviewingCode
+                    || session.workingQueue || session.timeline.taskQueue.map { !$0.finished } == true)
+                .sheet(isPresented: $planningQueue) {
+                    TaskQueueEditor(folder: session.cwd.path) { tasks, mode, parallelism in
+                        session.queue(.prepare, tasks: tasks, mode: mode, parallelism: parallelism)
+                    }
+                }
             if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(Theme.warning).lineLimit(1) }
             if session.isDormant { dormantHint }
             BrowserToggle(browser: session.browser, terminals: terminals) { session.openBrowser() }

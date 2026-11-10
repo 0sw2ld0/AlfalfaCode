@@ -367,3 +367,43 @@ máxima, cuenta el uso del otro modelo y no arranca si no cabe en los topes.
 Puedes cancelarla o enviar un nuevo mensaje para detenerla. Si se interrumpe una
 petición ya enviada, o el proveedor responde sin métricas de uso, se cuenta un coste máximo conservador,
 que la tarjeta señala como estimado; así cancelar no permite saltarse el tope.
+
+## Cola de encargos
+
+En «Nuevo encargo» o en la cabecera de una sesión, «Cola de encargos» permite
+preparar hasta 20 tareas completas y ordenarlas antes de guardar. La cola queda
+lista y empieza sólo al pulsar «Iniciar cola». Cada tarea abre una sesión propia;
+no se mezcla con los mensajes que se dejan mientras el agente está respondiendo.
+
+- **Una tras otra:** las tareas trabajan en la carpeta elegida. Cada una ve los
+  cambios que dejó la anterior, pero tiene su conversación independiente.
+- **En paralelo en worktrees:** de 1 a 4 tareas a la vez, cada una en una rama y
+  carpeta distinta, desde el mismo HEAD. Necesita la raíz de un repositorio Git
+  limpio; no copia archivos ignorados ni cambios sin confirmar. No ejecuta hooks
+  ni filtros de Git al preparar las carpetas.
+
+La tarjeta muestra el estado y la actividad de cada tarea, permite abrir su
+sesión y ofrece el informe cuando termina. El resumen conjunto queda al final
+de la conversación, con las rutas y ramas de los resultados. Los worktrees
+permanecen en el directorio hermano de `$ALFALFA_HOME`, con sufijo `-worktrees`
+(`~/.alfalfa-worktrees` por defecto). La cola no los borra, fusiona ni publica.
+
+Las tareas heredan modelo, esfuerzo y modo de permisos de la sesión que preparó la cola,
+comparten su presupuesto de sesión y mes y siguen mostrando los permisos que
+necesitan. Un fallo o bloqueo pausa el lanzamiento de tareas nuevas; las que ya
+están en marcha pueden terminar. «Pausar después de los activos» hace lo mismo
+sin interrumpir trabajo. «Detener ahora», cerrar la app o escribir un mensaje
+nuevo interrumpen los activos y conservan los pendientes. «Reanudar cola» continúa
+las sesiones interrumpidas o bloqueadas, comprobando las operaciones inciertas,
+y salta las tareas que ya terminaron. Al reabrir, nunca arranca sola.
+
+En la CLI, guarda un JSON como este y ejecuta `alfalfa --cola-encargos cola.json`:
+
+```json
+{"modo": "serie", "encargos": ["Corrige el cálculo de la suma.", "Añade pruebas de los casos límite."]}
+```
+
+Para tareas independientes puedes usar `"modo": "paralelo", "paralelos": 2`.
+La CLI muestra el ID de la sesión de la cola al empezar. Con
+`alfalfa --reanudar ID --cola-encargos` continúas una cola guardada. Ctrl-C
+la detiene conservando el estado para reanudarla.

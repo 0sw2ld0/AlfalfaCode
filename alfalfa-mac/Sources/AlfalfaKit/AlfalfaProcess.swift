@@ -64,8 +64,9 @@ public enum Launcher {
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
                                       monthlyBudget: Double? = nil, diagnostics: Bool = true,
-                                      commitSignature: Bool = true) -> [String] {
+                                      commitSignature: Bool = true, queue: Bool = false) -> [String] {
         var arguments = ["--stdio"]
+        if queue { arguments.append("--cola-encargos") }
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
         if browser { arguments.append("--navegador") }
         // Ajustes ▸ General ▸ Mantener el Mac despierto, Ver los errores al editar y Firmar los commits, apagados.
