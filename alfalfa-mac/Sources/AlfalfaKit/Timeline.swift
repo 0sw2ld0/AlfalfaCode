@@ -446,6 +446,16 @@ public struct Timeline: Equatable, Sendable {
 
     public mutating func apply(_ message: AlfalfaMessage) {
         switch message {
+        case let .codeReview(review):
+            if let tokens = review.sessionTokens { totalTokens = tokens }
+            if let cost = review.sessionCost { totalCost = cost }
+            for index in items.indices {
+                if case let .wrapUp(id, wrapUp, answered) = items[index], wrapUp.review?.turn == review.turn {
+                    var updated = wrapUp
+                    updated.review = review
+                    items[index] = .wrapUp(id: id, updated, answered: answered)
+                }
+            }
         case let .session(info):
             session = info
             if let mode = info.contextMode {

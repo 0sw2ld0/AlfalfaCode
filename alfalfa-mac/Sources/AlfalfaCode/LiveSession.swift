@@ -20,6 +20,7 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var ollama: Bool?
     @Published private(set) var answered: Set<String> = []
     @Published private(set) var stopping = false
+    @Published private(set) var reviewingCode = false
     /// Imágenes elegidas para la próxima indicación.
     @Published var draftImages: [URL] = []
     /// Texto que la vista pone en el cuadro al abrir la sesión (volver a un mensaje).
@@ -131,6 +132,8 @@ final class LiveSession: ObservableObject, Identifiable {
 
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
+        if case let .codeReview(review) = message { reviewingCode = review.state == "revisando" }
+        if case .error = message { reviewingCode = false }
         onChange?()
         // El motor no abrió turno con ese mensaje: vuelve al cuadro, con sus imágenes.
         if case let .messageRejected(rejection) = message {
@@ -145,7 +148,7 @@ final class LiveSession: ObservableObject, Identifiable {
         }
         if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
         if case let .browser(request) = message { answerBrowser(request) }
-        if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
+        if releaseWhenParked, !reviewingCode, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
         }
@@ -162,6 +165,7 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     private func exited(code: Int32, stderr: String) {
+        reviewingCode = false
         timeline.processExited(code: code)
         let detail = stderr.split(separator: "\n").suffix(3).joined(separator: "\n")
         if !detail.isEmpty && !timeline.finished { timeline.addNotice(detail) }
@@ -233,6 +237,19 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
+
+    func reviewCode(_ review: CodeReview, model: String) {
+        guard review.canRequest, canSend, !reviewingCode, !timeline.status.isRunning,
+              CodeReview.identity(of: model) != CodeReview.identity(of: review.author) else { return }
+        if isDormant { openWaiting() }
+        reviewingCode = true
+        process?.send(.reviewCode(turn: review.turn, model: model))
+    }
+
+    func cancelCodeReview() {
+        if isDormant { openWaiting() }
+        process?.send(.cancelCodeReview)
+    }
 
     /// La tarjeta de una propuesta de aprendizaje: sólo desde sus botones. Con la sesión dormida
     /// la propuesta sigue en Ajustes ▸ Memoria.
@@ -384,7 +401,7 @@ final class LiveSession: ObservableObject, Identifiable {
     /// Bifurcar o volver a un mensaje lo necesitan; con un turno en marcha no se toca.
     func releaseProcess() async -> Bool {
         guard process != nil else { return true }
-        guard !timeline.status.isRunning else { return false }
+        guard !timeline.status.isRunning, !reviewingCode else { return false }
         shutdown(interrupt: false)
         for _ in 0..<100 where process != nil {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -404,6 +421,7 @@ final class LiveSession: ObservableObject, Identifiable {
         guard process != nil else { return }
         // Un juego o un servidor en segundo plano se cerraría con el proceso: se queda abierto.
         guard timeline.liveProcesses.isEmpty else { return }
+        if reviewingCode { releaseWhenParked = true; return }
         switch ReleasePolicy.onLeave(status: timeline.status) {
         case .closeNow: shutdown(interrupt: false)
         case .cancelAndClose: shutdown()
@@ -416,7 +434,7 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// Hay un proceso vivo esperando órdenes, sin turno ni permiso en curso.
     var isParked: Bool {
-        process != nil && ReleasePolicy.isParked(timeline.status)
+        process != nil && !reviewingCode && ReleasePolicy.isParked(timeline.status)
     }
 }
 

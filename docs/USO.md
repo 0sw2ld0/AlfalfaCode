@@ -341,3 +341,29 @@ no puede revisar un `.env` regular o supera esos topes, detiene la petición.
 Un secreto sin formato reconocible y que no está en esas fuentes puede pasar.
 Los archivos y el historial local conservan su contenido; se sanea una copia al
 salir al proveedor, manteniendo el modelo, los identificadores y las huellas.
+
+## Revisión con otros ojos
+
+La tarjeta al terminar un turno ofrece «Revisar cambios». Elige otro modelo de
+los disponibles y pulsa el botón para lanzar un subagente de una sola respuesta.
+No se inicia automáticamente ni reutiliza el modelo que hizo el turno (cambiar
+sólo de pasarela o de Ollama local a cloud tampoco cuenta como otro modelo).
+
+El revisor recibe el diff entre las instantáneas del principio y final del turno,
+marcado como datos y sin secretos reconocibles. Las ediciones que hagas después
+no entran en esa revisión. No recibe la conversación completa ni herramientas:
+no puede ejecutar órdenes, abrir otros archivos ni aplicar sus propuestas.
+Los binarios, enlaces y archivos excluidos se indican como no revisados; un diff
+de más de 40 archivos o 60.000 caracteres se rechaza antes de pedir inferencia.
+También se comprueba que quepa completo en el contexto del modelo elegido.
+
+Los hallazgos aparecen en la misma tarjeta con prioridad, ruta, línea y detalle.
+«Corregir hallazgos en este hilo» envía un encargo al agente principal, que ya
+tiene el informe en su contexto como datos externos. Las correcciones conservan
+los permisos habituales. El informe y el estado se guardan con el cierre.
+
+La revisión comparte el presupuesto de sesión y mes: reserva entrada y salida
+máxima, cuenta el uso del otro modelo y no arranca si no cabe en los topes.
+Puedes cancelarla o enviar un nuevo mensaje para detenerla. Si se interrumpe una
+petición ya enviada, o el proveedor responde sin métricas de uso, se cuenta un coste máximo conservador,
+que la tarjeta señala como estimado; así cancelar no permite saltarse el tope.

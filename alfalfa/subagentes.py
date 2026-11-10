@@ -289,6 +289,20 @@ class Subagentes:
         self.agentes = {}
         self._contador = 0
 
+    def revisor_de_diff(self, modelo):
+        """Subagente de una sola respuesta, sin herramientas ni contexto del principal."""
+        from uuid import uuid4
+
+        from .proveedores.nativo.runtime import NativeRuntime
+        ident = 'revision-' + uuid4().hex[:10]
+        task = dict(id=self.gestor.task['id'] + '-' + ident, cwd=self.gestor.task['cwd'],
+                    model=modelo, effort='low', status='running', review=True,
+                    revision_diff=True, subagente_de=self.gestor.task['id'])
+        self.carpeta.mkdir(parents=True, exist_ok=True, mode=0o700)
+        sub = Subagente(ident, 'Revisión de cambios', 'revisor', task, self.carpeta)
+        gestor = _GestorDeSubagente(self.gestor, sub, lambda: None)
+        return NativeRuntime(gestor, task)
+
     # --- lo que ve la app -------------------------------------------------
     def lista(self):
         return [a.fila() for a in self.agentes.values()]

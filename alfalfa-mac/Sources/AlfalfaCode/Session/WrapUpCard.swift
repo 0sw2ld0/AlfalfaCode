@@ -40,6 +40,9 @@ struct WrapUpCard: View {
             ForEach(wrapUp.sessions) { proposal in
                 SessionProposalCard(proposal: proposal, canReply: canReply, session: session)
             }
+            if let review = wrapUp.review {
+                CodeReviewCard(review: review, canReply: canReply, session: session)
+            }
         }
         .padding(20).frame(maxWidth: .infinity, alignment: .leading)
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))

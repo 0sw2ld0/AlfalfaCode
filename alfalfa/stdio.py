@@ -97,6 +97,8 @@ class Transport:
         self.learning = None
         # El repaso de aprendizaje del último turno, que corre después de `turno_terminado`.
         self.repaso = None
+        self.revisar_codigo = None
+        self.revision_codigo = None
 
     def clean(self, value):
         from . import proveedores
@@ -126,6 +128,8 @@ class Transport:
         if self.stopped:
             return
         self.stopped = True
+        if self.revision_codigo is not None and not self.revision_codigo.done():
+            self.revision_codigo.cancel()
         self.wake.set()
         for ident in list(self.pending):
             self.resolve(ident, False, 'Sesión interrumpida')
@@ -156,6 +160,9 @@ class Transport:
     def interrumpir_turno(self):
         """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta. Entre
         turnos corta el repaso de aprendizaje, si está en marcha."""
+        if not self.in_turn and self.revision_codigo is not None and not self.revision_codigo.done():
+            self.revision_codigo.cancel()
+            return True
         if not self.in_turn and self.repaso is not None and not self.repaso.done():
             self.repaso.cancel()
             return True
@@ -365,6 +372,14 @@ class Transport:
                 if not isinstance(ident, str) or not isinstance(aplicar, bool) or self.learning is None:
                     raise ValueError()
                 self.learning(ident, aplicar)
+            elif value.get('tipo') == 'revisar_codigo':
+                ident, modelo = value.get('turno'), value.get('modelo')
+                if not isinstance(ident, str) or not isinstance(modelo, str) or self.revisar_codigo is None:
+                    raise ValueError()
+                self.revisar_codigo(ident, modelo)
+            elif value.get('tipo') == 'cancelar_revision_codigo':
+                if self.revision_codigo is not None and not self.revision_codigo.done():
+                    self.revision_codigo.cancel()
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -516,6 +531,24 @@ async def run(args, transport):
         transport.context_mode = cambiar_contexto
         transport.budget = manager.cambiar_presupuesto
         transport.learning = manager.aprendizaje.resolver
+
+        def pedir_revision(ident, modelo):
+            if (transport.in_turn or transport.compacting or transport.inbox
+                    or transport.revision_codigo is not None and not transport.revision_codigo.done()):
+                transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de revisar el cierre.')
+                return
+
+            async def revisar():
+                await _cancelar_repaso(transport)
+                try:
+                    await manager.revision_codigo.ejecutar(ident, modelo)
+                except ValueError as exc:
+                    transport.emit('error', texto=str(exc))
+
+            transport.revision_codigo = asyncio.create_task(revisar())
+
+        transport.revisar_codigo = pedir_revision
+        manager.revision_codigo.reabrir()
         # Las propuestas de aprendizaje de esta sesión que siguen esperando vuelven como tarjeta.
         manager.aprendizaje.reabrir()
         reader_task = asyncio.create_task(consume())
@@ -531,6 +564,7 @@ async def run(args, transport):
         while prompt is not None and not transport.stopped:
             # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
             await _cancelar_repaso(transport)
+            await _cancelar_revision(transport)
             if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
                 transport.compacting = True
                 transport.worker = asyncio.create_task(manager.continuar_en_nueva())
@@ -625,6 +659,7 @@ async def run(args, transport):
         if manager:
             manager.task.update(status='failed', summary='Fallo de ejecución')
     finally:
+        await _cancelar_revision(transport)
         if transport.repaso is not None and not transport.repaso.done():
             # La sesión se cierra: el repaso se deja (el turno ya estaba cerrado).
             transport.repaso.cancel()
@@ -650,6 +685,13 @@ async def run(args, transport):
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
     return code
+
+
+async def _cancelar_revision(transport):
+    revision, transport.revision_codigo = transport.revision_codigo, None
+    if revision is not None and not revision.done():
+        revision.cancel()
+        await asyncio.gather(revision, return_exceptions=True)
 
 
 async def _cancelar_repaso(transport):

@@ -361,6 +361,8 @@ class TerminalManager:
             # Memoria y habilidades aprendidas (alfalfa/aprendizaje): la memoria entra congelada.
             from .aprendizaje.sesion import Aprendizaje
             self.aprendizaje = Aprendizaje(self)
+            from .revision_codigo import RevisionCodigo
+            self.revision_codigo = RevisionCodigo(self)
             self.aprendizaje.congelar(self.task)
             private_directory(private_directory(self.directory / 'native') / ident)
             self.save()
@@ -899,6 +901,7 @@ class TerminalManager:
             # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
             # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
             await asyncio.to_thread(deshacer.al_terminar_turno, self.home, self.task, turno['id'], rt.state)
+            self.revision_codigo.ofrecer(turno)
             rt._record_context_details()
             if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
                 self.context(self.task, self.task['context_tokens'], self.task['context_limit'])
