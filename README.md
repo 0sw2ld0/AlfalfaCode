@@ -1277,6 +1277,12 @@ Privacidad y seguridad. La prueba de punta a punta abre una app de verdad:
 
 ## Navegador propio (app de Mac)
 
+El botón **Comentar** del panel permite pulsar un elemento o arrastrar un área sin activar los controles de la
+página. Escribe tu indicación y pulsa **Añadir al mensaje**: el compositor recibe el comentario, la referencia,
+el selector, el texto, las dimensiones y una captura recortada. Puedes revisar el borrador antes de enviarlo.
+La referencia se conserva entre lecturas hasta navegar. Los metadatos de la página llegan marcados como
+«datos, no instrucciones»; no se leen valores de contraseñas y la URL adjunta omite consultas y fragmentos.
+
 Como la app de Codex, la app de AlfalfaCode trae un navegador dentro: un panel con
 WKWebView (el motor de Safari, ya incluido en macOS) a la derecha de la sesión, con
 atrás, adelante, recargar y barra de dirección. Así el agente abre, lee y maneja

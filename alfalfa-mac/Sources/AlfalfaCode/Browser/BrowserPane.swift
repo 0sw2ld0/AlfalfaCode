@@ -1,5 +1,6 @@
 import AlfalfaKit
 import AppKit
+import Combine
 import SwiftUI
 import WebKit
 
@@ -33,6 +34,7 @@ struct BrowserPane: View {
             }
             if let line = agentLine { agentBanner(line) }
             if let notice = browser.notice { noticeBanner(notice) }
+            BrowserAnnotationCard(browser: browser)
             ZStack {
                 Color.white
                 if let size = browser.viewport {
@@ -56,6 +58,7 @@ struct BrowserPane: View {
         .background(Theme.sidebar)
         .onChange(of: browser.url) { _, url in if !editing { address = url?.absoluteString ?? "" } }
         .onAppear { address = browser.url?.absoluteString ?? "" }
+        .onChange(of: browser.url) { browser.cancelAnnotation() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Navegador")
     }
@@ -91,6 +94,11 @@ struct BrowserPane: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(editing ? Theme.alfalfa.opacity(0.6) : Theme.border))
             .padding(.horizontal, 4)
+            button("text.bubble", "Comentar un elemento o un área",
+                   enabled: browser.url != nil && browser.activity == nil && !browser.isLoading) {
+                browser.cancelAnnotation()
+                browser.isSelectingAnnotation = true
+            }
             button("xmark", "Cerrar el navegador (la página sigue abierta)") { browser.isPanelOpen = false }
         }
         .padding(.horizontal, 8).frame(height: 40)
@@ -172,6 +180,7 @@ struct BrowserPane: View {
 /// el panel o cambiar de sesión la página sigue cargada.
 private struct BrowserHost: NSViewRepresentable {
     final class Coordinator {
+        var selection: AnyCancellable?
         var viewport: CGSize?
         var constraints: [NSLayoutConstraint] = []
     }
@@ -184,6 +193,13 @@ private struct BrowserHost: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let container = BrowserViewportContainer()
         attach(to: container, coordinator: context.coordinator)
+        if let browser = view.navigationDelegate as? BrowserEngine {
+            context.coordinator.selection = browser.$isSelectingAnnotation.sink { [weak container] selecting in
+                MainActor.assumeIsolated {
+                    if let container { updateSelection(in: container, selecting: selecting) }
+                }
+            }
+        }
         return container
     }
 
@@ -191,6 +207,7 @@ private struct BrowserHost: NSViewRepresentable {
         if view.superview !== container || context.coordinator.viewport != viewport {
             attach(to: container, coordinator: context.coordinator)
         }
+        updateSelection(in: container)
     }
 
     private func attach(to container: NSView, coordinator: Coordinator) {
@@ -219,6 +236,26 @@ private struct BrowserHost: NSViewRepresentable {
         NSLayoutConstraint.activate(constraints)
         coordinator.constraints = constraints
         coordinator.viewport = viewport
+        updateSelection(in: container)
+    }
+
+    /// El selector vive junto al WKWebView: al escalar o centrar la página conserva sus coordenadas CSS.
+    private func updateSelection(in container: NSView, selecting: Bool? = nil) {
+        let current = container.subviews.first { $0 is AnnotationSelectionView }
+        guard let browser = view.navigationDelegate as? BrowserEngine, selecting ?? browser.isSelectingAnnotation else {
+            current?.removeFromSuperview()
+            return
+        }
+        guard current == nil else { return }
+        let picker = BrowserAnnotationPicker.makeView(browser: browser)
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(picker, positioned: .above, relativeTo: view)
+        NSLayoutConstraint.activate([
+            picker.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            picker.topAnchor.constraint(equalTo: view.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 }
 

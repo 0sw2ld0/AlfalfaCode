@@ -32,6 +32,12 @@ public final class BrowserEngine: NSObject {
     @Published public private(set) var notice: String?
     /// El panel del navegador está abierto en la ventana de la sesión.
     @Published public var isPanelOpen = false
+    /// Selección hecha por la persona; el comentario sólo llega al compositor cuando lo confirma.
+    @Published public var isSelectingAnnotation = false
+    @Published public var annotation: BrowserAnnotation?
+    public var onAnnotation: ((BrowserAnnotation, String) -> Void)?
+    var annotationNavigation = 0
+    var annotationSelection = 0
 
     @Published public internal(set) var handoff: BrowserHandoff?
     var handoffContinuation: CheckedContinuation<BrowserReply, Never>?
@@ -159,6 +165,7 @@ public final class BrowserEngine: NSObject {
         cancelHandoff()
         queuedHandoffs.removeAll()
         isClosed = true
+        cancelAnnotation()
         isPanelOpen = false
         activity = nil
         webView.stopLoading()
@@ -178,6 +185,7 @@ public final class BrowserEngine: NSObject {
     }
 
     private func performNow(_ request: BrowserRequest) async -> BrowserReply {
+        if isSelectingAnnotation { cancelAnnotation() }
         isPanelOpen = true
         host()
         activity = Self.describe(request)
@@ -562,6 +570,8 @@ extension BrowserEngine: WKNavigationDelegate {
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         diagnostics.reset()
+        annotationNavigation += 1
+        cancelAnnotation()
         started += 1
     }
 
