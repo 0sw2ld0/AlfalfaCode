@@ -550,7 +550,12 @@ public struct Timeline: Equatable, Sendable {
             // orden) ya no está corriendo.
             closeOpenCalls()
             let id: Int
-            if let index = items.firstIndex(where: { if case .user(_, event.text, true) = $0 { return true } else { return false } }),
+            let queued = items.firstIndex { item in
+                guard case let .user(id, text, true) = item else { return false }
+                if let queueID = event.queueID { return queueIDs[id] == queueID }
+                return text == event.text // Motores anteriores sin id.
+            }
+            if let index = queued,
                case let .user(existing, text, _) = items[index] {
                 items[index] = .user(id: existing, text: text, queued: false)
                 // Ya no está en cola; un «Quitar» pedido antes recibirá «entregado».

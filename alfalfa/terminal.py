@@ -385,6 +385,8 @@ class TerminalManager:
     def event(self, task, role, text, emitir=True, herramienta=None):
         """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó.
         `herramienta`: nombre, fase y descripción de la llamada, para que la app la agrupe."""
+        id_cola = getattr(text, 'id', None) if role == 'user' else None
+        cola = {'id_cola': id_cola} if isinstance(id_cola, str) and id_cola else {}
         if self.transport:
             text = self.transport.clean(text)
             herramienta = self.transport.clean(herramienta)
@@ -399,6 +401,7 @@ class TerminalManager:
         if role != 'system':
             self._ultima_respuesta = text if role == 'agent' else None
         row = dict(role=role, text=text, time=time.time())
+        row.update(cola)
         if herramienta:
             row['herramienta'] = herramienta
         if task.get('turno_actual'):
@@ -411,6 +414,7 @@ class TerminalManager:
             return
         if self.transport:
             self.transport.emit('evento', rol=role, texto=text, hora=row['time'],
+                                **cola,
                                 **({'turno': row['turno']} if 'turno' in row else {}),
                                 **({'herramienta': herramienta} if herramienta else {}))
         else:

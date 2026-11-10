@@ -75,6 +75,20 @@ def test_el_mensaje_que_abre_un_turno_vuelve_como_entregado(tmp_path):
         cliente.cerrar()
 
 
+def test_el_eco_conserva_el_id_del_duplicado_que_se_adelanto(tmp_path):
+    cliente = ClienteLento(tmp_path, 'LENTO original')
+    try:
+        cliente.pensando()
+        cliente.enviar(tipo='mensaje', texto='Igual', id='q1')
+        cliente.enviar(tipo='mensaje', texto='Igual', id='q2')
+        cliente.enviar(tipo='enviar_ahora', texto='Igual', id='q2')
+        primero, segundo = cliente.usuario(), cliente.usuario()
+        assert primero['texto'] == segundo['texto'] == 'Igual'
+        assert [primero['id_cola'], segundo['id_cola']] == ['q2', 'q1']
+    finally:
+        cliente.cerrar()
+
+
 def test_enviar_ahora_corta_el_turno_y_sigue_la_sesion(tmp_path):
     cliente = ClienteLento(tmp_path, 'Tarea LENTO')
     try:

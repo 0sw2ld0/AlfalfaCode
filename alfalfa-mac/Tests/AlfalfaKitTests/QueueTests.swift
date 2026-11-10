@@ -24,6 +24,19 @@ final class QueueTests: XCTestCase {
         XCTAssertNil(timeline.queueIDs[second])
     }
 
+    func testEchoDeliversTheChosenDuplicateByID() throws {
+        var timeline = running()
+        let first = timeline.addUser("Igual", queued: true, queueID: "q1")
+        let second = timeline.addUser("Igual", queued: true, queueID: "q2")
+        let echo = try XCTUnwrap(AlfalfaMessage.decode(line:
+            #"{"version":2,"tipo":"evento","rol":"user","texto":"Igual","hora":2,"id_cola":"q2"}"#))
+        timeline.apply(echo)
+        XCTAssertEqual(timeline.queueIDs[first], "q1", "el primero sigue esperando en el motor")
+        XCTAssertNil(timeline.queueIDs[second], "Enviar ahora adelantó el segundo")
+        XCTAssertEqual(timeline.requestUnqueue(item: first, action: .remove), "q1")
+        XCTAssertNil(timeline.requestUnqueue(item: second, action: .remove))
+    }
+
     func testEchoDeliversTheQueuedReplyAndACutTurnLeavesTheSessionReady() {
         var timeline = Timeline()
         timeline.apply(.event(AgentEvent(role: "user", text: "primero", time: 1)))
