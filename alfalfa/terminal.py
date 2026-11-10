@@ -249,6 +249,9 @@ class TerminalManager:
             self.navegador = Navegador(transport.pedir_navegador)
         elif motor_navegador is not None:
             raise ValueError('WebKit requiere la app de Mac; en terminal elige --motor-navegador cuybrowser.')
+        if self.navegador is not None and transport is not None and (navegador or motor_navegador == 'webkit'):
+            from .navegador_comparar import Comparador
+            self.navegador.comparador = Comparador(self.navegador, transport.pedir_navegador, perfil_cuybrowser)
         # «Prevent sleep while running» de Codex: el Mac no se duerme por inactividad mientras
         # trabaja un turno. None lee ALFALFA_MANTENER_DESPIERTO (encendido por defecto).
         from .despierto import MantenerDespierto
@@ -390,6 +393,9 @@ class TerminalManager:
             raise
 
     def close(self):
+        comparador = getattr(getattr(self, 'navegador', None), 'comparador', None)
+        if comparador is not None:
+            comparador.close()
         if getattr(self, 'navegador', None) is not None and hasattr(self.navegador, 'close'):
             self.navegador.close()
         if getattr(self, 'despierto', None) is not None:

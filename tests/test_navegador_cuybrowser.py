@@ -185,9 +185,10 @@ def test_modos_y_confirmacion_nativa(tmp_path, api, mode):
         assert len(requests) == (1 if mode == 'manual' else 0)
 
 
-def test_los_dieciséis_y_escritura_plan(tmp_path, api):
-    assert len(NOMBRES) == 16
+def test_herramientas_sin_webkit_y_escritura_plan(tmp_path, api):
+    assert 'browser_compare' in NOMBRES
     browser, runtime, _ = setup(tmp_path, 'plan')
+    assert 'browser_compare' not in {tool['function']['name'] for tool in browser.tools}
     for name in ESCRITURA:
         with pytest.raises(ValueError, match='sólo lee'):
             asyncio.run(browser.llamar(runtime, name, {}))
