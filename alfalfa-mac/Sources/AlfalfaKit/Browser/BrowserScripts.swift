@@ -157,7 +157,7 @@ extension BrowserScripts {
     const max = Math.max(500, Math.min(args.max || 15000, 15000));
     if (args.modo === 'texto') {
       const text = (document.body?.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-      return { texto: text.slice(0, max), recortado: text.length > max };
+      return { texto: text.slice(0, max), recortado: text.length > max, documento: A.documentID };
     }
     // Las anotaciones del usuario y las lecturas comparten referencias hasta la siguiente navegación.
     const CONTEXT = new Set(['form', 'navigation', 'main', 'dialog']);
@@ -239,7 +239,7 @@ extension BrowserScripts {
       if (t) push(el, 'text «' + t + '»');
     }
     if (document.body) walk(document.body);
-    return { arbol: lines.join('\n'), referencias: A.next - 1, recortado: cut };
+    return { arbol: lines.join('\n'), referencias: A.next - 1, recortado: cut, documento: A.documentID };
     """#
 
 }
