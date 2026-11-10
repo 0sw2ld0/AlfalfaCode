@@ -768,6 +768,30 @@ def test_sourcekit_de_verdad_en_un_paquete_cabe_en_el_plazo(sesion, permisos, mo
     assert not (raiz / '.build').exists() and not (raiz / '.swiftpm').exists(), 'nadie abrió el paquete con SwiftPM'
 
 
+@pytest.mark.parametrize('diagnostico,gravedad,codigo,mensaje', [
+    ({'code': None, 'message': 'SyntaxError: unexpected EOF while parsing'},
+     'error', None, 'SyntaxError: unexpected EOF while parsing'),
+    ({'code': 'invalid-syntax', 'severity': 'error', 'message': 'unexpected EOF while parsing'},
+     'error', None, 'SyntaxError: unexpected EOF while parsing'),
+    ({'code': 'invalid-syntax', 'severity': 'error', 'message': 'SyntaxError: unexpected EOF while parsing'},
+     'error', None, 'SyntaxError: unexpected EOF while parsing'),
+    ({'code': 'F401', 'severity': 'error', 'message': '`os` imported but unused'},
+     'aviso', 'F401', '`os` imported but unused'),
+])
+def test_ruff_conserva_clasificacion_y_rotulo_del_json(tmp_path, monkeypatch, diagnostico, gravedad, codigo, mensaje):
+    async def simular(*_args, **_kwargs):
+        salida = dict(diagnostico, location={'row': 1, 'column': 6})
+        return json.dumps([salida]).encode(), b'', 1
+
+    monkeypatch.setattr(linters, 'correr', simular)
+    linter = linters.Ruff('ruff', '/ruff', tmp_path, {}, [])
+    filas = asyncio.run(linter.lint('o.py', 'o = (\n', None))
+    assert filas == [{'path': 'o.py', 'linea': 1, 'columna': 6, 'gravedad': gravedad,
+                      'fuente': 'ruff', 'codigo': codigo, 'mensaje': mensaje}]
+    fuente = 'ruff ' + codigo if codigo else 'ruff'
+    assert modulo.texto_de(filas[0]) == 'o.py:1:6 ' + gravedad + ' [' + fuente + '] ' + mensaje
+
+
 RUFF = shutil.which('ruff')
 
 

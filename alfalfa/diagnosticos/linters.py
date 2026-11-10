@@ -132,9 +132,14 @@ class Ruff(Linter):
                 continue
             lugar = d.get('location') or {}
             codigo_regla = d.get('code')
+            mensaje = d.get('message')
+            if codigo_regla == 'invalid-syntax':
+                codigo_regla = None
+                if not str(mensaje or '').startswith('SyntaxError'):
+                    mensaje = 'SyntaxError: ' + str(mensaje or '')
             error_de_verdad = (codigo_regla is None or str(codigo_regla).startswith(ERRORES_RUFF)
-                               or str(d.get('message', '')).startswith('SyntaxError'))
-            filas.append(self.fila(rel, lugar.get('row'), lugar.get('column'), error_de_verdad, d.get('message'),
+                               or str(mensaje or '').startswith('SyntaxError'))
+            filas.append(self.fila(rel, lugar.get('row'), lugar.get('column'), error_de_verdad, mensaje,
                                    codigo_regla))
         return filas
 

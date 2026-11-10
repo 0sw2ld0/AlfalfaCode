@@ -271,9 +271,10 @@ def prueba_el_proyecto(argv, raiz, cambiados=(), documentos=(), salida=None, cwd
             return False
         if re.search(r'\bRan\s+0\s+tests?\b', salida):
             return False
-        if re.search(r'(?m)^#\s*tests\s+0(?:\s|$)', salida) or re.search(r'no tests? (?:files? )?found', salida, re.I):
+        if (re.search(r'(?m)^[#ℹ]\s*tests\s+0(?:\s|$)', salida)
+                or re.search(r'no tests? (?:files? )?found', salida, re.I)):
             return False
-        if re.search(r'(?m)^#\s*pass\s+0(?:\s|$)', salida):
+        if re.search(r'(?m)^[#ℹ]\s*pass\s+0(?:\s|$)', salida):
             return False
         pasaron = re.search(r'\b[1-9][0-9]*\s+passed\b', salida)
         if herramienta == 'pytest' and not pasaron:

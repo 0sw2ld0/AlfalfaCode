@@ -1,4 +1,5 @@
 """Regresiones con proyectos y claves ficticios para la puerta y las tarjetas."""
+import shutil
 import sys
 
 import pytest
@@ -44,6 +45,34 @@ def test_scripts_npm_vacios_tampoco_acreditan_pruebas(tmp_path):
 def test_unittest_exige_ejecucion(tmp_path, salida, valida):
     (tmp_path / 'test_demo.py').write_text('')
     assert prueba_el_proyecto(['python3', '-m', 'unittest', 'discover'], tmp_path, salida=salida) is valida
+
+
+@pytest.mark.parametrize('marcador', ['#', 'ℹ'])
+@pytest.mark.parametrize('pruebas,pasaron,valida', [(0, 0, False), (1, 0, False), (1, 1, True)])
+def test_resumen_node_exige_pruebas_que_pasan(tmp_path, marcador, pruebas, pasaron, valida):
+    (tmp_path / 'package.json').write_text('{}')
+    salida = (f'{marcador} tests {pruebas}\n{marcador} suites 0\n{marcador} pass {pasaron}\n'
+              f'{marcador} fail 0\n{marcador} skipped {pruebas - pasaron}\n')
+    assert prueba_el_proyecto(['node', '--test'], tmp_path, salida=salida) is valida
+
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='Seatbelt real en macOS')
+@pytest.mark.skipif(shutil.which('node') is None, reason='node no disponible')
+def test_node_con_prueba_real_si_abre_la_puerta(escena):
+    s = escena()
+    (s.root / 'package.json').write_text('{}')
+    (s.root / 'demo.test.cjs').write_text("const test = require('node:test');\n"
+                                       "const assert = require('node:assert/strict');\n"
+                                       "test('Suma inventada', () => assert.equal(2 + 2, 4));\n")
+    _, modelo = s.correr([llamada('run_checks', {'argv': ['node', '--test', '--test-reporter=spec', 'demo.test.cjs'],
+                                              'purpose': 'Verificar', 'description': 'Verificar'}),
+                         CREAR_PASAR_PRUEBAS, FIN])
+    comprobacion = s.m.runtime().state['checks'][-1]
+    assert comprobacion['sandbox'] == 'seatbelt'
+    assert comprobacion['exit_code'] == 0, comprobacion['output']
+    assert 'tests 1' in comprobacion['output']
+    assert resultado(modelo.payloads[-1])['guardada']
+    assert len(s.permisos()) == 1
 
 
 @pytest.mark.skipif(sys.platform != 'darwin', reason='Seatbelt real en macOS')
