@@ -311,6 +311,32 @@ async def test_una_respuesta_fallida_del_navegador_no_dispara_la_captura(demo, m
     assert not app['peticiones']
 
 
+@pytest.mark.parametrize('releer', [False, True])
+async def test_tras_relevo_solo_hay_captura_automatica_si_se_relee(demo, releer):
+    m, rt, root, app = demo
+    await rt.tools.call('browser_read', {})
+    await rt.tools.call('browser_handoff', {'reason': 'Continúa en la página ficticia.'})
+    if releer:
+        await rt.tools.call('browser_read', {})
+    editar(root)
+    prueba = await cerrar(m, rt)
+    assert prueba['estado'] == ('completa' if releer else 'incompleta')
+    assert [accion for accion, _ in app['peticiones']].count('captura') == (2 if releer else 1)
+
+
+async def test_comparar_no_toma_foto_extra_y_permite_respaldo_antes_de_editar(demo):
+    m, rt, root, app = demo
+    m.diagnosticos = None
+    await m.pruebas_interfaz.navegador(rt, 'browser_compare', {'_imagenes': ['webkit.png', 'chromium.png']})
+    assert not app['peticiones']
+    original = (root / 'index.html').read_bytes()
+    await rt.tools.call('write_file', {'path': 'index.html', 'content': original.decode().replace('red', 'green'),
+                                       'expected_sha256': digest(original)})
+    assert [accion for accion, _ in app['peticiones']] == ['captura']
+    app['png'] = VERDE
+    assert (await cerrar(m, rt))['estado'] == 'completa'
+
+
 @pytest.mark.parametrize('editora', ['write_file', 'edit_file', 'apply_patch'])
 async def test_antes_de_la_edicion_autorizada_si_fallo_la_captura_temprana(demo, monkeypatch, editora):
     m, rt, root, app = demo

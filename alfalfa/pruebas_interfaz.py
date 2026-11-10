@@ -99,6 +99,7 @@ class PruebasInterfaz:
         self.notas = {}
         self.intentos = 0
         self.intento_previo_edicion = False
+        self.lectura_tras_relevo_pendiente = False
         self.lock = asyncio.Lock()
 
     def empezar(self, runtime, ident):
@@ -106,6 +107,7 @@ class PruebasInterfaz:
         self.web = self.mac = None
         self.usados, self.notas, self.intentos = set(), {}, 0
         self.intento_previo_edicion = False
+        self.lectura_tras_relevo_pendiente = False
 
     def _turno(self):
         return next(t for t in self.manager.task['turnos'] if t['id'] == self.ident)
@@ -135,16 +137,23 @@ class PruebasInterfaz:
     def _navegador_disponible(self):
         navegador = self.manager.navegador
         cerrado = hasattr(navegador, 'process') and getattr(navegador, 'http', None) is None
-        return (navegador is not None and not cerrado and not getattr(navegador, 'relevo_pendiente', False)
+        return (navegador is not None and not cerrado and not self.lectura_tras_relevo_pendiente
+                and not getattr(navegador, 'relevo_pendiente', False)
                 and not getattr(self.manager.transport, 'stopped', False)
                 and (getattr(navegador, 'url', None) or '').startswith(('http://', 'https://')))
+
+    def tras_relevo(self, runtime):
+        if self._turno_web(runtime):
+            self.lectura_tras_relevo_pendiente = True
 
     async def navegador(self, runtime, nombre, resultado):
         if (not self._turno_web(runtime) or nombre == 'browser_handoff' or not isinstance(resultado, dict)
                 or resultado.get('ok') is False or 'error' in resultado or 'permiso' in resultado):
             return
         self.usados.add('web')
-        if self.web is not None:
+        if nombre == 'browser_read':
+            self.lectura_tras_relevo_pendiente = False
+        if self.web is not None or nombre == 'browser_compare':
             return
         async with self.lock:
             if self.web is not None or not self._turno_web(runtime) or not self._navegador_disponible():
@@ -187,7 +196,8 @@ class PruebasInterfaz:
             if relevantes(almacen.cambios(antes, ahora), 'web'):
                 self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
                 return
-            if navegador is not self.manager.navegador or url != navegador.url:
+            if (navegador is not self.manager.navegador or url != navegador.url
+                    or not self._navegador_disponible()):
                 raise ValueError('La página cambió durante la captura previa.')
             png, tamano = self._imagen(resultado)
             self.web = dict(png=png, tamano=tamano, url=url)
@@ -272,7 +282,9 @@ class PruebasInterfaz:
             self.notas.setdefault('web', 'Falta la captura previa del navegador.')
             return
         if not self._turno_web(self.runtime) or not self._navegador_disponible():
-            self.notas['web'] = 'No se capturó el cierre: el navegador estaba cerrado o en relevo a la persona.'
+            self.notas['web'] = ('Falta volver a leer la página tras el relevo para capturar el cierre.'
+                                 if self.lectura_tras_relevo_pendiente
+                                 else 'No se capturó el cierre: el navegador no estaba disponible.')
             return
         try:
             if navegador.url != self.web['url']:
