@@ -27,6 +27,7 @@ struct Composer: View {
             HStack(spacing: 10) {
                 attachButton
                 field
+                if suggestion != nil { tabHint }
                 if session.timeline.status.isRunning { stopButton } else { sendButton }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -82,10 +83,25 @@ struct Composer: View {
         .disabled(!session.canSend || !allowsImages)
     }
 
+    /// La frase sugerida del último cierre, como en la app de Codex: sale en gris con el cuadro vacío.
+    private var suggestion: String? { text.isEmpty ? session.timeline.suggestion : nil }
+
+    /// «Tab» al lado de la sugerencia: así se sabe cómo usarla.
+    private var tabHint: some View {
+        Text("Tab").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.border))
+            .help("Tab pone la sugerencia en el cuadro para editarla o enviarla")
+            .accessibilityHidden(true)
+    }
+
     private var field: some View {
-        TextField("Añade una indicación", text: $text, axis: .vertical)
+        TextField(suggestion ?? "Añade una indicación", text: $text, axis: .vertical)
             .textFieldStyle(.plain).lineLimit(1...8).font(Theme.body)
             .accessibilityLabel("Indicación para el agente")
+            .accessibilityHint(suggestion.map { "Sugerencia: \($0). Tab la escribe en el cuadro." } ?? "")
+            // Escribir encima (o aceptarla) la retira hasta el siguiente cierre.
+            .onChange(of: text) { _, new in if !new.isEmpty { session.dismissSuggestion() } }
             // Una imagen soltada sobre el texto llega como su ruta: se adjunta en su lugar.
             .onChange(of: text) { old, new in
                 guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
@@ -118,8 +134,13 @@ struct Composer: View {
             .onKeyPress(.upArrow) { move(-1) }
             .onKeyPress(.downArrow) { move(1) }
             .onKeyPress(.tab) {
-                guard let option = suggestions[safe: selection] else { return .ignored }
-                complete(option)
+                if let option = suggestions[safe: selection] {
+                    complete(option)
+                    return .handled
+                }
+                // Con el cuadro vacío, Tab acepta la sugerencia: queda escrita, no se envía.
+                guard let suggestion else { return .ignored }
+                text = suggestion
                 return .handled
             }
             .onKeyPress(.escape) {

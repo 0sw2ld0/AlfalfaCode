@@ -277,6 +277,12 @@ final class LiveSession: ObservableObject, Identifiable {
         process?.send(.cancelCodeReview)
     }
 
+    /// El usuario escribió en el cuadro: la frase sugerida se va. Sin sugerencia no toca la línea
+    /// de tiempo, para no repintar la sesión con cada tecla.
+    func dismissSuggestion() {
+        if timeline.suggestion != nil { timeline.dismissSuggestion() }
+    }
+
     /// La tarjeta de una propuesta de aprendizaje: sólo desde sus botones. Con la sesión dormida
     /// la propuesta sigue en Ajustes ▸ Memoria.
     func resolveLearning(_ id: String, apply: Bool) {

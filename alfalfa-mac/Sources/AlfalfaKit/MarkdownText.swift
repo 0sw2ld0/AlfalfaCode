@@ -2,7 +2,8 @@ import Foundation
 
 /// Bloque de Markdown del texto del agente. Cubre lo que pinta la TUI de Codex
 /// (codex-rs/tui/src/markdown_render.rs): títulos, citas, listas anidadas y de
-/// tareas, código con lenguaje, líneas separadoras y tablas GFM.
+/// tareas, código con lenguaje, líneas separadoras y tablas GFM. Además, como la app de
+/// Codex, las imágenes y vídeos locales que el agente cita en su propia línea.
 public enum MarkdownBlock: Equatable, Sendable {
     case paragraph(String)
     case heading(Int, String)
@@ -13,12 +14,91 @@ public enum MarkdownBlock: Equatable, Sendable {
     case code(String, language: String? = nil)
     case table(header: [String], rows: [[String]])
     case rule
+    /// Una o varias imágenes o vídeos locales seguidos, cada uno en su línea o en la misma.
+    case media([MarkdownMedia])
+}
+
+/// Imagen o vídeo local citado con `![texto](ruta)`: el texto va de pie de foto.
+public struct MarkdownMedia: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable { case image, video }
+
+    public var alt: String
+    /// La ruta tal como la escribió el agente.
+    public var source: String
+    /// El archivo, ya resuelto, que existía al leer el texto.
+    public var url: URL
+    public var kind: Kind
+
+    public init(alt: String, source: String, url: URL, kind: Kind) {
+        self.alt = alt
+        self.source = source
+        self.url = url
+        self.kind = kind
+    }
+
+    public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "heif", "webp", "gif",
+                                                      "tif", "tiff", "bmp"]
+    public static let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+    public static func kind(ofExtension ext: String) -> Kind? {
+        let ext = ext.lowercased()
+        if imageExtensions.contains(ext) { return .image }
+        if videoExtensions.contains(ext) { return .video }
+        return nil
+    }
+
+    /// El archivo de una ruta de Markdown, si es local, de un formato que se muestra y existe:
+    /// absoluta, `~/`, `file://` o relativa a la carpeta de la sesión. Una URL web nunca: no se
+    /// descarga nada.
+    public static func resolve(_ source: String, folder: URL?,
+                               fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) })
+        -> URL? {
+        var path = source.trimmingCharacters(in: .whitespaces)
+        guard !path.isEmpty else { return nil }
+        if path.lowercased().hasPrefix("file://") {
+            guard let url = URL(string: path), url.isFileURL else { return nil }
+            path = url.path
+        } else if hasScheme(path) {
+            return nil
+        }
+        var candidates = [path]
+        if let decoded = path.removingPercentEncoding, decoded != path { candidates.append(decoded) }
+        for candidate in candidates {
+            let url: URL
+            if candidate.hasPrefix("/") {
+                url = URL(fileURLWithPath: candidate)
+            } else if candidate == "~" || candidate.hasPrefix("~/") {
+                url = URL(fileURLWithPath: NSString(string: candidate).expandingTildeInPath)
+            } else if let folder {
+                url = folder.appendingPathComponent(candidate)
+            } else {
+                continue
+            }
+            let file = url.standardizedFileURL
+            guard kind(ofExtension: file.pathExtension) != nil, fileExists(file.path) else { continue }
+            return file
+        }
+        return nil
+    }
+
+    /// `http:`, `data:`, `mailto:`…: un esquema antes de la primera barra.
+    private static func hasScheme(_ path: String) -> Bool {
+        guard let colon = path.firstIndex(of: ":") else { return false }
+        let scheme = path[..<colon]
+        guard let first = scheme.first, first.isLetter else { return false }
+        return scheme.allSatisfy { $0.isLetter || $0.isNumber || "+-.".contains($0) }
+    }
 }
 
 public enum MarkdownText {
     /// Divide el texto en bloques. El formato en línea (negrita, código, enlaces) se resuelve con `inline`.
-    public static func blocks(_ text: String) -> [MarkdownBlock] {
+    /// Las rutas relativas de las imágenes se buscan en `folder`, la carpeta de la sesión.
+    public static func blocks(_ text: String, folder: URL? = nil,
+                              fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) })
+        -> [MarkdownBlock] {
         var result: [MarkdownBlock] = []
+        /// La línea anterior era de imágenes: las seguidas, sin línea en blanco, van juntas.
+        var mediaRun = false
         var paragraph: [String] = []
         var quote: [String] = []
         let lines = text.components(separatedBy: "\n")
@@ -36,6 +116,8 @@ public enum MarkdownText {
             let line = lines[index]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             index += 1
+            let continuesMedia = mediaRun
+            mediaRun = false
 
             if let fence = fenceMarker(trimmed) {
                 flush()
@@ -50,6 +132,16 @@ public enum MarkdownText {
                 continue
             }
             if trimmed.isEmpty { flush(); continue }
+            if let items = mediaLine(trimmed, folder: folder, fileExists: fileExists) {
+                flush()
+                if continuesMedia, case let .media(previous) = result.last {
+                    result[result.count - 1] = .media(previous + items)
+                } else {
+                    result.append(.media(items))
+                }
+                mediaRun = true
+                continue
+            }
             if trimmed.hasPrefix(">") {
                 flushParagraph()
                 var body = trimmed.dropFirst()
@@ -109,10 +201,108 @@ public enum MarkdownText {
     /// Negrita, cursiva, tachado, código y enlaces. Si el texto no es Markdown válido, se devuelve tal cual.
     public static func inline(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        let source = visibleImages(text)
+        return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(text)
     }
 
     // MARK: - Piezas
+
+    /// Las imágenes de una línea que no tiene nada más (salvo la viñeta o el número de una
+    /// lista). Si alguna no es un archivo local que exista, la línea se queda como texto.
+    static func mediaLine(_ line: String, folder: URL?, fileExists: (String) -> Bool) -> [MarkdownMedia]? {
+        var body = line
+        if let (_, item) = taskItem(body) {
+            body = item
+        } else if let item = bulletItem(body) {
+            body = item
+        } else if let (_, item) = numberedItem(body) {
+            body = item
+        }
+        guard let references = imageReferences(body.trimmingCharacters(in: .whitespaces)) else { return nil }
+        var result: [MarkdownMedia] = []
+        for (alt, source) in references {
+            guard let url = MarkdownMedia.resolve(source, folder: folder, fileExists: fileExists),
+                  let kind = MarkdownMedia.kind(ofExtension: url.pathExtension) else { return nil }
+            result.append(MarkdownMedia(alt: alt, source: source, url: url, kind: kind))
+        }
+        return result
+    }
+
+    /// `![texto](ruta)` una o varias veces, separadas sólo por espacios.
+    static func imageReferences(_ line: String) -> [(alt: String, source: String)]? {
+        var rest = Substring(line)
+        var result: [(String, String)] = []
+        while !rest.isEmpty {
+            guard let (alt, source, remainder) = imageReference(at: rest) else { return nil }
+            result.append((alt, source))
+            rest = remainder.drop { $0 == " " || $0 == "\t" }
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    /// Una `![texto](ruta)` al principio de `text` y lo que queda detrás. La ruta admite
+    /// `<…>`, paréntesis equilibrados (`foto (1).png`) y un título final entre comillas.
+    static func imageReference(at text: Substring) -> (alt: String, source: String, rest: Substring)? {
+        guard text.hasPrefix("![") else { return nil }
+        var rest = text.dropFirst(2)
+        guard let close = rest.range(of: "](") else { return nil }
+        let alt = String(rest[..<close.lowerBound])
+        guard !alt.contains("]"), !alt.contains("\n") else { return nil }
+        rest = rest[close.upperBound...]
+        var destination: String
+        if rest.hasPrefix("<") {
+            guard let end = rest.range(of: ">)") else { return nil }
+            destination = String(rest[rest.index(after: rest.startIndex)..<end.lowerBound])
+            rest = rest[end.upperBound...]
+        } else {
+            var depth = 0
+            var end: Substring.Index?
+            for position in rest.indices {
+                let character = rest[position]
+                if character == "\n" { return nil }
+                if character == "(" { depth += 1 }
+                if character == ")" {
+                    if depth == 0 { end = position; break }
+                    depth -= 1
+                }
+            }
+            guard let end else { return nil }
+            destination = String(rest[..<end])
+            rest = rest[rest.index(after: end)...]
+            if let quote = destination.range(of: " \"", options: .backwards), destination.hasSuffix("\""),
+               quote.lowerBound < destination.index(before: destination.endIndex) {
+                destination = String(destination[..<quote.lowerBound])
+            }
+        }
+        destination = destination.trimmingCharacters(in: .whitespaces)
+        guard !destination.isEmpty else { return nil }
+        return (alt.trimmingCharacters(in: .whitespaces), destination, rest)
+    }
+
+    /// Una imagen que se queda en el texto (en medio de un párrafo, web o que no existe) no
+    /// se pinta, pero tampoco pierde la ruta: una web queda como enlace y una local, a la vista.
+    static func visibleImages(_ text: String) -> String {
+        guard text.contains("![") else { return text }
+        var output = ""
+        var rest = Substring(text)
+        var inCode = false
+        while let character = rest.first {
+            if character == "`" { inCode.toggle() }
+            if !inCode, character == "!", let (alt, source, remainder) = imageReference(at: rest) {
+                let lower = source.lowercased()
+                if lower.hasPrefix("https://") || lower.hasPrefix("http://") {
+                    output += "[\(alt.isEmpty ? source : alt)](\(source))"
+                } else {
+                    output += alt.isEmpty ? "`\(source)`" : "\(alt) (`\(source)`)"
+                }
+                rest = remainder
+                continue
+            }
+            output.append(character)
+            rest = rest.dropFirst()
+        }
+        return output
+    }
 
     private static func fenceMarker(_ line: String) -> String? {
         for marker in ["```", "~~~"] where line.hasPrefix(marker) { return marker }
