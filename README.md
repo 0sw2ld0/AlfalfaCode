@@ -412,6 +412,16 @@ la sesión recibe la imagen y responde a la pregunta. Sin visión, la herramient
 no se ofrece. Una aplicación que integra AlfalfaCode puede delegarlo en otra
 sesión con `alfalfa.ajustes.vision_delegada`.
 
+Al revés, el agente también puede enseñarte imágenes y vídeos, como en la app de Codex.
+Si responde con una línea `![Tolgrenn — caminar](/ruta/lamina.png)`, la app de Mac
+pinta ahí la imagen con el texto como pie de foto, y varias seguidas forman una
+cuadrícula. Valen PNG, JPG, HEIC, WebP, GIF (animado) y, en un reproductor sin sonido
+y en bucle si es corto, MP4 y MOV. Sólo archivos locales que existan, con ruta
+absoluta, `~/` o relativa a la carpeta de la sesión: una URL web se queda como enlace y
+nunca se descarga nada. Un clic la abre en Vista rápida y el menú contextual la muestra
+en Finder o la copia. Copiar o exportar la respuesta sigue dando el Markdown original, y
+en la terminal se ve la ruta.
+
 ## Cierre de cada turno
 
 Como la caja «siguiente paso» de Claude Code: cuando un turno cambió archivos o
