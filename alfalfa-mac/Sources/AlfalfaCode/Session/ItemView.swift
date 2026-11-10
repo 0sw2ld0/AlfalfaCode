@@ -24,7 +24,8 @@ struct ItemView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case let .events(_, events):
-            WorkLog(events: events, running: liveWork, expanded: $expanded)
+            WorkLog(events: events, running: liveWork,
+                    waiting: liveWork && session.timeline.status == .waitingPermission, expanded: $expanded)
         case let .permission(_, request, state):
             PermissionCard(request: request, state: state, session: session, isFirstPending: isFirstPending)
         case let .notice(_, text):

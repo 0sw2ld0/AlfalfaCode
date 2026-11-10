@@ -2,36 +2,31 @@ import AlfalfaKit
 import SwiftUI
 
 /// Las llamadas seguidas del agente en una fila plegada, como en la app de Claude:
-/// «Ejecutó 3 comandos, leyó 2 archivos ›». Al abrirla, una fila por llamada con su
-/// descripción; al abrir una fila, el comando con su `$` y la salida.
+/// «Ejecutó 3 comandos, leyó 2 archivos · 1min 7s ›». Al abrirla, una fila por llamada con su
+/// descripción y lo que tardó; al abrir una fila, el comando con su `$` y la salida.
 ///
-/// Mientras trabaja, el grupo sigue plegado y debajo se ve la llamada en curso con su
-/// descripción: así lo hace Claude, y la conversación no salta con cada salida larga.
+/// Mientras trabaja, la fila es la viva: la hoja de alfalfa animada, lo que hace ahora en
+/// gerundio («Leyendo WorkLog.swift», «Pensando» entre llamadas) y el tiempo que lleva. La
+/// conversación no salta con cada salida larga: las llamadas se ven al abrirla.
 struct WorkLog: View {
 
     // MARK: - Propiedades
 
     let events: [ToolEvent]
     let running: Bool
+    /// Una llamada del grupo espera el permiso de la persona.
+    var waiting = false
     @Binding var expanded: Bool
 
     var body: some View {
         let entries = ToolCalls.entries(from: events)
         let calls = entries.compactMap { if case let .call(call) = $0 { return call } else { return nil } }
-        let current = running ? calls.last { !$0.finished } : nil
         VStack(alignment: .leading, spacing: 0) {
-            Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: {
-                HStack(spacing: 6) {
-                    Text(title(calls: calls, entries: entries))
-                        .font(.system(size: 14)).foregroundStyle(Theme.muted).lineLimit(1)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.muted).rotationEffect(.degrees(expanded ? 90 : 0))
-                }
-                .padding(.vertical, 6).contentShape(Rectangle())
+            if running {
+                LiveActivityRow(activity: LiveActivity.of(group: events, waiting: waiting), expanded: $expanded)
+            } else {
+                summaryRow(title: title(calls: calls, entries: entries), onlyNotes: calls.isEmpty)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title(calls: calls, entries: entries))
-            .accessibilityHint(expanded ? "Plegar las llamadas" : "Ver cada llamada")
             if expanded {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(entries) { entry in
@@ -41,23 +36,39 @@ struct WorkLog: View {
                         }
                     }
                 }
-                .padding(.top, 4)
-            } else if let current {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    ProgressView().controlSize(.mini)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(current.description + "…").font(.system(size: 13)).foregroundStyle(Theme.secondary)
-                            .lineLimit(1)
-                        if let command = current.command { CommandText(command: command) }
-                    }
-                }
-                .padding(.vertical, 3)
-                .accessibilityElement(children: .combine)
+                .padding(.leading, 24).padding(.top, 2)
             }
         }
     }
 
     // MARK: - Métodos privados
+
+    /// La fila de un grupo terminado: la hoja quieta, el resumen y lo que duró. Un grupo con
+    /// sólo avisos del sistema no es trabajo del agente: lleva el icono de aviso.
+    private func summaryRow(title: String, onlyNotes: Bool) -> some View {
+        let total = ToolEvent.duration(of: events)
+        return Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: {
+            HStack(spacing: 8) {
+                if onlyNotes {
+                    Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                        .frame(width: 16, height: 16)
+                } else {
+                    AlfalfaActivityIcon(phase: .done, size: 16)
+                }
+                Text(title).font(.system(size: 14)).foregroundStyle(Theme.muted).lineLimit(1)
+                if let total {
+                    Text(ElapsedTime.text(total)).font(.system(size: 13)).monospacedDigit()
+                        .foregroundStyle(Theme.muted).fixedSize()
+                }
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.muted).rotationEffect(.degrees(expanded ? 90 : 0))
+            }
+            .padding(.vertical, 6).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title + (total.map { ", " + ElapsedTime.spoken($0) } ?? ""))
+        .accessibilityHint(expanded ? "Plegar las llamadas" : "Ver cada llamada")
+    }
 
     private func title(calls: [ToolCall], entries: [WorkEntry]) -> String {
         if !calls.isEmpty { return ToolCalls.summary(calls) }
@@ -65,7 +76,7 @@ struct WorkLog: View {
         if case let .note(event)? = entries.first {
             return entries.count == 1 ? event.title : event.title + " · y \(entries.count - 1) más"
         }
-        return running ? "Trabajando…" : "Sin acciones"
+        return "Sin acciones"
     }
 }
 
@@ -89,6 +100,7 @@ struct ToolCallRow: View {
                             Text(call.description).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                                 .lineLimit(1)
                             badge
+                            duration
                             Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(Theme.muted).rotationEffect(.degrees(open ? 90 : 0))
                         }
@@ -100,8 +112,7 @@ struct ToolCallRow: View {
             }
             .buttonStyle(.plain)
             .help(call.command.map { "$ " + $0 } ?? call.description)
-            .accessibilityLabel(call.description + (call.command.map { ", orden " + $0 } ?? "")
-                                + (call.interrupted ? ", interrumpida" : call.failed ? ", falló" : ""))
+            .accessibilityLabel(spokenLabel)
             if open { detail.padding(.leading, 22).padding(.bottom, 6) }
         }
     }
@@ -110,10 +121,28 @@ struct ToolCallRow: View {
 
     @State private var open = false
 
+    /// Descripción, orden, cómo acabó y lo que tardó, para VoiceOver.
+    private var spokenLabel: String {
+        var parts = [call.description]
+        if let command = call.command { parts.append("orden " + command) }
+        if call.interrupted { parts.append("interrumpida") } else if call.failed { parts.append("falló") }
+        if let seconds = call.duration, seconds >= 1 { parts.append(ElapsedTime.spoken(seconds)) }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Lo que tardó o, en curso, lo que lleva («5s»), con las horas de los eventos.
+    @ViewBuilder private var duration: some View {
+        if live, let start = call.startTime {
+            LiveDuration(since: start)
+        } else if let seconds = call.duration, seconds >= 1 {
+            DurationText(seconds: seconds)
+        }
+    }
+
     /// En curso, interrumpida, fallida o con un código que el motor dio por bueno (en gris).
     @ViewBuilder private var badge: some View {
         if live {
-            ProgressView().controlSize(.mini)
+            EmptyView()
         } else if call.interrupted {
             Text("interrumpida").font(.system(size: 11.5)).foregroundStyle(Theme.warning)
         } else if call.failed {
@@ -212,5 +241,28 @@ private struct CommandText: View {
     var body: some View {
         Text("$ " + command).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Theme.muted)
             .lineLimit(1).truncationMode(.middle)
+    }
+}
+
+/// Lo que tardó una llamada, pequeño y en gris («5s»).
+private struct DurationText: View {
+    let seconds: Double
+
+    var body: some View {
+        Text(ElapsedTime.text(seconds)).font(.system(size: 11.5)).monospacedDigit().foregroundStyle(Theme.muted)
+            .fixedSize()
+    }
+}
+
+/// Lo que lleva la llamada en curso; se para cuando la ventana no se ve.
+private struct LiveDuration: View {
+    let since: Double
+    @State private var visible = true
+
+    var body: some View {
+        SecondTicker(since: since, active: visible) { now in
+            DurationText(seconds: max(0, now.timeIntervalSince1970 - since))
+        }
+        .background(WindowVisibilityReader(visible: $visible))
     }
 }
