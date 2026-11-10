@@ -113,6 +113,12 @@ def descripcion(nombre, args):
         return 'Cerrar el turno'
     if nombre == 'propose_session':
         return 'Proponer una sesión aparte'
+    if nombre == 'memoria':
+        return 'Guardar en la memoria (' + (_texto(args.get('almacen'), 20) or 'usuario') + ')'
+    if nombre == 'habilidad':
+        accion = {'crear': 'Crear', 'parchear': 'Cambiar', 'escribir_archivo': 'Ampliar',
+                  'borrar': 'Borrar'}.get(args.get('accion'), 'Cambiar')
+        return accion + ' la habilidad ' + _texto(args.get('nombre'), 64)
     if nombre == 'buscar_herramientas':
         return 'Cargar herramientas'
     if isinstance(nombre, str) and nombre.startswith('browser_'):

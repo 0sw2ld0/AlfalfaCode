@@ -31,6 +31,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case budget(session: Double?, month: Double?)
     /// La respuesta del navegador propio a una petición `navegador`.
     case browserReply(BrowserReply)
+    /// La tarjeta de una propuesta de la revisión al cerrar el turno: aplicarla o descartarla.
+    case learning(id: String, apply: Bool)
 
     public var line: String {
         let object: [String: Any]
@@ -57,6 +59,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
             object = ["tipo": "presupuesto", "sesion": session.map { $0 as Any } ?? NSNull(),
                       "mes": month.map { $0 as Any } ?? NSNull()]
         case let .browserReply(reply): object = reply.object
+        case let .learning(id, apply): object = ["tipo": "aprendizaje", "id": id, "aplicar": apply]
         case let .compact(instructions):
             object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
         case let .settings(model, effort, mode):

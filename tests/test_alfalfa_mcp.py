@@ -785,6 +785,8 @@ def primer_payload(tmp_path, monkeypatch, con_mcp):
 
 @macos
 def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
+    # La memoria propia (almacén «entorno») se apaga: aquí sólo se mide lo que declara MCP.
+    monkeypatch.setenv('ALFALFA_APRENDER', '0')
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--herramientas', '294')})
     assert s.m.task['model'] == 'deepseek-v4.1-flash:cloud'
     vistos = {}

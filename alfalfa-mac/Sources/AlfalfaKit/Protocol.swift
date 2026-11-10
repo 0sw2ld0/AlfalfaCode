@@ -163,6 +163,8 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     /// El navegador propio: enviar un formulario, escribir una contraseña, descargar, JavaScript
     /// que cambia la página o abrir una dirección local.
     case browser = "navegador"
+    /// Guardar memoria o una habilidad aprendida (alfalfa/aprendizaje): la tarjeta trae el diff.
+    case learn = "aprendizaje"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -175,6 +177,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .edit: return "Edición de archivos"
         case .app: return "Controlar una app"
         case .browser: return "Navegador"
+        case .learn: return "Guardar lo aprendido"
         }
     }
 
@@ -298,11 +301,14 @@ public struct PermissionRequest: Equatable, Sendable {
     public var forSession: Bool = false
     /// Presente sólo al mirar o manejar otra app (motivo `app`).
     public var app: AppTarget?
+    /// Lo que cambia al guardar memoria o una habilidad aprendida (motivo `aprendizaje`).
+    public var diff: String?
 
     public init(id: String, argv: [String], purpose: String, reason: PermissionReason? = nil,
                 reasons: [PermissionReason]? = nil, justification: String? = nil, rule: String? = nil,
                 retryOf: String? = nil, detail: String? = nil, mcp: McpCall? = nil, forSession: Bool = false,
-                app: AppTarget? = nil) {
+                app: AppTarget? = nil, diff: String? = nil) {
+        self.diff = diff
         self.forSession = forSession
         self.app = app
         self.id = id
@@ -336,6 +342,10 @@ public struct PermissionRequest: Equatable, Sendable {
         if reasons.contains(.edit) { return "El modo Manual pide permiso antes de editar archivos." }
         if reasons.contains(.mode) {
             return "Tu modo pide permiso para cada orden que no sólo lee; se ejecutará dentro del sandbox, sin red."
+        }
+        if reasons.contains(.learn) {
+            return "Lo escribe AlfalfaCode, fuera del sandbox: en tu memoria o tus habilidades, o en .alfalfa/skills "
+                + "del proyecto. Entra en la próxima sesión."
         }
         if reasons.contains(.browser) {
             return "Lo hará el navegador de la sesión, que ves en el panel: aislado, sin tus cuentas "
@@ -690,6 +700,17 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `quitado_de_cola`: respuesta a «Quitar» o «Editar» de un mensaje en cola. `removed` si se
     /// quitó; si no, `reason` es `entregado` (el modelo ya lo leyó) o `desconocido`.
     case unqueued(id: String, removed: Bool, reason: String?)
+    /// `alfalfa --memoria --json`: los tres almacenes de memoria y los ajustes de aprendizaje.
+    case memory(MemoryState)
+    /// `alfalfa --aprendido --json`: habilidades aprendidas, propuestas sin revisar y ajustes.
+    case learned(LearnedState)
+    /// `alfalfa --aprendido ver NOMBRE --json`: los archivos de una habilidad aprendida.
+    case learnedSkillFiles(reference: String, files: [String: String])
+    /// `aprendizaje_propuesto`: la revisión al cerrar el turno propone guardar algo; espera a la tarjeta.
+    case learningProposal(LearningProposal)
+    /// `aprendizaje_resuelto`: la respuesta a la tarjeta (`{"tipo":"aprendizaje"}`); `discarded` si
+    /// se descartó (no se deduce del texto).
+    case learningResolved(id: String, applied: Bool, discarded: Bool = false, text: String)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -716,7 +737,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                                  justification: text(object["justificacion"]), rule: text(object["regla"]),
                                                  retryOf: text(object["reintento_de"]), detail: text(object["sin_sandbox"]),
                                                  mcp: mcpCall(object["mcp"]), forSession: bool(object["para_sesion"]) ?? false,
-                                                 app: appTarget(object["app"])))
+                                                 app: appTarget(object["app"]), diff: text(object["diff"])))
         case "permiso_resuelto":
             guard let id = object["id"] as? String, let approved = bool(object["aprobado"]) else { return nil }
             return .permissionResolved(id: id, approved: approved, reason: object["motivo"] as? String ?? "",
@@ -851,6 +872,22 @@ public enum AlfalfaMessage: Equatable, Sendable {
             guard let id = text(object["id"]) else { return nil }
             if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }
             return .sessionChanged(id: id, forkedFrom: text(object["bifurcada_de"]))
+        case "memoria":
+            return MemoryState(object).map(Self.memory)
+        case "aprendido":
+            return LearnedState(object).map(Self.learned)
+        case "habilidad":
+            guard let skill = object["habilidad"] as? [String: Any], let scope = text(skill["alcance"]),
+                  let name = text(skill["nombre"]) else { return nil }
+            let files = (skill["archivos"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
+            return .learnedSkillFiles(reference: scope + ":" + name, files: files)
+        case "aprendizaje_propuesto":
+            return LearningProposal(object).map(Self.learningProposal)
+        case "aprendizaje_resuelto":
+            guard let id = text(object["id"]) else { return nil }
+            return .learningResolved(id: id, applied: bool(object["aplicado"]) ?? false,
+                                     discarded: bool(object["descartada"]) ?? false,
+                                     text: object["texto"] as? String ?? "")
         case "actualizacion":
             guard let installed = object["instalada"] as? String, let available = bool(object["hay_nueva"]) else { return nil }
             return .update(UpdateInfo(installed: installed, latest: text(object["ultima"]), available: available,

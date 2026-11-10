@@ -14,6 +14,8 @@ os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
 os.environ['ALFALFA_IMPORTAR_CASA'] = tempfile.mkdtemp(prefix='casa-ajena-')
 # Ni lanzan servidores de lenguaje ni linters tras cada edición: test_diagnosticos los enciende.
 os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
+# Ni la revisión de aprendizaje al cerrar el turno pide nada al modelo falso: test_aprendizaje la enciende.
+os.environ['ALFALFA_APRENDER_REVISION'] = '0'
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)

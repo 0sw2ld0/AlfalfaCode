@@ -53,10 +53,11 @@ final class PermissionReasonTests: XCTestCase {
 
     func testEachReasonExplainsItsScope() {
         // modo y edicion los añaden los modos Manual y Aceptar ediciones; app, el control de apps;
-        // navegador, el navegador propio de la app.
+        // navegador, el navegador propio de la app; aprendizaje, la memoria y las habilidades aprendidas.
         XCTAssertEqual(PermissionReason.allCases.map(\.rawValue),
-                       ["peligroso", "red", "salir_sandbox", "reintento", "modo", "edicion", "app", "navegador"])
-        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 8)
+                       ["peligroso", "red", "salir_sandbox", "reintento", "modo", "edicion", "app", "navegador",
+                        "aprendizaje"])
+        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 9)
         XCTAssertEqual(PermissionReason.allCases.filter(\.leavesSandbox), [.leaveSandbox, .retry])
         func scope(_ reasons: [PermissionReason]) -> String? {
             PermissionRequest(id: "x", argv: ["ls"], purpose: "", reason: reasons.first, reasons: reasons).scope

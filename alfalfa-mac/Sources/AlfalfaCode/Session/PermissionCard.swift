@@ -26,6 +26,10 @@ struct PermissionCard: View {
             if !request.purpose.isEmpty, request.mcp == nil {
                 Text(request.purpose).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
             }
+            if let diff = request.diff, !diff.isEmpty {
+                // Memoria o habilidad aprendida: lo que se escribiría, antes de aprobarlo.
+                DiffBlock(diff: diff)
+            }
             if let justification = request.justification {
                 detailLine("Justificación", justification)
             }

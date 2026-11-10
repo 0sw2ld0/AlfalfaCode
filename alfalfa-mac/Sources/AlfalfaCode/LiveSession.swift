@@ -230,6 +230,19 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
 
+    /// La tarjeta de una propuesta de aprendizaje: sólo desde sus botones. Con la sesión dormida
+    /// la propuesta sigue en Ajustes ▸ Memoria.
+    func resolveLearning(_ id: String, apply: Bool) {
+        let key = "aprendizaje:" + id
+        guard !answered.contains(key) else { return }
+        guard let process else {
+            timeline.addNotice("La sesión está cerrada: guarda o descarta la propuesta en Ajustes ▸ Memoria.")
+            return
+        }
+        answered.insert(key)
+        process.send(.learning(id: id, apply: apply))
+    }
+
     /// Como /model en Codex: vale para el siguiente turno; el que está en marcha sigue igual.
     func change(model newModel: String? = nil, effort newEffort: String? = nil, mode newMode: String? = nil) {
         let model = newModel.flatMap { $0 == self.model ? nil : $0 }

@@ -330,6 +330,10 @@ private extension Composer {
         case .cerrarProcesos: session.stopProcess("todos")
         case .estado: session.showStatus()
         case .revisar, .inicializar: session.send(command.prompt ?? "")
+        case .aprender:
+            // El motor la expande (alfalfa/aprendizaje): reúne el material y propone la habilidad.
+            guard !value.isEmpty else { text = "/aprender "; return }
+            session.send("/aprender " + value)
         case .renombrar:
             guard !value.isEmpty else { text = "/renombrar "; return }
             withRow { app.rename($0, to: value) }

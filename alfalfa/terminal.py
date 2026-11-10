@@ -352,6 +352,10 @@ class TerminalManager:
                                         sandbox=lambda raiz: SeatbeltSandbox(raiz, network=False, protegidas=(base,)))
                 if motor.activo() or motor.diagnosticos:
                     self.hooks = HooksDeSesion(motor, self, self.task, reanudada=bool(resume))
+            # Memoria y habilidades aprendidas (alfalfa/aprendizaje): la memoria entra congelada.
+            from .aprendizaje.sesion import Aprendizaje
+            self.aprendizaje = Aprendizaje(self)
+            self.aprendizaje.congelar(self.task)
             private_directory(private_directory(self.directory / 'native') / ident)
             self.save()
         except BaseException:
@@ -635,7 +639,8 @@ class TerminalManager:
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else '')
                              + (navegador_manual() if self.navegador is not None
-                                and 'browser_navigate' not in excluidas() else ''),
+                                and 'browser_navigate' not in excluidas() else '')
+                             + self.aprendizaje.manual(),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
                              excluded_tools=excluidas() + (ESCRITURA
                                                          if self.read_only or modos.solo_lee(modos.modo_de(self.task))
@@ -659,6 +664,8 @@ class TerminalManager:
         if self.navegador is not None:
             from .navegador import TOOLS as HERRAMIENTAS_DEL_NAVEGADOR
             rt.tool_specs = list(rt.tool_specs) + HERRAMIENTAS_DEL_NAVEGADOR
+        rt.tool_specs = list(rt.tool_specs) + self.aprendizaje.herramientas()
+        self.aprendizaje.vincular(rt)
         if self.mcp is not None:
             self.mcp.vincular(rt)
         if self.transport:
@@ -704,6 +711,21 @@ class TerminalManager:
         rt._inherit_handoff_uncertain_operations()
         rt.save()
         return rt
+
+    async def repasar(self):
+        """Tras cerrar el turno (con su estado ya fijado y, en --stdio, `turno_terminado` ya emitido):
+        ¿algo que recordar o un procedimiento que guardar? (alfalfa/aprendizaje/revision.py). Va aparte
+        del turno: Detener no lo toca, y si se cancela (se cierra la sesión) el turno sigue como estaba."""
+        rt = getattr(self.aprendizaje, 'rt', None)
+        if rt is None:
+            return None
+        try:
+            return await self.aprendizaje.revisar(rt)
+        except asyncio.CancelledError:
+            self.task['aprendizaje_revision'] = {'estado': 'cancelada'}
+            return None
+        finally:
+            self.save()
 
     async def compact_now(self, instructions=None):
         """Compacta la sesión entre turnos («Compactar sesión», /compactar sin turno en marcha).
@@ -829,7 +851,7 @@ class TerminalManager:
             # El código de la carpeta antes del turno, para poder volver a este mensaje con él.
             await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'], rt.state)
             # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
-            expandido = self.importadas.expandir(prompt)
+            expandido = self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt)
             pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
             if pendiente is not None:
                 self.event(self.task, 'system', 'La orden /' + pendiente.nombre + ' del proyecto ('
@@ -1011,8 +1033,12 @@ async def execute(args):
         if rechazo:
             print('AlfalfaCode · Error: ' + rechazo[0], file=sys.stderr)
             return 1
-        return await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones inciertas '
-                                                 'antes de actuar.')
+        codigo = await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones '
+                                                   'inciertas antes de actuar.')
+        # El resultado del turno ya salió entero; el repaso va detrás, acotado y cancelable con Ctrl-C.
+        sys.stdout.flush()
+        await manager.repasar()
+        return codigo
     finally:
         # Como Codex al cerrar: los procesos en segundo plano terminan con la sesión.
         await manager.fondo.detener_todos()
@@ -1102,6 +1128,8 @@ def main(argv=None):
     orden_de_importadas.argumentos(parser)
     from .deshacer import orden as orden_de_deshacer
     orden_de_deshacer.argumentos(parser, listing)
+    from .aprendizaje import orden as orden_de_aprendizaje
+    orden_de_aprendizaje.argumentos(parser, listing)
     args = parser.parse_args(argv)
     if (args.autorizar or args.retirar or args.sin_internet) and not args.importar:
         parser.error('--autorizar, --retirar y --sin-internet sólo valen con --importar')
@@ -1111,6 +1139,10 @@ def main(argv=None):
         return orden_de_proveedores.orden(args)
     if orden_de_deshacer.pedida(args):
         return orden_de_deshacer.orden(args)
+    if args.texto is not None and not orden_de_aprendizaje.pedida(args):
+        parser.error('--texto sólo vale con --memoria o --aprendido')
+    if orden_de_aprendizaje.pedida(args):
+        return orden_de_aprendizaje.orden(args, home_dir())
     if args.descartar_no_relevantes and not args.aligerar_sesiones:
         parser.error('--descartar-no-relevantes sólo vale con --aligerar-sesiones')
     if args.aligerar_sesiones:

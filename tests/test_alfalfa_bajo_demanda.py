@@ -97,7 +97,9 @@ def commands(spawned):
 def test_policy_is_enabled_only_by_terminal_manager_and_integrators_keep_their_catalog(session):
     rt, *_ = session
     assert isinstance(rt.command_policy, OnRequestPolicy)
-    assert rt.tool_specs is ON_REQUEST_TOOLS
+    # El catálogo on-request y, detrás, las herramientas de aprendizaje de AlfalfaCode (alfalfa/aprendizaje).
+    assert rt.tool_specs[:len(ON_REQUEST_TOOLS)] == ON_REQUEST_TOOLS
+    assert [t['function']['name'] for t in rt.tool_specs[len(ON_REQUEST_TOOLS):]] == ['memoria', 'habilidad']
     integrador = NativeRuntime(rt.manager, dict(rt.task, id='integrador'))
     assert integrador.command_policy is None and integrador.process_sandbox is None and integrador.tool_specs is TOOLS
     run = next(t for t in TOOLS if t['function']['name'] == 'run_command')['function']
@@ -357,9 +359,10 @@ REQUESTS = {
 
 def test_the_four_reasons_are_the_same_everywhere():
     # 'regla' (reglas del usuario, test_alfalfa_reglas.py) se suma a los cuatro de la política.
-    # 'modo' lo añaden Manual y Aceptar ediciones (permisos/modos.py); 'edicion' no es de la política.
+    # 'modo' lo añaden Manual y Aceptar ediciones (permisos/modos.py); 'edicion' y 'aprendizaje' (guardar
+    # memoria o una habilidad, alfalfa/aprendizaje) no son de la política.
     assert MOTIVOS == ('peligroso', 'red', 'salir_sandbox', 'reintento', 'regla', 'modo')
-    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {'edicion'}
+    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {'edicion', 'aprendizaje'}
     assert set(MOTIVOS) == set(REQUESTS) | {'regla', 'modo'}
 
 
