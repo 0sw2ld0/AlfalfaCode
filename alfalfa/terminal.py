@@ -231,7 +231,8 @@ class TerminalManager:
 
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
-                 navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None, cwd=None):
+                 navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
+                 motor_navegador=None, perfil_cuybrowser='alfalfa', cwd=None):
         cwd = Path(cwd or Path.cwd()).resolve()
         self.transport = transport
         self.auto = auto
@@ -240,9 +241,14 @@ class TerminalManager:
         self.firma = Firma(firma)
         # El navegador propio de la app (`--navegador`): sólo con la app al otro lado.
         self.navegador = None
-        if navegador and transport is not None:
+        if motor_navegador == 'cuybrowser':
+            from .navegador_cuybrowser import NavegadorCuyBrowser
+            self.navegador = NavegadorCuyBrowser(perfil_cuybrowser)
+        elif (navegador or motor_navegador == 'webkit') and transport is not None:
             from .navegador import Navegador
             self.navegador = Navegador(transport.pedir_navegador)
+        elif motor_navegador is not None:
+            raise ValueError('WebKit requiere la app de Mac; en terminal elige --motor-navegador cuybrowser.')
         # «Prevent sleep while running» de Codex: el Mac no se duerme por inactividad mientras
         # trabaja un turno. None lee ALFALFA_MANTENER_DESPIERTO (encendido por defecto).
         from .despierto import MantenerDespierto
@@ -384,6 +390,8 @@ class TerminalManager:
             raise
 
     def close(self):
+        if getattr(self, 'navegador', None) is not None and hasattr(self.navegador, 'close'):
+            self.navegador.close()
         if getattr(self, 'despierto', None) is not None:
             self.despierto.cerrar()
         if getattr(self, 'diagnosticos', None) is not None:
@@ -659,7 +667,7 @@ class TerminalManager:
                              manual=lambda model: MANUAL + SUBAGENTES_MANUAL + self.subagentes.descripcion_de_tipos()
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else '')
-                             + (navegador_manual() if self.navegador is not None
+                             + (getattr(self.navegador, 'manual', navegador_manual()) if self.navegador is not None
                                 and 'browser_navigate' not in excluidas() else '')
                              + self.aprendizaje.manual(),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
@@ -684,7 +692,7 @@ class TerminalManager:
                              compaction='codex', compact_limit=self.compact_limit)
         if self.navegador is not None:
             from .navegador import TOOLS as HERRAMIENTAS_DEL_NAVEGADOR
-            rt.tool_specs = list(rt.tool_specs) + HERRAMIENTAS_DEL_NAVEGADOR
+            rt.tool_specs = list(rt.tool_specs) + getattr(self.navegador, 'tools', HERRAMIENTAS_DEL_NAVEGADOR)
         rt.tool_specs = list(rt.tool_specs) + self.aprendizaje.herramientas()
         self.aprendizaje.vincular(rt)
         if self.mcp is not None:
@@ -1052,7 +1060,9 @@ async def execute(args):
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                               budget=getattr(args, 'presupuesto', None),
                               monthly_budget=getattr(args, 'presupuesto_mes', None),
-                              diagnosticos=diagnostics(args), firma=signature(args))
+                              diagnosticos=diagnostics(args), firma=signature(args),
+                              motor_navegador=getattr(args, 'motor_navegador', None),
+                              perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -1142,6 +1152,10 @@ def main(argv=None):
                              '--reanudar ID o preparar una cola desde la app con --stdio')
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
+    parser.add_argument('--motor-navegador', choices=('webkit', 'cuybrowser'),
+                        help='Activar browser_* explícitamente: WebKit en la app o CuyBrowser instalado en PATH')
+    parser.add_argument('--perfil-cuybrowser', default='alfalfa', metavar='NOMBRE',
+                        help='Perfil propio de Chromium por proyecto; nunca usa perfiles de navegadores personales')
     parser.add_argument('--json', action='store_true')
     listing = parser.add_mutually_exclusive_group()
     listing.add_argument('--sesiones', action='store_true')

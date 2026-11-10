@@ -1310,8 +1310,8 @@ los datos guardados; **Borrar los datos del navegador de este proyecto…** los 
 tras confirmar, sin borrar los de otros proyectos. Mientras el agente trabaja,
 espera un permiso o está en relevo, estos cambios quedan bloqueados.
 
-Herramientas, que sólo existen cuando el agente corre dentro de la app (la app arranca
-el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscador web en
+Herramientas del motor WebKit (la app arranca el motor con `--stdio --navegador`). En terminal
+se pueden activar explícitamente con el segundo motor CuyBrowser, descrito abajo. Con el buscador web en
 «apagado» tampoco se ofrecen:
 
 - `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
@@ -1379,6 +1379,63 @@ El motor decide los permisos y la app sólo ejecuta (`alfalfa/navegador.py` y
 `{"tipo":"navegador_respuesta","id":…,"ok":true,"resultado":{…}}`, o
 `"permiso":{"tipo":"formulario",…}` si la acción necesita aprobación: el motor pregunta
 y repite la petición con `permitido`.
+
+### Chromium con CuyBrowser
+
+En Ajustes → Navegador se puede elegir **CuyBrowser · Chromium** para las sesiones nuevas.
+WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
+
+```sh
+alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
+```
+
+Requiere una instalación de confianza de `cuybrowser` en `PATH`, con HTTP y la capacidad
+`exactOrigins` que garantiza el bloqueo anterior al contacto, también al restaurar perfiles,
+y `localNetwork` para impedir que recursos de una página pública contacten localhost o la red local.
+**CuyBrowser 0.4.0 todavía no ofrece esa garantía:** se devuelve un error de capacidad y no
+se abre Chromium. No se instala ni descarga un navegador automáticamente.
+
+El motor pide permiso una vez por sesión para iniciar el servidor fuera del sandbox. Usa HTTP
+autenticado en un puerto propio de `127.0.0.1`, sin proxies ni redirecciones. El hogar de CuyBrowser
+vive en `ALFALFA_HOME/cuybrowser/<hash de la raíz canónica del proyecto>` y conserva los logins
+de ese proyecto. Un bloqueo exclusivo impide que dos sesiones compartan el mismo navegador.
+No adopta un daemon preexistente ni detiene procesos de otros clientes. Al cerrar, detiene sólo
+su servidor y su daemon; los perfiles propios permanecen. Nunca copia cookies personales ni usa attach.
+
+La política de ese hogar debe conservar `approval: native-dialog`, todas las confirmaciones
+sensibles, bloqueo de campos sensibles y `attach.enabled: false`. El cliente comprueba `policy_show`
+antes de actuar y pide las confirmaciones a CuyBrowser mediante `confirm`: la persona decide en
+el diálogo del sistema. No se duplica la tarjeta sensible de AlfalfaCode. **Omitir permisos sólo
+omite las preguntas del motor; los diálogos independientes de CuyBrowser siguen activos.**
+Manual conserva su permiso por sitio y Plan/sólo lectura deshabilitan las herramientas de escritura.
+Para contraseñas, 2FA y captchas se usa el relevo; el agente nunca los resuelve ni disfraza su identidad.
+
+Las dieciséis herramientas mantienen sus nombres. El contenido web, los mensajes, las URLs y los
+títulos siguen marcados como datos, no instrucciones. Estas diferencias se comunican al agente:
+
+| Herramienta | Comportamiento de CuyBrowser |
+| --- | --- |
+| Navegar, leer, consola, red, viewport, pulsar, escribir, desplazar, captura, esperar y hover | Traducción HTTP nativa. Los diagnósticos de red no incluyen duraciones, cuerpos ni cabeceras. `type` admite campos editables, no selecciona opciones de un `<select>` nativo. |
+| `browser_eval` | Requiere `modifies: true` y que una persona haya habilitado `evaluate` en la política privada. Siempre pasa por su diálogo nativo. No existe un mundo JavaScript de sólo lectura y el motor no habilita la función automáticamente. |
+| `browser_handoff` | Espera la decisión de la persona en el diálogo del sistema, hasta 120 segundos. `until` devuelve un error de capacidad. Cancelar el turno detiene exclusivamente este navegador para interrumpir el relevo. |
+| `browser_key` | Usa el foco actual; `ref` y `target` para cambiarlo devuelven un error de capacidad. |
+| `browser_upload` | Hasta diez archivos del proyecto y 20 MiB. Rechaza enlaces simbólicos, duros, rutas privadas y salidas del proyecto. Prepara copias privadas de sólo lectura fuera del hogar de CuyBrowser; su diálogo aprueba esos mismos bytes aunque el proyecto cambie mientras espera. Las copias se eliminan al terminar o cancelar. |
+| `browser_download` | Descargar una URL a un archivo del proyecto requiere WebKit; CuyBrowser devuelve un error explícito. No se suplanta con JavaScript ni `fetch`. |
+
+El modo estricto de subrecursos requiere `strictResources: true`. Si el servidor sólo garantiza
+documentos por origen exacto, se rechaza ese modo y se indica usar WebKit. Una lista de hostnames
+nunca sustituye la política por origen (esquema, host y puerto). Sólo se configura la política del
+hogar exclusivo de AlfalfaCode, inicialmente cerrada antes de abrir el navegador.
+La excepción `local_network.allow_origins` se concede únicamente tras el permiso independiente
+de red local. Como las reglas de WebKit, la barrera de subrecursos compara URLs; la resolución
+de IP se comprueba en Python al navegar, y no protege contra cambios de DNS en cada recurso.
+Los permisos de **Una vez** viajan separados de los permisos de sesión/proyecto, mediante
+`origins.visit` con identificador propio y capacidad `visitLeases`. El motor retira los identificadores
+de `status.consumed_visits` antes de generar otra política, y al cerrar el navegador. Una respuesta
+atrasada no puede convertir una visita consumida en confianza permanente.
+El servidor compatible emplea un proxy privado antes de lanzar el perfil para proteger también
+recursos, workers y WebSocket, sin interceptar TLS. Los service workers se deshabilitan en ese perfil
+restringido; los workers dedicados y compartidos pueden funcionar.
 
 ## SwiftPM y apps dentro del sandbox
 

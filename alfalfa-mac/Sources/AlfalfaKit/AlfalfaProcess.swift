@@ -64,11 +64,12 @@ public enum Launcher {
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
                                       monthlyBudget: Double? = nil, diagnostics: Bool = true,
-                                      commitSignature: Bool = true, queue: Bool = false) -> [String] {
+                                      commitSignature: Bool = true, queue: Bool = false, browserEngine: String? = nil,
+                                      cuyBrowserProfile: String = "alfalfa") -> [String] {
         var arguments = ["--stdio"]
         if queue { arguments.append("--cola-encargos") }
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
-        if browser { arguments.append("--navegador") }
+        arguments += browserArguments(enabled: browser, engine: browserEngine, profile: cuyBrowserProfile)
         // Ajustes ▸ General ▸ Mantener el Mac despierto, Ver los errores al editar y Firmar los commits, apagados.
         arguments += [(keepAwake, "--sin-mantener-despierto"), (diagnostics, "--sin-diagnosticos"),
                       (commitSignature, "--sin-firma")]
