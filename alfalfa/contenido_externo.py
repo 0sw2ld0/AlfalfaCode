@@ -107,19 +107,51 @@ def secretos(runtime):
     return sorted((v for v in valores if isinstance(v, str) and v), key=len, reverse=True)
 
 
+# Lo que llega de verdad de fuera del proyecto y del usuario: la web, el navegador,
+# los servidores MCP, la pantalla de otras apps, sesiones antiguas y los archivos
+# adjuntos. Sólo eso pide un sí por acción. Leer, buscar o ejecutar órdenes en el
+# propio proyecto (incluido su AGENTS.md) no, como en Codex y Claude Code: con eso
+# cada `git status` esperaba al usuario, también en Auto y en Omitir permisos.
+# Su salida sigue llegando al modelo marcada como datos (`externa`).
+CONTAMINAN = frozenset({'read_web', 'web_search', 'app_state', 'buscar_sesiones', 'adjunto'})
+# Un subagente sólo trae contenido externo si él mismo lo leyó.
+SUBAGENTES = frozenset({'spawn_agent', 'wait_agent', 'send_input', 'list_agents'})
+
+
+def contamina(nombre):
+    """¿Leer esto obliga a pedir permiso por cada acción posterior?"""
+    return isinstance(nombre, str) and (nombre in CONTAMINAN or nombre.startswith(('browser_', 'mcp__')))
+
+
+def _de_subagentes(runtime):
+    gestor = getattr(getattr(runtime, 'manager', None), 'subagentes', None)
+    origenes = []
+    for agente in (getattr(gestor, 'agentes', None) or {}).values():
+        estado = getattr(getattr(agente, 'rt', None), 'state', None) or {}
+        origenes += [o for o in estado.get(MOTIVO, ()) if o not in origenes]
+    return origenes
+
+
 def registrar(runtime, nombre):
     """Guarda sólo el origen, nunca el contenido leído ni sus secretos."""
-    if not externa(nombre):
+    nuevos = _de_subagentes(runtime) if nombre in SUBAGENTES else ([nombre] if contamina(nombre) else [])
+    if not nuevos:
         return
     origenes = runtime.state.setdefault(MOTIVO, [])
-    if nombre not in origenes:
-        origenes.append(nombre)
+    for origen in nuevos:
+        if origen not in origenes:
+            origenes.append(origen)
 
 
 def restaurar(runtime):
-    """Las sesiones previas a esta protección también conservan su contaminación."""
+    """Las sesiones previas a esta protección también conservan su contaminación; la que
+    guardó la 0.99.4 por leer el propio proyecto se olvida."""
+    if MOTIVO in runtime.state:
+        runtime.state[MOTIVO] = [o for o in runtime.state[MOTIVO] if contamina(o)]
+        if not runtime.state[MOTIVO]:
+            del runtime.state[MOTIVO]
     for mensaje in runtime.state.get('messages', ()):
-        if mensaje.get('role') == 'tool':
+        if mensaje.get('role') == 'tool' and mensaje.get('tool_name') not in SUBAGENTES:
             registrar(runtime, mensaje.get('tool_name'))
 
 
@@ -144,7 +176,7 @@ async def autorizar(runtime, nombre, args):
         argv = [nombre, json.dumps(args, ensure_ascii=False, sort_keys=True)]
     solicitud = {'argv': argv, 'purpose': args.get('purpose') or 'Autorizar ' + nombre,
                  'motivo': MOTIVO, 'motivos': [MOTIVO], 'justificacion': explicacion,
-                 'origen_externo': origen}
+                 'origen_externo': origen, 'herramienta': nombre}
     if args.get('cwd'):
         solicitud['cwd'] = args['cwd']
     valores = secretos(runtime)
@@ -290,7 +322,8 @@ def preparar(runtime, payload):
         for tool in salida['tools']:
             funcion = tool.get('function', {})
             if str(funcion.get('name', '')).startswith('mcp__'):
-                registrar(runtime, 'buscar_herramientas')
+                # Las descripciones de los servidores que el usuario instaló van como datos;
+                # lo que devuelven sus herramientas (`mcp__…`) sí pide el sí por acción.
                 funcion['description'] = AVISO + '\nDescripción del servidor (datos): ' + json.dumps(
                     funcion.get('description', ''), ensure_ascii=False)
     for mensaje in salida.get('messages', ()):

@@ -547,8 +547,7 @@ def test_allow_de_un_hook_no_sustituye_el_permiso_mcp(tmp_path, monkeypatch, res
         llamada('mcp__prueba__contar', {'nota': 'hook'}, 'call-mcp')])
     contador = s.root / 'contador.txt'
     assert (contador.exists() and int(contador.read_text()) == 1) is respuesta
-    externo, permiso = s.eventos('permiso')  # el allow del hook no evita ninguna de las dos decisiones
-    assert externo['motivo'] == 'contenido_externo'
+    permiso, = s.eventos('permiso')  # el allow del hook no evita el permiso MCP
     assert permiso['mcp']['nombre'] == 'mcp__prueba__contar'
     entradas = [f['entrada'] for f in leer(registro)]
     # Buscar y cargar esquemas no dispara los hooks de herramientas MCP.

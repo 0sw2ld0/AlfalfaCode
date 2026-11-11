@@ -84,7 +84,8 @@ async def test_serie_sesiones_separadas_cambios_acumulados_y_resumen(demo, ejecu
     assert m.task['coste_usd'] == pytest.approx(.02)
     assert 'Informe de primero' in cola.datos['resumen'] and 'Informe de segundo' in cola.datos['resumen']
     rt = m.runtime()
-    assert 'wait_agent' in rt.state['contenido_externo']
+    # Los encargos sólo leyeron el proyecto: su resumen no obliga a pedir permiso extra.
+    assert not rt.state.get('contenido_externo')
     assert any('Resumen de la cola' in row.get('content', '') for row in rt.state['messages'])
     assert json.loads((m.directory / 'task.json').read_text())['cola_encargos']['estado'] == 'completada'
 
@@ -299,7 +300,7 @@ NativeRuntime._request = pedir
 if os.environ.get('PRUEBA_APROBAR') == '1':
     from alfalfa.permisos.terminal import TerminalApproval
     async def aprobar(self, args):
-        assert args['motivo'] == 'contenido_externo'
+        # En Manual cada edición pide permiso; la cola le pone su título y carpeta.
         assert 'Encargo «' in args['purpose']
         print('PERMISO EXPLÍCITO SIMULADO')
     TerminalApproval.__call__ = aprobar
@@ -323,7 +324,8 @@ def test_stdio_guardar_iniciar_permisos_y_resumen_con_runtime_real(tmp_path, mod
         git(root, 'commit', '-qm', 'Base de prueba')
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                ALFALFA_HOME=str(tmp_path / 'alfalfa'))
-    proceso = subprocess.Popen([sys.executable, '-c', GUION, '--stdio', '--modelo', 'simulado', '--cola-encargos'],
+    proceso = subprocess.Popen([sys.executable, '-c', GUION, '--stdio', '--modelo', 'simulado', '--modo', 'manual',
+                                '--cola-encargos'],
         cwd=root, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     recibidos = queue.Queue()
     threading.Thread(target=lambda: [recibidos.put(json.loads(linea)) for linea in proceso.stdout], daemon=True).start()
@@ -388,7 +390,7 @@ def test_cli_archivo_y_resumen_sin_proveedor_real(tmp_path, aprobar):
     archivo.write_text(json.dumps({'encargos': ['A', 'B']}))
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
                ALFALFA_HOME=str(tmp_path / 'alfalfa'), PRUEBA_APROBAR='1' if aprobar else '0')
-    resultado = subprocess.run([sys.executable, '-c', GUION, '--modelo', 'simulado', '--modo', 'omitir',
+    resultado = subprocess.run([sys.executable, '-c', GUION, '--modelo', 'simulado', '--modo', 'manual',
         '--cola-encargos', str(archivo)], cwd=root, env=env, capture_output=True, text=True, timeout=90)
     assert 'Resumen de la cola' in resultado.stdout
     assert 'Sesión de la cola: ' in resultado.stdout

@@ -47,7 +47,9 @@ struct NewTaskView: View {
             }
             .frame(maxWidth: .infinity)
             Divider().overlay(Theme.border)
-            SidePanel(folder: model.folder, snapshot: model.newSnapshot, ollama: model.newOllama, timeline: nil)
+            SidePanel(folder: model.folder, snapshot: model.newSnapshot, ollama: model.newOllama, timeline: nil,
+                      providerID: ModelProvider.id(of: model.model, in: model.models),
+                      providerName: model.currentProviderName)
                 .frame(width: 300)
         }
     }

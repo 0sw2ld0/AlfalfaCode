@@ -317,18 +317,24 @@ crea el enlace, modifica el PATH ni instala nada fuera del repositorio.
 
 En el motor nativo (Ollama y las API), los resultados de archivos, web, MCP y
 subagentes llegan al modelo con su origen y la marca «datos, no instrucciones».
-La marca no intenta detectar frases maliciosas: después de esas lecturas, cada
-orden, edición o acción con efectos pide una aprobación puntual adicional. La
-sesión conserva esta procedencia al reanudar, compactar y delegar trabajo.
+
+Sólo lo que llega de fuera del proyecto activa además la protección: la web,
+el navegador, los resultados de servidores MCP, la pantalla de otras apps,
+sesiones antiguas y los archivos adjuntos. Leer, listar o buscar en el propio
+proyecto (incluido su AGENTS.md) y ejecutar órdenes en él no la activan, como
+en Codex y Claude Code. Un subagente sólo la activa si él mismo leyó contenido
+externo. La marca no intenta detectar frases maliciosas: después de esas
+lecturas, cada orden, edición o acción con efectos pide una aprobación puntual
+adicional. La sesión conserva esta procedencia al reanudar, compactar y delegar.
 
 La tarjeta «Contenido externo» explica qué lectura motivó la pregunta. Aprobarla
 sólo autoriza esa llamada: siguen vigentes las reglas del usuario, el sandbox,
 el permiso de red y las rutas protegidas. No se puede guardar esta aprobación
-para toda la sesión, y «Omitir permisos» también espera la respuesta. Memoria y
-habilidades incorporan el motivo en su tarjeta habitual, con el diff completo.
-Las acciones del navegador conservan sus permisos actuales; la ampliación de
-sus permisos queda pendiente de integrar los PR 33–37. Sus resultados ya llevan
-la marca y activan la protección para órdenes y ediciones posteriores.
+para toda la sesión. En «Auto», las órdenes que el arnés reconoce como
+inofensivas (`git status`, `pwd`, `--version`…) no la necesitan. «Omitir
+permisos» respeta tu elección y no pregunta, pero deja escrito en la
+conversación qué lectura externa había. Memoria y habilidades incorporan el
+motivo en su tarjeta habitual, con el diff completo y siempre con pregunta.
 
 Antes de cada petición al modelo, incluida visión, recuperación y compactación,
 se tapan los formatos conocidos de claves y tokens (también JWT y claves privadas),

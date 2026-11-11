@@ -516,9 +516,10 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
             proc.kill()
             proc.wait()
     permissions = [r for r in rows if r['tipo'] == 'permiso']
-    assert [p['motivo'] for p in permissions] == ['contenido_externo', 'peligroso']
+    # Leer el proyecto no añade el permiso de contenido externo: sólo pregunta la orden peligrosa.
+    assert [p['motivo'] for p in permissions] == ['peligroso']
     assert all(p['argv'] == ['rm', '-rf', 'basura'] for p in permissions)
-    assert permissions[1]['proposito'] == 'Borrar la carpeta desechable'
+    assert permissions[0]['proposito'] == 'Borrar la carpeta desechable'
     assert (tmp_path / 'normal').read_text() == 'x' and not (tmp_path / 'basura').exists()
     assert rows[-1]['tipo'] == 'turno_terminado' and rows[-1]['estado'] == 'completed', rows[-1]
 

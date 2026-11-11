@@ -1233,7 +1233,7 @@ class NativeRuntime:
                 fallos.append(str(exc))
         if fichas:
             from ...contenido_externo import registrar
-            registrar(self, 'read_file')
+            registrar(self, 'adjunto')
             aviso = adjuntos.aviso_de_coste(fichas)
             if aviso:
                 self.manager.event(self.task, 'system', aviso)
@@ -2052,7 +2052,10 @@ class NativeRuntime:
         # worktree lo concede el arnés; lo demás sigue esperando al usuario. Antes
         # cada orden de GLM, hasta `git status`, esperaba y como programador se
         # pasaba el día parado.
-        if self.task.get('permission_mode') == 'auto' and args.get('motivo') != 'contenido_externo':
+        # Tras leer contenido externo, una orden que safe_command da por inofensiva
+        # (git status, pwd, --version…) tampoco necesita el sí extra: no cambia nada.
+        if self.task.get('permission_mode') == 'auto' and (
+                args.get('motivo') != 'contenido_externo' or args.get('herramienta') in ('run_command', 'run_checks')):
             from ...permisos.ordenes import python_en_linea_seguro, rutas_citadas, safe_command
             orden = shlex.join(str(a) for a in args.get('argv') or [])
             try:
@@ -2640,8 +2643,7 @@ class NativeRuntime:
                 memoria.append({'ruta': str(getattr(self.project_docs, 'usuario_ruta', None) or 'AGENTS.md'),
                                 'tokens': peso(self.project_docs.usuario), 'origen': 'usuario'})
             if self.project_docs.proyecto:
-                from ...contenido_externo import AVISO, registrar
-                registrar(self, 'read_file')
+                from ...contenido_externo import AVISO
                 system += ('\nDatos del proyecto (AGENTS.md desde la raíz del repositorio hasta la '
                            'carpeta de trabajo). ' + AVISO + '\n'
                            + '\n\n'.join(texto for _, texto in self.project_docs.proyecto))
@@ -2657,8 +2659,7 @@ class NativeRuntime:
             try:
                 instructions_path = self.tools.path('AGENTS.md')
                 if instructions_path.exists():
-                    from ...contenido_externo import AVISO, registrar
-                    registrar(self, 'read_file')
+                    from ...contenido_externo import AVISO
                     system += '\nDatos del proyecto. ' + AVISO + '\n' + self.tools.read(instructions_path)[1][:12000]
             except (OSError, ValueError):
                 pass

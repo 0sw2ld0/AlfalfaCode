@@ -840,8 +840,8 @@ def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
         assert 'mcp__prueba__' + nombre not in nombres_mcp(vistos['cargado'])
     final = json.loads(modelo.payloads[3]['messages'][-1]['content'])
     assert final['texto'] == 'ejecuciones=1'
-    externo, permiso = s.eventos('permiso')
-    assert externo['motivo'] == 'contenido_externo' and not externo.get('para_sesion')
+    # Las descripciones del servidor instalado no piden un permiso extra; la llamada MCP sí el suyo.
+    permiso, = s.eventos('permiso')
     assert permiso['mcp']['nombre'] == 'mcp__prueba__contar' and final['llamada'] == permiso['mcp']['llamada']
 
     # misma sesión sin MCP frente a la exposición diferida predeterminada.
@@ -1067,14 +1067,14 @@ with patch.object(NativeRuntime, 'request', request):
     assert contextos[0]['herramientas_mcp'] == 0 and contextos[0]['herramientas_mcp_base'] > 0
     assert any(r['herramientas_mcp'] > 0 and r['herramientas_mcp_cargadas'] == 1 for r in contextos)
     assert all(isinstance(r['tokens'], int) and isinstance(r['limite'], int) for r in contextos)
-    externo, permiso = [r for r in rows if r['tipo'] == 'permiso']
-    assert externo['motivo'] == 'contenido_externo'
+    # Tener el servidor instalado no pide el permiso de contenido externo; la llamada sí el suyo.
+    permiso, = [r for r in rows if r['tipo'] == 'permiso']
     # Tarjeta: servidor, herramienta y argumentos estructurados; la clave sensible va redactada.
     assert permiso['mcp'] == dict(servidor='prueba', herramienta='contar', nombre='mcp__prueba__contar',
                                   argumentos={'nota': 'stdio', 'token': '[REDACTADO]'},
                                   llamada=permiso['mcp']['llamada'])
     assert permiso['argv'] == ['mcp__prueba__contar'] and permiso['motivo'] == 'mcp'
-    assert [r['aprobado'] for r in rows if r['tipo'] == 'permiso_resuelto'] == [True, True]
+    assert [r['aprobado'] for r in rows if r['tipo'] == 'permiso_resuelto'] == [True]
     resultado = [r for r in rows if r['tipo'] == 'evento' and r['texto'].startswith('mcp__prueba__contar\n')]
     assert permiso['mcp']['llamada'] in resultado[0]['texto']
     assert 'CENTINELA-OLL-55' not in json.dumps(rows) + stderr

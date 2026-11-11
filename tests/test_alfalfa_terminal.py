@@ -137,7 +137,7 @@ def test_native_runtime_completes_local_task_without_cuysearch(tmp_path, monkeyp
         assert (Path.cwd() / 'value.txt').read_text() == 'good'
         assert m.task['status'] == 'completed'
         assert m.task['total_tokens'] == 36
-        assert [p['motivo'] for p in permisos] == ['contenido_externo']
+        assert permisos == []  # leer el proyecto no obliga a aprobar la edición en modo auto
         for name in ('event', 'save', 'transcript', 'context', 'conversation_task_error', 'terminate',
                      'directory', 'tasks', 'runners', 'processes', 'native_approvals', 'vision_slots'):
             assert hasattr(m, name)

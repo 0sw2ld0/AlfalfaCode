@@ -163,7 +163,7 @@ def test_el_runtime_guarda_la_ficha_y_marca_contenido_externo(m, informe):
     guardado = rt.state['messages'][-1]
     assert Path(guardado['archivos'][0]['ruta']).parent == rt.directory / 'archivos'
     assert 'documentos' not in guardado and 'data' not in json.dumps(guardado)
-    assert rt.state[contenido_externo.MOTIVO] == ['read_file']
+    assert rt.state[contenido_externo.MOTIVO] == ['adjunto']
     sin_pdf = asyncio.run(rt._con_archivos(rt.state['messages'], {'capabilities': ['tools']}))[-1]
     assert 'archivos' not in sin_pdf and 'documentos' not in sin_pdf and 'contenido_adjunto' in sin_pdf['content']
     con_pdf = asyncio.run(rt._con_archivos(rt.state['messages'], {'capabilities': ['tools', 'vision', 'pdf']}))[-1]

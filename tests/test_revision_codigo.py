@@ -89,7 +89,8 @@ async def test_opcional_otro_modelo_hallazgos_y_correccion_en_el_mismo_hilo(demo
     assert (root / 'suma.py').read_text().endswith('return a - b\n')
     padre = m.runtime()
     assert any('La suma resta' in s.get('content', '') for s in padre.state['messages'])
-    assert 'wait_agent' in padre.state['contenido_externo']
+    # El revisor sólo vio el diff del proyecto: sus hallazgos llegan como datos sin el permiso extra.
+    assert not padre.state.get('contenido_externo')
     assert revision(m)['estado'] == 'terminada'  # ni runtime.save ni el transporte perdieron el cierre
     assert json.loads((m.directory / 'task.json').read_text())['turnos'][-1]['cierre']['revision_codigo'] == resultado
     assert any(json.loads(s)['tipo'] == 'revision_codigo' for s in salida.getvalue().splitlines())

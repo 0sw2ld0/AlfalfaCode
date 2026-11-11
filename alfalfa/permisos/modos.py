@@ -81,13 +81,17 @@ class AprobacionConModo:
             setattr(self.interior, nombre, valor)
 
     async def __call__(self, args):
-        if (modo_de(self.manager.task) == OMITIR and args.get('motivo') != 'contenido_externo'
-                and not args.get('_equipo')):
+        # Omitir permisos es una elección expresa del usuario: tampoco pregunta tras leer
+        # contenido externo, pero lo deja dicho en la conversación con su origen.
+        if modo_de(self.manager.task) == OMITIR and not args.get('_equipo'):
             import shlex
 
             from ..auditoria_equipo import marcar_respuesta
             marcar_respuesta('omitir')
             orden = shlex.join(str(a) for a in args.get('argv') or [])
-            self.manager.event(self.manager.task, 'system', 'Aprobado por el modo Omitir permisos: ' + orden[:300])
+            origen = (' (tras leer contenido externo: ' + str(args.get('origen_externo')) + ')'
+                      if args.get('motivo') == 'contenido_externo' and args.get('origen_externo') else '')
+            self.manager.event(self.manager.task, 'system',
+                               'Aprobado por el modo Omitir permisos' + origen + ': ' + orden[:300])
             return None
         return await self.interior(args)

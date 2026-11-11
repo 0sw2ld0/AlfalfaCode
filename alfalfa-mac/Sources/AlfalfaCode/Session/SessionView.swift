@@ -7,6 +7,7 @@ struct SessionView: View {
     // MARK: - Propiedades
 
     @ObservedObject var session: LiveSession
+    @EnvironmentObject private var app: AppModel
     var notice: String?
     @State private var planningQueue = false
 
@@ -23,8 +24,10 @@ struct SessionView: View {
             Divider().overlay(Theme.border)
             SessionBrowserSlot(browser: session.browser, terminals: terminals) {
                 SessionSidePane(terminals: terminals) {
+                    let provider = ModelProvider.id(of: session.model, in: app.models)
                     SidePanel(folder: session.cwd.path, snapshot: session.snapshot, ollama: session.ollama,
-                              timeline: session.timeline, canCompact: session.canCompact,
+                              timeline: session.timeline, providerID: provider, providerName: app.providerName(provider),
+                              canCompact: session.canCompact,
                               onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) },
                               onContextMode: { session.setContextMode($0) })
                 }
