@@ -1,4 +1,3 @@
-En proyectos grandes, el primer turno ya no espera minutos: el modelo empieza a responder mientras se prepara deshacer.
-Deshacer reutiliza lo que ya guarda git en el proyecto y solo copia lo modificado y lo nuevo.
-Mientras se prepara, la app dice «Preparando deshacer…» con el número de archivos y el tamaño, en lugar de «Pensando».
-Si una carpeta es demasiado grande para deshacer, avisa una vez y no lo vuelve a intentar en cada turno.
+Los proyectos grandes (más de 5000 carpetas) vuelven a funcionar: antes ninguna petición se enviaba por no poder revisar sus .env.
+Los .env se buscan con git, también los ignorados, y solo se releen cuando cambian, en lugar de recorrer todo el proyecto en cada petición.
+Si una carpeta enorme no es un repositorio git, el aviso explica cómo seguir.
