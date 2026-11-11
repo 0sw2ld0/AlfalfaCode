@@ -47,8 +47,12 @@ SKIP = PRIVATE | {'node_modules', '.venv', '.build', '__pycache__', 'vendor'}
 def _motivo_sin_huella(cuando, exc):
     """Por qué una comprobación quedó sin verificar: no se pudo tomar la huella del workspace."""
     detalle = str(exc).strip() or type(exc).__name__
-    return (f'No se pudo tomar la huella del workspace {cuando} de la orden ({detalle}). La orden se ejecutó, '
-            'pero su resultado no cuenta como comprobación del código actual.')
+    texto = (f'No se pudo tomar la huella del workspace {cuando} de la orden ({detalle}). La orden se ejecutó, '
+             'pero su resultado no cuenta como comprobación del código actual.')
+    if 'cambió' in detalle:
+        texto += (' Otro programa o agente está cambiando el proyecto ahora mismo: repetir la orden no lo '
+                  'arregla. No la repitas; usa su salida y dilo en tu respuesta.')
+    return texto
 
 
 def digest(data):

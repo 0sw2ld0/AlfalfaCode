@@ -125,10 +125,23 @@ class RevisionCodigo:
         if datos and self.manager.transport:
             self.manager.transport.emit('revision_codigo', revision=datos)
 
+    def _cambio_el_agente(self, datos):
+        """¿El agente o uno de sus subagentes escribió algo en este turno?"""
+        desde, hasta = datos.get('cambios_desde'), datos.get('cambios_hasta')
+        if isinstance(hasta, int) and hasta > (desde if isinstance(desde, int) else 0):
+            return True
+        gestor = getattr(self.manager, 'subagentes', None)
+        return any((getattr(getattr(agente, 'rt', None), 'state', None) or {}).get('changes')
+                   for agente in (getattr(gestor, 'agentes', None) or {}).values())
+
     def ofrecer(self, turno):
         turno = next(t for t in self.manager.task['turnos'] if t['id'] == turno['id'])
         cierre = self.manager.task.get('cierre')
         datos = turno.get('instantanea') or {}
+        if not self._cambio_el_agente(datos):
+            # El agente no cambió nada en este turno: no hay nada suyo que revisar. Comparar
+            # las instantáneas metía lo que otro agente o el usuario cambiaron a la vez.
+            return
         if not cierre and datos.get('antes') and datos.get('despues'):
             almacen = deshacer.Almacen.de_clave(self.manager.home, datos.get('repo'), self.manager.task['cwd'])
             try:

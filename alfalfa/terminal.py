@@ -1011,8 +1011,10 @@ class TerminalManager:
                            'Ajustes ▸ Importar o con alfalfa --importar.')
             await rt.run(expandido or prompt)
             if self.task['status'] == 'running':
-                if (rt.evidence.handoff().get('status') in ('failed', 'stale', 'changed_externally')
-                        or rt.state.get('unresolved') or self.approval.denied
+                # Lo que cambió fuera (otro agente en el mismo proyecto) y las órdenes de consulta
+                # fallidas de una sesión que no cambió nada no bloquean (ver `bloqueantes`).
+                if (rt.evidence.verificacion_bloquea(rt.evidence.handoff())
+                        or rt.evidence.bloqueantes() or self.approval.denied
                         or any(row.get('status') == 'uncertain' for row in
                                rt.state.get('handoff_uncertain_operations', []))
                         or not rt.evidence._result({})):

@@ -27,6 +27,8 @@ def demo(tmp_path, monkeypatch):
     turno = sesiones.abrir_turno(m.task, 'Implementa suma.', len(rt.state['messages']))
     deshacer.al_empezar_turno(m.home, m.task, turno['id'], rt.state)
     (root / 'suma.py').write_text('def suma(a, b):\n    return a - b\n')
+    # El agente escribió suma.py en este turno (lo apunta como sus herramientas).
+    rt.state.setdefault('changes', []).append({'path': 'suma.py', 'via': 'edit_file'})
     m.task.update(status='completed', cierre={'resumen': 'Suma implementada.'})
     sesiones.cerrar_turno(m.task, turno['id'], 'completed', len(rt.state['messages']), cierre=m.task['cierre'])
     deshacer.al_terminar_turno(m.home, m.task, turno['id'], rt.state)

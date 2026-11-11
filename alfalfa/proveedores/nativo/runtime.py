@@ -2709,6 +2709,7 @@ class NativeRuntime:
         evento.clear()
         raise Redirigido()
 
+
     async def run(self, prompt):
         self.attempt_start_index = len(self.state.get('messages', []))
         closing = self.state.get('review_closing', {})
@@ -3017,7 +3018,8 @@ class NativeRuntime:
                 self.save()
                 if clean['content']:
                     self.manager.event(self.task, 'agent', clean['content'])
-                if not calls and self.state.get('unresolved') and not self.state.get('unresolved_nudged') \
+                bloqueantes = self.evidence.bloqueantes() if not calls else {}
+                if not calls and bloqueantes and not self.state.get('unresolved_nudged') \
                         and not self.task.get('conversation_only'):
                     # GLM terminó con una edición fallida de WorldEventEngine.swift
                     # y el ticket se bloqueó sin que nadie se lo dijera: se le
@@ -3025,7 +3027,7 @@ class NativeRuntime:
                     self.state['unresolved_nudged'] = True
                     self.state['messages'].append({'role': 'user', 'content': (
                         'Antes de terminar: estas operaciones fallaron y siguen sin resolver: '
-                        + json.dumps(self.state['unresolved'], ensure_ascii=False)[:1500] + '. Una explicación '
+                        + json.dumps(bloqueantes, ensure_ascii=False)[:1500] + '. Una explicación '
                         'no las resuelve. Una comprobación (run_checks) se resuelve al volver a pasarla en verde '
                         'con la misma orden, o con la misma de pytest lanzada desde otra carpeta o con otra '
                         'verbosidad; una edición fallida, al volver a leer el archivo y repetirla con '
@@ -3036,7 +3038,7 @@ class NativeRuntime:
                         and not self.state.get('verification_nudged') \
                         and not self.state.get('unresolved'):
                     previa = self.evidence.report()
-                    if previa['status'] in ('failed', 'stale'):
+                    if self.evidence.verificacion_bloquea(previa):
                         # GLM terminó las misiones sin volver a pasar las pruebas tras
                         # sus últimos cambios y el ticket quedó en «Verificación pendiente».
                         self.state['verification_nudged'] = True
@@ -3082,12 +3084,20 @@ class NativeRuntime:
                         self.task['conversation_proposal'] = clean['content'][:12000]
                         self.task['proposal_status'] = 'pending'
                         self.manager.event(self.task, 'proposal', clean['content'][:12000])
-                    if self.state.get('unresolved'):
+                    bloqueantes = self.evidence.bloqueantes()
+                    if bloqueantes:
                         self.task.update(status='blocked', summary='Operaciones sin resolver: '+
-                            json.dumps(self.state['unresolved'],ensure_ascii=False)[:400])
-                    elif verification['status'] in ('changed_externally','failed','stale'):
+                            json.dumps(bloqueantes,ensure_ascii=False)[:400])
+                    elif self.evidence.verificacion_bloquea(verification):
                         self.task.update(status='blocked', summary='Verificación pendiente: '+
                             json.dumps(verification, ensure_ascii=False)[:400])
+                    elif verification['status'] == 'changed_externally':
+                        # Otro agente o programa tocó los archivos después de comprobarlos:
+                        # con dos agentes en el mismo proyecto pasa siempre y no es un fallo de
+                        # este turno. Se avisa, sin dejar la sesión bloqueada.
+                        self.manager.event(self.task, 'system', 'Los archivos cambiaron fuera de AlfalfaCode '
+                                           'después de comprobarlos (otro agente o programa); la comprobación '
+                                           'es de cómo estaban entonces.')
                     self.save()
                     return
                 await self.pending()
