@@ -5,6 +5,7 @@ Path guards protect built-in tools, not arbitrary approved subprocesses.
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import json
 import math
@@ -1456,6 +1457,12 @@ class WorkspaceTools:
                 registration.add_done_callback(reclaim)
                 raise
             except OSError as exc:
+                if exc.errno == errno.EMFILE:
+                    detalle = exc.strerror if exc.filename is None and exc.strerror else \
+                        'se acabaron los archivos abiertos que permite el sistema'
+                    raise ValueError(f'No se pudo vigilar el workspace durante la comprobación: {detalle}. '
+                                     'La orden se puede ejecutar con run_command, pero no cuenta como '
+                                     'comprobación.') from exc
                 raise ValueError('No se pudo vigilar el workspace durante la comprobación.') from exc
             resources.callback(guard.close)
             try:
