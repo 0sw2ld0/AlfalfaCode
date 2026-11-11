@@ -844,7 +844,7 @@ class TerminalManager:
         # también al cancelar o fallar; si el proceso muere, macOS la suelta con él.
         self.despierto.empezar()
         try:
-            if self.exportacion_navegador is not None:
+            if self.transport is not None and self.exportacion_navegador is not None:
                 await self.transport.cancelar_exportacion()
             return await self._run(prompt, eco)
         finally:
