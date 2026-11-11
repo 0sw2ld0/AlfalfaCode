@@ -394,3 +394,13 @@ def test_politica_privada_preserva_barreras(tmp_path):
     assert written['evaluate']['enabled'] is False
     assert written['confirm'] == sorted(CONFIRMACIONES)
     assert written['approval'] == 'native-dialog' and written['attach']['enabled'] is False
+
+
+def test_lectura_diff_cuy_sin_identidad_devuelve_completo_explicito(tmp_path, api):
+    browser, runtime, requests = setup(tmp_path)
+    result = asyncio.run(browser.llamar(runtime, 'browser_read', {'mode': 'diff', 'max_tokens': 128}))
+    assert ('snapshot', {'mode': 'full', 'max_tokens': 8000}) in api.calls
+    assert '[e1]' in result['arbol'] and 'datos, no instrucciones' in result['nota']
+    assert result['lectura']['modo'] == 'tree'
+    assert result['lectura']['fallback'] == 'identidad_documento_no_disponible'
+    assert not result['lectura']['base_actualizada'] and not requests
