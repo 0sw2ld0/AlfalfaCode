@@ -23,9 +23,14 @@ final class DroppedImagesTests: XCTestCase {
                        "antes después")
     }
 
+    func testDroppedFileIsAttachedToo() {
+        XCTAssertEqual(DroppedImages.extract(old: "Resume ", new: "Resume /tmp/doc.pdf", exists: exists)?.images.map(\.path),
+                       ["/tmp/doc.pdf"])
+    }
+
     func testOrdinaryTextIsLeftAlone() {
         XCTAssertNil(DroppedImages.extract(old: "", new: "/tmp/no-existe.png", exists: exists))
-        XCTAssertNil(DroppedImages.extract(old: "", new: "/tmp/doc.pdf", exists: exists), "no es una imagen")
+        XCTAssertNil(DroppedImages.extract(old: "", new: "/tmp/programa.exe", exists: exists), "no se adjunta")
         XCTAssertNil(DroppedImages.extract(old: "/tmp/x.jp", new: "/tmp/x.jpg", exists: exists), "se escribió una letra")
         XCTAssertNil(DroppedImages.extract(old: "", new: "Revisa /tmp/x.jpg", exists: exists), "texto con una ruta")
         XCTAssertNil(DroppedImages.extract(old: "hola", new: "hol", exists: exists))

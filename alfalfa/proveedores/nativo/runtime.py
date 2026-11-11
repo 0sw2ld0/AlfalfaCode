@@ -371,6 +371,19 @@ def podar_sesiones_nativas(manager, ahora=None, edad=SESIONES_NATIVAS_VIGENTES):
     return borradas
 
 
+def _tokens_de_documentos(mensaje):
+    """Tokens aproximados de los PDF que un mensaje manda como documento (por página)."""
+    from ...adjuntos import TOKENS_POR_PAGINA
+    total = 0
+    for documento in mensaje.get('documentos') or ():
+        if isinstance(documento, dict):
+            paginas = documento.get('paginas')
+            if not isinstance(paginas, int) or paginas <= 0:
+                paginas = max(1, len(documento.get('data') or '') * 3 // 4 // 50_000)
+            total += TOKENS_POR_PAGINA * paginas
+    return total
+
+
 class Redirigido(Exception):
     """El usuario pidió que el modelo lea ya su mensaje («Redirigir»)."""
 
@@ -1198,11 +1211,57 @@ class NativeRuntime:
             message['imagenes'] = copias
         # Las de este mensaje, para saber cuáles llegan ahora y cuáles son del historial.
         self._imagenes_del_turno = list(copias)
+        fichas = self._preparar_archivos(text, fallos)
+        if fichas:
+            message['archivos'] = fichas
         if fallos:
             message['content'] = text + '\n\n(No se pudo adjuntar: ' + '; '.join(fallos) + ')'
         self.state['messages'].append(message)
         if self.compaction == 'codex':
             self.state.setdefault('user_messages', []).append(len(self.state['messages']) - 1)
+
+    def _preparar_archivos(self, text, fallos):
+        """Los archivos de las etiquetas `<file name=… path=…>` (alfalfa.adjuntos), copiados a la
+        sesión con su texto extraído. Su contenido es externo: cuenta como una lectura de archivo
+        para contenido_externo (cada acción posterior pide su aprobación) y se avisa si es enorme."""
+        from ... import adjuntos
+        fichas = []
+        for ruta in adjuntos.rutas_etiquetadas(text)[:adjuntos.MAX_ARCHIVOS]:
+            try:
+                fichas.append(adjuntos.preparar(ruta, self.directory / 'archivos'))
+            except (OSError, ValueError) as exc:
+                fallos.append(str(exc))
+        if fichas:
+            from ...contenido_externo import registrar
+            registrar(self, 'read_file')
+            aviso = adjuntos.aviso_de_coste(fichas)
+            if aviso:
+                self.manager.event(self.task, 'system', aviso)
+        return fichas
+
+    async def _con_archivos(self, context, info):
+        """Los mensajes para el modelo con el contenido de sus `archivos`: un PDF como documento
+        (`documentos`) si el modelo lo admite (capacidad `pdf`), si no su texto como datos externos."""
+        if not any(m.get('archivos') for m in context):
+            return context
+        from ... import adjuntos
+        from ...contenido_externo import _dato_sensible, secretos
+        capacidades = info.get('capabilities') if isinstance(info, dict) else None
+        nativo = isinstance(capacidades, list) and 'pdf' in capacidades
+        valores = await asyncio.to_thread(secretos, self) if nativo else []
+        salida = []
+        for m in context:
+            m = dict(m)
+            fichas = m.pop('archivos', None) or []
+            if fichas:
+                texto, documentos = await asyncio.to_thread(
+                    adjuntos.para_el_modelo, fichas, nativo, lambda t: _dato_sensible(t, valores))
+                if texto:
+                    m['content'] = ((m.get('content') or '') + '\n\n' + texto).strip()
+                if documentos:
+                    m['documentos'] = documentos
+            salida.append(m)
+        return salida
 
     @staticmethod
     def _desglose(payload, medido, piezas=None):
@@ -1216,8 +1275,10 @@ class NativeRuntime:
         from ...compactacion import tokens_aprox
         partes = {'sistema': 0, 'herramientas': 0, 'mcp': 0, 'mensajes': 0}
         for mensaje in payload.get('messages', []):
-            texto = json.dumps({k: v for k, v in mensaje.items() if k != 'images'}, ensure_ascii=False)
-            partes['sistema' if mensaje.get('role') == 'system' else 'mensajes'] += tokens_aprox(texto)
+            texto = json.dumps({k: v for k, v in mensaje.items() if k not in ('images', 'documentos')},
+                               ensure_ascii=False)
+            partes['sistema' if mensaje.get('role') == 'system' else 'mensajes'] += tokens_aprox(texto) \
+                + _tokens_de_documentos(mensaje)
         propias = {t['function']['name'] for t in COMPLEMENTOS_TOOLS}
         for tool in payload.get('tools', []):
             nombre = tool.get('function', {}).get('name', '')
@@ -1243,11 +1304,15 @@ class NativeRuntime:
         log = self.state.get('messages') or []
         if isinstance(usage, dict) and isinstance(usage.get('tokens'), int) \
                 and isinstance(usage.get('messages'), int) and usage['messages'] <= len(log):
+            from ...adjuntos import tokens as de_adjuntos
             despues = log[usage['messages']:]
-            return usage['tokens'] + (tokens_aprox(json.dumps(despues, ensure_ascii=False)) if despues else 0)
+            return usage['tokens'] + (tokens_aprox(json.dumps(despues, ensure_ascii=False)) + de_adjuntos(despues)
+                                      if despues else 0)
         if not log:
             return None
-        return tokens_aprox(json.dumps(self._context_messages(), ensure_ascii=False))
+        from ...adjuntos import tokens as de_adjuntos
+        mensajes = self._context_messages()
+        return tokens_aprox(json.dumps(mensajes, ensure_ascii=False)) + de_adjuntos(mensajes)
 
     def _record_context_details(self):
         """Umbral de compactación y uso estimado, para «X hasta la compactación» del panel."""
@@ -1458,11 +1523,12 @@ class NativeRuntime:
         """USD que costará la entrada de esta petición, antes de pedirla: los tokens aproximados de
         mensajes y herramientas (cada imagen, unos 1.600) y, como caché, lo que leyó la anterior."""
         from ...compactacion import tokens_aprox
-        mensajes = [{k: v for k, v in m.items() if k != 'images'} if isinstance(m, dict) else m
+        mensajes = [{k: v for k, v in m.items() if k not in ('images', 'documentos')} if isinstance(m, dict) else m
                     for m in payload.get('messages') or []]
         imagenes = sum(len(m.get('images') or []) for m in payload.get('messages') or [] if isinstance(m, dict))
+        documentos = sum(_tokens_de_documentos(m) for m in payload.get('messages') or [] if isinstance(m, dict))
         tokens = tokens_aprox(json.dumps({'messages': mensajes, 'tools': payload.get('tools')},
-                                         ensure_ascii=False)) + 1600 * imagenes
+                                         ensure_ascii=False)) + 1600 * imagenes + documentos
         from ... import catalogo
         anterior = self.task.get('cache_ultima')
         cache = min(anterior if type(anterior) is int and anterior > 0 else 0, tokens)
@@ -2817,7 +2883,8 @@ class NativeRuntime:
                     salida = min(salida, tope_catalogo)
                 opciones = {'num_ctx':context_tokens, **perfil(model).get('options', {}),
                             'num_predict':salida}
-                payload = {'model':model, 'messages':await self._con_imagenes(context, info), 'stream':False,
+                mensajes = await self._con_archivos(await self._con_imagenes(context, info), info)
+                payload = {'model':model, 'messages':mensajes, 'stream':False,
                            'options':opciones}
                 if allowed_tools:
                     payload['tools'] = allowed_tools

@@ -102,7 +102,7 @@ final class AppModel: ObservableObject {
         recents = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
         applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
-        // ⌘V con una imagen en el portapapeles la adjunta al compositor visible, como en Codex.
+        // ⌘V con una imagen (o un archivo copiado en Finder) la adjunta al compositor visible, como en Codex.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
                   event.charactersIgnoringModifiers == "v", let self,
@@ -115,11 +115,11 @@ final class AppModel: ObservableObject {
     private func attachPasted(_ url: URL) {
         switch route {
         case .new:
-            guard allowsImages(model) else { newImageNotice.show(); return }
+            guard allowsImages(model) || !Attachments.isImage(url) else { newImageNotice.show(); return }
             ImagePicker.add([url], to: &draftImages)
         case let .live(id):
             guard let session = session(id) else { return }
-            guard allowsImages(session.model) else { session.imageNotice.show(); return }
+            guard allowsImages(session.model) || !Attachments.isImage(url) else { session.imageNotice.show(); return }
             ImagePicker.add([url], to: &session.draftImages)
         case .past: break
         }
@@ -381,7 +381,7 @@ final class AppModel: ObservableObject {
 
     func startTask() {
         var task = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if task.isEmpty, !draftImages.isEmpty { task = "Mira la imagen adjunta." }
+        if task.isEmpty, !draftImages.isEmpty { task = Attachments.placeholder(for: draftImages.map(\.path)) }
         guard !task.isEmpty, let folder, let launcher else { return }
         select(folder: folder)
         let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: task, resumeID: nil,

@@ -64,6 +64,11 @@ struct ItemView: View {
                         }
                     }
                 }
+                if !parts.files.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(parts.files, id: \.self) { path in FileChip(url: URL(fileURLWithPath: path)) }
+                    }
+                }
                 if !parts.text.isEmpty {
                     Text(parts.text).font(Theme.body).lineSpacing(Theme.bodyLineSpacing).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)

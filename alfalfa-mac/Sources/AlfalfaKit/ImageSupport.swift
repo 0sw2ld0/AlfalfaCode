@@ -36,6 +36,12 @@ public struct MessageRejection: Equatable, Sendable {
 public enum ImageSupport {
     public static let notice = "Este modelo no ve imágenes"
 
+    /// La ayuda del botón «+»: los archivos se adjuntan con cualquier modelo.
+    public static func attachHelp(allowsImages: Bool) -> String {
+        allowsImages ? "Adjuntar imágenes, PDF, texto, código, Word o Excel (también puedes pegarlos o soltarlos aquí)"
+            : notice + ": adjunta PDF, texto, código, Word o Excel (se envía su texto)"
+    }
+
     /// Se deja adjuntar salvo que se sepa que no las ve: con visión desconocida (nil), sí.
     public static func allows(_ vision: Bool?) -> Bool { vision != false }
 

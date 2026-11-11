@@ -34,15 +34,17 @@ struct Composer: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.border))
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                guard allowsImages else { session.imageNotice.show(); return true }
-                return ImagePicker.drop(providers, into: $session.draftImages)
+                // Los archivos se adjuntan siempre; las imágenes, sólo si el modelo las ve.
+                ImagePicker.drop(providers, into: $session.draftImages, withImages: allowsImages) {
+                    session.imageNotice.show()
+                }
             }
             .confirmationDialog(ImageChoiceButtons.title, isPresented: $askingAboutImages) {
                 ImageChoiceButtons(alternatives: app.imageAlternatives(to: session.model)) { choice in
                     session.change(model: choice.model)
                     send()
                 } dropImages: {
-                    session.draftImages = []
+                    session.draftImages.removeAll(where: Attachments.isImage)
                     send()
                 }
             } message: {
@@ -73,14 +75,14 @@ struct Composer: View {
     private var allowsImages: Bool { app.allowsImages(session.model) }
 
     private var attachButton: some View {
-        Button { ImagePicker.choose(into: &session.draftImages) } label: {
-            Image(systemName: allowsImages ? "plus" : "eye.slash").foregroundStyle(Theme.secondary)
+        Button { ImagePicker.choose(into: &session.draftImages, withImages: allowsImages) } label: {
+            Image(systemName: "plus").foregroundStyle(Theme.secondary)
                 .frame(width: 22, height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(allowsImages ? "Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)" : ImageSupport.notice)
-        .accessibilityLabel(allowsImages ? "Adjuntar imágenes" : ImageSupport.notice)
-        .disabled(!session.canSend || !allowsImages)
+        .help(ImageSupport.attachHelp(allowsImages: allowsImages))
+        .accessibilityLabel(allowsImages ? "Adjuntar imágenes o archivos" : "Adjuntar archivos")
+        .disabled(!session.canSend)
     }
 
     /// La frase sugerida del último cierre, como en la app de Codex: sale en gris con el cuadro vacío.
@@ -106,8 +108,8 @@ struct Composer: View {
             .onChange(of: text) { old, new in
                 guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
                 text = dropped.text
-                guard allowsImages else { session.imageNotice.show(); return }
-                ImagePicker.add(dropped.images, to: &session.draftImages)
+                if !allowsImages, dropped.images.contains(where: Attachments.isImage) { session.imageNotice.show() }
+                ImagePicker.add(dropped.images, to: &session.draftImages, withImages: allowsImages)
             }
             .onSubmit(submit)
             .onChange(of: text) { selection = 0 }
@@ -196,7 +198,7 @@ struct Composer: View {
             }
             // «/Users/…» u otra cosa que no es una orden: va como mensaje normal.
         }
-        if !session.draftImages.isEmpty, !allowsImages {
+        if session.draftImages.contains(where: Attachments.isImage), !allowsImages {
             askingAboutImages = true
             return
         }

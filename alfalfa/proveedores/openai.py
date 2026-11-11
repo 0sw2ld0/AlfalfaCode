@@ -63,6 +63,14 @@ def _imagen(dato):
     return {'type': 'input_image', 'detail': 'auto', 'image_url': 'data:' + _mime(dato) + ';base64,' + dato}
 
 
+def _archivos(lista):
+    """Los PDF adjuntos (alfalfa.adjuntos) como `input_file` con `file_data`, sin la Files API."""
+    return [{'type': 'input_file', 'filename': str(d.get('nombre') or 'documento.pdf')[:200],
+             'file_data': 'data:application/pdf;base64,' + d['data']}
+            for d in lista or [] if isinstance(d, dict) and isinstance(d.get('data'), str) and d['data']
+            and d.get('mime') == 'application/pdf']
+
+
 def _texto(valor):
     return valor if isinstance(valor, str) else ('' if valor is None else json.dumps(valor, ensure_ascii=False))
 
@@ -146,7 +154,8 @@ def traducir_peticion(payload, esfuerzo=None, identificador=None, razona=None, a
                                 'arguments': _argumentos(funcion.get('arguments'))})
                 pendientes.append((ident, nombre))
         else:
-            partes = ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes
+            partes = _archivos(mensaje.get('documentos')) \
+                + ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes
             entrada.append({'role': 'user', 'content': partes or [{'type': 'input_text', 'text': ''}]})
     cerrar_pendientes()
 
@@ -241,8 +250,9 @@ def mostrar(modelo):
     ficha = CATALOGO.get(modelo) or {'ventana': externa.get('ventana') or 128000,
                                      'vision': bool(externa.get('vision'))}
     razona = razonamiento(modelo)[0]
+    # La Responses API lee PDF (`input_file`) en los modelos con visión: texto e imagen de cada página.
     capacidades = ['completion', 'tools'] + ([] if razona is False else ['thinking']) \
-        + (['vision'] if ficha.get('vision') else [])
+        + (['vision', 'pdf'] if ficha.get('vision') else [])
     info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'gpt'}, 'model_info': {'openai.context_length': ficha['ventana']}}
     if modelo not in CATALOGO and not externa:

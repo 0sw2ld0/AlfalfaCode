@@ -80,8 +80,8 @@ class Sesion:
         titulo = marcas.get('titulo') if isinstance(marcas, dict) else None
         if not isinstance(titulo, str) or not titulo.strip():
             titulo = self.task.get('objective') if isinstance(self.task.get('objective'), str) else ''
-            from ..imagenes import CIERRE, ETIQUETA
-            titulo = ETIQUETA.sub('', titulo).replace(CIERRE, '').strip()
+            from ..adjuntos import sin_etiquetas
+            titulo = sin_etiquetas(titulo)
         return ' '.join(titulo.split())[:200]
 
     @property
@@ -303,7 +303,7 @@ def _recortar(texto, limite):
 
 
 def _convertir(lectura, filas, usuarios, turnos, sesion, secretos):
-    from ..imagenes import CIERRE, ETIQUETA
+    from ..adjuntos import sin_etiquetas
     fecha_sesion = sesion.fecha
     for posicion, mensaje in filas:
         if not isinstance(mensaje, dict):
@@ -318,7 +318,7 @@ def _convertir(lectura, filas, usuarios, turnos, sesion, secretos):
                     continue  # lo escribió el arnés, no el usuario
             elif texto.startswith(PREFIJOS_DEL_ARNES):
                 continue
-            texto = ETIQUETA.sub('', texto).replace(CIERRE, '')
+            texto = sin_etiquetas(texto)
             texto = redaccion.tapar(texto, secretos)
             texto = _recortar(texto, MAX_TEXTO)
         elif rol == 'assistant':

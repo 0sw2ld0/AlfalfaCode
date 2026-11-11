@@ -18,6 +18,7 @@ VERSION = 2
 MAX_MENSAJE = 20000
 # El texto de un mensaje que sólo trae imágenes (también lo usa la app de Mac).
 SOLO_IMAGENES = 'Mira la imagen adjunta.'
+SOLO_ARCHIVOS = 'Lee el archivo adjunto.'
 # Campos opcionales del evento `permiso` (política on-request); los clientes v2
 # anteriores los ignoran.
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
@@ -255,24 +256,28 @@ class Transport:
             await self.wake.wait()
         return None
 
-    def message(self, text, images=(), ident=None):
-        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex.
+    def message(self, text, images=(), ident=None, files=()):
+        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex;
+        `files`: las de PDF, texto, código, Word o Excel (alfalfa.adjuntos).
         `ident`: el id que le da la app para poder quitarlo de la cola; sin él, como siempre."""
-        from . import imagenes
+        from . import adjuntos, imagenes
         if ident is not None and not (isinstance(ident, str) and 0 < len(ident) <= MAX_ID_EN_COLA):
             self.emit('error', texto='`id` tiene que ser texto de hasta 100 caracteres.')
             return
         if images and not (isinstance(images, list) and all(isinstance(r, str) for r in images)):
             self.emit('error', texto='`imagenes` tiene que ser una lista de rutas.')
             return
-        if images and isinstance(text, str) and not text.strip():
-            text = SOLO_IMAGENES
+        if files and not (isinstance(files, list) and all(isinstance(r, str) for r in files)):
+            self.emit('error', texto='`archivos` tiene que ser una lista de rutas.')
+            return
+        if (images or files) and isinstance(text, str) and not text.strip():
+            text = SOLO_IMAGENES if images else SOLO_ARCHIVOS
         if not isinstance(text, str) or not text.strip() or len(text) > MAX_MENSAJE:
             self.emit('error', texto='El mensaje debe ser texto no vacío de hasta 20000 caracteres.')
             return
         try:
-            text = imagenes.con_etiquetas(text, list(images))
-        except imagenes.ImagenInvalida as exc:
+            text = adjuntos.con_etiquetas(imagenes.con_etiquetas(text, list(images)), list(files))
+        except (imagenes.ImagenInvalida, adjuntos.ArchivoInvalido) as exc:
             self.emit('error', texto=str(exc))
             return
         if self.stopped:
@@ -328,7 +333,8 @@ class Transport:
             if value.get('tipo') == 'cancelar':
                 self.stop()
             elif value.get('tipo') == 'mensaje':
-                self.message(value.get('texto'), value.get('imagenes') or [], value.get('id'))
+                self.message(value.get('texto'), value.get('imagenes') or [], value.get('id'),
+                             value.get('archivos') or [])
             elif value.get('tipo') == 'enviar_ahora':
                 self.enviar_ahora(value.get('texto'), value.get('id'))
             elif value.get('tipo') == 'redirigir':
@@ -677,9 +683,12 @@ async def run(args, transport):
             # La app lo quita de la conversación y lo devuelve al cuadro (`rechazado`).
             rechazo = await manager.sin_vision(prompt)
             if rechazo:
+                from .adjuntos import rutas_etiquetadas as archivos_etiquetados
                 from .imagenes import rutas_etiquetadas
-                transport.emit('error', texto=rechazo[0], motivo='sin_vision',
-                               rechazado={'texto': _texto_escrito(prompt), 'imagenes': rutas_etiquetadas(prompt)},
+                rechazado = {'texto': _texto_escrito(prompt), 'imagenes': rutas_etiquetadas(prompt)}
+                if archivos_etiquetados(prompt):
+                    rechazado['archivos'] = archivos_etiquetados(prompt)  # vuelven al cuadro con las imágenes
+                transport.emit('error', texto=rechazo[0], motivo='sin_vision', rechazado=rechazado,
                                con_vision=[{'modelo': ident, 'nombre': nombre} for ident, nombre in rechazo[1]])
                 if not eco:
                     code = 0  # el encargo inicial rechazado no es un fallo; un turno anterior manda
@@ -829,19 +838,18 @@ MARCAS = {'titulo': str, 'fijada': bool, 'archivada': bool}
 
 
 def _texto_escrito(texto):
-    """Lo que escribió el usuario: sin etiquetas de imagen ni el relleno de un mensaje que
-    sólo traía imágenes (la app pintó su burbuja sin texto y lo devuelve al cuadro tal cual)."""
-    from .imagenes import CIERRE, ETIQUETA
-    limpio = ETIQUETA.sub('', texto).replace(CIERRE, '').strip()
-    return '' if limpio == SOLO_IMAGENES else limpio
+    """Lo que escribió el usuario: sin etiquetas de imagen o de archivo ni el relleno de un mensaje
+    que sólo traía adjuntos (la app pintó su burbuja sin texto y lo devuelve al cuadro tal cual)."""
+    from .adjuntos import sin_etiquetas
+    limpio = sin_etiquetas(texto)
+    return '' if limpio in (SOLO_IMAGENES, SOLO_ARCHIVOS) else limpio
 
 
 def _sin_etiquetas(texto):
-    from .imagenes import CIERRE, ETIQUETA
+    from .adjuntos import rutas_etiquetadas, sin_etiquetas
     if not isinstance(texto, str):
         return texto
-    limpio = ETIQUETA.sub('', texto).replace(CIERRE, '').strip()
-    return limpio or 'Imagen adjunta'
+    return sin_etiquetas(texto) or ('Archivo adjunto' if rutas_etiquetadas(texto) else 'Imagen adjunta')
 
 
 def _marcas(directory):
