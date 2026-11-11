@@ -390,6 +390,8 @@ async def test_ciclo_real_del_turno_no_pierde_el_cierre_ni_la_revision(tmp_path,
     async def run(rt, prompt):
         await rt.tools.call('browser_read', {})
         editar(root)
+        # Como lo apuntan las herramientas del agente al editar.
+        rt.state.setdefault('changes', []).append({'path': 'index.html', 'via': 'edit_file'})
         control['png'] = VERDE
         await rt.tools.call('wrap_up', {'recap': 'Demo terminada.', 'suggestion': 'Mira el botón.'})
         rt.task['status'] = 'completed'
