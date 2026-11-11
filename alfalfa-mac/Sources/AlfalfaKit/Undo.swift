@@ -66,6 +66,7 @@ public struct UndoFile: Equatable, Hashable, Sendable {
         case "repo_anidado": return "Está en un repositorio anidado: no se guarda"
         case "ilegible": return "No se puede leer"
         case "sin_registro": return "No hay registro de cómo estaba"
+        case "perdido": return "Su versión de entonces ya no está en el repositorio del proyecto"
         default: return reason ?? ""
         }
     }

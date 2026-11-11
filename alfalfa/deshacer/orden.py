@@ -30,7 +30,8 @@ MOTIVOS = {'editado_despues': 'lo cambiaste después del turno', 'ajeno': 'no lo
            'adoptado': 'una orden del agente tomó su huella al acabar: puede llevar lo que cambiaste mientras corría',
            'grande': 'es demasiado grande para compararlo', 'ignorado': 'ahora está ignorado',
            'repo_anidado': 'está en un repositorio anidado', 'ilegible': 'no se puede leer',
-           'sin_registro': 'no hay registro de cómo estaba'}
+           'sin_registro': 'no hay registro de cómo estaba',
+           'perdido': 'su versión de entonces ya no está en el repositorio del proyecto'}
 # Los que se proponen restaurar: probablemente los cambió una orden del agente.
 PROPUESTOS = {'orden'}
 ACCIONES = {'restaurar': 'se restaura', 'recrear': 'se recrea', 'borrar': 'se borra',

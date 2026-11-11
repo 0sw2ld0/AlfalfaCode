@@ -32,19 +32,21 @@ public struct LiveActivity: Equatable, Sendable {
         self.since = since
     }
 
-    /// El agente razona desde `since` (el último mensaje o el último resultado).
-    public static func thinking(since: Double?) -> LiveActivity {
-        LiveActivity(phase: .thinking, phrase: thinkingPhrase, since: since)
+    /// El agente razona desde `since` (el último mensaje o el último resultado). Con `preparing`
+    /// (el motor guarda la instantánea para deshacer), la fila dice eso en vez de «Pensando».
+    public static func thinking(since: Double?, preparing: String? = nil) -> LiveActivity {
+        if let preparing { return LiveActivity(phase: .working, phrase: preparing, since: since) }
+        return LiveActivity(phase: .thinking, phrase: thinkingPhrase, since: since)
     }
 
     /// Lo que hace un grupo de llamadas que sigue en marcha: la llamada sin resultado o, si no
-    /// hay, «Pensando» desde el último evento. Con `waiting`, la llamada espera un permiso.
-    public static func of(group events: [ToolEvent], waiting: Bool = false) -> LiveActivity {
+    /// hay, «Pensando» (o `preparing`) desde el último evento. Con `waiting`, la llamada espera un permiso.
+    public static func of(group events: [ToolEvent], waiting: Bool = false, preparing: String? = nil) -> LiveActivity {
         let calls = ToolCalls.calls(from: events)
         let lastTime = events.last { $0.time > 0 }?.time
         guard let current = calls.last(where: { !$0.finished }) else {
             return waiting ? LiveActivity(phase: .waiting, phrase: waitingPhrase, since: lastTime)
-                : .thinking(since: lastTime)
+                : .thinking(since: lastTime, preparing: preparing)
         }
         let since = current.startTime ?? lastTime
         if waiting {

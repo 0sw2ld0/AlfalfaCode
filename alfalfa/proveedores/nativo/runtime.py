@@ -481,6 +481,8 @@ class NativeRuntime:
         self.started = time.monotonic()
         self.espera_permisos = 0.0
         self.repeats = self.state.setdefault('tool_repeats', {})
+        # `async () -> None` que espera la instantánea de antes del turno (la pone terminal.py).
+        self.antes_de_cambiar = None
         self.context_chars = 64000
         self.attempt_start_index = None
         if self.hooks is not None:
@@ -2354,6 +2356,12 @@ class NativeRuntime:
                 self.repeats[key] = self.repeats.get(key, 0)+1
                 if self.repeats[key] > 3:
                     raise ValueError('Bucle detectado: la misma herramienta se repitió sin progreso. Sesión guardada.')
+                # La instantánea de antes del turno (deshacer) se toma mientras el modelo responde: lo
+                # que puede cambiar archivos la espera; leer, no.
+                if self.antes_de_cambiar is not None:
+                    from ...deshacer import espera
+                    if espera(str(name)):
+                        await self.antes_de_cambiar()
                 call['status'] = 'executing'
                 self.save()
                 self.task['activity'] = name

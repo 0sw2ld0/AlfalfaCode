@@ -885,6 +885,77 @@ class TerminalManager:
             if self.transport is not None:
                 self.transport.in_turn = False
 
+    # MARK: - Instantáneas para deshacer
+
+    PREPARANDO = 'Preparando deshacer…'
+    # Una instantánea rápida no se anuncia: sólo la que tarda más que esto, o la que hace esperar.
+    PREPARANDO_TRAS = 1.0
+
+    async def _instantanea(self, ident, momento, cambios):
+        """Toma la instantánea `antes` o `despues` del turno en otro hilo y la apunta. Si tarda, la app
+        y la terminal dicen «Preparando deshacer…» (con el tamaño cuando se sabe) en vez de «Pensando».
+        Si no se puede, lo dice una vez por sesión."""
+        if not deshacer.activas() or not self.task.get('cwd') or not self.task.get('id'):
+            return
+        loop = asyncio.get_running_loop()
+        self._preparacion = {'detalle': None, 'visible': False, 'desde': time.monotonic()}
+        tardia = loop.call_later(self.PREPARANDO_TRAS, self._preparando) if momento == 'antes' else None
+
+        def avance(detalle):
+            loop.call_soon_threadsafe(self._preparando, detalle, False)
+
+        try:
+            fila = await asyncio.to_thread(deshacer.tomar, self.home, self.task['cwd'], self.task['id'], ident,
+                                           momento, avance)
+        finally:
+            if tardia is not None:
+                tardia.cancel()
+            self._preparado()
+        deshacer.apuntar(self.home, self.task, ident, momento, fila, cambios)
+        texto = deshacer.aviso(self.task, fila)
+        if texto:
+            self.event(self.task, 'system', texto)
+
+    def _preparando(self, detalle=None, mostrar=True):
+        estado = getattr(self, '_preparacion', None)
+        if estado is None:
+            return
+        cambia = bool(detalle) and detalle != estado['detalle']
+        if detalle:
+            estado['detalle'] = detalle
+        if (estado['visible'] or not mostrar) and not (estado['visible'] and cambia):
+            return
+        estado['visible'] = True
+        texto = self.PREPARANDO + (' (' + estado['detalle'] + ')' if estado['detalle'] else '')
+        if self.transport is not None:
+            self.transport.emit('preparando', texto=texto)
+        else:
+            print('AlfalfaCode · ' + texto, flush=True)
+
+    def _preparado(self):
+        estado, self._preparacion = getattr(self, '_preparacion', None), None
+        if not estado or not estado['visible']:
+            return
+        if self.transport is not None:
+            self.transport.emit('preparando', texto=None)
+        else:
+            print(f'AlfalfaCode · Deshacer listo ({time.monotonic() - estado["desde"]:.0f} s).', flush=True)
+
+    async def _esperar_instantanea(self, previa, mostrar=True):
+        """Antes de una herramienta que puede cambiar archivos: la instantánea de antes del turno."""
+        if previa.done():
+            if not previa.cancelled():
+                previa.exception()  # Ya quedó apuntado; que asyncio no lo dé por perdido.
+            return
+        if mostrar:
+            self._preparando()
+        try:
+            await asyncio.shield(previa)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 — sin instantánea el turno sigue (ya quedó apuntado el error).
+            pass
+
     async def _run(self, prompt, eco=False):
         if self.transport is None and not getattr(self, '_equipo_anunciado', False):
             self.anunciar_equipo()
@@ -925,9 +996,11 @@ class TerminalManager:
             self._hooks_avisados = True
             for diagnostico in self.hooks.motor.diagnosticos:
                 self.event(self.task, 'system', 'Hooks · ' + diagnostico.texto)
+        # El código de la carpeta antes del turno, para poder volver a este mensaje con él. Se toma
+        # mientras el modelo ya responde; sólo lo esperan las herramientas que pueden cambiar archivos.
+        previa = asyncio.create_task(self._instantanea(turno['id'], 'antes', deshacer.contar_cambios(rt.state)))
+        rt.antes_de_cambiar = lambda: self._esperar_instantanea(previa)
         try:
-            # El código de la carpeta antes del turno, para poder volver a este mensaje con él.
-            await asyncio.to_thread(deshacer.al_empezar_turno, self.home, self.task, turno['id'], rt.state)
             self.pruebas_interfaz.empezar(rt, turno['id'])
             # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
             expandido = self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt)
@@ -958,6 +1031,9 @@ class TerminalManager:
             self.task.update(status='failed', summary=str(exc))
             return 1
         finally:
+            rt.antes_de_cambiar = None
+            # La de antes tiene que quedar apuntada antes que la de después (y no chocar con ella).
+            await self._esperar_instantanea(previa, mostrar=False)
             # Un subagente no sigue solo cuando el turno acaba o se interrumpe.
             await self.subagentes.detener_todos()
             for proc in list(self.processes.values()):
@@ -971,7 +1047,7 @@ class TerminalManager:
                                   gasto=registro.gasto_del_turno(self.task, *antes))
             # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
             # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
-            await asyncio.to_thread(deshacer.al_terminar_turno, self.home, self.task, turno['id'], rt.state)
+            await self._instantanea(turno['id'], 'despues', deshacer.contar_cambios(rt.state))
             await self.pruebas_interfaz.terminar()
             self.revision_codigo.ofrecer(turno)
             rt._record_context_details()
