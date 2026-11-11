@@ -10,7 +10,8 @@
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
 #      con el identificador com.cuycoders.alfalfacode y la misma versión.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
-#      ayudantes a ~/.local/share/alfalfa, y deja ~/.local/bin/alfalfa. Si algo falla,
+#      ayudantes, incluido CuyBrowser si viene en el DMG, a ~/.local/share/alfalfa y
+#      deja ~/.local/bin/alfalfa. Si algo falla,
 #      la copia que hubiera no se toca.
 #   5. Si ~/.local/bin no está en el PATH, lo añade a ~/.zshrc (o ~/.bash_profile) entre
 #      dos marcas (ALFALFA_SIN_PATH=1 para no tocarlos).
@@ -126,6 +127,7 @@ main() {
   else
     paso "Firma correcta (Developer ID del equipo $EQUIPO, notarizada)."
   fi
+  comprobar_cuybrowser
 
   # --- 4. Copiar el motor ---------------------------------------------------------------------
   mkdir -p "$PREFIJO/share" "$BIN"
@@ -179,6 +181,23 @@ comprobar_mac() {
     || falla "AlfalfaCode necesita un Mac con Apple Silicon (M1 o posterior)."
   MAYOR="$(sw_vers -productVersion | cut -d. -f1)"
   [ "$MAYOR" -ge 14 ] 2>/dev/null || falla "AlfalfaCode necesita macOS 14 (Sonoma) o posterior."
+}
+
+comprobar_cuybrowser() {
+  PLIST="$APP/Contents/Info.plist"
+  # Los DMG anteriores a CuyBrowser no declaran la clave.
+  TIPO_CUY="$(plutil -type AlfalfaCuyBrowserVersion "$PLIST" 2>/dev/null)" || return 0
+  [ "$TIPO_CUY" = string ] || falla "AlfalfaCuyBrowserVersion no es un texto"
+  VERSION_CUY="$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$PLIST")"
+  printf '%s' "$VERSION_CUY" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || falla "AlfalfaCuyBrowserVersion no es una versión válida"
+  CUY="$APP/Contents/Helpers/cuybrowser"
+  [ -f "$CUY" ] && [ -x "$CUY" ] && [ ! -L "$CUY" ] || falla "la app no trae CuyBrowser $VERSION_CUY"
+  CUY="$(CDPATH= cd -- "$APP/Contents/Helpers" && pwd)/cuybrowser"
+  codesign --verify --strict "$CUY" 2>/dev/null || falla "la firma de CuyBrowser no es válida"
+  SALIDA_CUY="$(cd "$TMP" && env -i HOME="$PWD" PATH=/usr/bin:/bin "$CUY" --version)" \
+    && [ "$SALIDA_CUY" = "$VERSION_CUY" ] || falla "el ejecutable no declara CuyBrowser $VERSION_CUY"
+  paso "CuyBrowser $VERSION_CUY incluido."
 }
 
 bajar() {   # bajar <url> <destino>
