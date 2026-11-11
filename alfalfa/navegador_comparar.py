@@ -65,9 +65,10 @@ def _acotar(respuesta):
 class Comparador:
     """Reutiliza el motor activo y conserva el secundario hasta cerrar la sesión."""
 
-    def __init__(self, active, pedir, profile='alfalfa'):
+    def __init__(self, active, pedir, profile='alfalfa', *, origen=None):
         self.active = active
         self.profile = profile
+        self.origen = origen
         if isinstance(active, NavegadorCuyBrowser):
             self.webkit, self.chromium = Navegador(pedir), active
             self._owns_chromium = False
@@ -86,7 +87,7 @@ class Comparador:
         async with self._lock:
             if self.chromium is None:
                 # WebKit sigue siendo utilizable aunque el perfil secundario no esté configurado.
-                self.chromium = NavegadorCuyBrowser(self.profile)
+                self.chromium = NavegadorCuyBrowser(self.profile, origen=self.origen)
             if self.webkit.relevo_pendiente or self.chromium.relevo_pendiente:
                 raise ValueError('Un motor espera a la persona; termina el relevo antes de comparar.')
             # No iniciar Chromium cuando su política estricta no puede garantizarse.

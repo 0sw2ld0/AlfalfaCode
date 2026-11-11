@@ -14,6 +14,8 @@ struct NewTaskView: View {
     @FocusState private var focused: Bool
     @State private var importingOllama = false
     @State private var planningQueue = false
+    @State private var showingBrowserFirstRun = false
+    @AppStorage("ajustes.navegador.primerInicioVisto") private var browserFirstRunSeen = false
     /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
     @Environment(\.openSettings) private var openSettings
@@ -52,6 +54,17 @@ struct NewTaskView: View {
                       providerName: model.currentProviderName)
                 .frame(width: 300)
         }
+        .onChange(of: shouldShowBrowserFirstRun, initial: true) { _, show in
+            if show { showingBrowserFirstRun = true }
+        }
+        .sheet(isPresented: $showingBrowserFirstRun, onDismiss: { browserFirstRunSeen = true }, content: {
+            BrowserFirstRunCard().environmentObject(model)
+        })
+    }
+
+    private var shouldShowBrowserFirstRun: Bool {
+        !browserFirstRunSeen && model.firstRun == nil && model.launcher != nil
+            && model.providers.contains(where: \.configured) && model.connecting == nil
     }
 
     private var header: some View {

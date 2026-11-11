@@ -104,6 +104,7 @@ final class LiveSession: ObservableObject, Identifiable {
     func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
         liveBrowserExport = nil
+        let browserPreferences = BrowserEnginePreferences()
         let arguments = Launcher.stdioArguments(
             task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
             effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
@@ -112,7 +113,8 @@ final class LiveSession: ObservableObject, Identifiable {
             keepAwake: Preferences().keepAwake, browser: true,
             budget: Preferences().sessionBudget, monthlyBudget: Preferences().monthlyBudget,
             diagnostics: Preferences().diagnostics, commitSignature: Preferences().commitSignature, queue: queue,
-            browserEngine: browserBackend, cuyBrowserProfile: BrowserEnginePreferences().profile)
+            browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
+            cuyBrowserFromPath: browserPreferences.fromPath)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }

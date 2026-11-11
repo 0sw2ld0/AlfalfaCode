@@ -14,7 +14,53 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import empaquetado
 from .cuybrowser_http import HttpCuyBrowser
+
+
+def ejecutable_cuybrowser(root, *, origen=None):
+    """La distribución instalada tiene prioridad. PATH sigue disponible por elección o en clones."""
+    incluido = None if origen == 'path' else empaquetado.ayudante('cuybrowser')
+    ejecutable = incluido or (None if origen == 'incluido' else shutil.which('cuybrowser'))
+    if ejecutable is None and origen == 'path':
+        ejecutable = shutil.which(str(Path.home() / '.local/bin/cuybrowser'))
+    if ejecutable is None:
+        return None, None
+    ruta = Path(ejecutable).resolve()
+    if incluido and (incluido.is_symlink() or incluido.parent.is_symlink()):
+        raise ValueError('El CuyBrowser incluido debe ser un archivo dentro de Helpers.')
+    if not incluido and ruta.is_relative_to(root.resolve()):
+        raise ValueError('No se ejecuta un cuybrowser procedente del proyecto; usa una instalación de confianza.')
+    return str(ruta), 'incluido' if incluido else 'path'
+
+
+def entorno_cuybrowser(base, home=None, *, root=None):
+    # Bun y Node aceptan opciones de arranque antes de que CuyBrowser pueda aplicar su política.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith('BUN_') and key not in ('NODE_OPTIONS', 'NODE_PATH')}
+    if root is not None:
+        paths = env.get('PATH', os.defpath).split(os.pathsep)
+        local = str(Path.home() / '.local/bin')
+        if local not in paths:
+            paths.append(local)
+        env['PATH'] = os.pathsep.join(
+            entry for entry in paths
+            if os.path.isabs(entry) and not Path(entry).resolve().is_relative_to(root))
+    env['CUYBROWSER_HOME'] = str(home if home is not None else base / 'cuybrowser')
+    if 'PLAYWRIGHT_BROWSERS_PATH' in env:
+        return env
+    compartido = base / 'chromium-cuybrowser'
+    anterior = home / 'browsers' if home is not None else None
+    if compartido.exists() or compartido.is_symlink():
+        _private(compartido)
+    elif anterior is not None and anterior.is_dir() and not anterior.is_symlink():
+        compartido = anterior
+    env['PLAYWRIGHT_BROWSERS_PATH'] = str(compartido)
+    return env
+
+
+def clave_proyecto(root):
+    return hashlib.sha256(os.fsencode(root)).hexdigest()[:24]
 
 
 def _private(path):
@@ -54,10 +100,11 @@ def _port():
 
 
 class ProcesoCuyBrowser:
-    def __init__(self, profile='alfalfa'):
+    def __init__(self, profile='alfalfa', *, origen=None):
         if not isinstance(profile, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', profile):
             raise ValueError('El perfil de CuyBrowser admite 1–64 letras ASCII, números, guiones y guiones bajos.')
         self.profile = profile
+        self.origen = origen
         self.home = None
         self.staging = None
         self.process = None
@@ -77,7 +124,7 @@ class ProcesoCuyBrowser:
                 raise ValueError('CuyBrowser no garantiza el modo estricto de subrecursos; usa WebKit.')
             return self.http
         self.root = root
-        key = hashlib.sha256(os.fsencode(root)).hexdigest()[:24]
+        key = clave_proyecto(root)
         self.home = _private(_private(runtime.manager.home / 'cuybrowser') / key)
         self.staging = _private(_private(runtime.manager.home / 'subidas-cuybrowser') / key)
         self.lock = os.open(self.home / 'alfalfa.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
@@ -96,21 +143,19 @@ class ProcesoCuyBrowser:
         try:
             if await asyncio.to_thread(_ipc, self.home) is not None:
                 raise ValueError('Ya hay un daemon en el hogar reservado de este proyecto; no se adoptará ni detendrá.')
-            executable = shutil.which('cuybrowser')
+            executable, _ = ejecutable_cuybrowser(root, origen=self.origen)
             if not executable:
-                raise ValueError('No se encuentra cuybrowser en PATH. Instala una versión compatible explícitamente.')
-            executable = str(Path(executable).resolve())
-            if Path(executable).is_relative_to(root):
-                raise ValueError('No se ejecuta un cuybrowser procedente del proyecto; '
-                                 'usa una instalación de confianza.')
+                if self.origen == 'incluido':
+                    raise ValueError('CuyBrowser no está incluido. Puedes elegir tu instalación en Ajustes.')
+                raise ValueError('No se encuentra CuyBrowser incluido ni en PATH. Instala una versión compatible.')
+            env = entorno_cuybrowser(runtime.manager.home, self.home, root=root)
             if not self.authorized:
                 await ask(runtime, [executable, 'serve', '--http'],
                           'Navegador: iniciar CuyBrowser fuera del sandbox con un perfil propio del proyecto ('
                           + self.profile + '). Sus diálogos nativos confirmarán las acciones sensibles.')
                 self.authorized = True
             port = _port()
-            env = dict(os.environ, CUYBROWSER_HOME=str(self.home))
-            self.process = subprocess.Popen([executable, 'serve', '--http', '--port', str(port)], env=env,
+            self.process = subprocess.Popen([executable, 'serve', '--http', '--port', str(port)], env=env, cwd='/',
                                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                             stderr=subprocess.DEVNULL, start_new_session=True)
             for _ in range(100):
