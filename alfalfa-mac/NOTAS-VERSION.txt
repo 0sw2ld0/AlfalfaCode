@@ -1,6 +1,8 @@
-El agente ve la consola y las peticiones de red del navegador propio.
-Cuando hace falta que tú hagas algo en una página (iniciar sesión, un captcha), te pasa el navegador y sigue después.
-Prueba las páginas en tamaño de móvil, tableta o escritorio, con la vista a escala.
-Señala un elemento o un área de la página con un comentario para decirle al agente qué cambiar.
-En el navegador también espera, pulsa teclas, pasa el ratón y sube archivos.
-Los commits que hace el agente llevan la firma de AlfalfaCode como coautor; se quita en Ajustes ▸ General.
+Al terminar un turno puedes pedir que otro modelo revise los cambios y encargar las correcciones en el mismo hilo.
+Cola de encargos: deja una lista de tareas y el agente las hace una tras otra o en paralelo, cada una en su propio worktree.
+El cuadro de escribir te propone en gris el siguiente mensaje; con Tab lo aceptas y lo editas antes de enviarlo.
+Las imágenes y los vídeos que enseña el agente se ven dentro de la conversación.
+Cuando el agente cambia una web, el cierre del turno muestra capturas de antes y después.
+Navegador: perfil propio por proyecto, Chromium con CuyBrowser como segundo motor y permisos por sitio.
+Un equipo puede compartir reglas de modelos, permisos y presupuesto en .alfalfa/equipo.toml.
+El contenido de páginas y archivos externos se trata como datos, no como órdenes, y los secretos se ocultan.
