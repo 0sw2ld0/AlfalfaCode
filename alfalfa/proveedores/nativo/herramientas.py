@@ -1163,8 +1163,12 @@ class WorkspaceTools:
             if navegador is None:
                 raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
             from ...navegador_actividad import ejecutar
-            resultado = await ejecutar(self.runtime, navegador, name, args)
             pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+            try:
+                resultado = await ejecutar(self.runtime, navegador, name, args)
+            finally:
+                if pruebas is not None and name == 'browser_handoff':
+                    pruebas.tras_relevo(self.runtime)
             if pruebas is not None:
                 await pruebas.navegador(self.runtime, name, resultado)
             return resultado
@@ -1215,7 +1219,7 @@ class WorkspaceTools:
             fondo.aviso()
             return estado
         if name == 'apply_patch':
-            return self.apply_patch(args['input'])
+            return await self.apply_patch(args['input'])
         if name == 'inspect_image':
             path = self.path(args['path'])
             return await self.runtime.vision(path, args['question'])
@@ -1279,6 +1283,8 @@ class WorkspaceTools:
             after = args['content'].encode()
         if len(after) > MAX_FILE:
             raise ValueError('Archivo demasiado grande.')
+        if before != after:
+            await self._prueba_antes_de_editar([path])
         # Preserve a private preimage for review/recovery; never auto-rollback user work.
         if before is not None:
             backup = self.runtime.directory / ('before-'+digest(before))
@@ -1295,7 +1301,12 @@ class WorkspaceTools:
         self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0)+1
         return change
 
-    def apply_patch(self, text):
+    async def _prueba_antes_de_editar(self, paths):
+        pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+        if pruebas is not None:
+            await pruebas.antes_de_editar(self.runtime, [str(path.relative_to(self.root)) for path in paths])
+
+    async def apply_patch(self, text):
         """Aplica un parche de Codex: todo o nada, con las mismas rutas y copias que edit_file."""
         from ...apply_patch import NoEncaja, ParchInvalido, leer, planificar
         try:
@@ -1323,6 +1334,7 @@ class WorkspaceTools:
             if after is not None and len(after) > MAX_FILE:
                 raise ValueError('Archivo demasiado grande: ' + name + '. No se escribió nada.')
             writes.append((name, path, before, after, action))
+        await self._prueba_antes_de_editar([path for _, path, before, after, _ in writes if before != after])
         # Nada cambió por debajo mientras se calculaba: si no, no se escribe.
         for name, path, before, _, _ in writes:
             now = path.read_bytes() if path.is_file() else None

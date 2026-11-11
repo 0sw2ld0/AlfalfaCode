@@ -11,6 +11,7 @@ import pytest
 
 from alfalfa import deshacer, sesiones
 from alfalfa.navegador import Navegador, _podar_capturas
+from alfalfa.proveedores.nativo.herramientas import digest
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.pruebas_interfaz import leer_png
 from alfalfa.stdio import Transport
@@ -277,6 +278,118 @@ async def test_la_captura_automatica_no_puede_pedir_permisos_nuevos(demo, monkey
     assert prueba['estado'] == 'incompleta' and not prueba['comparaciones']
 
 
+@pytest.mark.parametrize('caso', ['plan', 'solo_lectura', 'revision', 'turno_fallido'])
+async def test_solo_lectura_y_turno_fallido_no_hacen_capturas_automaticas(demo, caso):
+    m, rt, root, app = demo
+    if caso == 'plan':
+        m.task['modo'] = 'plan'
+    elif caso == 'solo_lectura':
+        m.read_only = True
+    elif caso == 'revision':
+        m.task['review'] = True
+    else:
+        m.task['status'] = 'failed'
+    await rt.tools.call('browser_read', {})
+    editar(root)  # Un cambio externo tampoco autoriza una captura en un turno de solo lectura.
+    assert await cerrar(m, rt) is None
+    assert [accion for accion, _ in app['peticiones']] == ['leer']
+
+
+async def test_una_respuesta_fallida_del_navegador_no_dispara_la_captura(demo, monkeypatch):
+    m, rt, root, app = demo
+    llamar = m.navegador.llamar
+
+    async def fallo(runtime, nombre, args):
+        if nombre == 'browser_read':
+            return {'ok': False, 'error': 'Falló la lectura'}
+        return await llamar(runtime, nombre, args)
+
+    monkeypatch.setattr(m.navegador, 'llamar', fallo)
+    assert (await rt.tools.call('browser_read', {}))['ok'] is False
+    editar(root)
+    assert await cerrar(m, rt) is None
+    assert not app['peticiones']
+
+
+@pytest.mark.parametrize('releer', [False, True])
+async def test_tras_relevo_solo_hay_captura_automatica_si_se_relee(demo, releer):
+    m, rt, root, app = demo
+    await rt.tools.call('browser_read', {})
+    await rt.tools.call('browser_handoff', {'reason': 'Continúa en la página ficticia.'})
+    if releer:
+        await rt.tools.call('browser_read', {})
+    editar(root)
+    prueba = await cerrar(m, rt)
+    assert prueba['estado'] == ('completa' if releer else 'incompleta')
+    assert [accion for accion, _ in app['peticiones']].count('captura') == (2 if releer else 1)
+
+
+async def test_comparar_no_toma_foto_extra_y_permite_respaldo_antes_de_editar(demo):
+    m, rt, root, app = demo
+    m.diagnosticos = None
+    await m.pruebas_interfaz.navegador(rt, 'browser_compare', {'_imagenes': ['webkit.png', 'chromium.png']})
+    assert not app['peticiones']
+    original = (root / 'index.html').read_bytes()
+    await rt.tools.call('write_file', {'path': 'index.html', 'content': original.decode().replace('red', 'green'),
+                                       'expected_sha256': digest(original)})
+    assert [accion for accion, _ in app['peticiones']] == ['captura']
+    app['png'] = VERDE
+    assert (await cerrar(m, rt))['estado'] == 'completa'
+
+
+@pytest.mark.parametrize('editora', ['write_file', 'edit_file', 'apply_patch'])
+async def test_antes_de_la_edicion_autorizada_si_fallo_la_captura_temprana(demo, monkeypatch, editora):
+    m, rt, root, app = demo
+    m.diagnosticos = None
+    path = root / 'index.html'
+    original = path.read_text()
+    nuevo = original.replace('color:red', 'color:green')
+    captura_de = []
+    pedir = m.navegador.pedir
+
+    async def perder_primera(accion, campos, tiempo):
+        if accion == 'captura':
+            captura_de.append(path.read_text())
+            if len(captura_de) == 1:
+                raise ValueError('No se obtuvo la primera captura.')
+        return await pedir(accion, campos, tiempo)
+
+    monkeypatch.setattr(m.navegador, 'pedir', perder_primera)
+    await rt.tools.call('browser_read', {})
+    assert captura_de == [original]
+    if editora == 'apply_patch':
+        args = {'input': f'*** Begin Patch\n*** Update File: index.html\n@@\n-{original}\n+{nuevo}\n*** End Patch'}
+    else:
+        args = dict(path='index.html', expected_sha256=digest(original.encode()))
+        if editora == 'write_file':
+            args['content'] = nuevo
+        else:
+            args.update(old=original, new=nuevo)
+
+    # La primera edición se deniega en Manual. Todavía no debe haber respaldo.
+    m.task['modo'] = 'manual'
+
+    async def denegar(solicitud):
+        assert solicitud['motivo'] == 'edicion'
+        raise ValueError('Edición no autorizada')
+
+    monkeypatch.setattr(rt, 'approve', denegar)
+    with pytest.raises(ValueError, match='Edición no autorizada'):
+        await rt.tools.call(editora, args)
+    assert captura_de == [original] and path.read_text() == original
+    m.task['modo'] = 'auto'
+
+    await rt.tools.call(editora, args)
+    assert captura_de == [original, original]
+    assert path.read_text().strip() == nuevo
+    app['png'] = VERDE
+    prueba = await cerrar(m, rt)
+    par, = prueba['comparaciones']
+    assert Path(par['antes']).read_bytes() == ROJO
+    assert Path(par['despues']).read_bytes() == VERDE
+    assert captura_de[-1].strip() == nuevo
+
+
 async def test_sin_instantanea_final_no_se_adjudica_una_imagen_a_otro_codigo(demo):
     m, rt, root, _ = demo
     await rt.tools.call('browser_read', {})
@@ -286,8 +399,8 @@ async def test_sin_instantanea_final_no_se_adjudica_una_imagen_a_otro_codigo(dem
     assert 'prueba_interfaz' not in m.task.get('cierre', {})
 
 
-@pytest.mark.parametrize('cerrado', [False, True])
-async def test_mismo_contrato_con_cuybrowser_simulado_sin_arrancar_chromium(demo, monkeypatch, cerrado):
+@pytest.mark.parametrize('caso', ['completa', 'cerrado', 'sin_pestana', 'confirmacion', 'estricto'])
+async def test_mismo_contrato_con_cuybrowser_simulado_sin_arrancar_chromium(demo, monkeypatch, caso):
     import base64
 
     import httpx
@@ -299,7 +412,9 @@ async def test_mismo_contrato_con_cuybrowser_simulado_sin_arrancar_chromium(demo
 
     def responder(request):
         respuesta = api(request)
-        if request.url.path.endswith('/screenshot'):
+        if request.url.path.endswith('/status') and control.get('sin_pestana'):
+            return httpx.Response(200, json={'ok': True, 'data': {'running': False, 'tabs': []}})
+        if request.url.path.endswith('/screenshot') and respuesta.json().get('ok'):
             datos = respuesta.json()
             datos['data']['image']['base64'] = base64.b64encode(control['png']).decode()
             return httpx.Response(200, json=datos)
@@ -312,18 +427,26 @@ async def test_mismo_contrato_con_cuybrowser_simulado_sin_arrancar_chromium(demo
     await rt.tools.call('browser_read', {})
     editar(root)
     control['png'] = VERDE
-    if cerrado:
+    if caso == 'cerrado':
         m.navegador.close()
-    arranques = m.navegador.process.started
+    elif caso == 'sin_pestana':
+        control['sin_pestana'] = True
+    elif caso == 'confirmacion':
+        api.confirm.add('screenshot')
+    elif caso == 'estricto':
+        monkeypatch.setattr(m.navegador, 'politica_sitios',
+                            lambda _: {'permitidos': ['https://example.com:443'], 'estricto': True})
     prueba = await cerrar(m, rt)
-    assert m.navegador.process.started == arranques + (0 if cerrado else 1)
-    if cerrado:
+    assert m.navegador.process.started == 1
+    acciones = [tool for tool, _ in api.calls]
+    assert 'confirm' not in acciones
+    assert acciones.count('screenshot') == (2 if caso in ('completa', 'confirmacion') else 1)
+    if caso != 'completa':
         assert prueba['estado'] == 'incompleta' and not prueba['comparaciones']
         return
     assert prueba['estado'] == 'completa'
     par, = prueba['comparaciones']
     assert Path(par['antes']).read_bytes() == ROJO and Path(par['despues']).read_bytes() == VERDE
-    assert [tool for tool, _ in api.calls].count('screenshot') == 2
 
 
 async def test_hook_de_app_state_con_ayudante_simulado_y_permisos_habituales(demo, monkeypatch):

@@ -114,6 +114,7 @@ class NavegadorCuyBrowser(Navegador):
         for tab in status.get('tabs') or []:
             if isinstance(tab, dict) and tab.get('id') == status.get('active_tab') and isinstance(tab.get('url'), str):
                 self.url = tab['url']
+        return status
 
     async def llamar(self, runtime, name, args):
         if name == 'browser_compare':
@@ -128,25 +129,33 @@ class NavegadorCuyBrowser(Navegador):
         owner = getattr(self.process, 'root', None)
         if owner is not None and owner != runtime.tools.root.resolve():
             raise ValueError('Este navegador pertenece a otro proyecto; inicia una sesión nueva para cambiarlo.')
+        captura_automatica = name == 'browser_screenshot' and getattr(runtime, 'captura_automatica', False)
         async with self._lock:
+            if captura_automatica and (self.http is None or self.relevo_pendiente):
+                raise ValueError('CuyBrowser está cerrado o en relevo. No se inicia para una captura automática.')
             self._runtime_owner = runtime
             if self.http is not None:
                 try:
-                    await self._consumir_visitas(runtime)
+                    status = await self._consumir_visitas(runtime)
                 except ValueError:
                     self.close()
                     raise
+                if captura_automatica and (status.get('running') is not True or not status.get('active_tab')):
+                    raise ValueError('CuyBrowser no tiene una pestaña activa para la captura automática.')
             site_policy = getattr(self, 'politica_sitios', None)
             strict = bool(site_policy(runtime).get('estricto')) if (
                 site_policy is not None and getattr(runtime.manager, 'home', None) is not None) else False
-            try:
-                self.http = await self.process.start(runtime, self._preguntar, strict=strict)
-            except BaseException:
-                self.http = None
-                self._retirar_visita()
-                raise
+            if not captura_automatica:
+                try:
+                    self.http = await self.process.start(runtime, self._preguntar, strict=strict)
+                except BaseException:
+                    self.http = None
+                    self._retirar_visita()
+                    raise
             try:
                 policy = await self.http.check_policy()  # Nunca rebajar confirmaciones en caliente.
+                if captura_automatica and strict and self.http.capabilities.get('strictResources') is not True:
+                    raise ValueError('CuyBrowser no garantiza el modo estricto de subrecursos; usa WebKit.')
                 await self._sitios(runtime, policy)
             except ValueError:
                 self.close()
@@ -293,7 +302,8 @@ class NavegadorCuyBrowser(Navegador):
         elif action in ('consola', 'red'):
             result = await self._diagnostico(action, fields['limite'])
         elif action == 'captura':
-            raw = await self.http.call('screenshot', {'full_page': False})
+            raw = await self.http.call('screenshot', {'full_page': False},
+                                       approve=not getattr(self._runtime_cuy, 'captura_automatica', False))
             image = raw.get('image') or {}
             if image.get('mime_type') != 'image/png':
                 raise ValueError('CuyBrowser no devolvió una captura PNG.')
