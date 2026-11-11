@@ -701,6 +701,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
     /// se duerma por inactividad mientras trabaja un turno.
     case keepingAwake(Bool)
+    /// `preparando`: el motor guarda la instantánea para deshacer el turno; la fila viva lo dice
+    /// («Preparando deshacer… (8306 archivos, 1,2 GB)») en vez de «Pensando». nil: ya terminó.
+    case preparingUndo(String?)
     /// `presupuesto`: topes y gasto de la sesión y del mes, el aviso del 80 % y el corte, y la caché.
     case budget(BudgetStatus, cache: CacheSavings?)
     /// `navegador`: el agente pide algo al navegador propio de la app (BrowserEngine).
@@ -879,6 +882,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
+        case "preparando":
+            return .preparingUndo(text(object["texto"]))
         case "quitado_de_cola":
             guard let id = text(object["id"]), let removed = bool(object["quitado"]) else { return nil }
             return .unqueued(id: id, removed: removed, reason: text(object["motivo"]))

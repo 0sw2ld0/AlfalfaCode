@@ -16,6 +16,8 @@ struct WorkLog: View {
     let running: Bool
     /// Una llamada del grupo espera el permiso de la persona.
     var waiting = false
+    /// «Preparando deshacer…» mientras el motor guarda la instantánea del turno.
+    var preparing: String?
     @Binding var expanded: Bool
 
     var body: some View {
@@ -23,7 +25,7 @@ struct WorkLog: View {
         let calls = entries.compactMap { if case let .call(call) = $0 { return call } else { return nil } }
         VStack(alignment: .leading, spacing: 0) {
             if running {
-                LiveActivityRow(activity: LiveActivity.of(group: events, waiting: waiting), expanded: $expanded)
+                LiveActivityRow(activity: LiveActivity.of(group: events, waiting: waiting, preparing: preparing), expanded: $expanded)
             } else {
                 summaryRow(title: title(calls: calls, entries: entries), onlyNotes: calls.isEmpty)
             }

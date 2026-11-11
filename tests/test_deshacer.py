@@ -401,6 +401,9 @@ def test_un_turno_de_verdad_guarda_sus_dos_instantaneas(tmp_path, monkeypatch):
     async def request(rt, client, endpoint, payload, **kwargs):
         if endpoint == '/api/show':
             return {'capabilities': ['tools']}
+        # La instantánea de antes corre mientras el modelo responde: lo que cambia archivos la espera,
+        # como cualquier herramienta que no sólo lee.
+        await rt.antes_de_cambiar()
         (proyecto / 'a.txt').write_text('cambiado por una orden')
         return dict(message={'role': 'assistant', 'content': 'Hecho.'}, done=True, done_reason='stop',
                     prompt_eval_count=1, eval_count=1)

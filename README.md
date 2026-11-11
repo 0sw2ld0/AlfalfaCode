@@ -719,6 +719,16 @@ Las instantáneas de más de 30 días se borran, y también las más viejas si e
 pasa de 2 GB (nunca las de los dos últimos días ni las de deshacer y rehacer).
 `ALFALFA_INSTANTANEAS=0` las apaga; un fallo al guardar una nunca para el turno.
 
+En un repositorio git no copia lo que el proyecto ya tiene: el almacén lee sus objetos
+(`objects/info/alternates` al almacén común, también desde un worktree) y la primera
+instantánea parte del árbol de HEAD, así que sólo escribe lo cambiado y lo nuevo. Se
+toma mientras el modelo ya responde: sólo la esperan las herramientas que pueden
+cambiar archivos (editar, órdenes, parches, subagentes, MCP…). Si tarda, la app y la
+terminal dicen «Preparando deshacer…» con el tamaño. Si no termina en 90 s, avisa una
+vez de que deshacer no está disponible en esa carpeta y no lo reintenta hasta el día
+siguiente. Si el proyecto reescribe su historia y un `git gc` borra objetos que una
+instantánea tomaba prestados, esos archivos no se restauran (salen como «perdido»).
+
 Al pulsar **volver** la app pregunta qué vuelve a antes del mensaje:
 
 - **Conversación y código**: la conversación sigue en una copia justo antes del

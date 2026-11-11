@@ -29,6 +29,24 @@ repositorio aparte, fuera del proyecto: `$ALFALFA_HOME/instantaneas/<clave>`, co
   limpieza borra las refs de más de `DIAS` días y, si el almacén pasa de
   `TOPE_TOTAL`, también las más viejas, salvo las de los últimos `PROTEGIDAS_DIAS`
   días y las de deshacer y rehacer.
+
+Cuando la carpeta es (o está dentro de) un repositorio git, el almacén toma prestados
+sus objetos y parte de su HEAD, como los «ghost commits» de Codex pero sin escribir en
+el `.git` del proyecto:
+
+- `objects/info/alternates` apunta al almacén de objetos común del proyecto (el de
+  `--git-common-dir`, así vale también desde un worktree). git lee de ahí lo que ya
+  está y sólo escribe en el almacén lo nuevo o cambiado.
+- El primer índice se siembra con el árbol de HEAD de la carpeta (`read-tree`) y un
+  `update-index --refresh`, que compara cada archivo con su blob sin escribir nada:
+  los rastreados sin cambios no se copian. Los de más de `TOPE_ARCHIVO` se quitan del
+  índice antes de comparar (no se leen, como antes).
+- Si el proyecto reescribe su historia y un `gc` borra objetos que una instantánea
+  tomaba prestados, esa instantánea queda incompleta: `faltan()` lo comprueba antes de
+  restaurar y esos archivos no se tocan (motivo `perdido`). Lo nuevo y lo cambiado de
+  cada turno vive siempre en el almacén.
+- Una instantánea entera tiene `TIEMPO` segundos. Si se agotan, la carpeta queda
+  marcada (`sin_deshacer.json`) y los turnos no la reintentan hasta `DESCANSO`.
 """
 from __future__ import annotations
 
@@ -53,6 +71,9 @@ DIAS = 30
 PROTEGIDAS_DIAS = 2
 TOPE_TOTAL = 2 * 1024 ** 3
 TIEMPO = 90
+# Tras agotar el tiempo, los turnos no vuelven a intentarlo en esta carpeta hasta pasado esto.
+DESCANSO = 86400
+MARCA_SIN_DESHACER = 'sin_deshacer.json'
 # Carpetas pesadas que se reinstalan y no son trabajo del usuario.
 PESADAS = ('node_modules/', '.venv/', 'venv/', '.tox/', '.DS_Store')
 # Archivos (no carpetas) de las cachés de los permisos.
@@ -89,6 +110,10 @@ class SinInstantanea(Exception):
     """No se pudo guardar o leer una instantánea; el texto dice por qué."""
 
 
+class TiempoAgotado(SinInstantanea):
+    """La instantánea no terminó en `TIEMPO` segundos."""
+
+
 def _seguro(nombre):
     """Un trozo de ref válido: sin barras, espacios ni `..`."""
     limpio = _NOMBRE.sub('-', str(nombre)).strip('.-')[:80]
@@ -108,6 +133,15 @@ def sha256_de(path):
         return None
 
 
+def _bytes(n):
+    """«850 KB», «1,2 GB»: el tamaño para el aviso de «Preparando deshacer…»."""
+    for unidad, valor in (('GB', 1e9), ('MB', 1e6), ('KB', 1e3)):
+        if n >= valor:
+            cifra = n / valor
+            return (f'{cifra:.1f}'.replace('.', ',') if cifra < 10 else f'{cifra:.0f}') + ' ' + unidad
+    return f'{n} B'
+
+
 def _ignore_global():
     """Dónde está el ignore global del usuario: `core.excludesFile` o el de XDG."""
     candidatas = []
@@ -121,6 +155,35 @@ def _ignore_global():
         pass
     candidatas.append(Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'git' / 'ignore')
     return [c for c in candidatas if c.is_file()]
+
+
+def proyecto_de(cwd):
+    """{objetos, arbol} del repositorio git que contiene `cwd`, o None si no lo hay o no se puede leer.
+
+    `objetos` es su almacén común de objetos (también desde un worktree) y `arbol`, el árbol de
+    HEAD en `cwd` (None si HEAD aún no tiene commit o la carpeta no está en él). Sólo `rev-parse`:
+    ni hooks ni fsmonitor, y sin escribir nada en el proyecto."""
+    entorno = {k: os.environ[k] for k in ('PATH', 'HOME', 'LANG') if k in os.environ}
+    entorno.update(GIT_TERMINAL_PROMPT='0', GIT_OPTIONAL_LOCKS='0', LC_ALL='C')
+
+    def rev_parse(*args):
+        try:
+            salida = subprocess.run(['git', '-c', 'core.fsmonitor=false', 'rev-parse', *args], cwd=cwd,
+                                    env=entorno, capture_output=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return salida.stdout.decode(errors='surrogateescape') if salida.returncode == 0 else None
+
+    salida = rev_parse('--is-inside-work-tree', '--path-format=absolute', '--git-common-dir', '--show-prefix')
+    lineas = salida.split('\n') if salida else []
+    if len(lineas) < 3 or lineas[0] != 'true':
+        return None
+    objetos = (Path(cwd) / lineas[1]).resolve() / 'objects'
+    if not objetos.is_dir():
+        return None
+    prefijo = lineas[2]
+    arbol = rev_parse('--verify', '-q', 'HEAD:' + prefijo if prefijo else 'HEAD^{tree}')
+    return {'objetos': objetos, 'arbol': arbol.strip() if arbol and arbol.strip() else None}
 
 
 def cubre(excluidos, ruta):
@@ -148,6 +211,11 @@ class Almacen:
         self.cwd = Path(cwd).expanduser().resolve()
         self.clave = hashlib.sha256(str(self.cwd).encode()).hexdigest()[:16]
         self.dir = Path(hogar) / CARPETA / self.clave
+        # Hasta cuándo (time.monotonic) puede seguir la instantánea en curso; None fuera de guardar().
+        self._limite = None
+        self.proyecto = None
+        # Quien quiera saber cuánto falta: avance(texto) con «8.306 archivos», «1,2 GB»…
+        self.avance = None
 
     @classmethod
     def de_clave(cls, hogar, clave, cwd):
@@ -180,9 +248,16 @@ class Almacen:
         orden = ['git', '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false', '-c', 'core.quotepath=off',
                  '-c', 'core.fsmonitor=false', '-c', 'gc.auto=0', '-c', 'core.hooksPath=/dev/null',
                  '-c', 'core.excludesFile=' + str(self.dir / 'info' / 'exclude-global'), *args]
+        tiempo = TIEMPO
+        if self._limite is not None:
+            tiempo = self._limite - time.monotonic()
+            if tiempo <= 0:
+                raise TiempoAgotado(f'La instantánea tardó más de {TIEMPO} s.')
         try:
             salida = subprocess.run(orden, cwd=self.cwd, env=entorno, input=entrada, capture_output=True,
-                                    timeout=TIEMPO)
+                                    timeout=tiempo)
+        except subprocess.TimeoutExpired:
+            raise TiempoAgotado(f'La instantánea tardó más de {TIEMPO} s (git {args[0]}).') from None
         except (OSError, subprocess.SubprocessError) as exc:
             raise SinInstantanea('git no respondió: ' + str(exc)[:200]) from None
         if salida.returncode in tolerar:
@@ -233,6 +308,27 @@ class Almacen:
         for carpeta in ('indices', 'excluidos', 'info'):
             (self.dir / carpeta).mkdir(mode=0o700, exist_ok=True)
         self._exclusiones()
+        self.proyecto = proyecto_de(self.cwd)
+        self._prestados()
+
+    def _prestados(self):
+        """`objects/info/alternates`: el almacén de objetos del proyecto, para leer de ahí lo que ya
+        tiene en vez de copiarlo. Se conservan los anteriores que sigan existiendo: instantáneas
+        viejas pueden tomar prestado de un `.git` que se movió (otro `gitdir`)."""
+        alternates = self.dir / 'objects' / 'info' / 'alternates'
+        try:
+            lineas = [linea for linea in alternates.read_text().splitlines() if linea.strip()]
+        except OSError:
+            lineas = []
+        vigentes = [linea for linea in lineas if Path(linea).is_dir()]
+        if self.proyecto and str(self.proyecto['objetos']) not in vigentes:
+            vigentes.append(str(self.proyecto['objetos']))
+        if vigentes != lineas:
+            alternates.parent.mkdir(parents=True, exist_ok=True)
+            if vigentes:
+                alternates.write_text('\n'.join(vigentes) + '\n')
+            else:
+                alternates.unlink(missing_ok=True)
 
     def _escribir_si_cambia(self, path, texto):
         if not path.is_file() or path.read_text() != texto:
@@ -269,7 +365,53 @@ class Almacen:
         """Instantánea de la carpeta ahora: {repo, commit, fecha, grandes?}. SinInstantanea si no se pudo."""
         self.preparar()
         with self.cerrojo():
-            return self._guardar(sesion, nombre, mensaje)
+            # El plazo cuenta desde que se tiene el cerrojo: esperar a otra sesión no lo gasta.
+            self._limite = time.monotonic() + TIEMPO
+            try:
+                return self._guardar(sesion, nombre, mensaje)
+            finally:
+                self._limite = None
+
+    def _contar(self, texto):
+        if callable(self.avance):
+            try:
+                self.avance(texto)
+            except Exception:  # noqa: BLE001 — quien escucha no puede romper la instantánea.
+                pass
+
+    def _sembrar(self, sesion, arbol):
+        """El índice de una sesión sin índice previo, con el árbol de HEAD del proyecto: sus blobs ya
+        están en el almacén prestado. Lo grande se quita antes de comparar (no se lee), y
+        `--refresh` compara el resto con lo que hay en disco sin escribir objetos."""
+        self.git('read-tree', arbol, sesion=sesion)
+        filas = self.git('ls-files', '-z', '-s', sesion=sesion).decode(errors='surrogateescape').split('\0')
+        rutas = [fila.split('\t', 1)[1] for fila in filas if '\t' in fila and not fila.startswith('160000 ')]
+        fuera, total = [], 0
+        for ruta in rutas:
+            try:
+                estado = os.lstat(self.cwd / ruta)
+            except FileNotFoundError:
+                continue  # Borrado: `add -A` lo apunta.
+            except OSError:
+                # Dentro de una carpeta que no se puede abrir: su versión de HEAD no es la de disco.
+                fuera.append(ruta)
+                continue
+            if stat.S_ISREG(estado.st_mode):
+                if estado.st_size > TOPE_ARCHIVO or not os.access(self.cwd / ruta, os.R_OK):
+                    # Grande o ilegible: fuera, como en un almacén sin sembrar (se apunta después).
+                    fuera.append(ruta)
+                else:
+                    total += estado.st_size
+        if fuera:
+            self._quitar(sesion, fuera)
+        self._contar(f'{len(rutas) - len(fuera)} archivos, {_bytes(total)}')
+        # Sale con 1 si algo no coincide: eso lo guarda después `add`.
+        self.git('update-index', '-q', '--refresh', '--ignore-missing', sesion=sesion, tolerar=(0, 1))
+
+    def _quitar(self, sesion, rutas):
+        """Quita estas rutas del índice de la sesión (sin mirar HEAD ni el disco)."""
+        self.git('update-index', '-z', '--force-remove', '--stdin', sesion=sesion,
+                 entrada=''.join(r + '\0' for r in rutas).encode(errors='surrogateescape'))
 
     def _guardar(self, sesion, nombre, mensaje):
         indice = self._indice(sesion)
@@ -278,6 +420,8 @@ class Almacen:
             previos = [p for p in (self.dir / 'indices').iterdir() if p.is_file() and not p.name.endswith('.lock')]
             if previos:
                 shutil.copy2(max(previos, key=lambda p: p.stat().st_mtime), indice)
+            elif self.proyecto and self.proyecto.get('arbol'):
+                self._sembrar(sesion, self.proyecto['arbol'])
         lista, avisos = self.git('ls-files', '-z', '-o', '-m', '--exclude-standard', sesion=sesion, tolerar=(0,))
         nuevos = [n for n in lista.decode(errors='surrogateescape').split('\0') if n]
         if len(nuevos) > TOPE_ARCHIVOS:
@@ -313,6 +457,10 @@ class Almacen:
             elif not os.access(path, os.R_OK):
                 ilegibles.append(nombre_archivo)
         fuera = grandes + ilegibles + anidados
+        if grandes:
+            # Si ya estaba en el índice (un archivo que creció), su versión anterior no puede pasar
+            # por la de ahora: fuera también de ahí.
+            self._quitar(sesion, grandes)
         especificacion = ['.'] + [':(exclude,literal)' + g for g in fuera]
         _, errores = self.git('add', '-A', '--ignore-errors', '--pathspec-from-file=-', '--pathspec-file-nul',
                               sesion=sesion, tolerar=(0, 1),
@@ -464,6 +612,45 @@ class Almacen:
             return True
         except SinInstantanea:
             return False
+
+    def faltan(self, blobs):
+        """Los de estos objetos que ya no están (ni en el almacén ni en el prestado del proyecto)."""
+        blobs = sorted({b for b in blobs if b})
+        if not blobs:
+            return set()
+        try:
+            salida = self.git('cat-file', '--batch-check=%(objectname)', entrada=('\n'.join(blobs) + '\n').encode())
+        except SinInstantanea:
+            return set(blobs)
+        return {linea.split(' ', 1)[0] for linea in salida.decode(errors='replace').splitlines()
+                if linea.endswith(' missing')}
+
+    # MARK: - Sin deshacer en esta carpeta
+
+    def sin_deshacer(self, ahora=None):
+        """Por qué los turnos no toman instantáneas aquí ({motivo, fecha}), o None. Caduca a los `DESCANSO` s."""
+        try:
+            marca = json.loads((self.dir / MARCA_SIN_DESHACER).read_text())
+        except (OSError, ValueError):
+            return None
+        fecha = marca.get('fecha') if isinstance(marca, dict) else None
+        if not isinstance(fecha, (int, float)) or (time.time() if ahora is None else ahora) - fecha > DESCANSO:
+            return None
+        return marca
+
+    def marcar_sin_deshacer(self, motivo):
+        try:
+            self.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            (self.dir / MARCA_SIN_DESHACER).write_text(json.dumps({'motivo': motivo, 'fecha': time.time()},
+                                                                  ensure_ascii=False))
+        except OSError:
+            pass
+
+    def quitar_marca(self):
+        try:
+            (self.dir / MARCA_SIN_DESHACER).unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def excluidos(self, commit):
         """Lo que no entró en la instantánea `commit`, o None si no se sabe (instantánea antigua)."""

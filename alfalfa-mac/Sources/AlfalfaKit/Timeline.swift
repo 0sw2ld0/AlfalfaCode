@@ -187,6 +187,8 @@ public struct Timeline: Equatable, Sendable {
     public private(set) var compacting = false
     /// El arnés mantiene el Mac despierto: sólo mientras trabaja un turno y con el ajuste encendido.
     public private(set) var keepingAwake = false
+    /// «Preparando deshacer…» mientras el motor guarda la instantánea del turno; nil si no.
+    public private(set) var preparingUndo: String?
     /// Topes en dólares de la sesión y del mes y lo gastado (`presupuesto`); nil en motores anteriores.
     public private(set) var budget: BudgetStatus?
     /// Lo que ahorró la caché de prompts en la sesión; nil sin caché.
@@ -521,6 +523,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            preparingUndo = nil
             closeOpenCalls()
             // Los mensajes ya entregados sin turno conocido son de este turno.
             if let turn = outcome.turn {
@@ -550,6 +553,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            preparingUndo = nil
             closeOpenCalls()
             totalTokens = outcome.tokens
             if let cost = outcome.cost { totalCost = cost }
@@ -569,6 +573,7 @@ public struct Timeline: Equatable, Sendable {
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
         case let .keepingAwake(on): keepingAwake = on
+        case let .preparingUndo(text): preparingUndo = text
         case let .budget(status, cache):
             budget = status
             if let cache { cacheSavings = cache }
@@ -771,6 +776,7 @@ public struct Timeline: Equatable, Sendable {
         compacting = false
         // macOS suelta la aserción con el proceso.
         keepingAwake = false
+        preparingUndo = nil
         // Con el proceso de alfalfa se cierran sus órdenes en segundo plano.
         processes = processes.map { var row = $0; if row.alive { row.alive = false; row.stopped = true }; return row }
         denyPending(reason: "Sesión terminada")

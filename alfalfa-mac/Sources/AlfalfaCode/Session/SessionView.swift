@@ -90,7 +90,8 @@ struct SessionView: View {
                     // Sin herramienta en curso: el modelo piensa desde el último mensaje.
                     if liveWork == nil, status.isRunning, status != .waitingPermission, !session.timeline.compacting,
                        session.timeline.taskQueue?.running != true {
-                        LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince)).id("pensando")
+                        LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince,
+                                                         preparing: session.timeline.preparingUndo)).id("pensando")
                     }
                 }
                 .frame(maxWidth: Theme.column, alignment: .leading)

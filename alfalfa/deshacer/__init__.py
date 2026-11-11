@@ -36,10 +36,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from . import irreversibles
-from .instantaneas import CARPETA, Almacen, SinInstantanea, cubre, limpiar_todo, sha256_de
+from .instantaneas import CARPETA, Almacen, SinInstantanea, TiempoAgotado, cubre, limpiar_todo, sha256_de
 
 __all__ = ['Almacen', 'SinInstantanea', 'activas', 'al_empezar_turno', 'al_terminar_turno', 'vista_deshacer',
-           'deshacer', 'vista_rehacer', 'rehacer', 'turno_de', 'turno_anterior']
+           'deshacer', 'vista_rehacer', 'rehacer', 'turno_de', 'turno_anterior', 'tomar', 'apuntar', 'aviso',
+           'contar_cambios', 'NO_CAMBIAN', 'espera']
+
+# Herramientas que no esperan a la instantánea de antes del turno: las que sólo leen (`SIN_EFECTOS`
+# del motor) y el plan. Todas las demás (editar, órdenes, parches, subagentes, MCP…) sí, como las
+# «mutating» del `tool_call_gate` de Codex.
+NO_CAMBIAN = frozenset({'update_plan', 'buscar_herramientas'})
 
 EDITADO = 'editado_despues'
 AJENO = 'ajeno'
@@ -100,21 +106,66 @@ def _apuntar(task, ident, momento, fila, cambios=None):
             return
 
 
-def _instantanea(hogar, task, ident, momento, estado):
-    if not activas() or not task.get('cwd') or not task.get('id'):
-        return
+def espera(nombre):
+    """Si la herramienta `nombre` tiene que esperar a la instantánea de antes del turno."""
+    from ..proveedores.nativo.runtime import SIN_EFECTOS
+    return nombre not in SIN_EFECTOS and nombre not in NO_CAMBIAN
+
+
+def contar_cambios(estado):
+    """Cuántas filas tiene `changes` ahora (None si no hay lista): desde dónde son de un turno."""
     cambios = (estado or {}).get('changes')
-    cambios = len(cambios) if isinstance(cambios, list) else None
-    almacen = Almacen(hogar, task['cwd'])
+    return len(cambios) if isinstance(cambios, list) else None
+
+
+def tomar(hogar, cwd, sesion, ident, momento, avance=None):
+    """La instantánea `antes` o `despues` del turno `ident`: {repo, commit, fecha, grandes?} o {error}.
+
+    No toca `task`: puede correr en otro hilo mientras el modelo ya responde (`apuntar` la deja
+    luego en el turno). Si una vez se agotó el tiempo en esta carpeta, no se reintenta hasta
+    pasado `DESCANSO` (sale {error, desactivada}). `avance(texto)` recibe el tamaño cuando se sabe."""
+    almacen = Almacen(hogar, cwd)
+    marca = almacen.sin_deshacer()
+    if marca:
+        return {'error': str(marca.get('motivo') or 'tardó demasiado'), 'desactivada': True}
+    almacen.avance = avance
     try:
-        fila = almacen.guardar(task['id'], ident + '-' + momento,
+        fila = almacen.guardar(sesion, ident + '-' + momento,
                                'Turno ' + ident + ' · ' + ('al empezar' if momento == 'antes' else 'al terminar'))
+    except TiempoAgotado as exc:
+        motivo = str(exc) + ' La carpeta es demasiado grande para guardarla entera; añade lo pesado a .gitignore.'
+        almacen.marcar_sin_deshacer(motivo)
+        return {'error': motivo, 'tiempo': True}
     except (SinInstantanea, OSError, subprocess.SubprocessError, ValueError) as exc:
         # Sin instantánea el turno sigue: sólo no se podrá deshacer su código.
-        fila = {'error': str(exc) or type(exc).__name__}
+        return {'error': str(exc) or type(exc).__name__}
+    almacen.quitar_marca()
+    return fila
+
+
+def apuntar(hogar, task, ident, momento, fila, cambios=None):
+    """Deja en el turno la instantánea que devolvió `tomar` (o su error)."""
     _apuntar(task, ident, momento, fila, cambios)
     if momento == 'despues' and 'commit' in fila:
         _limpiar_de_vez_en_cuando(hogar)
+
+
+def aviso(task, fila):
+    """El aviso de que deshacer no está disponible en esta carpeta, una vez por sesión, o None."""
+    if not isinstance(fila, dict) or 'error' not in fila or task.get('deshacer_no_disponible'):
+        return None
+    task['deshacer_no_disponible'] = fila['error'][:300]
+    texto = 'Deshacer no está disponible en esta carpeta: ' + fila['error'].rstrip('.') + '.'
+    if fila.get('tiempo') or fila.get('desactivada'):
+        texto += ' No se volverá a intentar hasta mañana.'
+    return texto
+
+
+def _instantanea(hogar, task, ident, momento, estado):
+    if not activas() or not task.get('cwd') or not task.get('id'):
+        return
+    cambios = contar_cambios(estado)
+    apuntar(hogar, task, ident, momento, tomar(hogar, task['cwd'], task['id'], ident, momento), cambios)
 
 
 def al_empezar_turno(hogar, task, ident, estado=None):
@@ -201,7 +252,13 @@ def _dejado(almacen, pasos):
             incompleto = True
             continue
         registrados = paso['registrados']
-        for ruta, estado in almacen.cambios(antes, despues).items():
+        try:
+            cambiados = almacen.cambios(antes, despues)
+        except SinInstantanea:
+            # Le faltan árboles que tomaba prestados del proyecto (un gc tras reescribir su historia).
+            incompleto = True
+            continue
+        for ruta, estado in cambiados.items():
             dejado[ruta] = estado
             if origen.get(ruta) == ADOPTADO:
                 # Una huella que tomó una orden puede llevar lo tuyo; escribirlo después no lo limpia.
@@ -354,8 +411,12 @@ def vista_deshacer(hogar, task, estado, ident):
         return vista
     excluidos_antes = almacen.excluidos(datos['antes'])
     excluidos_ahora = almacen.excluidos(ahora['commit'])
-    objetivo = almacen.cambios(ahora['commit'], datos['antes'])
-    actuales = almacen.cambios(datos['antes'], ahora['commit'])
+    try:
+        objetivo = almacen.cambios(ahora['commit'], datos['antes'])
+        actuales = almacen.cambios(datos['antes'], ahora['commit'])
+    except SinInstantanea:
+        vista['motivo'] = PERDIDA
+        return vista
     pasos = _pasos(task, estado, turno.get('inicio') or 0)
     dejado, origen, incompleto = _dejado(almacen, pasos)
     ultimas = huella(estado)
@@ -407,6 +468,7 @@ def vista_deshacer(hogar, task, estado, ident):
     for ruta, (fila, entrada) in archivos.items():
         vista['conflictos'].append(fila)
         objetivo[ruta] = entrada
+    _sin_objetos(almacen, vista, objetivo, no_cubiertos)
     vista['conflictos'] += [fila for fila, _ in carpetas.values()]
     for ruta, motivo in ignorados.items():
         no_cubiertos.setdefault(ruta, motivo)
@@ -418,6 +480,26 @@ def vista_deshacer(hogar, task, estado, ident):
                  _destino={r: v for r, v in objetivo.items() if v is not None}, _desde=turno.get('inicio'),
                  _carpetas={ruta: modo for ruta, (_, modo) in carpetas.items()})
     return vista
+
+
+PERDIDA = ('La instantánea de ese turno ya no está completa: tomaba prestados objetos del repositorio del '
+           'proyecto que ya no están (¿un git gc después de reescribir la historia?).')
+PERDIDO = 'perdido'
+
+
+def _sin_objetos(almacen, vista, objetivo, no_cubiertos):
+    """Saca de la vista lo que no se puede escribir porque su blob ya no existe (lo tomaba prestado del
+    proyecto y un gc lo borró): va a `no_cubiertos` con motivo `perdido` y no se toca."""
+    blobs = {fila['ruta']: objetivo[fila['ruta']][1] for fila in vista['restaurables'] + vista['conflictos']
+             if objetivo.get(fila['ruta'])}
+    faltan = almacen.faltan(blobs.values())
+    if not faltan:
+        return
+    perdidas = {ruta for ruta, blob in blobs.items() if blob in faltan}
+    vista['restaurables'] = [f for f in vista['restaurables'] if f['ruta'] not in perdidas]
+    vista['conflictos'] = [f for f in vista['conflictos'] if f['ruta'] not in perdidas]
+    for ruta in perdidas:
+        no_cubiertos[ruta] = PERDIDO
 
 
 def _aplicar(hogar, task, estado, vista, forzar, tipo, extra):
@@ -504,9 +586,13 @@ def vista_rehacer(hogar, task, ident=None):
     except SinInstantanea as exc:
         vista['motivo'] = 'No se pudo guardar el estado de ahora: ' + str(exc)
         return vista
-    desde_deshacer = almacen.cambios(paso['despues'], ahora['commit'])
-    objetivo = almacen.cambios(ahora['commit'], paso['antes'])
-    actuales = almacen.cambios(paso['antes'], ahora['commit'])
+    try:
+        desde_deshacer = almacen.cambios(paso['despues'], ahora['commit'])
+        objetivo = almacen.cambios(ahora['commit'], paso['antes'])
+        actuales = almacen.cambios(paso['antes'], ahora['commit'])
+    except SinInstantanea:
+        vista['motivo'] = PERDIDA.replace('de ese turno', 'de antes de deshacer')
+        return vista
     excluidos_ahora = almacen.excluidos(ahora['commit'])
     restaurados = set(paso.get('restaurados') or ())
     for ruta in sorted(restaurados & set(objetivo)):
@@ -519,6 +605,9 @@ def vista_rehacer(hogar, task, ident=None):
             vista['conflictos'].append(dict(fila, motivo=EDITADO))
         else:
             vista['restaurables'].append(fila)
+    perdidos = {}
+    _sin_objetos(almacen, vista, objetivo, perdidos)
+    vista['no_cubiertos'] = [{'ruta': r, 'motivo': m} for r, m in sorted(perdidos.items())]
     vista.update(disponible=True, _repo=almacen.clave, _ahora=ahora['commit'], _objetivo=paso['antes'],
                  _destino={r: v for r, v in objetivo.items() if v is not None}, _desde=paso.get('fecha'))
     return vista

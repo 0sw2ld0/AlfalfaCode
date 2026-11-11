@@ -117,6 +117,13 @@ class PruebasInterfaz:
             commit = almacen.guardar(self.manager.task['id'], 'interfaz-' + self.ident)['commit']
         return almacen, datos['antes'], commit
 
+    async def _instantanea_previa(self):
+        """La instantánea de antes del turno se toma mientras el modelo responde: las capturas se
+        sitúan respecto a ella, así que la esperan (leer el navegador no la espera por sí mismo)."""
+        esperar = getattr(self.runtime, 'antes_de_cambiar', None)
+        if esperar is not None:
+            await esperar()
+
     def _imagen(self, resultado):
         return leer_png(resultado['captura'], self.manager.directory)
 
@@ -134,6 +141,7 @@ class PruebasInterfaz:
                 return
             self.intentos += 1
             try:
+                await self._instantanea_previa()
                 almacen, antes, ahora = await asyncio.to_thread(self._estado)
                 if relevantes(almacen.cambios(antes, ahora), 'web'):
                     self.notas['web'] = 'No hay una captura anterior a los cambios web de este turno.'
@@ -157,6 +165,7 @@ class PruebasInterfaz:
             return
         self.usados.add('mac')
         try:
+            await self._instantanea_previa()
             almacen, antes, ahora = await asyncio.to_thread(self._estado)
             png, tamano = self._imagen(resultado)
             # El ejecutable permite comparar la app propia tras reconstruirla y volver a abrirla (otro PID).

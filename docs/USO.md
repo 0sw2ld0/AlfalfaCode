@@ -47,6 +47,12 @@ encendida). Cada vez que el arnés la toma o la suelta de verdad emite
 `{"version":2,"tipo":"despierto","activo":true|false}`; si macOS no la concede, no se
 emite nada. Siempre se suelta antes de `turno_terminado`.
 
+Si la instantánea para deshacer del turno tarda más de un segundo (o una herramienta que
+cambia archivos tiene que esperarla), el arnés emite
+`{"version":2,"tipo":"preparando","texto":"Preparando deshacer… (8306 archivos, 1,2 GB)"}`
+y, al terminar, `{"version":2,"tipo":"preparando","texto":null}`. La app lo enseña en la
+fila viva en lugar de «Pensando».
+
 Novedad de la versión 2, `mensaje`: el texto del usuario se encola y entra en el
 historial justo antes de la siguiente llamada al modelo, después de registrar los
 resultados de las herramientas. No interrumpe la orden en curso ni responde a un
