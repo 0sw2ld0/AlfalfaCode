@@ -399,6 +399,35 @@ async def test_sin_instantanea_final_no_se_adjudica_una_imagen_a_otro_codigo(dem
     assert 'prueba_interfaz' not in m.task.get('cierre', {})
 
 
+@pytest.mark.parametrize('herramienta', ['apply_patch', 'write_file'])
+async def test_la_espera_de_captura_no_permite_escribir_fuera_del_proyecto(demo, monkeypatch, herramienta):
+    m, rt, root, _ = demo
+    m.diagnosticos = None
+    carpeta = root / 'web'
+    carpeta.mkdir()
+    externa = root.parent / 'externa'
+    externa.mkdir()
+    original = '<p>La misma página</p>'
+    (carpeta / 'pagina.html').write_text(original)
+    ajena = externa / 'pagina.html'
+    ajena.write_text(original)
+
+    async def cambiar_ruta_durante_la_captura(runtime, rutas):
+        carpeta.rename(root / 'web-original')
+        carpeta.symlink_to(externa, target_is_directory=True)
+
+    monkeypatch.setattr(m.pruebas_interfaz, 'antes_de_editar', cambiar_ruta_durante_la_captura)
+    if herramienta == 'apply_patch':
+        args = {'input': '*** Begin Patch\n*** Delete File: web/pagina.html\n*** End Patch'}
+    else:
+        args = {'path': 'web/nueva/pagina.html', 'content': original, 'expected_sha256': 'NEW'}
+
+    with pytest.raises(ValueError, match='enlaces simbólicos'):
+        await rt.tools.call(herramienta, args)
+    assert ajena.read_text() == original
+    assert not (externa / 'nueva').exists()
+
+
 @pytest.mark.parametrize('caso', ['completa', 'cerrado', 'sin_pestana', 'confirmacion', 'estricto'])
 async def test_mismo_contrato_con_cuybrowser_simulado_sin_arrancar_chromium(demo, monkeypatch, caso):
     import base64

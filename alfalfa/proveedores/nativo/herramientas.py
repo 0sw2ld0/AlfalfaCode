@@ -1287,16 +1287,17 @@ class WorkspaceTools:
             raise ValueError('Archivo demasiado grande.')
         if before != after:
             await self._prueba_antes_de_editar([path])
+        # La ruta y el contenido pueden haber cambiado mientras se tomaba la captura.
+        path = self.path(args['path'], escritura=True)
+        latest = digest(self.read(path)[0]) if path.exists() else 'NEW'
+        if latest != expected:
+            raise ValueError('El archivo cambió durante la edición; vuelve a leerlo.')
         # Preserve a private preimage for review/recovery; never auto-rollback user work.
         if before is not None:
             backup = self.runtime.directory / ('before-'+digest(before))
             if not backup.exists():
                 atomic_write(backup, before, 0o600)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.path(args['path'], escritura=True)
-        latest = digest(path.read_bytes()) if path.exists() else 'NEW'
-        if latest != expected:
-            raise ValueError('El archivo cambió durante la edición; vuelve a leerlo.')
         atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if before is not None else 0o644)
         change = {'path': str(path.relative_to(self.root)), 'before': expected, 'after': digest(after)}
         self.runtime.state.setdefault('changes', []).append(change)
@@ -1337,9 +1338,10 @@ class WorkspaceTools:
                 raise ValueError('Archivo demasiado grande: ' + name + '. No se escribió nada.')
             writes.append((name, path, before, after, action))
         await self._prueba_antes_de_editar([path for _, path, before, after, _ in writes if before != after])
-        # Nada cambió por debajo mientras se calculaba: si no, no se escribe.
-        for name, path, before, _, _ in writes:
-            now = path.read_bytes() if path.is_file() else None
+        # Revalida todas las rutas y contenidos tras la captura antes de aplicar el parche.
+        for name, _, before, _, _ in writes:
+            path = self.path(name, escritura=True)
+            now = self.read(path)[0] if path.exists() else None
             if now != before:
                 raise ValueError('El archivo ' + name + ' cambió durante el parche; vuelve a leerlo. '
                                  'No se escribió nada.')
@@ -1349,12 +1351,12 @@ class WorkspaceTools:
                 backup = self.runtime.directory / ('before-' + digest(before))
                 if not backup.exists():
                     atomic_write(backup, before, 0o600)
+            self.path(name, escritura=True)
             if after is None:
                 if path.exists():
                     path.unlink()
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                self.path(name, escritura=True)
                 atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644)
             change = {'path': str(path.relative_to(self.root)),
                       'before': digest(before) if before is not None else 'NEW',
