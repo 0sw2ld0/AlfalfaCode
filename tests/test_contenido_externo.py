@@ -300,6 +300,57 @@ def test_env_literales_sin_expansion_y_enlaces_ignorados(rt, tmp_path):
     assert 'secreto-ajeno-de-prueba' not in seguridad.secretos(rt)
 
 
+def _git(raiz, *args):
+    import subprocess
+    subprocess.run(['git', '-C', str(raiz), *args], check=True, capture_output=True,
+                   env={'GIT_AUTHOR_NAME': 'Demo', 'GIT_AUTHOR_EMAIL': 'demo@localhost', 'GIT_COMMITTER_NAME': 'Demo',
+                        'GIT_COMMITTER_EMAIL': 'demo@localhost', 'HOME': str(raiz), 'PATH': '/usr/bin:/bin'})
+
+
+def test_repositorio_con_miles_de_carpetas_si_envia_y_tapa_los_env_ignorados(rt):
+    """Un proyecto git grande (más de 5000 carpetas) ya no bloquea cada petición."""
+    raiz = rt.tools.root
+    for n in range(seguridad.MAX_CARPETAS + 50):
+        (raiz / 'assets' / f'c{n // 100}' / f'd{n}').mkdir(parents=True)
+    (raiz / '.gitignore').write_text('.env*\n')
+    oculto = raiz / 'assets' / 'c3' / 'd300'
+    (oculto / '.env.local').write_text('TOKEN=valorIgnoradoDePrueba123\n')
+    (raiz / '.env').write_text('CLAVE="valorRaizDePrueba456"\n')
+    _git(raiz, 'init', '-q')
+    _git(raiz, 'add', '.gitignore')
+    _git(raiz, 'commit', '-qm', 'base')
+    segura = seguridad.preparar(rt, {'messages': [
+        {'role': 'user', 'content': 'valorIgnoradoDePrueba123 y valorRaizDePrueba456'}]})
+    assert 'valorIgnoradoDePrueba123' not in segura['messages'][0]['content']
+    assert 'valorRaizDePrueba456' not in segura['messages'][0]['content']
+
+
+def test_carpeta_enorme_sin_git_explica_como_seguir(rt, monkeypatch):
+    monkeypatch.setattr(seguridad, 'MAX_CARPETAS', 20)
+    for n in range(30):
+        (rt.tools.root / f'd{n}').mkdir()
+    with pytest.raises(ValueError, match='no es un repositorio git'):
+        seguridad.preparar(rt, {'messages': [{'role': 'user', 'content': 'hola'}]})
+
+
+def test_env_se_relee_al_cambiar_y_la_lista_se_guarda_un_rato(rt, monkeypatch):
+    env = rt.tools.root / '.env'
+    env.write_text('A=primerValorDePrueba1\n')
+    assert 'primerValorDePrueba1' in seguridad.secretos(rt)
+    llamadas = []
+    original = seguridad._env_a_mano
+    monkeypatch.setattr(seguridad, '_env_a_mano', lambda *a: llamadas.append(a) or original(*a))
+    env.write_text('A=segundoValorMasLargo22\n')
+    valores = seguridad.secretos(rt)
+    assert 'segundoValorMasLargo22' in valores and 'primerValorDePrueba1' not in valores
+    assert not llamadas  # no se volvió a recorrer la carpeta: sólo se releyó el archivo que cambió
+    # Un .env nuevo aparece en cuanto vence el rato de la lista.
+    monkeypatch.setattr(seguridad, 'REBUSCAR', 0.0)
+    (rt.tools.root / 'sub').mkdir()
+    (rt.tools.root / 'sub' / '.env').write_text('B=tercerValorDePrueba3\n')
+    assert 'tercerValorDePrueba3' in seguridad.secretos(rt)
+
+
 def test_secretos_en_json_anidado_y_argumentos_sin_romper_el_contrato(rt):
     (rt.tools.root / '.env').write_text('X=1\nY="dos\\tres"\n')
     sha = '1' * 64

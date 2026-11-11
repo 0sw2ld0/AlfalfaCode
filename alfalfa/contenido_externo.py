@@ -61,39 +61,137 @@ def valores_env(texto):
     return valores
 
 
-def _env_del_proyecto(runtime):
-    """.env y .env.* del proyecto, sin dependencias, hogares privados ni enlaces."""
+MAX_CARPETAS = 5000
+MAX_ARCHIVOS_ENV = 100
+# La lista de .env se vuelve a buscar como mucho cada tanto; sus valores se releen
+# en cuanto cambia la fecha o el tamaño de un archivo ya conocido.
+REBUSCAR = 30.0
+_PATRONES_ENV = (':(glob)**/.env', ':(glob)**/.env.*')
+
+
+def _es_env(nombre):
+    return nombre == '.env' or nombre.startswith('.env.')
+
+
+def _fuera(ruta, raiz, hogar):
+    """Dependencias, carpetas privadas, el hogar de AlfalfaCode y enlaces se quedan fuera."""
     from .proveedores.nativo.herramientas import SKIP
-    valores = set()
-    raiz = Path(runtime.task['cwd'])
-    carpetas, archivos = 0, 0
-    hogar = getattr(runtime.manager, 'home', None)
+    partes = ruta.relative_to(raiz).parts
+    if any(p in SKIP for p in partes[:-1]):
+        return True
+    actual = raiz
+    for parte in partes:
+        actual = actual / parte
+        if actual.is_symlink():
+            return True
+    return hogar is not None and ruta.resolve().is_relative_to(hogar)
+
+
+def _env_con_git(raiz):
+    """Los .env (rastreados, nuevos e ignorados) según git: rápido y sin límite de carpetas.
+    None si la carpeta no está en un repositorio o git no responde."""
+    import subprocess
+    base = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=off', '-C', str(raiz), 'ls-files', '-z']
+    rutas = []
+    try:
+        for extra in (['--cached', '--others', '--exclude-standard'], ['--others', '--ignored', '--exclude-standard']):
+            salida = subprocess.run(base + extra + ['--', *_PATRONES_ENV], capture_output=True, timeout=30,
+                                    stdin=subprocess.DEVNULL, env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'))
+            if salida.returncode != 0:
+                return None
+            rutas += [raiz / r for r in salida.stdout.decode(errors='surrogateescape').split('\0') if r]
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return sorted({r for r in rutas if _es_env(r.name)})
+
+
+def _env_a_mano(raiz, hogar):
+    """Fuera de un repositorio: recorre la carpeta con un tope de carpetas."""
+    from .proveedores.nativo.herramientas import SKIP
+    rutas, carpetas = [], 0
     for carpeta, dirs, nombres in os.walk(raiz, followlinks=False):
         carpetas += 1
-        if carpetas > 5000:
-            raise ValueError('No se envió la petición: el proyecto es demasiado grande para revisar sus .env.')
+        if carpetas > MAX_CARPETAS:
+            raise ValueError('No se envió la petición: la carpeta tiene más de ' + str(MAX_CARPETAS)
+                             + ' carpetas y no es un repositorio git, así que no se pueden revisar sus .env a '
+                             'tiempo. Ábrela desde un repositorio git (git init) o elige una carpeta más concreta.')
         dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(carpeta) / d).is_symlink()
-                         and (hogar is None or not (Path(carpeta) / d).resolve().is_relative_to(Path(hogar).resolve())))
-        for nombre in sorted(nombres):
-            if nombre != '.env' and not nombre.startswith('.env.'):
+                         and (hogar is None or not (Path(carpeta) / d).resolve().is_relative_to(hogar)))
+        rutas += [Path(carpeta) / n for n in sorted(nombres) if _es_env(n)]
+    return rutas
+
+
+def _rutas_env(runtime, raiz, hogar):
+    import time
+    cache = getattr(runtime, '_env_rutas', None)
+    if cache and cache[0] == raiz and time.monotonic() - cache[1] < REBUSCAR:
+        return cache[2]
+    rutas = _env_con_git(raiz)
+    if rutas is None:
+        rutas = _env_a_mano(raiz, hogar)
+    rutas = [r for r in rutas if not _fuera(r, raiz, hogar)]
+    try:
+        runtime._env_rutas = (raiz, time.monotonic(), rutas)
+    except AttributeError:
+        pass
+    return rutas
+
+
+def _leer_env(ruta):
+    try:
+        fd = os.open(ruta, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as entrada:
+            estado = os.fstat(entrada.fileno())
+            if not stat.S_ISREG(estado.st_mode):
+                return None, set()
+            if estado.st_size > MAX_ENV:
+                raise ValueError('No se envió la petición: ' + ruta.name + ' supera el límite de revisión de 256 KB.')
+            return (estado.st_mtime_ns, estado.st_size), valores_env(
+                entrada.read(MAX_ENV).decode('utf-8', errors='replace'))
+    except FileNotFoundError:
+        return None, set()  # se borró entre la búsqueda y la lectura
+    except OSError as exc:
+        raise ValueError('No se envió la petición: no se pudo revisar un .env del proyecto.') from exc
+
+
+def _env_del_proyecto(runtime):
+    """.env y .env.* del proyecto, sin dependencias, hogares privados ni enlaces.
+
+    En un repositorio git los busca git (también los ignorados), sin recorrer a mano
+    carpetas enormes; la lista se guarda un rato y los valores sólo se releen si el
+    archivo cambia. Antes se recorría todo el proyecto en cada petición y, con más de
+    5000 carpetas, ninguna se enviaba."""
+    raiz = Path(runtime.task['cwd']).resolve()
+    hogar = getattr(runtime.manager, 'home', None)
+    hogar = Path(hogar).resolve() if hogar is not None else None
+    rutas = _rutas_env(runtime, raiz, hogar)
+    if len(rutas) > MAX_ARCHIVOS_ENV:
+        raise ValueError('No se envió la petición: hay más de ' + str(MAX_ARCHIVOS_ENV)
+                         + ' archivos .env para revisarlos con seguridad.')
+    leidos = getattr(runtime, '_env_leidos', None) or {}
+    nuevos, valores = {}, set()
+    for ruta in rutas:
+        try:
+            estado = os.lstat(ruta)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError('No se envió la petición: no se pudo revisar un .env del proyecto.') from exc
+        if stat.S_ISLNK(estado.st_mode):
+            continue  # un enlace no se sigue: podría llevar a un archivo de fuera
+        firma = (estado.st_mtime_ns, estado.st_size)
+        if ruta in leidos and leidos[ruta][0] == firma and stat.S_ISREG(estado.st_mode):
+            nuevos[ruta] = leidos[ruta]
+        else:
+            leida, encontrados = _leer_env(ruta)
+            if leida is None:
                 continue
-            ruta = Path(carpeta) / nombre
-            if ruta.is_symlink():
-                continue
-            archivos += 1
-            if archivos > 100:
-                raise ValueError('No se envió la petición: hay demasiados archivos .env para revisarlos con seguridad.')
-            try:
-                fd = os.open(ruta, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                with os.fdopen(fd, 'rb') as entrada:
-                    estado = os.fstat(entrada.fileno())
-                    if not stat.S_ISREG(estado.st_mode):
-                        continue
-                    if estado.st_size > MAX_ENV:
-                        raise ValueError('No se envió la petición: un .env supera el límite de revisión de 256 KB.')
-                    valores |= valores_env(entrada.read(MAX_ENV).decode('utf-8', errors='replace'))
-            except OSError as exc:
-                raise ValueError('No se envió la petición: no se pudo revisar un .env del proyecto.') from exc
+            nuevos[ruta] = (leida, encontrados)
+        valores |= nuevos[ruta][1]
+    try:
+        runtime._env_leidos = nuevos
+    except AttributeError:
+        pass
     return valores
 
 
