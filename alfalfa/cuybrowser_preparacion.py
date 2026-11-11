@@ -6,13 +6,15 @@ from pathlib import Path
 
 from .aprendizaje.rutas import escribir_privado
 from .cuybrowser_proceso import _private, clave_proyecto, ejecutable_cuybrowser, entorno_cuybrowser
+from .stdio import VERSION
 
 PREFERENCIA = 'navegador-cli.json'
 SIN_CHROMIUM = 'No se encontró ningún navegador compatible'
 
 
 def _resultado(estado, *, origen=None, navegador=None, mensaje=None):
-    return dict(tipo='cuybrowser_preparacion', estado=estado, origen=origen, navegador=navegador, mensaje=mensaje)
+    return dict(version=VERSION, tipo='cuybrowser_preparacion', estado=estado,
+                origen=origen, navegador=navegador, mensaje=mensaje)
 
 
 def _consultar(home, origen):

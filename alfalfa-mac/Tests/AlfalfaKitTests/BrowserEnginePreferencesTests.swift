@@ -45,7 +45,7 @@ final class BrowserEnginePreferencesTests: XCTestCase {
     }
 
     func testChromiumPreparationResponse() throws {
-        let line = #"{"tipo":"cuybrowser_preparacion","estado":"sin_chromium","origen":"incluido"}"#
+        let line = #"{"version":2,"tipo":"cuybrowser_preparacion","estado":"sin_chromium","origen":"incluido"}"#
         guard case let .cuyBrowserPreparation(result)? = AlfalfaMessage.decode(line: line) else {
             return XCTFail("Estado de CuyBrowser ausente")
         }

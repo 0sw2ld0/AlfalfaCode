@@ -67,6 +67,7 @@ def test_cli_descarga_solo_con_confirmacion_y_si_falta(tmp_path, monkeypatch, ca
     assert calls == [['browsers']] and not home.exists()
     assert main(['--descargar-chromium', '--confirmar-descarga-chromium', '--json']) == 0
     result = json.loads(capsys.readouterr().out)
+    assert result['version'] == 2
     assert result['estado'] == 'disponible' and result['navegador'] == 'Chromium de Playwright'
     assert calls == [['browsers'], ['browsers'], ['install-browser', '--yes'], ['browsers']]
     assert main(['--descargar-chromium', '--confirmar-descarga-chromium', '--json']) == 0
