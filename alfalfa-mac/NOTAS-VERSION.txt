@@ -1,3 +1,3 @@
-Los proyectos grandes (más de 5000 carpetas) vuelven a funcionar: antes ninguna petición se enviaba por no poder revisar sus .env.
-Los .env se buscan con git, también los ignorados, y solo se releen cuando cambian, en lugar de recorrer todo el proyecto en cada petición.
-Si una carpeta enorme no es un repositorio git, el aviso explica cómo seguir.
+Las comprobaciones (run_checks) vuelven a funcionar en proyectos grandes: antes fallaban con cualquier orden por «No se pudo vigilar el workspace».
+AlfalfaCode sube por su cuenta el límite de archivos abiertos que macOS da a las apps abiertas desde el Finder, sin pasar del máximo del sistema.
+Si un proyecto tuviera más archivos de los que se pueden abrir, el aviso dice cuántos hay y cuántos se pueden abrir.
