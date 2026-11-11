@@ -33,6 +33,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case budget(session: Double?, month: Double?)
     /// La respuesta del navegador propio a una petición `navegador`.
     case browserReply(BrowserReply)
+    case exportBrowserTest(id: String, path: String)
     /// La tarjeta de una propuesta de la revisión al cerrar el turno: aplicarla o descartarla.
     case learning(id: String, apply: Bool)
     case reviewCode(turn: String, model: String)
@@ -69,6 +70,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
             object = ["tipo": "presupuesto", "sesion": session.map { $0 as Any } ?? NSNull(),
                       "mes": month.map { $0 as Any } ?? NSNull()]
         case let .browserReply(reply): object = reply.object
+        case let .exportBrowserTest(id, path): object = ["tipo": "exportar_prueba_navegador", "id": id, "ruta": path]
         case let .learning(id, apply): object = ["tipo": "aprendizaje", "id": id, "aplicar": apply]
         case let .reviewCode(turn, model): object = ["tipo": "revisar_codigo", "turno": turn, "modelo": model]
         case .cancelCodeReview: object = ["tipo": "cancelar_revision_codigo"]

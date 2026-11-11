@@ -22,6 +22,7 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var stopping = false
     @Published private(set) var reviewingCode = false
     @Published private(set) var workingQueue = false
+    @Published private var liveBrowserExport: String?
     private var pendingQueueAction: TaskQueueAction?
     private var previousQueueID: String?
     /// Imágenes elegidas para la próxima indicación.
@@ -102,6 +103,7 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
+        liveBrowserExport = nil
         let arguments = Launcher.stdioArguments(
             task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
             effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
@@ -155,7 +157,10 @@ final class LiveSession: ObservableObject, Identifiable {
            let gone = timeline.unqueued(id: id, removed: removed, reason: reason), gone.action == .edit {
             returnToComposer(gone.text)
         }
-        if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
+        if case let .turnFinished(outcome) = message {
+            liveBrowserExport = outcome.state == "completed" ? outcome.wrapUp?.browserExport?.id : nil
+            onTurnFinished?(outcome)
+        }
         if case let .browser(request) = message { answerBrowser(request) }
         if releaseWhenParked, !reviewingCode, !workingQueue, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
@@ -177,6 +182,7 @@ final class LiveSession: ObservableObject, Identifiable {
         workingQueue = false
         pendingQueueAction = nil
         reviewingCode = false
+        liveBrowserExport = nil
         timeline.processExited(code: code)
         let detail = stderr.split(separator: "\n").suffix(3).joined(separator: "\n")
         if !detail.isEmpty && !timeline.finished { timeline.addNotice(detail) }
@@ -564,6 +570,20 @@ extension LiveSession {
     func closeBrowser() {
         browser?.close()
         browser = nil
+    }
+
+    func browserExportBlock(_ id: String) -> String? {
+        guard process?.isRunning == true, liveBrowserExport == id else {
+            return "La propuesta ya no está disponible en el motor de esta sesión."
+        }
+        if readOnly || mode == PermissionMode.plan.rawValue { return "Plan y solo lectura no permiten guardar." }
+        if timeline.status.isRunning || reviewingCode || workingQueue { return "Espera a que termine el trabajo." }
+        return nil
+    }
+
+    func exportBrowserTest(id: String, path: String) {
+        guard browserExportBlock(id) == nil else { return }
+        process?.send(.exportBrowserTest(id: id, path: path))
     }
 
     /// El agente usa el navegador: el panel se abre y la respuesta vuelve al motor. El motor las

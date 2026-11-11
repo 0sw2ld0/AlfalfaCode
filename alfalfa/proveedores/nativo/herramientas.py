@@ -1163,9 +1163,11 @@ class WorkspaceTools:
             if navegador is None:
                 raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
             from ...navegador_actividad import ejecutar
+            exportacion = getattr(self.runtime.manager, 'exportacion_navegador', None)
             pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
             try:
-                resultado = await ejecutar(self.runtime, navegador, name, args)
+                resultado = (await exportacion.llamar(navegador, self.runtime, name, args, ejecutar=ejecutar)
+                             if exportacion is not None else await ejecutar(self.runtime, navegador, name, args))
             finally:
                 if pruebas is not None and name == 'browser_handoff':
                     pruebas.tras_relevo(self.runtime)

@@ -102,6 +102,8 @@ class Transport:
         self.repaso = None
         self.revisar_codigo = None
         self.revision_codigo = None
+        self.exportar_prueba = None
+        self.exportacion = None
         self.encargos = None
         self.cola_encargos = None
 
@@ -132,6 +134,34 @@ class Transport:
                                     'Sesión interrumpida': 'interrumpido'}.get(reason, 'sin_respuesta')
             future.set_result(site if approved and site else 'sesion' if approved and session else approved)
 
+    @property
+    def exportando(self):
+        return self.exportacion is not None and not self.exportacion.done()
+
+    def pedir_exportacion(self, ident, ruta):
+        if self.exportar_prueba is None:
+            self.emit('error', texto='La propuesta ya no está disponible en el motor de esta sesión.')
+        elif self.exportando:
+            self.emit('error', texto='Ya se está guardando una prueba de navegador.')
+        else:
+            self.exportacion = asyncio.create_task(self._exportar(ident, ruta))
+
+    async def _exportar(self, ident, ruta):
+        try:
+            guardada = await self.exportar_prueba(ident, ruta)
+        except ValueError as exc:
+            self.emit('error', texto=str(exc))
+        except OSError:
+            self.emit('error', texto='No se pudo crear la prueba dentro de tests/e2e del proyecto.')
+        else:
+            self.emit('evento', rol='system', hora=time.time(), texto=f'Prueba guardada en {guardada}. No se ejecutó.')
+
+    async def cancelar_exportacion(self):
+        tarea, self.exportacion = self.exportacion, None
+        if tarea is not None and not tarea.done():
+            tarea.cancel()
+            await asyncio.gather(tarea, return_exceptions=True)
+
     def stop(self):
         if self.stopped:
             return
@@ -140,6 +170,8 @@ class Transport:
             self.cola_encargos.worker.cancel()
         if self.revision_codigo is not None and not self.revision_codigo.done():
             self.revision_codigo.cancel()
+        if self.exportando:
+            self.exportacion.cancel()
         self.wake.set()
         for ident in list(self.pending):
             self.resolve(ident, False, 'Sesión interrumpida')
@@ -172,6 +204,9 @@ class Transport:
         turnos corta el repaso de aprendizaje, si está en marcha."""
         if self.cola_encargos is not None and self.cola_encargos.activa:
             asyncio.create_task(self.cola_encargos.detener())
+            return True
+        if not self.in_turn and self.exportando:
+            self.exportacion.cancel()
             return True
         if not self.in_turn and self.revision_codigo is not None and not self.revision_codigo.done():
             self.revision_codigo.cancel()
@@ -398,6 +433,12 @@ class Transport:
             elif value.get('tipo') == 'cancelar_revision_codigo':
                 if self.revision_codigo is not None and not self.revision_codigo.done():
                     self.revision_codigo.cancel()
+            elif value.get('tipo') == 'exportar_prueba_navegador':
+                ident, ruta = value.get('id'), value.get('ruta')
+                if (not isinstance(ident, str) or not re.fullmatch(r'[0-9a-f]{32}', ident)
+                        or not isinstance(ruta, str) or len(ruta) > 100):
+                    raise ValueError()
+                self.pedir_exportacion(ident, ruta)
             elif value.get('tipo') == 'encargos':
                 if self.encargos is None:
                     raise ValueError()
@@ -568,10 +609,13 @@ async def run(args, transport):
         transport.budget = manager.cambiar_presupuesto
         transport.learning = manager.aprendizaje.resolver
         transport.cola_encargos = manager.cola_encargos
+        if manager.exportacion_navegador is not None:
+            transport.exportar_prueba = manager.exportacion_navegador.guardar
 
         def encargos(valor):
             accion = valor.get('accion')
             if accion in ('preparar', 'iniciar') and (transport.in_turn or transport.compacting or transport.inbox
+                    or transport.exportando
                     or transport.revision_codigo is not None and not transport.revision_codigo.done()):
                 transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de iniciar la cola.')
                 return
@@ -602,7 +646,7 @@ async def run(args, transport):
 
         def pedir_revision(ident, modelo):
             if (transport.in_turn or transport.compacting or transport.inbox
-                    or manager.cola_encargos.activa
+                    or manager.cola_encargos.activa or transport.exportando
                     or transport.revision_codigo is not None and not transport.revision_codigo.done()):
                 transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de revisar el cierre.')
                 return
@@ -634,6 +678,7 @@ async def run(args, transport):
             # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
             await _cancelar_repaso(transport)
             await _cancelar_revision(transport)
+            await transport.cancelar_exportacion()
             await manager.cola_encargos.detener()
             if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
                 transport.compacting = True
@@ -741,6 +786,7 @@ async def run(args, transport):
             manager.task.update(status='failed', summary='Fallo de ejecución')
     finally:
         await _cancelar_revision(transport)
+        await transport.cancelar_exportacion()
         if transport.repaso is not None and not transport.repaso.done():
             # La sesión se cierra: el repaso se deja (el turno ya estaba cerrado).
             transport.repaso.cancel()

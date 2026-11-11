@@ -15,6 +15,7 @@ public struct WrapUp: Equatable, Sendable {
     public var review: CodeReview?
     public var suggestion: String?
     public var interfaceProof: InterfaceProof?
+    public var browserExport: BrowserExportOffer?
 
     // MARK: - Inicializadores
 
@@ -27,6 +28,7 @@ public struct WrapUp: Equatable, Sendable {
         self.review = review
         self.suggestion = suggestion
         self.interfaceProof = nil
+        self.browserExport = nil
     }
 
     /// El `cierre` de `turno_terminado` o del historial; nil si no trae ni resumen ni sesiones.
@@ -34,7 +36,8 @@ public struct WrapUp: Equatable, Sendable {
         guard let object = value as? [String: Any] else { return nil }
         let recap = Self.text(object["resumen"]) ?? ""
         let sessions = SessionProposal.list(object["sesiones"])
-        guard !recap.isEmpty || !sessions.isEmpty else { return nil }
+        let browserExport = BrowserExportOffer(value: object["prueba_navegador"])
+        guard !recap.isEmpty || !sessions.isEmpty || browserExport != nil else { return nil }
         let ask = recap.isEmpty ? nil : Self.text(object["pregunta"])
         let options = ask == nil ? [] : (object["opciones"] as? [Any] ?? []).compactMap { Self.text($0) }.prefix(2)
         // Una sola línea, como la manda el motor: sin saltos que la conviertan en varios párrafos.
@@ -44,6 +47,7 @@ public struct WrapUp: Equatable, Sendable {
         self.init(recap: recap, ask: ask, options: Array(options), sessions: sessions,
                   review: CodeReview(value: object["revision_codigo"]), suggestion: suggestion)
         interfaceProof = InterfaceProof(value: object["prueba_interfaz"])
+        self.browserExport = browserExport
     }
 
     // MARK: - Métodos privados
