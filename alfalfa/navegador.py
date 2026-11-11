@@ -480,6 +480,8 @@ class Navegador:
     respuesta (`stdio.Transport.pedir_navegador`); en las pruebas, una app simulada.
     """
 
+    motor_actividad = 'webkit'
+
     def __init__(self, pedir, tiempo=TIEMPO):
         self.pedir = pedir
         self.tiempo = tiempo
@@ -537,20 +539,25 @@ class Navegador:
             or bool(runtime.task.get('review'))
 
     @staticmethod
-    async def _preguntar(runtime, argv, proposito, clave=None):
+    async def _preguntar(runtime, argv, proposito, clave=None, *, actividad='arranque_cuy', url_actividad=None):
         """La tarjeta de permiso de siempre. `clave`: se puede aprobar para la sesión."""
+        from .navegador_actividad import observar_aprobacion, permiso
         from .permisos import sesion
         if clave and sesion.aprobadas(runtime.task, [clave]):
+            permiso(actividad, 'vigente', 'sesion', url_actividad)
             return
         solicitud = {'argv': argv, 'purpose': proposito, 'motivo': MOTIVO, 'motivos': [MOTIVO],
                      **({'para_sesion': True} if clave else {})}
         try:
-            respuesta = await runtime.approve(solicitud)
+            respuesta, omitido = await observar_aprobacion(runtime, solicitud)
         except ValueError:
+            permiso(actividad, 'no_autorizado', url=url_actividad)
             raise ValueError('El usuario no lo aprobó: ' + proposito + '. No lo intentes por otra vía; si hace '
                              'falta, pregúntale.') from None
         if clave and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
+        permiso(actividad, 'omitido' if omitido else 'concedido',
+                'sesion' if clave and respuesta == sesion.SESION else 'accion', url_actividad)
 
     @staticmethod
     def _clave(que, origen):
@@ -598,7 +605,8 @@ class Navegador:
                 if clase != 'publica':
                     await self._preguntar(runtime, ['navegador', 'abrir', target],
                                           'Navegador: visitar una dirección de este Mac o de la red local: ' + target,
-                                          clave=self._clave('red_local', local))
+                                          clave=self._clave('red_local', local), actividad='red_local',
+                                          url_actividad=target)
                     network.append(local)
                     self._recordar_red_local(runtime, target)
             except BaseException:
@@ -646,7 +654,8 @@ class Navegador:
             detalle = str(permiso.get('detalle') or '')[:400]
             await self._preguntar(runtime, ['navegador', TIPOS_DE_PERMISO[tipo], self.url or ''],
                                   'Navegador: ' + que + ' va a ' + TIPOS_DE_PERMISO[tipo]
-                                  + ('. ' + detalle if detalle else '') + (' (' + self.url + ')' if self.url else ''))
+                                  + ('. ' + detalle if detalle else '') + (' (' + self.url + ')' if self.url else ''),
+                                  actividad=tipo, url_actividad=self.url)
             permitido.append(tipo)
 
     # --- herramientas
@@ -698,7 +707,8 @@ class Navegador:
             que = 'una dirección local' if clase == 'local' else 'una dirección de la red local'
             await self._preguntar(runtime, ['navegador', 'abrir', url],
                                   'Navegador: abrir ' + url + ', ' + que + ' (puede ser un servicio de este Mac o '
-                                  'de tu red)', clave=self._clave('red_local', origen))
+                                  'de tu red)', clave=self._clave('red_local', origen),
+                                  actividad='red_local', url_actividad=url)
             permitidos.append(origen)
             self._recordar_red_local(runtime, url)
         resultado = await self._pedir('abrir', {'url': url, 'red_local': permitidos})
@@ -787,7 +797,7 @@ class Navegador:
         origen = self._origen_actual() or 'página'
         await self._preguntar(runtime, ['navegador', que, self.url or ''],
                               'Navegador (modo Manual): ' + que + ' en ' + (self.url or 'la página abierta'),
-                              clave=self._clave('manejar', origen))
+                              clave=self._clave('manejar', origen), actividad='manejar', url_actividad=self.url)
 
     async def _click(self, runtime, args):
         objetivo = _objetivo(args)
@@ -831,11 +841,14 @@ class Navegador:
         base = getattr(runtime, 'directory', None)
         carpeta = Path(base) / 'capturas' if base else Path('/tmp') / 'alfalfa-capturas'
         carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
-        ruta = carpeta / ('navegador-' + uuid4().hex + '.png')
+        # La captura pertenece a esta llamada, incluso si dos se toman en el mismo milisegundo.
+        ruta = carpeta / f'navegador-{uuid4().hex}.png'
         resultado = await self._pedir('captura', {'ruta': str(ruta)})
         if not ruta.is_file():
             raise ValueError('La app no guardó la captura del navegador.')
         _podar_capturas(carpeta)
+        from .navegador_actividad import captura
+        captura(ruta)
         resultado['captura'] = str(ruta)
         pregunta = args.get('question')
         if isinstance(pregunta, str) and pregunta.strip():
@@ -863,7 +876,8 @@ class Navegador:
             que = 'que cambia la página' if modifica else 'que lee la página'
             await self._preguntar(runtime, ['navegador', 'javascript', self.url or ''],
                                   'Navegador: ejecutar JavaScript ' + que
-                                  + (' ' + self.url if self.url else '') + ':\n' + script[:600])
+                                  + (' ' + self.url if self.url else '') + ':\n' + script[:600],
+                                  actividad='javascript', url_actividad=self.url)
         resultado = await self._pedir('js', {'codigo': script, 'modifica': modifica})
         if modifica and args.get('modifies') is not True:
             resultado['nota'] = 'El script parecía cambiar la página, así que se pidió permiso.'
@@ -952,7 +966,8 @@ class Navegador:
             raise ValueError('No hay una página estable en la que autorizar la subida.')
         await self._preguntar(runtime, ['navegador', 'subir', *rutas],
                               'Navegador: entregar estos archivos del proyecto al sitio ' + (self.url or 'abierto')
-                              + ': ' + ', '.join(rutas) + '. La página puede enviarlos inmediatamente.')
+                              + ': ' + ', '.join(rutas) + '. La página puede enviarlos inmediatamente.',
+                              actividad='subida', url_actividad=url)
         archivos = comprobar()  # Una aprobación pendiente no autoriza rutas que se cambien mientras espera.
         actual = await self._pedir('estado')
         if actual.get('documento') != documento or actual.get('url') != url:
@@ -976,7 +991,8 @@ class Navegador:
         if ruta.exists():
             raise ValueError('Ya existe ' + str(args.get('path')) + ': elige otra ruta.')
         await self._preguntar(runtime, ['navegador', 'descargar', url, str(args.get('path'))],
-                              'Navegador: descargar ' + url + ' en ' + str(args.get('path')))
+                              'Navegador: descargar ' + url + ' en ' + str(args.get('path')),
+                              actividad='descarga', url_actividad=url)
         ruta.parent.mkdir(parents=True, exist_ok=True)
         resultado = await self._pedir('descargar', {'url': url, 'ruta': str(ruta)}, tiempo=300)
         if not ruta.is_file():

@@ -10,6 +10,7 @@ struct SessionView: View {
     @EnvironmentObject private var app: AppModel
     var notice: String?
     @State private var planningQueue = false
+    @State private var showingBrowserActivity = false
 
     var body: some View {
         let terminals = TerminalHub.shared.terminals(for: session)
@@ -36,6 +37,11 @@ struct SessionView: View {
     }
 
     // MARK: - Propiedades privadas
+
+    private var activityStore: BrowserActivityStore? {
+        guard let id = session.sessionID else { return nil }
+        return BrowserActivityStore(home: Attachments.directory().deletingLastPathComponent(), sessionID: id)
+    }
 
     /// Abre en Finder la carpeta del proyecto, no la del historial de la sesión.
     private var folderButton: some View {
@@ -148,6 +154,10 @@ struct SessionView: View {
                 BrowserToggle(browser: session.browser, terminals: terminals) { session.openBrowser() }
             }
             TerminalToggle(terminals: terminals)
+            Button("Qué hizo el agente", systemImage: "list.bullet.rectangle") { showingBrowserActivity = true }
+                .labelStyle(.iconOnly)
+                .help("Qué hizo el agente: actividad del navegador en esta sesión")
+                .sheet(isPresented: $showingBrowserActivity) { BrowserActivityView(store: activityStore) }
             folderButton
         }
         .padding(.horizontal, 24).frame(minHeight: 48).padding(.top, 4)
