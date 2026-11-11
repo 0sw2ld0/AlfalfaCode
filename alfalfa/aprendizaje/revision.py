@@ -252,6 +252,10 @@ async def _revisar(aprendizaje, rt):
         if getattr(aprendizaje.manager, 'transport', None) is None:
             print('AlfalfaCode · Repasando lo aprendido (hasta ' + str(TIEMPO) + ' s; Ctrl-C lo salta)…', flush=True)
         try:
+            equipo = getattr(rt.manager, 'equipo', None)
+            if equipo:
+                equipo.comprobar_modelo(modelo, proveedor.id)
+                equipo.comprobar_precio(proveedor, rt._precio)
             async with proveedor.cliente(httpx.Timeout(TIEMPO, connect=5), tarea=task) as cliente:
                 respuesta = await asyncio.wait_for(rt.request(cliente, '/api/chat', payload), TIEMPO)
             rt._record_response_usage(respuesta, payload, purpose='aprendizaje')

@@ -88,28 +88,32 @@ class OnRequestPolicy:
         self.reglas = reglas
 
     def _rules(self, argv):
-        """(decisión de las reglas o None, texto de la regla que decide)."""
+        """Decisión, explicación y si la decide una regla del equipo."""
         if not self.reglas:
-            return None, None
+            return None, None, False
+        from ..equipo import ORIGEN
         from ..reglas import PROHIBIDA
         evaluation = self.reglas.evaluar(list(argv))
         rule = evaluation.regla()
         if rule is None and evaluation.no_analizable:
-            return evaluation.decision, 'orden de shell no analizable con reglas que preguntan o prohíben'
+            equipo = any(r.origen.startswith(ORIGEN) for r in self.reglas.reglas)
+            return evaluation.decision, 'orden de shell no analizable con reglas que preguntan o prohíben', equipo
         if rule is None:
-            return None, None
-        text = 'regla del usuario «' + rule.texto() + '»' + (': ' + rule.justificacion.rstrip('.')
-                                                               if rule.justificacion else '')
+            return None, None, False
+        equipo = rule.origen.startswith(ORIGEN)
+        text = ('regla del equipo' if equipo else 'regla del usuario') + ' «' + rule.texto() + '»'
+        if rule.justificacion:
+            text += ': ' + rule.justificacion.rstrip('.')
         if evaluation.decision == PROHIBIDA:
             raise ValueError('Orden prohibida por una ' + text + '. No se ejecutó; no la reformules ni la lances '
                              'por otra herramienta para eludirla.')
-        return evaluation.decision, text
+        return evaluation.decision, text, equipo
 
     async def execute(self, tools, args, argv, launch, *, unsandboxed_timeout):
         """Lanza `argv` con `launch(command, sandbox, extra)` tras la decisión que corresponda."""
         escalated, network, justification = request_options(args)
         runtime = tools.runtime
-        ruled, rule_text = self._rules(argv)
+        ruled, rule_text, equipo = self._rules(argv)
         danger = dangerous_command_match(argv)
         if ruled == 'permitida':
             # El usuario la permitió de forma explícita: no se pregunta como peligrosa.
@@ -119,7 +123,8 @@ class OnRequestPolicy:
         command, label = list(argv), 'none'
         from . import sesion
         if (not escalated and not danger and ruled != 'preguntar'
-                and sesion.aprobadas(runtime.task, [sesion.clave_de_orden(argv, args.get('cwd'), sin_sandbox=True)])):
+                and sesion.aprobadas(runtime.task, [sesion.clave_de_orden(argv, args.get('cwd'), sin_sandbox=True)],
+                                     registrar=False)):
             # El usuario ya dejó correr esta misma orden sin sandbox en esta sesión: el
             # intento en el sandbox iba a fallar igual (como el reintento cacheado de Codex).
             escalated = True
@@ -157,7 +162,7 @@ class OnRequestPolicy:
         if reasons:
             await self._ask(runtime, argv, args, reasons, attempt, unsandboxed_timeout,
                             justification=justification, failure=failure, danger=danger,
-                            rule=rule_text if ruled == 'preguntar' else None)
+                            rule=rule_text if ruled == 'preguntar' else None, equipo=equipo)
         extra = {'intento': attempt, 'permisos': reasons, 'red': network or label == 'none'}
         result = await launch(command, label, extra)
         if label != 'seatbelt' or not self._denied(result):
@@ -167,10 +172,13 @@ class OnRequestPolicy:
         self._annotate(runtime, result, denegacion_probable=True)
         retry = uuid4().hex[:16]
         retry_reasons = [REINTENTO] + ([PELIGROSO] if danger else [])
+        if equipo and ruled == 'preguntar':
+            retry_reasons.append(REGLA_USUARIO)
         try:
             await self._ask(runtime, argv, args, retry_reasons, retry, unsandboxed_timeout,
                             justification=justification, previous=attempt, danger=danger,
-                            failure=self._denial_text(attempt, result))
+                            failure=self._denial_text(attempt, result), equipo=equipo,
+                            rule=rule_text if equipo else None)
         except ValueError as exc:
             result['reintento'] = 'rechazado: ' + str(exc)
             self._annotate(runtime, result, reintento='rechazado')
@@ -214,7 +222,7 @@ class OnRequestPolicy:
 
     @staticmethod
     async def _ask(runtime, argv, args, reasons, attempt, unsandboxed_timeout, *, justification=None,
-                   failure=None, previous=None, danger=None, rule=None):
+                   failure=None, previous=None, danger=None, rule=None, equipo=False):
         from . import sesion
         unsandboxed = SALIR in reasons or REINTENTO in reasons
         # Como ApprovedForSession de Codex: lo peligroso y lo que una regla manda preguntar, nunca.
@@ -226,6 +234,8 @@ class OnRequestPolicy:
             return None
         request = {'argv': list(argv), 'purpose': str(args['purpose']), 'motivo': reasons[0],
                    'motivos': list(reasons), 'intento': attempt}
+        if equipo:
+            request['_equipo'] = True
         if para_sesion:
             request['para_sesion'] = True
         if justification:

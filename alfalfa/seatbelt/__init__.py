@@ -171,6 +171,11 @@ def comprobar_enlaces_del_hogar(hogares):
             continue
         vistos = 0
         try:
+            datos = os.lstat(hogar)
+            if stat.S_ISREG(datos.st_mode):
+                if datos.st_nlink > 1:
+                    raise SandboxUnavailable('Un archivo protegido tiene enlaces duros.')
+                continue
             for carpeta, dirs, archivos in os.walk(hogar, followlinks=False, onerror=error):
                 vistos += len(dirs) + len(archivos)
                 if vistos > HOME_SCAN_LIMIT:

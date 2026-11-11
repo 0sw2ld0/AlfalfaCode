@@ -232,20 +232,35 @@ class Presupuesto:
     a la app del corte (`agotado`); el texto del corte va en el error, que es el resumen
     del turno."""
 
-    def __init__(self, home, task, sesion=None, mes=None, aviso=None):
+    def __init__(self, home, task, sesion=None, mes=None, aviso=None, equipo=None):
         self.task = task
         self.registro = GastoMensual(home)
-        self.sesion = importe(sesion) if sesion is not None else _de_entorno(ENTORNO_SESION)
-        self.mes = importe(mes) if mes is not None else _de_entorno(ENTORNO_MES)
+        self._sesion = importe(sesion) if sesion is not None else _de_entorno(ENTORNO_SESION)
+        self._mes = importe(mes) if mes is not None else _de_entorno(ENTORNO_MES)
+        self.equipo = equipo
         self.aviso = aviso
         self._reservas = {}
 
     def cambiar(self, sesion=_SIN_CAMBIO, mes=_SIN_CAMBIO):
         """Desde Ajustes de la app (`presupuesto` por --stdio): vale ya, también a mitad de turno."""
         if sesion is not _SIN_CAMBIO:
-            self.sesion = importe(sesion)
+            self._sesion = importe(sesion)
         if mes is not _SIN_CAMBIO:
-            self.mes = importe(mes)
+            self._mes = importe(mes)
+
+    def _tope(self, cual, personal):
+        compartido = getattr(self.equipo, cual, None)
+        if compartido is None:
+            return personal
+        return compartido if personal is None else min(personal, compartido)
+
+    @property
+    def sesion(self):
+        return self._tope('sesion', self._sesion)
+
+    @property
+    def mes(self):
+        return self._tope('mes', self._mes)
 
     @property
     def con_tope(self):
@@ -321,6 +336,8 @@ class Presupuesto:
             que = 'El presupuesto de esta sesión' if cual == 'sesion' else 'El presupuesto del mes en este Mac'
             como = (' Para seguir, sube el tope (' + COMO_SUBIR[cual] + ') o cambia a un modelo sin coste por '
                     'token (local o de plan).')
+            if getattr(self.equipo, cual, None) == tope:
+                como = ' El tope viene de .alfalfa/equipo.toml. Puedes elegir un modelo permitido sin coste por token.'
             if valor >= tope:
                 return (que + ' se agotó: se gastaron ' + dolares(valor) + ' de ' + dolares(tope) + '. Se detuvo '
                         'antes de la siguiente petición al modelo.' + como), cual
