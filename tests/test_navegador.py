@@ -129,7 +129,7 @@ def test_esquema_de_las_herramientas():
     assert navegador.NOMBRES == ('browser_navigate', 'browser_read', 'browser_console', 'browser_network',
                                  'browser_viewport', 'browser_click', 'browser_type', 'browser_scroll',
                                  'browser_screenshot', 'browser_eval', 'browser_handoff', 'browser_wait', 'browser_key',
-                                 'browser_hover', 'browser_upload', 'browser_download')
+                                 'browser_hover', 'browser_upload', 'browser_download', 'browser_compare')
     for tool in navegador.TOOLS:
         parametros = tool['function']['parameters']
         assert tool['type'] == 'function' and parametros['additionalProperties'] is False
