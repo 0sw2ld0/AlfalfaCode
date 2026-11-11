@@ -1,8 +1,4 @@
-Al terminar un turno puedes pedir que otro modelo revise los cambios y encargar las correcciones en el mismo hilo.
-Cola de encargos: deja una lista de tareas y el agente las hace una tras otra o en paralelo, cada una en su propio worktree.
-El cuadro de escribir te propone en gris el siguiente mensaje; con Tab lo aceptas y lo editas antes de enviarlo.
-Las imágenes y los vídeos que enseña el agente se ven dentro de la conversación.
-Cuando el agente cambia una web, el cierre del turno muestra capturas de antes y después.
-Navegador: perfil propio por proyecto, Chromium con CuyBrowser como segundo motor y permisos por sitio.
-Un equipo puede compartir reglas de modelos, permisos y presupuesto en .alfalfa/equipo.toml.
-El contenido de páginas y archivos externos se trata como datos, no como órdenes, y los secretos se ocultan.
+Leer, listar o buscar en tu propio proyecto ya no hace que cada orden pida permiso; solo lo activa lo que llega de fuera (web, navegador, MCP, adjuntos).
+«Omitir permisos» vuelve a no preguntar nada, y en Auto las órdenes inofensivas como git status no piden permiso ni después de leer la web.
+Ahora puedes adjuntar PDF, texto, código, Word y Excel además de imágenes.
+El panel muestra el proveedor real de la sesión (OpenAI, Anthropic…) en lugar de Ollama.
