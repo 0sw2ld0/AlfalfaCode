@@ -136,6 +136,14 @@ def _imagenes(lista):
             for i in lista or [] if isinstance(i, str) and i]
 
 
+def _documentos(lista):
+    """Los PDF adjuntos como bloques `document` (alfalfa.adjuntos), antes del texto como pide la API."""
+    return [{'type': 'document', 'title': str(d.get('nombre') or 'documento')[:200],
+             'source': {'type': 'base64', 'media_type': 'application/pdf', 'data': d['data']}}
+            for d in lista or [] if isinstance(d, dict) and isinstance(d.get('data'), str) and d['data']
+            and d.get('mime') == 'application/pdf']
+
+
 def _texto_bloque(texto):
     return {'type': 'text', 'text': texto}
 
@@ -303,7 +311,8 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
                     pendientes.append((bloque['id'], bloque['name']))
             poner('assistant', bloques)
         else:
-            poner('user', _imagenes(mensaje.get('images')) + [_texto_bloque(contenido or '(sin texto)')])
+            poner('user', _documentos(mensaje.get('documentos')) + _imagenes(mensaje.get('images'))
+                  + [_texto_bloque(contenido or '(sin texto)')])
     cerrar_pendientes()
     mensajes = _colocar_sistema(mensajes, bool(_SISTEMA_EN_MEDIO.match(modelo)))
     if not mensajes or mensajes[0]['role'] != 'user':
@@ -545,8 +554,10 @@ def mostrar(modelo):
     ventana = propia.get('ventana') or api.get('ventana') or externa.get('ventana') or 200000
     vision = propia.get('vision', api.get('vision') if isinstance(api.get('vision'), bool)
                         else bool(externa.get('vision')))
+    # Los modelos de Claude que ven imágenes leen también PDF como documento (texto e imagen de
+    # cada página): `pdf` hace que el motor los mande así en vez de su texto extraído.
     capacidades = ['completion', 'tools'] + (['thinking'] if adaptativo(modelo) else []) \
-        + (['vision'] if vision else [])
+        + (['vision', 'pdf'] if vision else [])
     info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'claude'}, 'model_info': {'anthropic.context_length': ventana}}
     ficha = dict(externa)

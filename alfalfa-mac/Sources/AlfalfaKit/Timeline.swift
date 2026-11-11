@@ -338,7 +338,7 @@ public struct Timeline: Equatable, Sendable {
             guard case let .user(id, text, _) = item, userTurns[id] == nil else { return false }
             let parts = ImageTags.split(text)
             return parts.text == wanted
-                || (!wantedImages.isEmpty && parts.images.map(ImageSupport.canonicalPath) == wantedImages)
+                || (!wantedImages.isEmpty && parts.attachments.map(ImageSupport.canonicalPath) == wantedImages)
         }
         if let index = items.lastIndex(where: matches) { items.remove(at: index) }
         items.append(.notice(id: nextID(), text: rejection.message))

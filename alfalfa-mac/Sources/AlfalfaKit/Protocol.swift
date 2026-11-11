@@ -1094,7 +1094,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
                                                  reason: text(object["motivo"]),
                                                  text: rejected["texto"] as? String ?? "",
-                                                 images: rejected["imagenes"] as? [String] ?? [],
+                                                 images: (rejected["imagenes"] as? [String] ?? [])
+                                                    + (rejected["archivos"] as? [String] ?? []),
                                                  alternatives: alternatives))
     }
 

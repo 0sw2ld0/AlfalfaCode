@@ -1182,6 +1182,9 @@ def main(argv=None):
                                                        'o de --volver')
     parser.add_argument('--imagen', action='append', default=[], metavar='RUTA',
                         help='Adjuntar una imagen al encargo (se puede repetir)')
+    parser.add_argument('--archivo', action='append', default=[], metavar='RUTA',
+                        help='Adjuntar un archivo al encargo: PDF, texto, código, Word (.docx) o Excel (.xlsx) '
+                             '(se puede repetir)')
     parser.add_argument('--sin-mantener-despierto', action='store_true',
                         help='Dejar que el Mac se duerma por inactividad mientras trabaja un turno '
                              '(también ALFALFA_MANTENER_DESPIERTO=0)')
@@ -1254,8 +1257,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.cola_encargos == '' and not args.stdio and not args.reanudar:
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
-    if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen):
-        parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni imágenes')
+    if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):
+        parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni adjuntos')
     if args.navegador_sitios:
         from .navegador_sitios_orden import orden
         return orden(args, home_dir())
@@ -1305,6 +1308,15 @@ def main(argv=None):
         try:
             args.encargo = con_etiquetas(args.encargo, [os.path.abspath(os.path.expanduser(r)) for r in args.imagen])
         except ImagenInvalida as exc:
+            parser.error(str(exc))
+    if args.archivo:
+        if not args.encargo:
+            parser.error('--archivo necesita un encargo')
+        from .adjuntos import ArchivoInvalido
+        from .adjuntos import con_etiquetas as con_archivos
+        try:
+            args.encargo = con_archivos(args.encargo, [os.path.abspath(os.path.expanduser(r)) for r in args.archivo])
+        except ArchivoInvalido as exc:
             parser.error(str(exc))
     if args.stdio or args.sesiones or args.modelos or args.turnos or args.historial or args.complementos:
         from .stdio import entry

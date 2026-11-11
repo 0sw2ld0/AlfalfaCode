@@ -146,7 +146,8 @@ final class LiveSession: ObservableObject, Identifiable {
         // El motor no abrió turno con ese mensaje: vuelve al cuadro, con sus imágenes.
         if case let .messageRejected(rejection) = message {
             // El cuadro añade el texto a lo que ya se haya escrito (Composer); las imágenes se suman.
-            if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta." { pendingDraft = rejection.text }
+            if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta.",
+               rejection.text != "Lee el archivo adjunto." { pendingDraft = rejection.text }
             draftImages = ImageSupport.restoredImages(current: draftImages, returned: rejection.images)
         }
         // «Quitar» o «Editar» de un mensaje en cola: el motor lo sacó (o ya lo leyó, y queda el aviso).
@@ -212,7 +213,7 @@ final class LiveSession: ObservableObject, Identifiable {
         if isDormant, !clean.isEmpty || !images.isEmpty {
             let urls = draftImages
             draftImages = []
-            wake(with: clean.isEmpty ? "Mira la imagen adjunta." : clean, images: urls)
+            wake(with: clean.isEmpty ? Attachments.placeholder(for: images) : clean, images: urls)
             return
         }
         guard !clean.isEmpty || !images.isEmpty, process != nil else { return }
@@ -488,7 +489,7 @@ extension LiveSession {
     fileprivate func returnToComposer(_ text: String) {
         let parts = ImageTags.split(text)
         if !parts.text.isEmpty { pendingDraft = parts.text }
-        draftImages = ImageSupport.restoredImages(current: draftImages, returned: parts.images)
+        draftImages = ImageSupport.restoredImages(current: draftImages, returned: parts.attachments)
     }
 
 }

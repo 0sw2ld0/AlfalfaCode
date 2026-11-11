@@ -48,7 +48,10 @@ public enum AlfalfaCommand: Equatable, Sendable {
                 : ["tipo": "permiso", "id": id, "aprobado": approved]
         case let .message(text, images, id):
             var fields: [String: Any] = ["tipo": "mensaje", "texto": text]
-            if !images.isEmpty { fields["imagenes"] = images }
+            // `images` lleva imágenes y archivos: el motor los recibe por separado.
+            let parts = Attachments.partition(images)
+            if !parts.images.isEmpty { fields["imagenes"] = parts.images }
+            if !parts.files.isEmpty { fields["archivos"] = parts.files }
             if let id { fields["id"] = id }
             object = fields
         case .cancel: object = ["tipo": "cancelar"]

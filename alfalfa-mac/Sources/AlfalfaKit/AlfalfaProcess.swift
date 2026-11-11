@@ -83,7 +83,10 @@ public enum Launcher {
         // El título de la propuesta, para que la barra lateral no enseñe el principio del encargo.
         if let title, !title.isEmpty, resume == nil { arguments += ["--titulo", title] }
         if let mode, !mode.isEmpty { arguments += ["--modo", mode] }
-        for image in images { arguments += ["--imagen", image] }
+        // `images` lleva también los archivos (PDF, texto, código, Word, Excel): van con `--archivo`.
+        for path in images {
+            arguments += [Attachments.isImage(URL(fileURLWithPath: path)) ? "--imagen" : "--archivo", path]
+        }
         if let resume { arguments += ["--reanudar", resume] }
         if let model, !model.isEmpty { arguments += ["--modelo", model] }
         if let effort, !effort.isEmpty { arguments += ["--esfuerzo", effort] }
