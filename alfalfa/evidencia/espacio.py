@@ -5,6 +5,7 @@ evidence readers to invalidate a check without launching a process.
 """
 import ast
 import asyncio
+import errno
 import hashlib
 import os
 import re
@@ -46,6 +47,54 @@ def _listar(carpeta):
         if os.stat(carpeta).st_mtime_ns == antes:
             return entradas, antes
     raise OSError('La carpeta no deja de cambiar: ' + carpeta)
+
+
+# Descriptores que se dejan libres para el resto del motor mientras vigila.
+MARGEN_DESCRIPTORES = 512
+_tope_por_proceso = None
+
+
+def _tope_de_descriptores(duro, infinito):
+    """Lo más que puede abrir este proceso: el límite duro, y en macOS también kern.maxfilesperproc."""
+    global _tope_por_proceso
+    tope = None if duro == infinito else duro
+    if sys.platform == 'darwin':
+        if _tope_por_proceso is None:
+            try:
+                salida = subprocess.run(['/usr/sbin/sysctl', '-n', 'kern.maxfilesperproc'],
+                                        capture_output=True, timeout=5, check=True).stdout
+                _tope_por_proceso = int(salida.strip())
+            except (OSError, subprocess.SubprocessError, ValueError):
+                _tope_por_proceso = 10240  # OPEN_MAX de <sys/syslimits.h>
+        tope = _tope_por_proceso if tope is None else min(tope, _tope_por_proceso)
+    return tope
+
+
+def subir_limite_de_archivos(necesarios):
+    """Sube el límite blando de archivos abiertos para vigilar `necesarios` rutas; devuelve el que queda.
+
+    macOS da 256 a lo que se abre desde el Finder (`launchctl limit maxfiles`) y kqueue pide un
+    descriptor por archivo y carpeta vigilados: en un proyecto de miles de archivos toda
+    comprobación fallaba con «Too many open files», aunque la misma orden fuera bien por
+    run_command. Sólo se sube el blando, nunca por encima del duro ni de lo que admite el sistema.
+    """
+    try:
+        import resource
+    except ImportError:
+        return None
+    blando, duro = resource.getrlimit(resource.RLIMIT_NOFILE)
+    querido = necesarios + MARGEN_DESCRIPTORES
+    if blando == resource.RLIM_INFINITY or blando >= querido:
+        return blando
+    tope = _tope_de_descriptores(duro, resource.RLIM_INFINITY)
+    nuevo = querido if tope is None else min(querido, tope)
+    if nuevo > blando:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (nuevo, duro))
+            blando = nuevo
+        except (ValueError, OSError):
+            pass
+    return blando
 
 
 class MutationWatch:
@@ -105,6 +154,10 @@ class MutationWatch:
                 paths.add(str(path.parent))
         try:
             if hasattr(select, 'kqueue'):
+                limite = subir_limite_de_archivos(len(paths))
+                if limite is not None and limite < len(paths) + MARGEN_DESCRIPTORES:
+                    raise OSError(errno.EMFILE, f'el proyecto tiene {len(paths)} archivos y carpetas que '
+                                  f'vigilar y este proceso sólo puede abrir {limite}')
                 self.queue = select.kqueue()
                 flags = (select.KQ_NOTE_WRITE | select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME
                          | select.KQ_NOTE_ATTRIB | select.KQ_NOTE_EXTEND | select.KQ_NOTE_REVOKE)
