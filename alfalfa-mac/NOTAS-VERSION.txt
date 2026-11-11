@@ -1,4 +1,4 @@
-Leer, listar o buscar en tu propio proyecto ya no hace que cada orden pida permiso; solo lo activa lo que llega de fuera (web, navegador, MCP, adjuntos).
-«Omitir permisos» vuelve a no preguntar nada, y en Auto las órdenes inofensivas como git status no piden permiso ni después de leer la web.
-Ahora puedes adjuntar PDF, texto, código, Word y Excel además de imágenes.
-El panel muestra el proveedor real de la sesión (OpenAI, Anthropic…) en lugar de Ollama.
+En proyectos grandes, el primer turno ya no espera minutos: el modelo empieza a responder mientras se prepara deshacer.
+Deshacer reutiliza lo que ya guarda git en el proyecto y solo copia lo modificado y lo nuevo.
+Mientras se prepara, la app dice «Preparando deshacer…» con el número de archivos y el tamaño, en lugar de «Pensando».
+Si una carpeta es demasiado grande para deshacer, avisa una vez y no lo vuelve a intentar en cada turno.
