@@ -22,6 +22,8 @@ struct SidebarRow: Identifiable {
     var archived = false
     /// Una sesión con turno en marcha no se puede eliminar ni bifurcar.
     var running = false
+    /// Lo crecida que está la alfalfa de una sesión abierta (contexto); nil en las guardadas.
+    var growth: Double?
 
     enum Tone { case working, attention, done, problem, idle }
 }
@@ -652,7 +654,8 @@ final class AppModel: ObservableObject {
         return SidebarRow(id: session.id.uuidString, title: stored?.title ?? session.title, status: status.label,
                           tone: tone, route: .live(session.id), date: Date().timeIntervalSince1970,
                           sessionID: session.sessionID, folder: session.cwd.path, pinned: stored?.pinned ?? false,
-                          archived: stored?.archived ?? false, running: status.isRunning)
+                          archived: stored?.archived ?? false, running: status.isRunning,
+                          growth: session.timeline.plantGrowth)
     }
 }
 

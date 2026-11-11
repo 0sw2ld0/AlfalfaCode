@@ -178,7 +178,18 @@ struct SidebarView: View {
     private func sessionRow(_ row: SidebarRow) -> some View {
         Button { model.route = row.route } label: {
             HStack(spacing: 10) {
-                StatusDot(color: color(row.tone), pulsing: row.tone == .working)
+                Group {
+                    if let growth = row.growth {
+                        // Las sesiones abiertas llevan su alfalfa, del color del estado: se mece
+                        // despacio mientras trabaja y crece con el contexto.
+                        AlfalfaActivityIcon(phase: row.tone == .working ? .thinking : .done, size: 16,
+                                            tint: color(row.tone))
+                            .environment(\.alfalfaGrowth, growth)
+                    } else {
+                        StatusDot(color: color(row.tone), pulsing: row.tone == .working)
+                    }
+                }
+                .frame(width: 16, height: 16)
                 Text(row.title).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
                 Text(row.status == "Interrumpida · se puede reanudar" ? "interrumpida" : row.status)

@@ -19,6 +19,8 @@ struct SessionView: View {
                 if let queue = session.timeline.taskQueue { TaskQueueCard(queue: queue, session: session) }
                 Composer(session: session)
             }
+            // La alfalfa de la cabecera y de la fila viva crece con el contexto de esta sesión.
+            .environment(\.alfalfaGrowth, session.timeline.plantGrowth)
             .frame(maxWidth: .infinity)
             Divider().overlay(Theme.border)
             SessionBrowserSlot(browser: session.browser, terminals: terminals) {
@@ -43,6 +45,18 @@ struct SessionView: View {
         .buttonStyle(.plain)
         .help("Abrir la carpeta del proyecto en Finder (\(Presentation.abbreviate(session.cwd.path)))")
         .accessibilityLabel("Abrir la carpeta del proyecto en Finder")
+    }
+
+    /// La alfalfa de la cabecera, quieta: crece con el contexto y rebrota al compactar.
+    private var plant: some View {
+        let stage = AlfalfaPlant.stage(for: session.timeline.plantGrowth).label
+        let context = session.timeline.contextLimit > 0
+            ? "\(Int((session.timeline.contextFraction * 100).rounded())) % del contexto usado"
+            : "contexto aún sin medir"
+        return AlfalfaActivityIcon(phase: .done, size: 22)
+            .help("Alfalfa en \(stage) · \(context)")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Alfalfa en \(stage), \(context)")
     }
 
     @ViewBuilder private var dormantHint: some View {
@@ -123,7 +137,7 @@ struct SessionView: View {
 
     private func header(_ terminals: SessionTerminals) -> some View {
         HStack(spacing: 10) {
-            LeafIcon()
+            plant
             Text(session.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
             Spacer()
             Button { planningQueue = true } label: { Image(systemName: "list.number") }

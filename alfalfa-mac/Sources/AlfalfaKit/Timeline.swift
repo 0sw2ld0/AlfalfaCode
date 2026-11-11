@@ -808,6 +808,12 @@ public struct Timeline: Equatable, Sendable {
         contextLimit > 0 ? min(1, Double(contextUsed) / Double(contextLimit)) : 0
     }
 
+    /// Cuánto ha crecido la alfalfa de la sesión (0…1): sube con el contexto y vuelve a ser un
+    /// brote al compactar (ver `AlfalfaPlant`).
+    public var plantGrowth: Double {
+        AlfalfaPlant.growth(used: contextUsed, limit: contextLimit, threshold: compactThreshold)
+    }
+
     /// Parte del camino hasta la compactación automática (0…1); nil sin umbral.
     public var compactionProgress: Double? {
         guard let threshold = compactThreshold, threshold > 0 else { return nil }
