@@ -1,313 +1,95 @@
 """Local observations, never model-supplied attestations.
 
-Git is queried in a worker thread. The saved watch also permits synchronous
-evidence readers to invalidate a check without launching a process.
+Una comprobación vale para el código de ahora si la huella del workspace de
+después de la orden es igual a la de antes. Nada vigila el workspace mientras la
+orden corre: un archivo que se escribe y se deshace en ese rato no se ve, y es
+una pérdida aceptada a cambio de no abrir un descriptor por archivo (en un
+proyecto de miles de archivos abierto desde el Finder, el límite de 256 tumbaba
+toda comprobación).
+
+La huella es barata como la de git: un archivo cuyo stat (tamaño, fechas,
+inodo, modo) no cambió no se vuelve a leer, y los hashes se guardan entre
+comprobaciones con el stat como clave. Git se consulta en un hilo aparte.
 """
 import ast
 import asyncio
-import errno
 import hashlib
 import os
 import re
-import select
 import shlex
-import struct
+import stat as _stat
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
 
-# inotify (Linux): los avisos que interesan y cómo vienen en el buffer.
-IN_MODIFY, IN_ATTRIB, IN_CLOSE_WRITE = 0x2, 0x4, 0x8
-IN_MOVED_FROM, IN_MOVED_TO, IN_CREATE, IN_DELETE = 0x40, 0x80, 0x100, 0x200
-IN_DELETE_SELF, IN_MOVE_SELF, IN_Q_OVERFLOW, IN_IGNORED = 0x400, 0x800, 0x4000, 0x8000
-MASCARA_INOTIFY = (IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
-                   | IN_DELETE_SELF | IN_MOVE_SELF)
-_EVENTO_INOTIFY = struct.Struct('iIII')
+# Racy mtime, como en git: si la fecha de un archivo cae tan cerca del momento en
+# que se leyó que otra escritura en el mismo tick del reloj podría dejar el mismo
+# stat, el stat no basta y decide el contenido. Linux pone las fechas con un
+# reloj de varios milisegundos; el margen cubre eso y un sistema de archivos lento.
+MARGEN_RACY_NS = 2_000_000_000
+
+# Hashes ya calculados: {ruta: (stat, sha256, cuándo se leyó)}. El stat va
+# entero (tamaño, mtime, ctime, inodo, modo y dispositivo) para que cualquier
+# escritura, chmod o reemplazo lo invalide.
+_HASHES = {}
+_HASHES_MAXIMO = 400_000
+_cerrojo_hashes = threading.Lock()
+
+# Una carpeta que no es un repositorio se recorre entera: con más archivos que
+# esto (la carpeta personal, un disco) no se toma huella y la comprobación queda
+# sin verificar en vez de tardar minutos.
+MAX_ARCHIVOS_SIN_GIT = 50_000
 
 
-def leer_inotify(buffer):
-    """[(wd, máscara, nombre)] de un buffer leído de inotify; el nombre es '' si el aviso es del propio objeto."""
-    eventos, posicion = [], 0
-    while posicion + _EVENTO_INOTIFY.size <= len(buffer):
-        wd, mascara, _, largo = _EVENTO_INOTIFY.unpack_from(buffer, posicion)
-        posicion += _EVENTO_INOTIFY.size
-        nombre = bytes(buffer[posicion:posicion + largo]).split(b'\0', 1)[0]
-        posicion += largo
-        eventos.append((wd, mascara, os.fsdecode(nombre)))
-    return eventos
+def _clave_stat(estado):
+    return (estado.st_size, estado.st_mtime_ns, estado.st_ctime_ns, estado.st_ino, estado.st_mode,
+            estado.st_dev)
 
 
-def _listar(carpeta):
-    """(entradas, mtime) de una carpeta, con la fecha estable durante la lista."""
-    for _ in range(5):
-        antes = os.stat(carpeta).st_mtime_ns
-        entradas = set(os.listdir(carpeta))
-        if os.stat(carpeta).st_mtime_ns == antes:
-            return entradas, antes
-    raise OSError('La carpeta no deja de cambiar: ' + carpeta)
+def _racy(estado, momento):
+    """¿El stat de este archivo podría repetirse tras otra escritura hecha después de `momento`?"""
+    return max(estado.st_mtime_ns, estado.st_ctime_ns) >= momento - MARGEN_RACY_NS
 
 
-# Descriptores que se dejan libres para el resto del motor mientras vigila.
-MARGEN_DESCRIPTORES = 512
-_tope_por_proceso = None
+def olvidar_hashes():
+    """Vacía los hashes guardados (para las pruebas y las mediciones)."""
+    with _cerrojo_hashes:
+        _HASHES.clear()
 
 
-def _tope_de_descriptores(duro, infinito):
-    """Lo más que puede abrir este proceso: el límite duro, y en macOS también kern.maxfilesperproc."""
-    global _tope_por_proceso
-    tope = None if duro == infinito else duro
-    if sys.platform == 'darwin':
-        if _tope_por_proceso is None:
-            try:
-                salida = subprocess.run(['/usr/sbin/sysctl', '-n', 'kern.maxfilesperproc'],
-                                        capture_output=True, timeout=5, check=True).stdout
-                _tope_por_proceso = int(salida.strip())
-            except (OSError, subprocess.SubprocessError, ValueError):
-                _tope_por_proceso = 10240  # OPEN_MAX de <sys/syslimits.h>
-        tope = _tope_por_proceso if tope is None else min(tope, _tope_por_proceso)
-    return tope
+def _hash(path, estado):
+    """sha256 del contenido de `path`, sin releerlo si su stat no cambió desde la última vez."""
+    modo = estado.st_mode
+    if _stat.S_ISLNK(modo):
+        return hashlib.sha256(os.readlink(path).encode(errors='surrogateescape')).hexdigest()
+    if _stat.S_ISDIR(modo):
+        # Un submódulo registrado (gitlink) es una carpeta: leerla como archivo
+        # tumbaba la huella con «Is a directory» (pasó con GLTFKit2).
+        return hashlib.sha256(('dir:' + '\0'.join(sorted(os.listdir(path)))).encode()).hexdigest()
+    if not _stat.S_ISREG(modo):
+        # Un FIFO o un socket: leerlo bloquearía la huella.
+        return hashlib.sha256(('especial:' + str(_stat.S_IFMT(modo))).encode()).hexdigest()
+    ruta = str(path)
+    clave = _clave_stat(estado)
+    guardado = _HASHES.get(ruta)
+    if guardado is not None and guardado[0] == clave and not _racy(estado, guardado[2]):
+        return guardado[1]
+    leido = time.time_ns()
+    with open(path, 'rb') as archivo:
+        sha = hashlib.file_digest(archivo, 'sha256').hexdigest()
+    with _cerrojo_hashes:
+        if len(_HASHES) >= _HASHES_MAXIMO:
+            _HASHES.clear()
+        _HASHES[ruta] = (clave, sha, leido)
+    return sha
 
 
-def subir_limite_de_archivos(necesarios):
-    """Sube el límite blando de archivos abiertos para vigilar `necesarios` rutas; devuelve el que queda.
-
-    macOS da 256 a lo que se abre desde el Finder (`launchctl limit maxfiles`) y kqueue pide un
-    descriptor por archivo y carpeta vigilados: en un proyecto de miles de archivos toda
-    comprobación fallaba con «Too many open files», aunque la misma orden fuera bien por
-    run_command. Sólo se sube el blando, nunca por encima del duro ni de lo que admite el sistema.
-    """
+def _lstat(path):
     try:
-        import resource
-    except ImportError:
+        return os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
         return None
-    blando, duro = resource.getrlimit(resource.RLIMIT_NOFILE)
-    querido = necesarios + MARGEN_DESCRIPTORES
-    if blando == resource.RLIM_INFINITY or blando >= querido:
-        return blando
-    tope = _tope_de_descriptores(duro, resource.RLIM_INFINITY)
-    nuevo = querido if tope is None else min(querido, tope)
-    if nuevo > blando:
-        try:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (nuevo, duro))
-            blando = nuevo
-        except (ValueError, OSError):
-            pass
-    return blando
-
-
-class MutationWatch:
-    """Observe writes across all snapshots, including writes after their reads.
-
-    Install before validating the baseline; keep alive across the worker await.
-    Queue overflow, unsupported platforms and registration errors fail closed.
-    This is a publication boundary, not a promise that files stay immutable.
-
-    Cada aviso de una carpeta se explica o deja la vigilancia sucia (`sucio`). Se
-    explica si lo que entró o salió de la carpeta es una caché o un temporal que
-    no estaba versionado (`nombre_de_cache`), y queda en `caches`
-    ({carpeta: nombres}). Con inotify el aviso trae el nombre. Con kqueue no: un
-    hilo lista la carpeta en cuanto avisa y compara con la lista anterior. Un
-    aviso sin cambio visible (algo se creó y se borró antes de listar), un chmod
-    o cualquier aviso de un archivo vigilado no se explican. Queda un hueco: un
-    archivo creado y borrado en los mismos ~50 ms en que se crea una caché.
-    """
-
-    def __init__(self, snapshots):
-        self.fd = None
-        self.queue = None
-        self.files = []
-        # ctime de cada ruta vigilada: macOS avisa con NOTE_ATTRIB también cuando
-        # sólo cambia la fecha de acceso (git la mueve al leer .git/index), y eso
-        # invalidaba toda comprobación de git aunque nadie escribiera nada. Un
-        # acceso no mueve el ctime; un chmod, chown o escritura sí.
-        self.ctimes = {}
-        self.avisos = False
-        self.sucio = False
-        self.caches = {}
-        self.rutas = {}
-        # Por carpeta vigilada (kqueue): sus entradas con la fecha de la carpeta al
-        # listarlas, y su modo y dueño al empezar.
-        self.listas = {}
-        self.fechas = {}
-        self.modos = {}
-        self.carpetas = set()
-        # Lo vigilado por la foto: una caché con algo de esto dentro no es caché.
-        self.vigilados = set()
-        self._cerrojo = threading.Lock()
-        self._parar = threading.Event()
-        self._hilo = None
-        paths = set()
-        for snapshot in snapshots:
-            watch = snapshot['watch']
-            paths.update(watch['directories'])
-            self.carpetas.update(watch['directories'])
-            self.vigilados.update(watch['files'])
-            for name, value in watch['files'].items():
-                path = Path(name)
-                if value is not None:
-                    paths.add(name)
-                # Observe creation of absent Git refs / MERGE_HEAD too.
-                while not path.parent.exists():
-                    path = path.parent
-                paths.add(str(path.parent))
-        try:
-            if hasattr(select, 'kqueue'):
-                limite = subir_limite_de_archivos(len(paths))
-                if limite is not None and limite < len(paths) + MARGEN_DESCRIPTORES:
-                    raise OSError(errno.EMFILE, f'el proyecto tiene {len(paths)} archivos y carpetas que '
-                                  f'vigilar y este proceso sólo puede abrir {limite}')
-                self.queue = select.kqueue()
-                flags = (select.KQ_NOTE_WRITE | select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME
-                         | select.KQ_NOTE_ATTRIB | select.KQ_NOTE_EXTEND | select.KQ_NOTE_REVOKE)
-                for name in sorted(paths):
-                    fd = os.open(name, os.O_RDONLY | os.O_NONBLOCK)
-                    self.files.append(fd)
-                    self.rutas[fd] = name
-                    estado = os.fstat(fd)
-                    self.ctimes[fd] = estado.st_ctime_ns
-                    if name in self.carpetas:
-                        self.listas[fd], self.fechas[fd] = _listar(name)
-                        self.modos[fd] = (estado.st_mode, estado.st_uid, estado.st_gid)
-                    self.queue.control([select.kevent(fd, filter=select.KQ_FILTER_VNODE,
-                        flags=select.KQ_EV_ADD | select.KQ_EV_CLEAR, fflags=flags)], 0, 0)
-                self._hilo = threading.Thread(target=self._vigilar, name='alfalfa-vigilante', daemon=True)
-                self._hilo.start()
-            elif sys.platform.startswith('linux'):
-                import ctypes
-                libc = ctypes.CDLL(None, use_errno=True)
-                self.fd = libc.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
-                if self.fd < 0:
-                    self.fd = None
-                    raise OSError(ctypes.get_errno(), 'inotify_init1')
-                for name in sorted(paths):
-                    wd = libc.inotify_add_watch(self.fd, os.fsencode(name), MASCARA_INOTIFY)
-                    if wd < 0:
-                        raise OSError(ctypes.get_errno(), 'inotify_add_watch')
-                    self.rutas[wd] = name
-            else:
-                raise OSError('No hay vigilancia de mutaciones disponible.')
-        except BaseException:
-            self.close()
-            raise
-
-    def cache_nueva(self, carpeta, nombre):
-        """¿La entrada `nombre` de `carpeta` es una caché o un temporal sin nada versionado ni vigilado dentro?"""
-        if not nombre_de_cache(nombre):
-            return False
-        ruta = os.path.join(carpeta, nombre)
-        return not any(v == ruta or v.startswith(ruta + os.sep) for v in self.vigilados)
-
-    def _explicar(self, carpeta, nombre):
-        if self.cache_nueva(carpeta, nombre):
-            self.caches.setdefault(carpeta, set()).add(nombre)
-        else:
-            self.sucio = True
-
-    def _vigilar(self):
-        # Lista cada carpeta en cuanto avisa: así se ve lo que entró aunque luego salga.
-        while not self._parar.is_set():
-            with self._cerrojo:
-                if self.queue is None:
-                    return
-                try:
-                    self._kqueue(self.queue.control([], 64, 0.05))
-                except OSError:
-                    self.avisos = self.sucio = True
-                    return
-            time.sleep(0.001)
-
-    def _kqueue(self, eventos):
-        for evento in eventos:
-            fd = evento.ident
-            try:
-                estado = os.fstat(fd)
-            except OSError:
-                self.avisos = self.sucio = True
-                continue
-            antes, self.ctimes[fd] = self.ctimes.get(fd), estado.st_ctime_ns
-            if fd not in self.listas:
-                if evento.fflags & ~select.KQ_NOTE_ATTRIB or estado.st_ctime_ns != antes:
-                    self.avisos = self.sucio = True
-                continue
-            if evento.fflags & (select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME | select.KQ_NOTE_REVOKE) \
-                    or (estado.st_mode, estado.st_uid, estado.st_gid) != self.modos[fd]:
-                self.avisos = self.sucio = True
-                continue
-            if not evento.fflags & (select.KQ_NOTE_WRITE | select.KQ_NOTE_EXTEND):
-                if estado.st_ctime_ns != antes:
-                    # ctime movido sin entradas nuevas: atributos extendidos, ACL…
-                    self.avisos = self.sucio = True
-                continue
-            self.avisos = True
-            carpeta = self.rutas[fd]
-            try:
-                ahora, fecha = _listar(carpeta)
-            except OSError:
-                self.sucio = True
-                continue
-            cambio = ahora ^ self.listas[fd]
-            if not cambio and fecha != self.fechas[fd]:
-                # Avisó, la carpeta cambió desde la última lista y no se ve nada:
-                # algo entró y salió antes de listar. Con la misma fecha es un aviso
-                # de algo que ya se vio (llegó después de listar).
-                self.sucio = True
-            self.listas[fd], self.fechas[fd] = ahora, fecha
-            for nombre in cambio:
-                self._explicar(carpeta, nombre)
-
-    def _inotify(self, eventos):
-        for wd, mascara, nombre in eventos:
-            self.avisos = True
-            carpeta = self.rutas.get(wd)
-            if mascara & (IN_Q_OVERFLOW | IN_IGNORED) or carpeta is None:
-                self.sucio = True
-            elif nombre and carpeta in self.carpetas:
-                self._explicar(carpeta, nombre)
-            else:
-                # Un aviso del propio objeto: un archivo vigilado, o un chmod o un borrado de la carpeta.
-                self.sucio = True
-
-    def changed(self):
-        if self.queue is not None:
-            with self._cerrojo:
-                while self.queue is not None:
-                    eventos = self.queue.control([], 64, 0)
-                    self._kqueue(eventos)
-                    if len(eventos) < 64:
-                        break
-            return self.avisos
-        if self.fd is not None:
-            while True:
-                try:
-                    datos = os.read(self.fd, 65536)
-                except BlockingIOError:
-                    break
-                if not datos:
-                    break
-                self._inotify(leer_inotify(datos))
-            return self.avisos
-        return True
-
-    def solo_caches(self):
-        """¿Hubo avisos y todos se explican por cachés o temporales no versionados?"""
-        return self.changed() and not self.sucio and bool(self.caches)
-
-    def close(self):
-        self._parar.set()
-        if self._hilo is not None and self._hilo is not threading.current_thread():
-            self._hilo.join(timeout=2)
-        with self._cerrojo:
-            if self.queue is not None:
-                self.queue.close()
-                self.queue = None
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
-        for fd in self.files:
-            os.close(fd)
-        self.files.clear()
 
 
 def functional_command(argv):
@@ -378,36 +160,53 @@ def nombre_de_cache(nombre):
     return nombre in CACHES or nombre.startswith('pytest-cache-files-') or temporal(nombre)
 
 
-def cambio_sin_trabajo(snapshot, guard):
-    """¿Lo único que pasó durante la orden fue crear o borrar cachés no versionadas?
+def _en_cache(name):
+    """¿`name` (relativo a la raíz) está dentro de una caché o un temporal?"""
+    return any(nombre_de_cache(parte) for parte in str(name).split('/')[:-1])
 
-    Cada aviso del vigilante quedó explicado por una entrada de caché nueva o
-    borrada (ver `MutationWatch`), y todo lo demás sigue igual: los archivos con
-    el mismo contenido, inodo y fechas, y cada carpeta con las mismas entradas
-    sin contar esas cachés. Pasa, por ejemplo, con el primer pytest de un repo sin
-    .gitignore, que deja `.pytest_cache/` (prueba real con Claude Haiku, 09/11).
-    """
-    try:
-        return bool(guard is not None and guard.solo_caches()
-                    and matches(for_mutation_watch(snapshot), tolerar=guard.caches))
-    except (OSError, KeyError, TypeError):
+
+def _cache_sin_trabajo(carpeta, nombre, vigilados):
+    """¿La entrada `nombre` de `carpeta` es una caché o un temporal sin nada vigilado dentro?"""
+    if not nombre_de_cache(nombre):
         return False
+    ruta = os.path.join(carpeta, nombre)
+    return not any(v == ruta or v.startswith(ruta + os.sep) for v in vigilados)
 
 
-def con_caches(snapshot, guard):
-    """La foto con las carpetas de `guard.caches` como han quedado, para que no caduque por ellas.
+def tras_la_orden(snapshot):
+    """(¿vale?, foto con la que queda) al acabar la orden: la huella de ahora contra la de antes.
 
-    Quien la lea luego (`matches`) vuelve a listar con lo ignorado de ahora: las
-    cachés nuevas cuentan como ya estaban.
+    Vale si los archivos, el índice, HEAD y las refs siguen como en la foto y cada
+    carpeta tiene las mismas entradas, sin contar las cachés y temporales que
+    entraron o salieron sin nada vigilado dentro: el primer pytest de un repo sin
+    .gitignore deja `.pytest_cache/` (prueba real con Claude Haiku, 09/11). La foto
+    devuelta lleva esas carpetas como han quedado, para que la comprobación no
+    caduque luego por ellas.
     """
-    ignorado = _current_ignored({**snapshot, 'watch': {**snapshot['watch'], '_use_snapshot_ignored': False}})
-    if ignorado is None:
-        return snapshot
-    carpetas = dict(snapshot['watch']['directories'])
-    for carpeta in guard.caches:
-        if carpeta in carpetas:
-            carpetas[carpeta] = _entries(Path(carpeta), ignorado, snapshot.get('root'))
-    return {**snapshot, 'watch': {**snapshot['watch'], 'directories': carpetas, 'ignored': sorted(ignorado)}}
+    if not isinstance(snapshot, dict) or not snapshot.get('watch'):
+        return False, snapshot
+    try:
+        watch = snapshot['watch']
+        root = snapshot.get('root')
+        ignored = _current_ignored(snapshot)
+        if ignored is None:
+            return False, snapshot
+        carpetas = {}
+        for name, antes in watch['directories'].items():
+            ahora = _entries(name, ignored, root)
+            if ahora != list(antes):
+                cambio = set(ahora) ^ set(antes)
+                if not cambio or not all(_cache_sin_trabajo(name, n, watch['files']) for n in cambio):
+                    return False, snapshot
+            carpetas[name] = ahora
+        if not _sin_cambios(snapshot):
+            return False, snapshot
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return False, snapshot
+    if carpetas == watch['directories']:
+        return True, snapshot
+    return True, {**snapshot, 'watch': {**watch, 'directories': carpetas, 'ignored': sorted(ignored)}}
+
 
 def con_escrituras_del_arnes(snapshot, rutas, borrada=None):
     """La foto con lo que el propio arnés acaba de escribir o borrar (`rutas`, absolutas: los archivos
@@ -466,35 +265,35 @@ def escrito_por_el_revisor(name):
     return any(parte.lower().startswith(PREFIJOS_DEL_REVISOR) for parte in partes)
 
 
-def _del_revisor(path, root):
-    try:
-        return escrito_por_el_revisor(Path(path).relative_to(root).as_posix())
-    except ValueError:
-        return False
-
-
 def _file(path):
-    if not path.exists() and not path.is_symlink():
+    """[sha256, modo, inodo, mtime_ns, ctime_ns, tamaño] de `path`, o None si no existe."""
+    estado = _lstat(path)
+    if estado is None:
         return None
-    stat = path.lstat()
-    if path.is_symlink():
-        data = os.readlink(path).encode()
-    elif path.is_dir():
-        # Un submódulo registrado (gitlink) es una carpeta: leerla como archivo
-        # tumbaba la huella con «Is a directory» (pasó con GLTFKit2).
-        data = ('dir:' + '\0'.join(sorted(os.listdir(path)))).encode()
-    else:
-        data = path.read_bytes()
-    return [hashlib.sha256(data).hexdigest(), stat.st_mode, stat.st_ino,
-            stat.st_mtime_ns, stat.st_ctime_ns]
+    return [_hash(path, estado), estado.st_mode, estado.st_ino, estado.st_mtime_ns, estado.st_ctime_ns,
+            estado.st_size]
 
 
 def _entries(path, ignored, root=None):
-    # Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
-    # caducaba la evidencia al terminar cada revisión («La evidencia caducó»).
-    return sorted(p.name for p in path.iterdir()
-                  if p.name != '.git' and not temporal(p.name) and str(p) not in ignored
-                  and not (root and _del_revisor(p, root)))
+    """Las entradas de la carpeta `path` que cuentan para la huella, ordenadas.
+
+    Las capturas que el revisor deja en la evidencia no son el trabajo: vigilarlas
+    caducaba la evidencia al terminar cada revisión («La evidencia caducó»). Va
+    con cadenas y no con Path: en un proyecto de miles de carpetas, pathlib era
+    lo más lento de la huella.
+    """
+    carpeta = str(path)
+    prefijo = None
+    if root:
+        raiz = str(root).rstrip('/')
+        if carpeta == (raiz or '/'):
+            prefijo = ''
+        elif carpeta.startswith(raiz + '/'):
+            prefijo = carpeta[len(raiz) + 1:] + '/'
+    return sorted(nombre for nombre in os.listdir(carpeta)
+                  if nombre != '.git' and not temporal(nombre)
+                  and os.path.join(carpeta, nombre) not in ignored
+                  and not (prefijo is not None and escrito_por_el_revisor(prefijo + nombre)))
 
 
 def _shared(path, refs):
@@ -533,11 +332,6 @@ def _current_ignored(snapshot):
     """Read the current Git ignore view so new build artifacts stay out of a review receipt."""
     if snapshot.get('git') is None:
         return set()
-    if snapshot.get('watch', {}).get('_use_snapshot_ignored'):
-        try:
-            return set(snapshot['watch']['ignored'])
-        except (KeyError, TypeError):
-            return None
     try:
         result = subprocess.run(
             ['git', '-C', snapshot['root'], 'ls-files', '-oi', '--exclude-standard',
@@ -551,47 +345,31 @@ def _current_ignored(snapshot):
         return None
 
 
-def matches(snapshot, tolerar=None):
-    """¿Sigue todo como en la foto? `tolerar` ({carpeta: nombres}) no cuenta esas entradas."""
+def _sin_cambios(snapshot):
+    """¿Los archivos, lo compartido de .git y lo preparado en el índice siguen como en la foto?"""
+    watch = snapshot['watch']
+    tomada = watch.get('tomada_ns')
+    return (all(_same_file(name, value, tomada) for name, value in watch['files'].items())
+            and all(_shared(Path(name), refs) == value
+                    for name, (value, refs) in watch.get('shared', {}).items())
+            and ('index' not in watch or _preparado(snapshot['root']) == watch['index'][1]))
+
+
+def matches(snapshot):
+    """¿Sigue todo como en la foto?"""
     if not isinstance(snapshot, dict) or not snapshot.get('watch'):
         return False
-    tolerar = tolerar or {}
-
-    def igual(name, value):
-        fuera = tolerar.get(name) or ()
-        actuales = _entries(Path(name), ignored, snapshot.get('root'))
-        return [n for n in actuales if n not in fuera] == [n for n in value if n not in fuera]
     try:
         watch = snapshot['watch']
         ignored = _current_ignored(snapshot)
         if ignored is None:
             return False
-        return (all(_same_file(Path(name), value) for name, value in watch['files'].items())
-                and all(_shared(Path(name), refs) == value
-                        for name, (value, refs) in watch.get('shared', {}).items())
-                and all(igual(name, value) for name, value in watch['directories'].items())
-                and ('index' not in watch or _preparado(snapshot['root']) == watch['index'][1]))
+        root = snapshot.get('root')
+        return (all(_entries(name, ignored, root) == list(value)
+                    for name, value in watch['directories'].items())
+                and _sin_cambios(snapshot))
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         return False
-
-
-def same_context(left, right):
-    """Compare receipts while treating the current ignored-path listing as derived data."""
-    if not isinstance(left, dict) or not isinstance(right, dict):
-        return False
-    try:
-        left = {**left, 'watch': {**left['watch'], 'ignored': [], '_use_snapshot_ignored': False}}
-        right = {**right, 'watch': {**right['watch'], 'ignored': [], '_use_snapshot_ignored': False}}
-    except (KeyError, TypeError):
-        return False
-    return left == right
-
-
-def for_mutation_watch(snapshot):
-    """Use the already-read ignore list while a filesystem watcher is active."""
-    if not isinstance(snapshot, dict) or not isinstance(snapshot.get('watch'), dict):
-        return snapshot
-    return {**snapshot, 'watch': {**snapshot['watch'], '_use_snapshot_ignored': True}}
 
 
 def _preparado(root):
@@ -609,20 +387,31 @@ def _preparado(root):
     return hashlib.sha256(b'\n'.join(lineas)).hexdigest()
 
 
-def _same_file(path, expected):
+def _same_file(name, expected, tomada=None):
+    """¿`name` sigue como `expected` (lo que dio `_file`)? Sólo se lee si el stat no basta.
+
+    `tomada` es cuándo empezó la foto (las de versiones anteriores no lo traen):
+    si la fecha del archivo cae cerca, el stat podría repetirse tras otra
+    escritura (racy mtime) y decide el contenido.
+    """
+    estado = _lstat(name)
     if expected is None:
-        return not path.exists() and not path.is_symlink()
-    stat = path.lstat()
-    if [stat.st_mode, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns] == expected[1:]:
-        return True
+        return estado is None
+    if estado is None:
+        return False
+    if len(expected) > 5 and expected[5] != estado.st_size:
+        return False
+    if [estado.st_mode, estado.st_ino, estado.st_mtime_ns, estado.st_ctime_ns] == expected[1:5]:
+        if tomada is None or not _racy(estado, tomada):
+            return True
+        return _hash(name, estado) == expected[0]
     # La limpieza comparte los archivos repetidos con un clon: mismo contenido y
     # fecha, pero otro inodo y otro ctime. Comparar sólo metadatos caducaba la
     # evidencia de los tickets en revisión. Si el modo
     # y la fecha siguen iguales, decide el contenido.
-    if [stat.st_mode, stat.st_mtime_ns] != [expected[1], expected[3]]:
+    if [estado.st_mode, estado.st_mtime_ns] != [expected[1], expected[3]]:
         return False
-    actual = _file(path)
-    return actual is not None and actual[0] == expected[0]
+    return _hash(name, estado) == expected[0]
 
 
 def _status(porcelain):
@@ -630,13 +419,43 @@ def _status(porcelain):
                      if not escrito_por_el_revisor(line[3:].split(' -> ')[-1].strip('"').rstrip('/')))
 
 
+def _sin_git(root):
+    """Los archivos de una carpeta que no es un repositorio, relativos a ella."""
+    names = set()
+    for carpeta, subcarpetas, archivos in os.walk(root, onerror=_fallo_al_recorrer):
+        relativa = os.path.relpath(carpeta, root)
+        relativa = '' if relativa == '.' else relativa + '/'
+        if not relativa:
+            # Los temporales de primer nivel no entran en la huella: ni se recorren.
+            subcarpetas[:] = [s for s in subcarpetas if not temporal(s)]
+        for nombre in archivos + [s for s in subcarpetas if os.path.islink(os.path.join(carpeta, s))]:
+            names.add(relativa + nombre)
+        if len(names) > MAX_ARCHIVOS_SIN_GIT:
+            raise ValueError(f'La carpeta no es un repositorio git y tiene más de {MAX_ARCHIVOS_SIN_GIT} '
+                             'archivos.')
+    return names
+
+
+def _fallo_al_recorrer(error):
+    raise error
+
+
 def _capture(root):
+    tomada = time.time_ns()
     root = Path(root).resolve()
     def git(*args):
         result = subprocess.run(['git', '-C', str(root), *args], capture_output=True,
                                 timeout=15, check=True,
                                 env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'})
         return result.stdout.decode(errors='surrogateescape').rstrip('\n')
+
+    def listar():
+        versionados = set(git('ls-files', '-z').split('\0')) - {''}
+        # Lo que hay sin versionar dentro de una caché (`__pycache__/*.pyc` en un repo
+        # sin .gitignore) lo regenera cada orden: no es el trabajo.
+        otros = {name for name in git('ls-files', '-o', '--exclude-standard', '-z').split('\0')
+                 if name and not _en_cache(name)}
+        return versionados | otros
     ignored = set()
     git_files = []
     shared = {}
@@ -645,7 +464,7 @@ def _capture(root):
         common = Path(git('rev-parse', '--git-common-dir'))
         if not common.is_absolute():
             common = (root / common).resolve()
-        names = set(git('ls-files', '-co', '--exclude-standard', '-z').split('\0')) - {''}
+        names = listar()
         ignored = {str(root / name.rstrip('/')) for name in
                    git('ls-files', '-oi', '--exclude-standard', '--directory', '-z').split('\0') if name}
         # El índice no entra por fecha e inodo: git reescribe sus datos de stat
@@ -679,8 +498,7 @@ def _capture(root):
         # A broken repository must not masquerade as a plain directory.
         if (root / '.git').exists():
             raise ValueError('No se pudo verificar el estado Git actual.')
-        names = {str(p.relative_to(root)) for p in root.rglob('*')
-                 if p.is_file() or p.is_symlink()}
+        names = _sin_git(root)
         context = None
     # .tmp-alfalfa/ (o el .tmp-… de un integrador) son temporales de los agentes (cachés de Go, builds de Swift):
     # nunca son parte del trabajo, y si una rama los llegó a versionar, miles de
@@ -688,30 +506,35 @@ def _capture(root):
     # ellos en `status` si cambian.
     names = {name for name in names
              if not temporal(name) and not escrito_por_el_revisor(name)}
-    paths = [root / name for name in sorted(names)]
-    directories = {root}
-    for path in paths:
-        directories.update(parent for parent in path.parents if parent == root or root in parent.parents)
-    directory_before = {str(path): _entries(path, ignored, root) for path in directories}
-    watch = {'files': {str(path): _file(path) for path in paths + git_files},
+    raiz = str(root)
+    paths = [os.path.join(raiz, name) for name in sorted(names)]
+    # Las carpetas de cada archivo hasta la raíz, con cadenas: con Path y sus
+    # `parents` esto costaba segundos en un proyecto de 20 000 archivos.
+    relativas = set()
+    for name in names:
+        corte = name.rfind('/')
+        while corte > 0 and name[:corte] not in relativas:
+            relativas.add(name[:corte])
+            corte = name.rfind('/', 0, corte)
+    directories = [raiz] + [os.path.join(raiz, carpeta) for carpeta in relativas]
+    directory_before = {carpeta: _entries(carpeta, ignored, root) for carpeta in directories}
+    watch = {'files': {**{path: _file(path) for path in paths}, **{str(path): _file(path) for path in git_files}},
              'shared': shared,
              'directories': directory_before,
-             'ignored': sorted(ignored)}
+             'ignored': sorted(ignored),
+             'tomada_ns': tomada}
     if context is not None:
         watch['index'] = index
     result = {'root': str(root), 'git': context, 'watch': watch,
-              'sources': {str(path): watch['files'][str(path)] for path in paths}}
-    if not matches(result):
-        raise ValueError('El workspace cambió mientras se tomaba su huella.')
+              'sources': {path: watch['files'][path] for path in paths}}
     if context is not None:
         if any(watch['files'][name] != value for name, value in git_before.items()):
             raise ValueError('Git cambió mientras se tomaba su huella.')
-        final_names = {name for name in git('ls-files', '-co', '--exclude-standard', '-z').split('\0')
-                       if name and not temporal(name) and not escrito_por_el_revisor(name)}
+        final_names = {name for name in listar() if not temporal(name) and not escrito_por_el_revisor(name)}
         if final_names != names or _status(git('status', '--porcelain')) != context['status']:
             raise ValueError('El workspace cambió mientras se tomaba su huella.')
-        if not matches(result):
-            raise ValueError('Git o el workspace cambiaron durante la comprobación final.')
+    if not matches(result):
+        raise ValueError('El workspace cambió mientras se tomaba su huella.')
     return result
 
 

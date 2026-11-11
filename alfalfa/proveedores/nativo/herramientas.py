@@ -5,7 +5,6 @@ Path guards protect built-in tools, not arbitrary approved subprocesses.
 from __future__ import annotations
 
 import asyncio
-import errno
 import hashlib
 import json
 import math
@@ -17,7 +16,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import ExitStack
 from pathlib import Path
 
 from ...busqueda_sesiones.herramienta import TOOL as BUSCAR_SESIONES_TOOL
@@ -44,6 +42,13 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif'}
 # Lo privado del worktree se define con las demás rutas vetadas.
 PRIVATE = PRIVADOS_DEL_ESPACIO
 SKIP = PRIVATE | {'node_modules', '.venv', '.build', '__pycache__', 'vendor'}
+
+
+def _motivo_sin_huella(cuando, exc):
+    """Por qué una comprobación quedó sin verificar: no se pudo tomar la huella del workspace."""
+    detalle = str(exc).strip() or type(exc).__name__
+    return (f'No se pudo tomar la huella del workspace {cuando} de la orden ({detalle}). La orden se ejecutó, '
+            'pero su resultado no cuenta como comprobación del código actual.')
 
 
 def digest(data):
@@ -1342,8 +1347,7 @@ class WorkspaceTools:
                 'summary': 'Parche aplicado: ' + ', '.join(c['action'] + ' ' + c['path'] for c in changes) + '.'}
 
     async def command(self, args, verification=False):
-        with ExitStack() as resources:
-            return await self._command(args, verification, resources)
+        return await self._command(args, verification)
 
     def command_cwd(self, args):
         """Carpeta absoluta de la orden: la raíz o una subcarpeta existente del workspace."""
@@ -1366,7 +1370,7 @@ class WorkspaceTools:
         value = args.get('timeout_seconds') if isinstance(args, dict) else None
         return float(value) if isinstance(value, int) and not isinstance(value, bool) else COMMAND_TIMEOUT_SECONDS
 
-    async def _command(self, args, verification, resources):
+    async def _command(self, args, verification):
         cwd = self.command_cwd(args)
         argv = list(args['argv'])
         corregido = argv_sin_comillas_de_shell(argv, cwd)
@@ -1405,12 +1409,12 @@ class WorkspaceTools:
         if policy is None:
             await self.runtime.approve(args)
             launch, sandbox = await self._sandboxed(args, argv)
-            return await self._launch(args, argv, launch, sandbox, verification, resources, revision, cwd,
+            return await self._launch(args, argv, launch, sandbox, verification, revision, cwd,
                                       guard_key, guard_generation, guard_attempts)
 
         async def attempt(launch, sandbox, extra):
             # Cada intento parte de la revisión vigente: un reintento ve la del fallido.
-            return await self._launch(args, argv, launch, sandbox, verification, resources,
+            return await self._launch(args, argv, launch, sandbox, verification,
                                       self.runtime.state.get('workspace_revision', 0), cwd,
                                       guard_key, guard_generation, guard_attempts, extra)
 
@@ -1419,7 +1423,7 @@ class WorkspaceTools:
         plazo = getattr(self.runtime.manager, 'unsandboxed_approval_seconds', UNSANDBOXED_APPROVAL_SECONDS)
         return await policy.execute(self, args, argv, attempt, unsandboxed_timeout=plazo)
 
-    async def _launch(self, args, argv, launch, sandbox, verification, resources, revision, cwd,
+    async def _launch(self, args, argv, launch, sandbox, verification, revision, cwd,
                       guard_key, guard_generation, guard_attempts, extra=None):
         """Lanza un intento ya autorizado y registra su resultado."""
         # Any arbitrary command can change source files. Invalidate prior evidence
@@ -1429,7 +1433,7 @@ class WorkspaceTools:
             self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0)+1
         revision = self.runtime.state.get('workspace_revision', 0)
         self.runtime.save()
-        from ...evidencia.espacio import MutationWatch, capture, for_mutation_watch, matches
+        from ...evidencia.espacio import capture
         if verification and argv and Path(str(argv[0])).name == 'git':
             # `git diff` reescribe el índice al refrescar sus datos de stat, aun
             # con GIT_OPTIONAL_LOCKS=0, y esa escritura invalidaba la propia
@@ -1443,34 +1447,15 @@ class WorkspaceTools:
                 await asyncio.to_thread(refrescar)
             except (OSError, subprocess.SubprocessError):
                 pass
-        context = await capture(self.root) if verification else None
-        guard = None
-        if context is not None:
-            registration = asyncio.create_task(asyncio.to_thread(MutationWatch, [context]))
+        # La huella de antes; la de después se compara con ella al acabar. Si no se
+        # puede tomar, la orden corre igual y queda sin verificar, con el motivo:
+        # rechazarla tumbaba run_checks entero (un proyecto enorme, un permiso).
+        context = sin_huella = None
+        if verification:
             try:
-                guard = await asyncio.shield(registration)
-            except asyncio.CancelledError:
-                # Registration runs in a worker; cancellation must reclaim its handles.
-                def reclaim(done):
-                    if not done.cancelled() and done.exception() is None:
-                        done.result().close()
-                registration.add_done_callback(reclaim)
-                raise
-            except OSError as exc:
-                if exc.errno == errno.EMFILE:
-                    detalle = exc.strerror if exc.filename is None and exc.strerror else \
-                        'se acabaron los archivos abiertos que permite el sistema'
-                    raise ValueError(f'No se pudo vigilar el workspace durante la comprobación: {detalle}. '
-                                     'La orden se puede ejecutar con run_command, pero no cuenta como '
-                                     'comprobación.') from exc
-                raise ValueError('No se pudo vigilar el workspace durante la comprobación.') from exc
-            resources.callback(guard.close)
-            try:
-                stable = matches(for_mutation_watch(context)) and not guard.changed()
-            except OSError:
-                stable = False
-            if not stable:
-                raise ValueError('El workspace cambió antes de iniciar la comprobación.')
+                context = await capture(self.root)
+            except Exception as exc:  # noqa: BLE001 - cualquier fallo de la huella deja la orden sin verificar
+                sin_huella = _motivo_sin_huella('antes', exc)
         # The approval authorizes this exact command, not a reusable executable prefix.
         env = {k: os.environ[k] for k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'DEVELOPER_DIR') if k in os.environ}
         # Sin esto, `git diff --check` o `git status` refrescan el índice al
@@ -1503,8 +1488,8 @@ class WorkspaceTools:
                 result['retry_guard_key'] = guard_key
                 result['retry_guard_content_generation'] = guard_generation
                 result['retry_guard_attempts_by_class'] = dict(guard_attempts)
-            return self._record_command_result(args, result, revision, verification, cwd,
-                                               exception=True, context=context, guard=guard)
+            return self._record_command_result(args, result, revision, verification, cwd, exception=True,
+                                               huella=await self._huella_despues(context, sin_huella))
         self.runtime.manager.processes[self.runtime.task['id']] = proc
         # Si el arnés cae de golpe, al volver mata este grupo (ver reap_orphans).
         if isinstance(getattr(proc, 'pid', None), int):
@@ -1587,11 +1572,12 @@ class WorkspaceTools:
             self._adopt_command_writes(desde, presentes)
             if not (result.get('timed_out') or result.get('exception') or result.get('output_limit_exceeded')):
                 revision = self._revision_tras_orden(previa, revision)
-        # Publish only after process cleanup; no await after the final watch read.
+        # La huella de después, ya con el proceso recogido.
+        huella = await self._huella_despues(context, sin_huella) if verification else None
         return self._record_command_result(args, result, revision, verification, cwd,
                                            timed_out=bool(result.get('timed_out')),
                                            exception=bool(result.get('exception')),
-                                           context=context, guard=guard)
+                                           huella=huella)
 
     async def _adopt_timed_out(self, args, proc, collector, captured, total, sandbox, cwd, fondo):
         """La orden agotó su tiempo y sigue viva: pasa a segundo plano en vez de cortarse.
@@ -1746,20 +1732,26 @@ class WorkspaceTools:
                 self.runtime.state.setdefault('changes', []).append(
                     {'path': name, 'before': sha, 'after': after, 'via': 'run_command'})
 
+    async def _huella_despues(self, context, sin_huella):
+        """Los campos de la comprobación sobre el workspace: la huella de después contra la de antes."""
+        if context is None:
+            return {'workspace_stable': False, 'workspace_unverified': sin_huella} if sin_huella else {}
+        from ...evidencia.espacio import tras_la_orden
+        try:
+            igual, foto = await asyncio.to_thread(tras_la_orden, context)
+        except Exception as exc:  # noqa: BLE001 - como antes de la orden: sin huella, sin verificar
+            return {'workspace_context': context, 'workspace_stable': False,
+                    'workspace_unverified': _motivo_sin_huella('después', exc)}
+        # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo; la
+        # foto devuelta las incluye para que la comprobación no caduque luego por ellas.
+        return {'workspace_context': foto, 'workspace_stable': igual}
+
     def _record_command_result(self, args, result, revision, verification, cwd, *,
-                               prohibited=False, exception=False, timed_out=False, context=None, guard=None):
-        if context is not None:
-            from ...evidencia.espacio import cambio_sin_trabajo, con_caches, for_mutation_watch, matches
-            result['workspace_context'] = context
-            try:
-                result['workspace_stable'] = (matches(for_mutation_watch(context)) and guard is not None
-                                              and not guard.changed())
-                if not result['workspace_stable'] and cambio_sin_trabajo(context, guard):
-                    # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo;
-                    # la foto las incluye para que la comprobación no caduque por ellas.
-                    result['workspace_stable'] = True
-                    result['workspace_context'] = con_caches(context, guard)
-            except OSError:
+                               prohibited=False, exception=False, timed_out=False, huella=None):
+        if huella:
+            result.update(huella)
+            if result.get('workspace_stable') and self.runtime.state.get('workspace_revision', 0) != revision:
+                # Otra herramienta cambió el trabajo mientras corría la orden.
                 result['workspace_stable'] = False
         output = str(result.get('output') or '')
         classification = classify_operation(args['argv'], args['purpose'], cwd, output,

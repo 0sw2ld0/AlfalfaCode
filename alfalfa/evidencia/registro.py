@@ -350,7 +350,7 @@ class RunEvidence:
                   'session_id': str(self.runtime.task.get('id') or ''),
                   'fingerprint': self.fingerprint()}
         for key in ('error', 'timed_out', 'exception', 'output_limit_exceeded',
-                    'workspace_context', 'workspace_stable',
+                    'workspace_context', 'workspace_stable', 'workspace_unverified',
                     'retry_guard_key', 'retry_guard_content_generation',
                     'retry_guard_attempts_by_class', 'execution_complete',
                     # Política on-request de AlfalfaCode: aislamiento y relación entre intentos.
@@ -413,6 +413,8 @@ class RunEvidence:
 
     @staticmethod
     def _insufficient_check_reason(check):
+        if check.get('workspace_unverified'):
+            return 'workspace_unverified'
         if check.get('workspace_stable') is False:
             return 'workspace_changed_during_check'
         if check.get('timed_out'):
