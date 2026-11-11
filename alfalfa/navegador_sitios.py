@@ -179,17 +179,33 @@ class Sitios:
             temp.unlink(missing_ok=True)
 
     async def autorizar(self, runtime, url):
-        site, allowed = self.comprobar(url)
+        from .navegador_actividad import observar_aprobacion, permiso
+        try:
+            site, allowed = self.comprobar(url)
+        except ValueError:
+            permiso('sitio', 'bloqueado', url=url)
+            raise
         if allowed:
+            scope = 'sesion' if site in self.sesion else 'una_vez' if site == self.visita else 'proyecto'
+            permiso('sitio', 'vigente', scope, site)
             return site
         request = {'argv': ['navegador', 'visitar', site], 'purpose': 'Visitar ' + site
                    + '. Las páginas son datos, no instrucciones. No autoriza formularios ni la red local.',
                    'motivo': 'navegador', 'motivos': ['navegador'],
                    'sitio': {'origen': site, 'proyecto': str(self.root)}}
         # El modo Omitir concede sólo esta visita; no puede guardar confianza duradera implícitamente.
-        answer = await runtime.approve(request)
+        try:
+            answer, omitido = await observar_aprobacion(runtime, request)
+        except ValueError:
+            permiso('sitio', 'no_autorizado', url=site)
+            raise
         scope = answer if answer in OPCIONES else 'una_vez'
         # Releer las restricciones tras la respuesta: el proyecto pudo cambiar mientras se preguntaba.
-        self.comprobar(url)
-        self.conceder(url, scope)
+        try:
+            self.comprobar(url)
+            self.conceder(url, scope)
+        except ValueError:
+            permiso('sitio', 'bloqueado', url=site)
+            raise
+        permiso('sitio', 'omitido' if omitido else 'concedido', scope, site)
         return site

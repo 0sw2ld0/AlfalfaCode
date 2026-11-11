@@ -36,6 +36,7 @@ def _objetivo(args):
 
 class NavegadorCuyBrowser(Navegador):
     manual = MANUAL
+    motor_actividad = 'cuybrowser'
 
     @property
     def tools(self):
@@ -147,10 +148,15 @@ class NavegadorCuyBrowser(Navegador):
             except ValueError:
                 self.close()
                 raise
+            from .navegador_actividad_cuy import iniciar, terminar
+            profile = getattr(self.process, 'profile', None)
+            observacion = await iniciar(self.http, profile)
+            cancelado = False
             self._runtime_cuy = runtime
             try:
                 result = await super().llamar(runtime, name, args)
             except asyncio.CancelledError:
+                cancelado = True
                 # Handoff carece de endpoint de cancelación. Detener NUESTRO navegador desbloquea el daemon.
                 if name == 'browser_handoff':
                     try:
@@ -162,6 +168,8 @@ class NavegadorCuyBrowser(Navegador):
                 raise
             finally:
                 self._runtime_cuy = None
+                if not cancelado:
+                    await terminar(observacion, self.http, getattr(self.process, 'profile', None))
             await self._consumir_visitas(runtime)
             result['nota'] = (str(result.get('nota', '')) + ' ' + NOTA).strip()
             return result

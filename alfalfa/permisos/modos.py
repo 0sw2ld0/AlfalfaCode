@@ -87,6 +87,9 @@ class AprobacionConModo:
 
             from ..auditoria_equipo import marcar_respuesta
             marcar_respuesta('omitir')
+            if args.get('motivo') == 'navegador':
+                from ..navegador_actividad import permiso_omitido
+                permiso_omitido()
             orden = shlex.join(str(a) for a in args.get('argv') or [])
             self.manager.event(self.manager.task, 'system', 'Aprobado por el modo Omitir permisos: ' + orden[:300])
             return None
