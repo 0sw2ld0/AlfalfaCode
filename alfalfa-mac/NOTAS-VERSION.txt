@@ -1,3 +1,3 @@
-Las comprobaciones (run_checks) son mucho más rápidas en proyectos grandes: solo se vuelve a leer lo que cambió, en lugar de todo el proyecto.
-Ya no se vigila el proyecto mientras corre la orden: se compara cómo estaba antes y cómo queda después.
-Si no se puede revisar el proyecto, la orden se ejecuta igual y queda marcada como no verificada, en lugar de fallar.
+Si otro agente o programa trabaja en el mismo proyecto, la sesión ya no se queda repitiendo comprobaciones ni termina «bloqueada».
+Una orden de consulta que falla (por ejemplo, python sin el 3) ya no bloquea una sesión que no cambió nada.
+«Revisión con otros ojos» solo aparece cuando el agente cambió algo en ese turno.
