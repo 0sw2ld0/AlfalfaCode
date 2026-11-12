@@ -780,7 +780,12 @@ class WorkspaceTools:
         if not isinstance(value, str) or not value or '\0' in value:
             raise ValueError('Ruta inválida.')
         candidate = self.root / value
-        relative = candidate.relative_to(self.root)
+        try:
+            relative = candidate.relative_to(self.root)
+        except ValueError:
+            # Una ruta absoluta de fuera (/private/tmp/x.py): antes llegaba el error de Python tal cual.
+            raise ValueError('La ruta sale del workspace: las herramientas de archivos sólo escriben dentro de la '
+                             'carpeta. Para temporales usa .tmp-alfalfa/.') from None
         if '..' in relative.parts:
             raise ValueError('La ruta sale del workspace.')
         current = self.root
