@@ -150,7 +150,7 @@ struct SessionView: View {
             if session.browserBackend == "cuybrowser" {
                 Label("CuyBrowser", systemImage: "globe").font(.caption).foregroundStyle(Theme.secondary)
                     .help("Chromium se abre en su propia ventana, con un perfil de este proyecto.")
-            } else {
+            } else if session.browserBackend != "off" {
                 BrowserToggle(browser: session.browser, terminals: terminals) { session.openBrowser() }
             }
             TerminalToggle(terminals: terminals)

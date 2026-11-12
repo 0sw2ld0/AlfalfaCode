@@ -670,6 +670,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case providers(defaultProvider: String, providers: [ProviderStatus])
     /// `--buscador --json` y `--fijar-searxng`: el buscador web de los agentes.
     case webSearch(WebSearchSettings)
+    case cuyBrowserPreparation(CuyBrowserPreparation)
     /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
     case quota([Quota])
     /// `--activar-codigo`: el código quedó atado a este Mac.
@@ -817,6 +818,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             })
         case "buscador":
             return webSearch(object).map { .webSearch($0) }
+        case "cuybrowser_preparacion":
+            return CuyBrowserPreparation(object: object).map { .cuyBrowserPreparation($0) }
         case "cuota":
             guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
             return .quota(quotas(rows))

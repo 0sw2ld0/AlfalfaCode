@@ -7,18 +7,24 @@ public struct BrowserEnginePreferences {
 
     public static let engineKey = "ajustes.navegador.motor"
     public static let profileKey = "ajustes.navegador.perfilCuyBrowser"
+    public static let pathKey = "ajustes.navegador.cuyBrowserDesdePath"
 
     // MARK: - Propiedades
 
     public let defaults: UserDefaults
 
     public var engine: String {
-        defaults.string(forKey: Self.engineKey) == "cuybrowser" ? "cuybrowser" : "webkit"
+        guard let chosen = defaults.string(forKey: Self.engineKey), ["cuybrowser", "off"].contains(chosen) else {
+            return "webkit"
+        }
+        return chosen
     }
 
     public var profile: String {
         defaults.string(forKey: Self.profileKey) ?? "alfalfa"
     }
+
+    public var fromPath: Bool { defaults.bool(forKey: Self.pathKey) }
 
     // MARK: - Inicialización
 
@@ -26,10 +32,13 @@ public struct BrowserEnginePreferences {
 }
 
 extension Launcher {
-    public static func browserArguments(enabled: Bool, engine: String?, profile: String) -> [String] {
+    public static func browserArguments(enabled: Bool, engine: String?, profile: String,
+                                        fromPath: Bool? = nil) -> [String] {
+        if engine == "off" { return [] }
+        let source = fromPath.map { [$0 ? "--cuybrowser-desde-path" : "--cuybrowser-solo-incluido"] } ?? []
         if engine == "cuybrowser" {
-            return ["--motor-navegador", "cuybrowser", "--perfil-cuybrowser", profile]
+            return ["--motor-navegador", "cuybrowser", "--perfil-cuybrowser", profile] + source
         }
-        return enabled ? ["--navegador"] : []
+        return enabled ? ["--navegador"] + source : []
     }
 }

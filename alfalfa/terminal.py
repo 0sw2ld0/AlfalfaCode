@@ -240,7 +240,8 @@ class TerminalManager:
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
-                 cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', reglas_equipo=_CARGAR_EQUIPO):
+                 cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', origen_cuybrowser=None,
+                 reglas_equipo=_CARGAR_EQUIPO):
         cwd = Path(cwd or Path.cwd()).resolve()
         self.equipo = equipo.cargar(cwd) if reglas_equipo is _CARGAR_EQUIPO else reglas_equipo
         self.rutas_equipo = (self.equipo.ruta, equipo.raiz_proyecto(cwd) / equipo.ORIGEN) if self.equipo else ()
@@ -254,7 +255,7 @@ class TerminalManager:
         self.navegador = None
         if motor_navegador == 'cuybrowser':
             from .navegador_cuybrowser import NavegadorCuyBrowser
-            self.navegador = NavegadorCuyBrowser(perfil_cuybrowser)
+            self.navegador = NavegadorCuyBrowser(perfil_cuybrowser, origen=origen_cuybrowser)
         elif (navegador or motor_navegador == 'webkit') and transport is not None:
             from .navegador import Navegador
             self.navegador = Navegador(transport.pedir_navegador)
@@ -262,7 +263,8 @@ class TerminalManager:
             raise ValueError('WebKit requiere la app de Mac; en terminal elige --motor-navegador cuybrowser.')
         if self.navegador is not None and transport is not None and (navegador or motor_navegador == 'webkit'):
             from .navegador_comparar import Comparador
-            self.navegador.comparador = Comparador(self.navegador, transport.pedir_navegador, perfil_cuybrowser)
+            self.navegador.comparador = Comparador(self.navegador, transport.pedir_navegador, perfil_cuybrowser,
+                                                   origen=origen_cuybrowser)
         self.exportacion_navegador = None
         if transport is not None and self.navegador is not None:
             from .navegador_exportar import ExportacionNavegador
@@ -1207,7 +1209,8 @@ async def execute(args):
                               monthly_budget=getattr(args, 'presupuesto_mes', None),
                               diagnosticos=diagnostics(args), firma=signature(args),
                               motor_navegador=getattr(args, 'motor_navegador', None),
-                              perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'))
+                              perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
+                              origen_cuybrowser=getattr(args, 'origen_cuybrowser', None))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -1301,11 +1304,22 @@ def main(argv=None):
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--motor-navegador', choices=('webkit', 'cuybrowser'),
-                        help='Activar browser_* explícitamente: WebKit en la app o CuyBrowser instalado en PATH')
+                        help='Activar browser_* explícitamente: WebKit en la app o CuyBrowser')
     parser.add_argument('--perfil-cuybrowser', default='alfalfa', metavar='NOMBRE',
                         help='Perfil propio de Chromium por proyecto; nunca usa perfiles de navegadores personales')
+    parser.add_argument('--cuybrowser-desde-path', action='store_true',
+                        help='Elegir el CuyBrowser de PATH en lugar del ayudante incluido')
+    parser.add_argument('--cuybrowser-solo-incluido', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--confirmar-descarga-chromium', action='store_true',
+                        help='Confirmar explícitamente la descarga con --descargar-chromium')
     parser.add_argument('--json', action='store_true')
     listing = parser.add_mutually_exclusive_group()
+    listing.add_argument('--cuybrowser-estado', action='store_true',
+                         help='Consultar CuyBrowser y el Chromium disponible sin abrirlo')
+    listing.add_argument('--descargar-chromium', action='store_true',
+                         help='Preparar Chromium con CuyBrowser si falta un navegador compatible')
+    listing.add_argument('--cuybrowser-cli', choices=('activar', 'desactivar'),
+                         help='Guardar la elección de usar CuyBrowser en futuros encargos de terminal')
     listing.add_argument('--navegador-sitios', action='store_true',
                          help='Consultar los sitios de este proyecto; con --stdio, editar desde Ajustes con permiso')
     listing.add_argument('--sesiones', action='store_true')
@@ -1349,6 +1363,20 @@ def main(argv=None):
     from .busqueda_sesiones import orden as orden_de_busqueda
     orden_de_busqueda.argumentos(parser, listing)
     args = parser.parse_args(argv)
+    if args.confirmar_descarga_chromium and not args.descargar_chromium:
+        parser.error('--confirmar-descarga-chromium sólo vale con --descargar-chromium')
+    if args.cuybrowser_solo_incluido and args.cuybrowser_desde_path:
+        parser.error('Elige una sola procedencia de CuyBrowser')
+    args.origen_cuybrowser = 'incluido' if args.cuybrowser_solo_incluido else None
+    if args.cuybrowser_desde_path:
+        args.origen_cuybrowser = 'path'
+    if args.cuybrowser_estado or args.descargar_chromium or args.cuybrowser_cli:
+        from .cuybrowser_preparacion import orden
+        try:
+            return orden(args, home_dir())
+        except (ValueError, OSError) as exc:
+            print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
+            return 1
     if args.cola_encargos == '' and not args.stdio and not args.reanudar:
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):
@@ -1441,6 +1469,8 @@ def main(argv=None):
     if not args.encargo and not args.reanudar and not args.bifurcar and args.cola_encargos is None:
         parser.error('indica un encargo o --reanudar ID')
     try:
+        from .cuybrowser_preparacion import preparar_terminal
+        preparar_terminal(args, home_dir())
         return asyncio.run(execute(args))
     except (ValueError, OSError) as exc:
         print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)

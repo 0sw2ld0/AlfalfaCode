@@ -1435,11 +1435,17 @@ WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
 alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
 ```
 
-Requiere una instalación de confianza de `cuybrowser` en `PATH`, con HTTP y la capacidad
-`exactOrigins` que garantiza el bloqueo anterior al contacto, también al restaurar perfiles,
-y `localNetwork` para impedir que recursos de una página pública contacten localhost o la red local.
-**CuyBrowser 0.4.0 todavía no ofrece esa garantía:** se devuelve un error de capacidad y no
-se abre Chromium. No se instala ni descarga un navegador automáticamente.
+La distribución de AlfalfaCode incluye CuyBrowser 0.6.0 en `Helpers`. Los clones y las
+instalaciones anteriores pueden usar un `cuybrowser` compatible de `PATH`. Para elegirlo
+en una instalación que ya lo incluye, usa el interruptor en Ajustes → Navegador o la opción
+`--cuybrowser-desde-path` de la CLI. El motor comprueba `exactOrigins` y `localNetwork`
+antes de abrir Chromium.
+
+`alfalfa --cuybrowser-estado` comprueba qué navegador compatible está disponible. Si falta,
+la app ofrece descargar Chromium de Playwright y `alfalfa --descargar-chromium` pide confirmación
+en la terminal. La descarga se comparte entre proyectos y cada uno conserva su perfil propio.
+En el primer uso interactivo de `--motor-navegador cuybrowser` puedes guardar la elección
+para la terminal. Se cambia con `alfalfa --cuybrowser-cli activar` o `desactivar`.
 
 El motor pide permiso una vez por sesión para iniciar el servidor fuera del sandbox. Usa HTTP
 autenticado en un puerto propio de `127.0.0.1`, sin proxies ni redirecciones. El hogar de CuyBrowser

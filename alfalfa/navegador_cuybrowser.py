@@ -77,9 +77,9 @@ class NavegadorCuyBrowser(Navegador):
                                         'Unsupported requests return an explicit capability error.')
         return specs
 
-    def __init__(self, profile='alfalfa', *, process=None):
+    def __init__(self, profile='alfalfa', *, process=None, origen=None):
         super().__init__(None)
-        self.process = process or ProcesoCuyBrowser(profile)
+        self.process = process or ProcesoCuyBrowser(profile, origen=origen)
         self.http = None
         self._lock = asyncio.Lock()
         self._runtime_cuy = None
