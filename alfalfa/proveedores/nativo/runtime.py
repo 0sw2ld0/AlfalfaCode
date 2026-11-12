@@ -2044,11 +2044,18 @@ class NativeRuntime:
 
     async def approve(self, args):
         if self.approval_policy is not None:
-            auditoria = getattr(self.manager, 'auditoria_equipo', None)
-            if auditoria is not None:
-                with auditoria.permiso(self.task):
-                    return await self.approval_policy(args)
-            return await self.approval_policy(args)
+            # Esperar a que la persona conteste no es trabajar: no gasta el presupuesto de tiempo
+            # del turno. Antes sólo se descontaba en la aprobación propia del arnés, y en la app
+            # una tarjeta sin contestar agotaba los 60 minutos y cortaba el turno.
+            desde = time.monotonic()
+            try:
+                auditoria = getattr(self.manager, 'auditoria_equipo', None)
+                if auditoria is not None:
+                    with auditoria.permiso(self.task):
+                        return await self.approval_policy(args)
+                return await self.approval_policy(args)
+            finally:
+                self.espera_permisos += time.monotonic() - desde
         # Lo mismo que con Codex y Claude (pedido explícito del usuario): en modo
         # automático, lo que safe_command reconoce como inofensivo dentro del
         # worktree lo concede el arnés; lo demás sigue esperando al usuario. Antes
