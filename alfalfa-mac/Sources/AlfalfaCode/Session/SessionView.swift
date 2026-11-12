@@ -70,6 +70,13 @@ struct SessionView: View {
         }
     }
 
+    @State private var atBottom = true
+    private static let bottomID = "final-de-la-conversacion"
+    private static var hasScrollGeometry: Bool {
+        if #available(macOS 15, *) { return true }
+        return false
+    }
+
     private var conversation: some View {
         let firstPending = session.timeline.pendingPermissions.first?.id
         return ScrollViewReader { proxy in
@@ -101,16 +108,42 @@ struct SessionView: View {
                         LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince,
                                                          preparing: session.timeline.preparingUndo)).id("pensando")
                     }
+                    // El pie: a dónde va «Ir al final» y, en macOS 14, cómo se sabe si estás abajo.
+                    Color.clear.frame(height: 1).id(Self.bottomID)
+                        .onAppear { if !Self.hasScrollGeometry { atBottom = true } }
+                        .onDisappear { if !Self.hasScrollGeometry { atBottom = false } }
                 }
                 .frame(maxWidth: Theme.column, alignment: .leading)
                 .padding(.horizontal, 40).padding(.top, 28).padding(.bottom, 32)
                 .frame(maxWidth: .infinity)
             }
+            .trackingBottom($atBottom)
             .onChange(of: session.timeline.items.count) {
                 // Abierta desde la búsqueda de la barra lateral: al mensaje encontrado, no al final.
                 if scrollToSearch(proxy) { return }
-                if let last = session.timeline.items.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                // Como Claude Code y Codex: sólo sigue al final si ya estabas abajo o acabas de escribir.
+                // Si subiste a leer, te quedas donde estás y aparece «Ir al final».
+                let wrote: Bool
+                if case .user = session.timeline.items.last { wrote = true } else { wrote = false }
+                if AutoScroll.follows(atBottom: atBottom, userJustWrote: wrote) {
+                    withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if !atBottom {
+                    Button {
+                        withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                        atBottom = true
+                    } label: {
+                        Label("Ir al final", systemImage: "arrow.down").font(.system(size: 12.5, weight: .semibold))
+                            .padding(.horizontal, 12).frame(minHeight: 30)
+                            .background(Theme.card, in: Capsule())
+                            .overlay(Capsule().stroke(Theme.cardBorder))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
+                    .help("Vuelve al último mensaje y sigue la conversación")
                 }
             }
             .onChange(of: session.searchAnchor) { _ = scrollToSearch(proxy) }
@@ -179,5 +212,25 @@ struct SessionView: View {
     private func isPermission(_ item: TimelineItem, _ id: String) -> Bool {
         if case let .permission(_, request, _) = item { return request.id == id }
         return false
+    }
+}
+
+
+// MARK: - Seguir el final
+
+private extension View {
+    /// `atBottom`: el final de la conversación está a la vista (con 60 pt de margen). En macOS 15
+    /// lo dice la geometría del scroll; en macOS 14, la marca del pie al aparecer y desaparecer.
+    @ViewBuilder func trackingBottom(_ atBottom: Binding<Bool>) -> some View {
+        if #available(macOS 15, *) {
+            onScrollGeometryChange(for: Bool.self) { geometry in
+                AutoScroll.isAtBottom(offset: geometry.contentOffset.y, visible: geometry.containerSize.height,
+                                      content: geometry.contentSize.height)
+            } action: { _, now in
+                if atBottom.wrappedValue != now { atBottom.wrappedValue = now }
+            }
+        } else {
+            self
+        }
     }
 }

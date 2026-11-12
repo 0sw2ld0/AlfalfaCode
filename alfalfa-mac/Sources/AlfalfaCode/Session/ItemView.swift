@@ -27,6 +27,9 @@ struct ItemView: View {
             WorkLog(events: events, running: liveWork,
                     waiting: liveWork && session.timeline.status == .waitingPermission,
                     preparing: session.timeline.preparingUndo, expanded: $expanded)
+                // Sólo se vuelve a pintar si cambia su grupo: un evento de otro sitio o el contador de
+                // «Pensando» no vuelven a medir las llamadas desplegadas (colgaba la app con salidas largas).
+                .equatable()
         case let .permission(_, request, state):
             PermissionCard(request: request, state: state, session: session, isFirstPending: isFirstPending)
         case let .notice(_, text):

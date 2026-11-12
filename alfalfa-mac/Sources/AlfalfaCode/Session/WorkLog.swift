@@ -8,7 +8,12 @@ import SwiftUI
 /// Mientras trabaja, la fila es la viva: la hoja de alfalfa animada, lo que hace ahora en
 /// gerundio («Leyendo WorkLog.swift», «Pensando» entre llamadas) y el tiempo que lleva. La
 /// conversación no salta con cada salida larga: las llamadas se ven al abrirla.
-struct WorkLog: View {
+struct WorkLog: View, Equatable {
+
+    static func == (lhs: WorkLog, rhs: WorkLog) -> Bool {
+        lhs.events == rhs.events && lhs.running == rhs.running && lhs.waiting == rhs.waiting
+            && lhs.preparing == rhs.preparing && lhs.expanded == rhs.expanded
+    }
 
     // MARK: - Propiedades
 
@@ -33,7 +38,7 @@ struct WorkLog: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(entries) { entry in
                         switch entry {
-                        case let .call(call): ToolCallRow(call: call, live: running && !call.finished)
+                        case let .call(call): ToolCallRow(call: call, live: running && !call.finished).equatable()
                         case let .note(event): NoteRow(event: event)
                         }
                     }
@@ -83,7 +88,9 @@ struct WorkLog: View {
 }
 
 /// Una llamada: su descripción y, al pulsarla, el comando y la salida.
-struct ToolCallRow: View {
+struct ToolCallRow: View, Equatable {
+
+    static func == (lhs: ToolCallRow, rhs: ToolCallRow) -> Bool { lhs.call == rhs.call && lhs.live == rhs.live }
 
     // MARK: - Propiedades
 
@@ -162,19 +169,32 @@ struct ToolCallRow: View {
         }
     }
 
+    /// Siempre acotado (TextPreview): un parche de miles de líneas colgaba la app al medirse.
+    /// Lo entero se ve con «Ver todo», en un NSTextView.
     @ViewBuilder private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(header).font(Theme.mono).foregroundStyle(Theme.text).textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            if let edit = EditText.of(call) {
+                let preview = TextPreview(edit)
+                DiffBlock(diff: preview.shown, maxHeight: 260)
+                    .padding(6)
+                if preview.truncated { seeAll(preview, title: call.description, text: edit) }
+            } else {
+                let preview = TextPreview(header, maxLines: 30)
+                Text(preview.shown).font(Theme.mono).foregroundStyle(Theme.text).textSelection(.enabled)
+                    .lineLimit(preview.shownLines)
+                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                if preview.truncated { seeAll(preview, title: call.description, text: header) }
+            }
             if let output = call.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Divider().overlay(Theme.border)
+                let preview = TextPreview(output)
                 ScrollView {
-                    Text(output).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
-                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    Text(preview.shown).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
+                        .textSelection(.enabled)
                         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 220)
+                if preview.truncated { seeAll(preview, title: "Salida · " + call.description, text: output) }
             } else if !call.finished {
                 Divider().overlay(Theme.border)
                 Text("Sin salida todavía").font(.system(size: 12)).foregroundStyle(Theme.muted).padding(10)
@@ -182,6 +202,26 @@ struct ToolCallRow: View {
         }
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+    }
+
+    @State private var fullText: FullText?
+
+    private struct FullText: Identifiable {
+        let id = UUID()
+        let title: String
+        let text: String
+    }
+
+    private func seeAll(_ preview: TextPreview, title: String, text: String) -> some View {
+        Button {
+            fullText = FullText(title: title, text: text)
+        } label: {
+            Text(preview.hiddenLines > 0 ? "Ver todo (\(preview.totalLines) líneas)" : "Ver todo")
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.link)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .sheet(item: $fullText) { item in LargeTextSheet(title: item.title, text: item.text) }
     }
 
     /// `$ git status` en las órdenes; en lo demás, la llamada tal como la pidió el modelo.
@@ -225,7 +265,7 @@ private struct NoteRow: View {
             }
             .buttonStyle(.plain)
             if open {
-                Text(event.text.count > 4000 ? String(event.text.prefix(4000)) + "…" : event.text)
+                Text(TextPreview(event.text).shown)
                     .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
