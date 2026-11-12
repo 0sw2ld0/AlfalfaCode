@@ -210,10 +210,10 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     /// Sólo se llama desde un botón: la app nunca aprueba por su cuenta.
-    func answer(_ id: String, approved: Bool, session: Bool = false) {
+    func answer(_ id: String, approved: Bool, session: Bool = false, always: Bool = false) {
         guard !answered.contains(id) else { return }
         answered.insert(id)
-        process?.send(.permission(id: id, approved: approved, session: session))
+        process?.send(.permission(id: id, approved: approved, session: session, always: always))
     }
 
     func send(_ text: String) {

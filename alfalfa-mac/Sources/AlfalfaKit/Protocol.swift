@@ -310,6 +310,9 @@ public struct PermissionRequest: Equatable, Sendable {
     /// Se puede aprobar para el resto de la sesión (`para_sesion`), como «Yes, and don't ask
     /// again for this command» de Codex. Nunca en órdenes peligrosas ni con reglas que preguntan.
     public var forSession: Bool = false
+    /// Prefijo que se puede permitir para siempre (`prefijo`), como «Yes, and don't ask again
+    /// for commands that start with …» de Codex: la regla se guarda en reglas.toml.
+    public var alwaysPrefix: [String]?
     /// Presente sólo al mirar o manejar otra app (motivo `app`).
     public var app: AppTarget?
     /// Lo que cambia al guardar memoria o una habilidad aprendida (motivo `aprendizaje`).
@@ -320,7 +323,9 @@ public struct PermissionRequest: Equatable, Sendable {
     public init(id: String, argv: [String], purpose: String, reason: PermissionReason? = nil,
                 reasons: [PermissionReason]? = nil, justification: String? = nil, rule: String? = nil,
                 retryOf: String? = nil, detail: String? = nil, mcp: McpCall? = nil, forSession: Bool = false,
-                app: AppTarget? = nil, diff: String? = nil, site: BrowserSitePermission? = nil) {
+                app: AppTarget? = nil, diff: String? = nil, site: BrowserSitePermission? = nil,
+                alwaysPrefix: [String]? = nil) {
+        self.alwaysPrefix = alwaysPrefix.flatMap { $0.isEmpty ? nil : $0 }
         self.site = site
         self.diff = diff
         self.forSession = forSession
@@ -670,7 +675,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case event(AgentEvent)
     case permission(PermissionRequest)
     /// `session`: se aprobó también para el resto de la sesión.
-    case permissionResolved(id: String, approved: Bool, reason: String, session: Bool = false)
+    case permissionResolved(id: String, approved: Bool, reason: String, session: Bool = false, always: Bool = false)
     /// `mcp` sólo llega de sesiones con servidores MCP; los clientes v2 anteriores lo ignoran.
     case context(tokens: Int, limit: Int, mcp: McpContextUsage? = nil, breakdown: ContextBreakdown? = nil,
                  details: ContextDetails? = nil)
@@ -781,11 +786,12 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                                  retryOf: text(object["reintento_de"]), detail: text(object["sin_sandbox"]),
                                                  mcp: mcpCall(object["mcp"]), forSession: bool(object["para_sesion"]) ?? false,
                                                  app: appTarget(object["app"]), diff: text(object["diff"]),
-                                                 site: BrowserSitePermission(object["sitio"])))
+                                                 site: BrowserSitePermission(object["sitio"]),
+                                                 alwaysPrefix: object["prefijo"] as? [String]))
         case "permiso_resuelto":
             guard let id = object["id"] as? String, let approved = bool(object["aprobado"]) else { return nil }
             return .permissionResolved(id: id, approved: approved, reason: object["motivo"] as? String ?? "",
-                                       session: bool(object["sesion"]) ?? false)
+                                       session: bool(object["sesion"]) ?? false, always: bool(object["siempre"]) ?? false)
         case "contexto":
             guard let tokens = object["tokens"] as? Int, let limit = object["limite"] as? Int else { return nil }
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),

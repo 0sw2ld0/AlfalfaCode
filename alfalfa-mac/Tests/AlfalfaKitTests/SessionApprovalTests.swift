@@ -31,4 +31,30 @@ final class SessionApprovalTests: XCTestCase {
         XCTAssertEqual(AlfalfaCommand.permission(id: "p1", approved: false, session: true).line,
                        #"{"aprobado":false,"id":"p1","tipo":"permiso"}"# + "\n")
     }
+
+    /// «No volver a preguntar por órdenes que empiecen por …», como el prefix_rule de Codex.
+    func testRequestOffersAlwaysAndResolutionSaysSo() throws {
+        let request = #"{"version":2,"tipo":"permiso","id":"p3","argv":["git","switch","-c","x"],"proposito":"Rama","motivo":"salir_sandbox","motivos":["salir_sandbox"],"para_sesion":true,"prefijo":["git","switch"]}"#
+        guard case let .permission(permission)? = AlfalfaMessage.decode(line: request) else { return XCTFail("permiso") }
+        XCTAssertEqual(permission.alwaysPrefix, ["git", "switch"])
+        var timeline = Timeline()
+        timeline.apply(.permission(permission))
+        timeline.apply(try XCTUnwrap(AlfalfaMessage.decode(line:
+            #"{"version":2,"tipo":"permiso_resuelto","id":"p3","aprobado":true,"motivo":"Respuesta del cliente","siempre":true}"#)))
+        guard case let .permission(_, _, state)? = timeline.items.last else { return XCTFail("tarjeta") }
+        XCTAssertEqual(state, .approvedAlways)
+    }
+
+    func testAlwaysIsOnlyOfferedWithAPrefix() {
+        let line = #"{"version":2,"tipo":"permiso","id":"p4","argv":["git","push"],"proposito":"Subir","motivo":"red","prefijo":[]}"#
+        guard case let .permission(permission)? = AlfalfaMessage.decode(line: line) else { return XCTFail("permiso") }
+        XCTAssertNil(permission.alwaysPrefix)
+    }
+
+    func testAlwaysAnswerLine() {
+        XCTAssertEqual(AlfalfaCommand.permission(id: "p3", approved: true, always: true).line,
+                       #"{"aprobado":true,"id":"p3","siempre":true,"tipo":"permiso"}"# + "\n")
+        XCTAssertEqual(AlfalfaCommand.permission(id: "p3", approved: false, always: true).line,
+                       #"{"aprobado":false,"id":"p3","tipo":"permiso"}"# + "\n")
+    }
 }
