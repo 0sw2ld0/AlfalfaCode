@@ -111,7 +111,7 @@ final class LiveSession: ObservableObject, Identifiable {
             images: images.map(\.path), mode: mode, wait: wait,
             parent: parentSessionID, title: parentSessionID == nil ? nil : title,
             keepAwake: Preferences().keepAwake, browser: true,
-            budget: Preferences().sessionBudget, monthlyBudget: Preferences().monthlyBudget,
+            budget: Preferences().sessionBudget(for: sessionID), monthlyBudget: Preferences().monthlyBudget,
             diagnostics: Preferences().diagnostics, commitSignature: Preferences().commitSignature, queue: queue,
             browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
             cuyBrowserFromPath: browserPreferences.fromPath)
@@ -550,6 +550,19 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Firmar los commits: vale desde el siguiente `git commit`.
     func setCommitSignature(_ on: Bool) {
         process?.send(.commitSignature(on))
+    }
+
+    /// El tope propio de esta sesión (nil: sigue el de Ajustes).
+    var sessionCap: SessionCap? { Preferences().sessionCap(for: sessionID) }
+
+    /// Desde el panel derecho: cambia el tope sólo de esta sesión (nil vuelve al de Ajustes).
+    /// Se guarda con su id, así que vale también al reanudarla; el de Ajustes no cambia.
+    func setSessionCap(_ cap: SessionCap?) {
+        guard let id = sessionID else { return }
+        let preferences = Preferences()
+        preferences.setSessionCap(cap, for: id)
+        objectWillChange.send()
+        setBudget(session: preferences.sessionBudget(for: id), month: preferences.monthlyBudget)
     }
 }
 

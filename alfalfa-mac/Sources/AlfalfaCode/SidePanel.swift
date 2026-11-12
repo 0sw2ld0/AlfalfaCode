@@ -16,6 +16,9 @@ struct SidePanel: View {
     var onStopProcess: ((String) -> Void)?
     /// Ahorro o Contexto completo, con un modelo que cobra más por contexto largo.
     var onContextMode: ((ContextMode) -> Void)?
+    /// El tope propio de la sesión (nil: sigue el de Ajustes) y cómo cambiarlo desde el panel.
+    var sessionCap: SessionCap?
+    var onSessionCap: ((SessionCap?) -> Void)?
 
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
     @AppStorage("panel.entorno.abierto") private var environmentOpen = true
@@ -126,10 +129,14 @@ struct SidePanel: View {
                     stat("Caché", cache.savedText ?? compact(cache.read) + " tokens leídos")
                         .help(cache.detail)
                 }
-                if let budget = timeline.budget {
-                    if budget.session.cap != nil { stat("Presupuesto de la sesión", budget.session.text) }
-                    if budget.month.cap != nil { stat("Presupuesto del mes", budget.month.text) }
+                if let onSessionCap {
+                    // Editable ahí mismo, también sin tope todavía (para poner uno).
+                    SessionBudgetRow(budget: timeline.budget, spent: timeline.totalCost, sessionCap: sessionCap,
+                                     onChange: onSessionCap)
+                } else if let budget = timeline.budget, budget.session.cap != nil {
+                    stat("Presupuesto de la sesión", budget.session.text)
                 }
+                if let budget = timeline.budget, budget.month.cap != nil { stat("Presupuesto del mes", budget.month.text) }
             }
             .padding(.top, 2)
         }
@@ -165,15 +172,19 @@ struct SidePanel: View {
                         Text("Resume la conversación para liberar contexto")
                     }
                 }
-                .font(.system(size: 12.5)).foregroundStyle(Theme.muted).lineLimit(2)
+                .font(.system(size: 12.5)).foregroundStyle(Theme.muted).lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 Button(action: onCompact) {
+                    // El botón nunca se corta («Compactar se…»): es el texto de al lado el que baja de línea.
                     Text("Compactar sesión").font(.system(size: 12.5, weight: .medium))
+                        .lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).frame(height: 28)
                         .background(Theme.selection, in: RoundedRectangle(cornerRadius: 7))
                         .foregroundStyle(canCompact ? Theme.text : Theme.muted)
                 }
                 .buttonStyle(.plain).disabled(!canCompact)
+                .layoutPriority(1)
                 .help("Resume la conversación para el modelo y sigue desde ese resumen; el historial completo se conserva. "
                       + "Con /compactar y un texto detrás eliges qué conservar.")
             }

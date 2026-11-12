@@ -548,6 +548,9 @@ async def run(args, transport):
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                        modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
                        contexto=manager.task.get('contexto_modo') or 'ahorro',
+                       # Lo ya gastado: al reanudar, el panel lo enseña sin esperar al primer turno.
+                       tokens=manager.task.get('total_tokens') or 0,
+                       **{k: v for k, v in gasto(manager.task).items() if k == 'coste'},
                        **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}),
                        **({'continuada_de': manager.task['continuada_de']['sesion']}
                           if isinstance(manager.task.get('continuada_de'), dict) else {}))

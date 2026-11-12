@@ -136,6 +136,10 @@ estimados de la sesión con los precios del catálogo) cuando el modelo tiene pr
 `turno_terminado` trae también `tokens_turno` y `coste_turno`. Sin precio conocido
 no aparece ningún coste: 0 sería «gratis», no «no se sabe».
 
+El evento `sesion` trae también `tokens` (los de toda la sesión) y, con precio,
+`coste`: al reanudar, el cliente enseña ya lo gastado sin esperar a que acabe el
+primer turno.
+
 Con caché de prompts (Anthropic, OpenAI), esos mismos eventos añaden `cache`:
 `leidos` y `escritos` (tokens) y, con precio, `sin_cache`, `con_cache` y `ahorro`
 (USD de la sesión; `ahorro` es negativo mientras escribir en la caché cueste más de lo

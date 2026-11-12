@@ -494,6 +494,9 @@ public struct Timeline: Equatable, Sendable {
             }
         case let .session(info):
             session = info
+            // Al reanudar llega lo ya gastado: sin esto, el panel diría 0 hasta acabar el turno.
+            if let tokens = info.tokens { totalTokens = tokens }
+            if let cost = info.cost { totalCost = cost }
             if let mode = info.contextMode {
                 contextMode = mode
                 // Elegido el modo (botón, /contexto o Ajustes), el aviso ya no espera respuesta.
