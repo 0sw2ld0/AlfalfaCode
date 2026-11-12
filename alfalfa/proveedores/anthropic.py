@@ -29,30 +29,33 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from . import Proveedor
+from . import Proveedor, elegir_esfuerzo, lista_api, ordenar_por_fecha, sin_instantaneas
 from .ollama import validar_url
 from .openai import _json, _mime, _texto
 
 URL = 'https://api.anthropic.com/v1'
 VERSION_API = '2023-06-01'
 BETA_BLOQUES = 'thinking-binding-controls-2026-08-01'
-# Lo que se ofrece en el selector, con la ventana real (1M las tres: documentación
+# Los recomendados, arriba en el selector, con la ventana real (1M las tres: documentación
 # de Anthropic y models.dev, noviembre de 2026; sin cabecera beta para pasar de 200K).
 # Haiku 5.5 cobra cinco veces más toda la petición si el prompt pasa de 100K tokens
 # (`tramo`): el modo Ahorro de la sesión compacta antes (catalogo.tarifa), como con
 # GPT-6 Luna pasados 272K. Los precios son los de la documentación de Anthropic;
-# manda el catálogo de models.dev cuando trae el modelo.
+# manda el catálogo de models.dev cuando trae el modelo. Los tres admiten los cinco esfuerzos
+# (capabilities.effort de `GET /v1/models`). Con la clave se ofrecen además los demás modelos
+# de la cuenta, debajo, con lo que la API dice de cada uno.
+_CINCO = ['low', 'medium', 'high', 'xhigh', 'max']
 CATALOGO = {
     'claude-haiku-5-5': {
-        'nombre': 'Claude Haiku 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True,
+        'nombre': 'Claude Haiku 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True, 'esfuerzos': _CINCO,
         'precio': {'entrada': 0.10, 'salida': 0.50, 'cache_lectura': 0.01, 'cache_escritura': 0.125,
                    'tramo': {'desde': 100000, 'entrada': 0.50, 'salida': 2.50, 'cache_lectura': 0.05,
                              'cache_escritura': 0.625}}},
     'claude-sonnet-5-5': {
-        'nombre': 'Claude Sonnet 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True,
+        'nombre': 'Claude Sonnet 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True, 'esfuerzos': _CINCO,
         'precio': {'entrada': 2.0, 'salida': 10.0, 'cache_lectura': 0.20, 'cache_escritura': 2.50}},
     'claude-opus-5-5': {
-        'nombre': 'Claude Opus 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True,
+        'nombre': 'Claude Opus 5.5', 'ventana': 1000000, 'salida': 128000, 'vision': True, 'esfuerzos': _CINCO,
         'precio': {'entrada': 4.0, 'salida': 20.0, 'cache_lectura': 0.20, 'cache_escritura': 5.0}},
 }
 MODELO_POR_DEFECTO = 'claude-sonnet-5-5'
@@ -72,7 +75,24 @@ SOLO_JSON = 'Responde sólo con un objeto JSON válido, sin texto antes ni despu
 
 
 def adaptativo(modelo):
+    """¿Razona de forma adaptativa? Lo que diga la última lista de la API; si no, por su familia."""
+    info = lista_api.info('anthropic', modelo) or {}
+    if isinstance(info.get('adaptativo'), bool):
+        return info['adaptativo']
     return bool(_FAMILIA_5.match(str(modelo or ''))) or modelo in _FAMILIA_4
+
+
+def esfuerzos_de(modelo):
+    """Los esfuerzos que admite: los propios, los de la lista de la API (capabilities.effort) o
+    los de models.dev; None si nadie lo dice."""
+    if modelo in CATALOGO:
+        return list(CATALOGO[modelo]['esfuerzos'])
+    info = lista_api.info('anthropic', modelo) or {}
+    if isinstance(info.get('esfuerzos'), list):
+        return list(info['esfuerzos'])
+    from .. import catalogo
+    ficha = catalogo.ficha('anthropic', modelo) or {}
+    return list(ficha['esfuerzos']) if ficha.get('esfuerzos') else None
 
 
 def esfuerzo_para(modelo, esfuerzo, pensar):
@@ -80,6 +100,12 @@ def esfuerzo_para(modelo, esfuerzo, pensar):
     if not adaptativo(modelo):
         return None
     nivel = 'low' if pensar is False else (esfuerzo if esfuerzo in ESFUERZOS else 'medium')
+    admitidos = esfuerzos_de(modelo)
+    if admitidos == []:
+        return None
+    if admitidos:
+        # El más cercano por debajo de entre los que admite (Opus 4.6 no tiene `xhigh`).
+        return elegir_esfuerzo(admitidos, nivel) or nivel
     # `xhigh` llegó con Opus 4.7: los 4.6 se quedan en `high`.
     return 'high' if nivel == 'xhigh' and modelo in ('claude-opus-4-6', 'claude-sonnet-4-6') else nivel
 
@@ -108,6 +134,14 @@ def _entrada(valor):
 def _imagenes(lista):
     return [{'type': 'image', 'source': {'type': 'base64', 'media_type': _mime(i), 'data': i}}
             for i in lista or [] if isinstance(i, str) and i]
+
+
+def _documentos(lista):
+    """Los PDF adjuntos como bloques `document` (alfalfa.adjuntos), antes del texto como pide la API."""
+    return [{'type': 'document', 'title': str(d.get('nombre') or 'documento')[:200],
+             'source': {'type': 'base64', 'media_type': 'application/pdf', 'data': d['data']}}
+            for d in lista or [] if isinstance(d, dict) and isinstance(d.get('data'), str) and d['data']
+            and d.get('mime') == 'application/pdf']
 
 
 def _texto_bloque(texto):
@@ -277,7 +311,8 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
                     pendientes.append((bloque['id'], bloque['name']))
             poner('assistant', bloques)
         else:
-            poner('user', _imagenes(mensaje.get('images')) + [_texto_bloque(contenido or '(sin texto)')])
+            poner('user', _documentos(mensaje.get('documentos')) + _imagenes(mensaje.get('images'))
+                  + [_texto_bloque(contenido or '(sin texto)')])
     cerrar_pendientes()
     mensajes = _colocar_sistema(mensajes, bool(_SISTEMA_EN_MEDIO.match(modelo)))
     if not mensajes or mensajes[0]['role'] != 'user':
@@ -311,10 +346,11 @@ def traducir_peticion(payload, esfuerzo=None, salida_max=None):
             cuerpo['tools'] = herramientas
     betas = []
     nivel = esfuerzo_para(modelo, esfuerzo, payload.get('think'))
-    if nivel:
+    if adaptativo(modelo):
         # Los modelos que razonan no admiten temperature, top_p ni top_k: no se mandan.
         cuerpo['thinking'] = {'type': 'adaptive', 'display': 'summarized'}
-        cuerpo['output_config'] = {'effort': nivel}
+        if nivel:
+            cuerpo['output_config'] = {'effort': nivel}
         if _FAMILIA_5.match(modelo):
             cuerpo['thinking']['block_binding'] = {'prefix_mismatch_behavior': 'drop_block'}
             betas.append(BETA_BLOQUES)
@@ -514,18 +550,23 @@ def mostrar(modelo):
     from .. import catalogo
     externa = catalogo.ficha('anthropic', modelo) or {}
     propia = CATALOGO.get(modelo) or {}
-    ventana = propia.get('ventana') or externa.get('ventana') or 200000
-    vision = propia.get('vision', bool(externa.get('vision')))
+    api = lista_api.info('anthropic', modelo) or {}
+    ventana = propia.get('ventana') or api.get('ventana') or externa.get('ventana') or 200000
+    vision = propia.get('vision', api.get('vision') if isinstance(api.get('vision'), bool)
+                        else bool(externa.get('vision')))
+    # Los modelos de Claude que ven imágenes leen también PDF como documento (texto e imagen de
+    # cada página): `pdf` hace que el motor los mande así en vez de su texto extraído.
     capacidades = ['completion', 'tools'] + (['thinking'] if adaptativo(modelo) else []) \
-        + (['vision'] if vision else [])
+        + (['vision', 'pdf'] if vision else [])
     info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'claude'}, 'model_info': {'anthropic.context_length': ventana}}
     ficha = dict(externa)
-    if propia.get('salida') and not ficha.get('salida'):
-        ficha['salida'] = propia['salida']
+    salida = propia.get('salida') or api.get('salida')
+    if salida and not ficha.get('salida'):
+        ficha['salida'] = salida
     if ficha:
         info['catalogo'] = ficha
-    if modelo not in CATALOGO and not externa:
+    if modelo not in CATALOGO and not externa and not isinstance(api.get('vision'), bool):
         # Un modelo que el usuario añadió y nadie describe: no se sabe si ve imágenes.
         info['vision_conocida'] = False
     return info
@@ -559,7 +600,8 @@ class Transporte(httpx.AsyncBaseTransport):
         if ruta == '/api/show':
             return _json(200, mostrar(modelo))
         if ruta == '/api/tags':
-            return _json(200, {'models': [{'name': f['name'].split('/', 1)[1]} for f in self.proveedor.modelos()]})
+            return _json(200, {'models': [{'name': f['name'].split('/', 1)[1]}
+                                          for f in self.proveedor.modelos(red=False)]})
         if ruta != '/api/chat':
             return _json(404, {'error': 'ruta no disponible con Anthropic: ' + ruta})
         salida = (mostrar(modelo).get('catalogo') or {}).get('salida')
@@ -639,29 +681,81 @@ class Anthropic(Proveedor):
                                  transport=Transporte(self, self.url(), clave, tarea, timeout, transporte),
                                  timeout=timeout)
 
-    def modelos(self):
+    def lista(self, red=True):
+        """Las filas de `GET /v1/models` de esta cuenta (caché de `lista_api`), o None si no hay."""
+        clave = self.clave()
+        if not clave:
+            return None
+        try:
+            url = self.url()
+        except ValueError:
+            return None
+        return lista_api.modelos(self.id, url, clave, lambda: lista_api.bajar_anthropic(url, clave, VERSION_API), red)
+
+    def candidatos(self, red=True):
+        """Los ids que se ofrecen además de los recomendados: los activos de la cuenta o, sin clave
+        o sin lista, los de models.dev que llaman herramientas y no están retirados."""
+        from .. import catalogo
+        api = self.lista(red)
+        if api is None:
+            fichas = (catalogo.proveedor(self.id) or {}).get('modelos') or {}
+            ids = [m for m, f in fichas.items() if f.get('herramientas') and f.get('estado') != 'deprecated']
+        else:
+            ids = []
+            for m in api:
+                ficha = self.ficha(m['id'])
+                if m.get('estado', 'active') != 'active' or (ficha and ficha.get('estado') == 'deprecated'):
+                    continue
+                ids.append(m['id'])
+        fechas = {m['id']: m.get('fecha') for m in api or []}
+        return ordenar_por_fecha(sin_instantaneas(ids),
+                                 lambda m: fechas.get(m) or (self.ficha(m) or {}).get('fecha'))
+
+    def modelos(self, red=True):
+        """Los recomendados (`CATALOGO` y los que el usuario añadió en proveedores.json) arriba,
+        con `recomendado: true`; debajo, los demás de la cuenta con `recomendado: false`."""
         from . import configuracion
         extra = [m for m in configuracion.de('anthropic').get('modelos') or [] if isinstance(m, str)]
-        nombres = list(CATALOGO) + [m for m in extra if m not in CATALOGO]
+        recomendados = list(CATALOGO) + [m for m in dict.fromkeys(extra) if m not in CATALOGO]
+        resto = [m for m in self.candidatos(red) if m not in recomendados]
+        return [self._fila(m, True) for m in recomendados] + [self._fila(m, False) for m in resto]
+
+    def _fila(self, m, recomendado):
         from .. import catalogo
-        filas = []
-        for m in nombres:
-            propia = CATALOGO.get(m) or {}
-            ficha = self.ficha(m) or ({'id': m, 'nombre': propia['nombre'], 'ventana': propia['ventana'],
-                                       'salida': propia['salida'], 'razona': True, 'herramientas': True,
-                                       'vision': propia['vision'], 'esfuerzos': list(ESFUERZOS),
-                                       'precio': propia['precio']} if propia else None)
-            # El precio propio lleva el tramo largo (barato_hasta) aunque models.dev no lo traiga.
-            precio = self.precio(m)
-            resumen = catalogo.resumen(dict(ficha, precio=precio) if ficha and precio else ficha, self.id)
-            if propia:
-                resumen['ventana'] = propia['ventana']
-                resumen['precio'] = {k: propia['precio'][k] for k in ('entrada', 'salida')}
-            # Ve imágenes: lo propio, lo del catálogo o, sin ficha, «no se sabe» (None).
-            resumen['vision'] = propia['vision'] if propia else resumen.get('vision') if ficha else None
-            filas.append({'name': 'anthropic/' + m, 'model': 'anthropic/' + m, 'proveedor': self.id,
-                          'nombre': propia.get('nombre') or (ficha or {}).get('nombre') or m, **resumen})
-        return filas
+        propia = CATALOGO.get(m) or {}
+        api = lista_api.info(self.id, m) or {}
+        ficha = self.ficha(m) or ({'id': m, 'nombre': propia['nombre'], 'ventana': propia['ventana'],
+                                   'salida': propia['salida'], 'razona': True, 'herramientas': True,
+                                   'vision': propia['vision'], 'esfuerzos': list(propia['esfuerzos']),
+                                   'precio': propia['precio']} if propia else None)
+        # El precio propio lleva el tramo largo (barato_hasta) aunque models.dev no lo traiga.
+        precio = self.precio(m)
+        resumen = catalogo.resumen(dict(ficha, precio=precio) if ficha and precio else ficha, self.id)
+        if not ficha:
+            # Lo que sólo la API sabe de un modelo que models.dev no describe; sin precio.
+            resumen.update({k: api[k] for k in ('ventana',) if api.get(k)})
+            if api.get('salida'):
+                resumen['salida_max'] = api['salida']
+            resumen['herramientas'] = True
+        elif api.get('ventana') and not propia:
+            resumen['ventana'] = api['ventana']
+        esfuerzos = esfuerzos_de(m)
+        if esfuerzos is not None:
+            resumen['esfuerzos'] = esfuerzos
+        resumen['razona'] = bool(resumen.get('razona')) or bool(esfuerzos) or api.get('adaptativo') is True
+        if propia:
+            resumen['ventana'] = propia['ventana']
+            resumen['precio'] = {k: propia['precio'][k] for k in ('entrada', 'salida')}
+        # Ve imágenes: lo propio, lo de la API, lo del catálogo o, sin nada, «no se sabe» (None).
+        if propia:
+            resumen['vision'] = propia['vision']
+        elif isinstance(api.get('vision'), bool):
+            resumen['vision'] = api['vision']
+        else:
+            resumen['vision'] = resumen.get('vision') if ficha else None
+        nombre = propia.get('nombre') or api.get('nombre') or (ficha or {}).get('nombre') or m
+        return {'name': 'anthropic/' + m, 'model': 'anthropic/' + m, 'proveedor': self.id, 'nombre': nombre,
+                'recomendado': recomendado, **resumen}
 
     def estado(self):
         return dict(super().estado(), clave=self.configurado(), variable='ANTHROPIC_API_KEY',

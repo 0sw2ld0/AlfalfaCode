@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .. import catalogo
-from . import Proveedor
+from . import Proveedor, elegir_esfuerzo
 from .ollama import validar_url
 from .openai import _argumentos, _json, _mime, _texto, traducir_peticion, traducir_respuesta
 
@@ -44,16 +44,7 @@ def esfuerzo_para(ficha, esfuerzo, pensar):
         return None
     if pensar is False:
         return 'none' if 'none' in admitidos else None
-    deseado = esfuerzo if esfuerzo in ESFUERZOS else 'medium'
-    if deseado in admitidos:
-        return deseado
-    # El más cercano por debajo; si no hay, el más bajo que no apaga el razonamiento.
-    orden = ESFUERZOS.index(deseado)
-    debajo = [e for e in admitidos if e != 'none' and ESFUERZOS.index(e) <= orden]
-    if debajo:
-        return max(debajo, key=ESFUERZOS.index)
-    encendidos = [e for e in admitidos if e != 'none']
-    return min(encendidos, key=ESFUERZOS.index) if encendidos else None
+    return elegir_esfuerzo(admitidos, esfuerzo if esfuerzo in ESFUERZOS else 'medium')
 
 
 def traducir_chat(payload, ficha=None, esfuerzo=None, openrouter=False):

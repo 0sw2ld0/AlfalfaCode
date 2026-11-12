@@ -14,12 +14,14 @@
 #                                   (hoy: PERFIL=CuyCleaner, la del mismo equipo; «AlfalfaCode» aún no existe)
 #       ./publicar.sh --local     → DMG con firma ad hoc y sin notarizar, sólo para probar en este Mac
 #                                   (en otro Mac Gatekeeper no lo deja abrir)
+#       CONFIGURACION=debug ./publicar.sh --local → DMG con una app de depuración
 #
 # Escribe también dist/version.json (versión, URL del DMG en la release, huella, tamaño y las notas
 # de NOTAS-VERSION.txt) y el bottle de Homebrew de la CLI (alfalfa-<versión>.arm64_sonoma.bottle.tar.gz),
 # y enseña la orden para publicar los tres en GitHub. No publica nada.
 set -euo pipefail
 cd "$(dirname "$0")"
+. ../distribucion/cuybrowser.sh
 
 LOCAL=""
 [ "${1:-}" = "--local" ] && LOCAL=1
@@ -32,7 +34,9 @@ DMG="dist/AlfalfaCode-$VERSION.dmg"
 # --- Comprobaciones previas: fallar pronto y explicando qué falta ---------------------------
 if [ -n "$LOCAL" ]; then
   IDENTIDAD="-"
+  CONFIGURACION="${CONFIGURACION:-release}"
 else
+  CONFIGURACION=release
   IDENTIDAD="$(security find-identity -v -p codesigning 2>/dev/null \
     | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
   if [ -z "$IDENTIDAD" ]; then
@@ -54,7 +58,7 @@ else
 fi
 
 # --- 1. Compilar y firmar la app (motor incluido) ----------------------------------------------
-IDENTIDAD="$IDENTIDAD" VERSION="$VERSION" ./build-app.sh
+IDENTIDAD="$IDENTIDAD" VERSION="$VERSION" CONFIGURACION="$CONFIGURACION" ./build-app.sh
 
 # --- 1b. Notarizar y grapar la propia app ------------------------------------------------------
 # Gatekeeper verifica la app que va dentro del DMG. Con el ticket grapado en ella se valida
@@ -71,6 +75,9 @@ if [ -z "$LOCAL" ]; then
 fi
 
 # --- 2. DMG con acceso directo a Aplicaciones -----------------------------------------------------
+test "$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$APP/Contents/Info.plist")" = "$CUYBROWSER_VERSION" \
+  || { echo "✗ la app no declara el CuyBrowser fijado ($CUYBROWSER_VERSION)" >&2; exit 1; }
+cuybrowser_comprobar_app "$APP" "$TMP"
 mkdir -p "$TMP/dmg"
 ditto "$APP" "$TMP/dmg/AlfalfaCode.app"
 ln -s /Applications "$TMP/dmg/Aplicaciones"
@@ -128,8 +135,13 @@ PY
 # --- 7. Bottle de Homebrew de la CLI: el motor del DMG tal cual (ver distribucion/botella.sh) ----
 BOTELLA="dist/alfalfa-$VERSION.arm64_sonoma.bottle.tar.gz"
 echo "bottle de la fórmula alfalfa → $BOTELLA ($(../distribucion/botella.sh "$DMG" "$VERSION" dist))"
+
+# --- 8. Copia con nombre fijo: el botón «Descargar para Mac» de la web apunta a
+#        releases/latest/download/AlfalfaCode.dmg, que sólo existe si cada release la trae.
+FIJO="dist/AlfalfaCode.dmg"
+cp "$DMG" "$FIJO"
 echo
 echo "Para publicarlo (la release tiene que quedar como «Latest»; el actualizador lee releases/latest):"
-echo "  gh release create $ETIQUETA $DMG dist/version.json $BOTELLA --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
+echo "  gh release create $ETIQUETA $DMG $FIJO dist/version.json $BOTELLA --latest --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
 echo "Al publicarla, .github/workflows/tap.yml pone el tap 0sw2ld0/homebrew-tap (cask y fórmula) en $VERSION."
 echo "instalar.sh (curl) no necesita nada más: lee version.json y el DMG de la última release."

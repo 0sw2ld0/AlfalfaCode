@@ -1,7 +1,7 @@
 #!/bin/sh
 # Instala la CLI de AlfalfaCode (`alfalfa`) en este Mac, sin sudo:
 #
-#   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+#   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 #
 # Qué hace:
 #   1. Lee version.json de la última release de github.com/0sw2ld0/AlfalfaCode.
@@ -10,7 +10,8 @@
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
 #      con el identificador com.cuycoders.alfalfacode y la misma versión.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
-#      ayudantes a ~/.local/share/alfalfa, y deja ~/.local/bin/alfalfa. Si algo falla,
+#      ayudantes, incluido CuyBrowser si viene en el DMG, a ~/.local/share/alfalfa y
+#      deja ~/.local/bin/alfalfa. Si algo falla,
 #      la copia que hubiera no se toca.
 #   5. Si ~/.local/bin no está en el PATH, lo añade a ~/.zshrc (o ~/.bash_profile) entre
 #      dos marcas (ALFALFA_SIN_PATH=1 para no tocarlos).
@@ -19,7 +20,7 @@
 # trae macOS (curl, shasum, hdiutil, codesign, spctl, plutil, ditto).
 #
 # Desinstalar (tus sesiones y ajustes de ~/.alfalfa se quedan):
-#   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+#   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
 # o a mano:
 #   rm -rf ~/.local/share/alfalfa ~/.local/bin/alfalfa   (y las líneas marcadas de ~/.zshrc)
 #
@@ -126,6 +127,7 @@ main() {
   else
     paso "Firma correcta (Developer ID del equipo $EQUIPO, notarizada)."
   fi
+  comprobar_cuybrowser
 
   # --- 4. Copiar el motor ---------------------------------------------------------------------
   mkdir -p "$PREFIJO/share" "$BIN"
@@ -154,7 +156,7 @@ main() {
 
   {
     echo "#!/bin/sh"
-    echo "$MARCA_LANZADOR (https://cuycoders.dev/alfalfa)"
+    echo "$MARCA_LANZADOR (https://alfalfacode.cuycoders.dev)"
     echo "exec $(citar "$RAIZ/Resources/motor/alfalfa") \"\$@\""
   } > "$LANZADOR.nuevo.$$"
   chmod 755 "$LANZADOR.nuevo.$$"
@@ -167,9 +169,9 @@ main() {
   paso "AlfalfaCode $VERSION instalado: $LANZADOR"
   echo "  Empezar:       alfalfa \"tu encargo\"   (la primera vez te ofrece modelos gratis)"
   echo "  Actualizar:    alfalfa --actualizar"
-  echo "  Desinstalar:   curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar"
+  echo "  Desinstalar:   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar"
   echo "                 (tus sesiones y ajustes de ~/.alfalfa se quedan)"
-  echo "  La app de Mac: https://cuycoders.dev/alfalfa  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
+  echo "  La app de Mac: https://alfalfacode.cuycoders.dev  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
 }
 
 comprobar_mac() {
@@ -179,6 +181,23 @@ comprobar_mac() {
     || falla "AlfalfaCode necesita un Mac con Apple Silicon (M1 o posterior)."
   MAYOR="$(sw_vers -productVersion | cut -d. -f1)"
   [ "$MAYOR" -ge 14 ] 2>/dev/null || falla "AlfalfaCode necesita macOS 14 (Sonoma) o posterior."
+}
+
+comprobar_cuybrowser() {
+  PLIST="$APP/Contents/Info.plist"
+  # Los DMG anteriores a CuyBrowser no declaran la clave.
+  TIPO_CUY="$(plutil -type AlfalfaCuyBrowserVersion "$PLIST" 2>/dev/null)" || return 0
+  [ "$TIPO_CUY" = string ] || falla "AlfalfaCuyBrowserVersion no es un texto"
+  VERSION_CUY="$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$PLIST")"
+  printf '%s' "$VERSION_CUY" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || falla "AlfalfaCuyBrowserVersion no es una versión válida"
+  CUY="$APP/Contents/Helpers/cuybrowser"
+  [ -f "$CUY" ] && [ -x "$CUY" ] && [ ! -L "$CUY" ] || falla "la app no trae CuyBrowser $VERSION_CUY"
+  CUY="$(CDPATH= cd -- "$APP/Contents/Helpers" && pwd)/cuybrowser"
+  codesign --verify --strict "$CUY" 2>/dev/null || falla "la firma de CuyBrowser no es válida"
+  SALIDA_CUY="$(cd "$TMP" && env -i HOME="$PWD" PATH=/usr/bin:/bin "$CUY" --version)" \
+    && [ "$SALIDA_CUY" = "$VERSION_CUY" ] || falla "el ejecutable no declara CuyBrowser $VERSION_CUY"
+  paso "CuyBrowser $VERSION_CUY incluido."
 }
 
 bajar() {   # bajar <url> <destino>
@@ -231,7 +250,7 @@ es_nuestra() {
 ayuda() {
   cat <<'AYUDA'
 Instala la CLI de AlfalfaCode (alfalfa) en este Mac, sin sudo:
-  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+  curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 
 Baja el DMG de la última release de github.com/0sw2ld0/AlfalfaCode, comprueba su huella
 SHA-256 y la firma de la app (equipo FZ8TW9AWLE, notarizada) y copia su motor a
@@ -239,7 +258,7 @@ SHA-256 y la firma de la app (equipo FZ8TW9AWLE, notarizada) y copia su motor a
 
 Opciones:
   --desinstalar   quita lo que instaló (tus sesiones de ~/.alfalfa se quedan):
-                  curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+                  curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
   --ayuda         esto
 
 Variables:

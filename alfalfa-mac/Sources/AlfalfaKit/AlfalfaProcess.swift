@@ -63,12 +63,20 @@ public enum Launcher {
                                       mode: String? = nil, wait: Bool = false, parent: String? = nil,
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
-                                      monthlyBudget: Double? = nil) -> [String] {
+                                      monthlyBudget: Double? = nil, diagnostics: Bool = true,
+                                      commitSignature: Bool = true, queue: Bool = false,
+                                      browserEngine: String? = nil,
+                                      cuyBrowserProfile: String = "alfalfa",
+                                      cuyBrowserFromPath: Bool? = nil) -> [String] {
         var arguments = ["--stdio"]
+        if queue { arguments.append("--cola-encargos") }
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
-        if browser { arguments.append("--navegador") }
-        // Ajustes ▸ General ▸ Mantener el Mac despierto, apagado.
-        if !keepAwake { arguments.append("--sin-mantener-despierto") }
+        arguments += browserArguments(enabled: browser, engine: browserEngine, profile: cuyBrowserProfile,
+                                      fromPath: cuyBrowserFromPath)
+        // Ajustes ▸ General ▸ Mantener el Mac despierto, Ver los errores al editar y Firmar los commits, apagados.
+        arguments += [(keepAwake, "--sin-mantener-despierto"), (diagnostics, "--sin-diagnosticos"),
+                      (commitSignature, "--sin-firma")]
+            .filter { !$0.0 }.map(\.1)
         // Ajustes ▸ General ▸ Presupuesto: los topes en dólares de la sesión y del mes.
         if let budget, budget > 0 { arguments += ["--presupuesto", BudgetFormat.argument(budget)] }
         if let monthlyBudget, monthlyBudget > 0 { arguments += ["--presupuesto-mes", BudgetFormat.argument(monthlyBudget)] }
@@ -77,7 +85,10 @@ public enum Launcher {
         // El título de la propuesta, para que la barra lateral no enseñe el principio del encargo.
         if let title, !title.isEmpty, resume == nil { arguments += ["--titulo", title] }
         if let mode, !mode.isEmpty { arguments += ["--modo", mode] }
-        for image in images { arguments += ["--imagen", image] }
+        // `images` lleva también los archivos (PDF, texto, código, Word, Excel): van con `--archivo`.
+        for path in images {
+            arguments += [Attachments.isImage(URL(fileURLWithPath: path)) ? "--imagen" : "--archivo", path]
+        }
         if let resume { arguments += ["--reanudar", resume] }
         if let model, !model.isEmpty { arguments += ["--modelo", model] }
         if let effort, !effort.isEmpty { arguments += ["--esfuerzo", effort] }
@@ -223,10 +234,26 @@ public final class AlfalfaProcess: @unchecked Sendable {
     /// `input` va por la entrada estándar (una clave para `--guardar-clave`), nunca en los argumentos.
     /// `progress` recibe cada mensaje según llega (en otra cola), y `started` el proceso, para
     /// poder pararlo (`--conectar` espera a que el usuario autorice en el navegador).
+    /// Si se cancela la tarea que espera, el proceso se termina: una búsqueda vieja no sigue corriendo.
     public static func query(launcher: URL, arguments: [String], directory: URL,
                              input: String? = nil,
                              progress: (@Sendable (AlfalfaMessage) -> Void)? = nil,
                              started: (@Sendable (AlfalfaProcess) -> Void)? = nil) async throws -> [AlfalfaMessage] {
+        let running = RunningBox()
+        return try await withTaskCancellationHandler {
+            try await run(launcher: launcher, arguments: arguments, directory: directory, input: input,
+                          progress: progress) { process in
+                running.set(process)
+                started?(process)
+            }
+        } onCancel: {
+            running.cancel()
+        }
+    }
+
+    private static func run(launcher: URL, arguments: [String], directory: URL, input: String?,
+                            progress: (@Sendable (AlfalfaMessage) -> Void)?,
+                            started: @escaping @Sendable (AlfalfaProcess) -> Void) async throws -> [AlfalfaMessage] {
         try await withCheckedThrowingContinuation { continuation in
             let process = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: directory)
             let box = MessageBox()
@@ -245,13 +272,36 @@ public final class AlfalfaProcess: @unchecked Sendable {
             }
             do {
                 try process.start()
-                started?(process)
+                started(process)
                 if let input { process.write(line: input) }
                 process.closeInput()
             } catch {
                 continuation.resume(throwing: error)
             }
         }
+    }
+}
+
+/// El proceso de una consulta, para terminarlo si se cancela la tarea (también antes de arrancar).
+private final class RunningBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: AlfalfaProcess?
+    private var cancelled = false
+
+    func set(_ process: AlfalfaProcess) {
+        lock.lock()
+        self.process = process
+        let stop = cancelled
+        lock.unlock()
+        if stop { process.terminate() }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let process = self.process
+        lock.unlock()
+        process?.terminate()
     }
 }
 

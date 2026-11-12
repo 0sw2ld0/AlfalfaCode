@@ -47,6 +47,12 @@ encendida). Cada vez que el arnés la toma o la suelta de verdad emite
 `{"version":2,"tipo":"despierto","activo":true|false}`; si macOS no la concede, no se
 emite nada. Siempre se suelta antes de `turno_terminado`.
 
+Si la instantánea para deshacer del turno tarda más de un segundo (o una herramienta que
+cambia archivos tiene que esperarla), el arnés emite
+`{"version":2,"tipo":"preparando","texto":"Preparando deshacer… (8306 archivos, 1,2 GB)"}`
+y, al terminar, `{"version":2,"tipo":"preparando","texto":null}`. La app lo enseña en la
+fila viva en lugar de «Pensando».
+
 Novedad de la versión 2, `mensaje`: el texto del usuario se encola y entra en el
 historial justo antes de la siguiente llamada al modelo, después de registrar los
 resultados de las herramientas. No interrumpe la orden en curso ni responde a un
@@ -121,6 +127,9 @@ null si no se sabe (sale de `/api/show` en Ollama, del propio proveedor, del ser
 Alfalfa o del catálogo). Los gratis ahora llegan aunque su proveedor no tenga
 clave, con `gratis: true`, el `aviso` de datos, `nombre_proveedor` y, si falta la
 clave, `falta_clave` (`variable`, `donde`, `texto`).
+Las filas de OpenAI y Anthropic llevan `recomendado`: true para los recomendados
+(los propios y los añadidos a mano en `proveedores.json`), que van primero, y false
+para el resto de modelos de la cuenta («Más modelos» en la app).
 
 `turno_terminado`, `fin`, `historial` y cada fila de `sesiones` añaden `coste` (USD
 estimados de la sesión con los precios del catálogo) cuando el modelo tiene precio;
@@ -313,3 +322,201 @@ Para invocarlo por nombre, puedes crear tú un enlace en un directorio que **ya*
 esté en tu PATH, por ejemplo `ln -s /ruta/al/repositorio/scripts/alfalfa
 ~/.local/bin/alfalfa`. El lanzador resuelve enlaces simbólicos. Este cambio no
 crea el enlace, modifica el PATH ni instala nada fuera del repositorio.
+
+## Contenido externo y secretos
+
+En el motor nativo (Ollama y las API), los resultados de archivos, web, MCP y
+subagentes llegan al modelo con su origen y la marca «datos, no instrucciones».
+
+Sólo lo que llega de fuera del proyecto activa además la protección: la web,
+el navegador, los resultados de servidores MCP, la pantalla de otras apps,
+sesiones antiguas y los archivos adjuntos. Leer, listar o buscar en el propio
+proyecto (incluido su AGENTS.md) y ejecutar órdenes en él no la activan, como
+en Codex y Claude Code. Un subagente sólo la activa si él mismo leyó contenido
+externo. La marca no intenta detectar frases maliciosas: después de esas
+lecturas, cada orden, edición o acción con efectos pide una aprobación puntual
+adicional. La sesión conserva esta procedencia al reanudar, compactar y delegar.
+
+La tarjeta «Contenido externo» explica qué lectura motivó la pregunta. Aprobarla
+sólo autoriza esa llamada: siguen vigentes las reglas del usuario, el sandbox,
+el permiso de red y las rutas protegidas. No se puede guardar esta aprobación
+para toda la sesión. En «Auto», las órdenes que el arnés reconoce como
+inofensivas (`git status`, `pwd`, `--version`…) no la necesitan. «Omitir
+permisos» respeta tu elección y no pregunta, pero deja escrito en la
+conversación qué lectura externa había. Memoria y habilidades incorporan el
+motivo en su tarjeta habitual, con el diff completo y siempre con pregunta.
+
+Antes de cada petición al modelo, incluida visión, recuperación y compactación,
+se tapan los formatos conocidos de claves y tokens (también JWT y claves privadas),
+los campos sensibles y las credenciales ya presentes en memoria o en el entorno.
+Además se usan los valores literales de `.env` y `.env.*` del proyecto, también
+los de subcarpetas, sin enviarlos al modelo ni guardarlos en la procedencia.
+La revisión omite dependencias, carpetas privadas y enlaces simbólicos; no lee el
+Llavero. Se limita a 5.000 carpetas, 100 archivos `.env` y 256 KB por archivo; si
+no puede revisar un `.env` regular o supera esos topes, detiene la petición.
+Un secreto sin formato reconocible y que no está en esas fuentes puede pasar.
+Los archivos y el historial local conservan su contenido; se sanea una copia al
+salir al proveedor, manteniendo el modelo, los identificadores y las huellas.
+
+## Revisión con otros ojos
+
+La tarjeta al terminar un turno ofrece «Revisar cambios». Elige otro modelo de
+los disponibles y pulsa el botón para lanzar un subagente de una sola respuesta.
+No se inicia automáticamente ni reutiliza el modelo que hizo el turno (cambiar
+sólo de pasarela o de Ollama local a cloud tampoco cuenta como otro modelo).
+
+El revisor recibe el diff entre las instantáneas del principio y final del turno,
+marcado como datos y sin secretos reconocibles. Las ediciones que hagas después
+no entran en esa revisión. No recibe la conversación completa ni herramientas:
+no puede ejecutar órdenes, abrir otros archivos ni aplicar sus propuestas.
+Los binarios, enlaces y archivos excluidos se indican como no revisados; un diff
+de más de 40 archivos o 60.000 caracteres se rechaza antes de pedir inferencia.
+También se comprueba que quepa completo en el contexto del modelo elegido.
+
+Los hallazgos aparecen en la misma tarjeta con prioridad, ruta, línea y detalle.
+«Corregir hallazgos en este hilo» envía un encargo al agente principal, que ya
+tiene el informe en su contexto como datos externos. Las correcciones conservan
+los permisos habituales. El informe y el estado se guardan con el cierre.
+
+La revisión comparte el presupuesto de sesión y mes: reserva entrada y salida
+máxima, cuenta el uso del otro modelo y no arranca si no cabe en los topes.
+Puedes cancelarla o enviar un nuevo mensaje para detenerla. Si se interrumpe una
+petición ya enviada, o el proveedor responde sin métricas de uso, se cuenta un coste máximo conservador,
+que la tarjeta señala como estimado; así cancelar no permite saltarse el tope.
+
+## Cola de encargos
+
+En «Nuevo encargo» o en la cabecera de una sesión, «Cola de encargos» permite
+preparar hasta 20 tareas completas y ordenarlas antes de guardar. La cola queda
+lista y empieza sólo al pulsar «Iniciar cola». Cada tarea abre una sesión propia;
+no se mezcla con los mensajes que se dejan mientras el agente está respondiendo.
+
+- **Una tras otra:** las tareas trabajan en la carpeta elegida. Cada una ve los
+  cambios que dejó la anterior, pero tiene su conversación independiente.
+- **En paralelo en worktrees:** de 1 a 4 tareas a la vez, cada una en una rama y
+  carpeta distinta, desde el mismo HEAD. Necesita la raíz de un repositorio Git
+  limpio; no copia archivos ignorados ni cambios sin confirmar. No ejecuta hooks
+  ni filtros de Git al preparar las carpetas.
+
+La tarjeta muestra el estado y la actividad de cada tarea, permite abrir su
+sesión y ofrece el informe cuando termina. El resumen conjunto queda al final
+de la conversación, con las rutas y ramas de los resultados. Los worktrees
+permanecen en el directorio hermano de `$ALFALFA_HOME`, con sufijo `-worktrees`
+(`~/.alfalfa-worktrees` por defecto). La cola no los borra, fusiona ni publica.
+
+Las tareas heredan modelo, esfuerzo y modo de permisos de la sesión que preparó la cola,
+comparten su presupuesto de sesión y mes y siguen mostrando los permisos que
+necesitan. Un fallo o bloqueo pausa el lanzamiento de tareas nuevas; las que ya
+están en marcha pueden terminar. «Pausar después de los activos» hace lo mismo
+sin interrumpir trabajo. «Detener ahora», cerrar la app o escribir un mensaje
+nuevo interrumpen los activos y conservan los pendientes. «Reanudar cola» continúa
+las sesiones interrumpidas o bloqueadas, comprobando las operaciones inciertas,
+y salta las tareas que ya terminaron. Al reabrir, nunca arranca sola.
+
+En la CLI, guarda un JSON como este y ejecuta `alfalfa --cola-encargos cola.json`:
+
+```json
+{"modo": "serie", "encargos": ["Corrige el cálculo de la suma.", "Añade pruebas de los casos límite."]}
+```
+
+Para tareas independientes puedes usar `"modo": "paralelo", "paralelos": 2`.
+La CLI muestra el ID de la sesión de la cola al empezar. Con
+`alfalfa --reanudar ID --cola-encargos` continúas una cola guardada. Ctrl-C
+la detiene conservando el estado para reanudarla.
+
+## Capturas antes y después
+
+Al probar una interfaz, abre su estado inicial antes de editar. Si durante el turno
+usas el navegador y cambias archivos web, el cierre conserva una captura inicial y
+otra final de la misma página y tamaño. Recarga la página para comprobar los cambios:
+el cierre sólo toma la imagen de lo que quedó visible, sin recargar ni navegar por su cuenta.
+Funciona con los motores que ofrecen `browser_screenshot`, con sus permisos habituales.
+
+Para una app propia de Mac, pide `app_state` con captura antes de editar y después
+de reconstruirla. Se reutilizan esas imágenes de la misma app y ventana; al cerrar
+no se abre ni se captura ninguna app adicional. Los recortes con zoom no se comparan.
+La ruta del ejecutable identifica la app aunque la vuelvas a abrir con otro proceso;
+si no se conoce esa ruta, la comparación se limita al mismo proceso.
+
+La tarjeta de cierre muestra «Antes» y «Después»; puedes ampliarlas con un clic.
+También quedan en el historial del turno. Si falta una imagen, cambió la página o
+la ventana, o hubo una edición posterior a la última captura de Mac, aparece
+«Comparación incompleta». Sin uso de la interfaz o sin cambios de código pertinentes
+no se añade esta tarjeta. Las instantáneas del código deben estar activadas para
+situar las imágenes en el turno; no se reutilizan imágenes de turnos anteriores.
+
+Las capturas son archivos privados locales de la sesión. Guardarlas no hace llamadas
+al modelo ni añade permisos; las capturas automáticas no abren diálogos nuevos.
+Comparten el tope de 50 capturas guardadas del navegador en esa carpeta: una imagen
+antigua puede dejar de estar disponible. Son datos visuales, no una aprobación de
+las pruebas ni una comprobación de que la app se reconstruyó correctamente.
+
+La [demo reproducible](demos/interfaz-a13/README.md) cambia un botón de rojo a verde
+con WebKit y muestra ambas imágenes en la tarjeta.
+
+## Reglas de equipo
+
+Guarda `.alfalfa/equipo.toml` en la raíz del proyecto y súbelo al repositorio
+para compartir la política. AlfalfaCode lo busca en la raíz del worktree Git,
+también si abres una subcarpeta. En una carpeta sin Git, lo busca en la carpeta
+de trabajo. Se usa la misma política en la app de Mac y en la CLI.
+
+```toml
+modelos = ["qwen3:8b", "openai/gpt-5.4-mini"]
+
+[permisos]
+modos = ["manual", "ediciones", "plan"]
+
+[presupuesto]
+sesion = 2.50
+mes = 20
+
+[[regla]]
+patron = ["git", "push"]
+decision = "preguntar"
+
+[[regla]]
+patron = ["git", "reset", "--hard"]
+decision = "prohibida"
+```
+
+- **Modelos.** La lista compara el identificador completo y su proveedor.
+  `qwen3:8b` y `ollama/qwen3:8b` nombran el mismo modelo. Si tu elección o tu modelo
+  habitual queda fuera, la sesión muestra las opciones permitidas para que elijas.
+  También se valida el modelo de los subagentes,
+  la revisión de código y las peticiones auxiliares, como el repaso de aprendizaje.
+  Con una lista de modelos o un tope de equipo, las imágenes usan la visión del
+  modelo de la sesión, si la admite.
+- **Permisos.** Puedes limitar los modos a `auto`, `manual`, `ediciones`, `plan` u
+  `omitir`. Si abres sin elegir un modo y el habitual queda fuera, se usa el
+  primer modo permitido que sea más estricto. Si todos relajan los permisos,
+  la sesión requiere una elección explícita. Las reglas de prefijo para `run_command` y `run_checks`
+  admiten `preguntar` y `prohibida`. Se combinan con tus reglas personales y
+  gana la más estricta. Una regla de equipo que pregunta requiere una respuesta
+  incluso en «Omitir permisos». El sandbox, las reglas de contenido externo y
+  las demás comprobaciones de permisos siguen aplicándose.
+  Consulta la decisión de las reglas con `alfalfa --comprobar-orden <orden>`.
+- **Topes.** Los importes son dólares positivos. Se aplica el menor de cada
+  tope de equipo y tu tope personal. El mensual usa el gasto de este Mac que ya
+  muestra AlfalfaCode. Los modelos de pago sin precio conocido se rechazan si
+  hay un tope de equipo. El corte usa el presupuesto existente, que estima la
+  entrada antes de pedirla y contabiliza la respuesta con las métricas del
+  proveedor. El gasto se calcula en cada instalación.
+
+Cada campo es opcional. Si falta el archivo, se usan tus ajustes. Si el archivo
+es inválido, se indica el error al abrir la sesión. La política se carga al
+abrir o reanudar y se conserva durante esa sesión. Los subagentes y los encargos
+en cola heredan la política de la sesión que los lanza. Para aplicar una edición
+del archivo, vuelve a abrir la sesión. Si cambió la política, caducan los
+permisos guardados para esa sesión.
+
+La app y la CLI indican dónde consultar `equipo.jsonl`, dentro de la carpeta
+privada de la sesión. Cada fila indica la sesión, el agente, el turno y la
+huella de la política. El registro enlaza el inicio y resultado de cada
+herramienta con sus decisiones de permiso. Una respuesta de la terminal o del
+cliente de la app se atribuye a la cuenta local que ejecuta AlfalfaCode. Las
+aprobaciones automáticas indican su origen y las reutilizaciones enlazan con
+el permiso de sesión guardado. Las órdenes incluyen el identificador de su
+registro de ejecución para consultar el detalle cuando haga falta. El JSONL
+omite argumentos, mensajes, salidas y contenido de archivos. Se guarda
+localmente y queda fuera del repositorio.

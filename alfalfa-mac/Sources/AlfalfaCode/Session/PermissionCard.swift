@@ -26,6 +26,10 @@ struct PermissionCard: View {
             if !request.purpose.isEmpty, request.mcp == nil {
                 Text(request.purpose).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
             }
+            if let diff = request.diff, !diff.isEmpty {
+                // Memoria o habilidad aprendida: lo que se escribiría, antes de aprobarlo.
+                DiffBlock(diff: diff)
+            }
             if let justification = request.justification {
                 detailLine("Justificación", justification)
             }
@@ -40,10 +44,14 @@ struct PermissionCard: View {
                 RunningLine(since: running.since)
             }
             if case .pending = state {
-                HStack(spacing: 10) {
-                    approve
-                    if request.forSession { allowForSession }
-                    deny
+                if request.site != nil {
+                    BrowserSitePermissionButtons(request: request, session: session)
+                } else {
+                    HStack(spacing: 10) {
+                        approve
+                        if request.forSession { allowForSession }
+                        deny
+                    }
                 }
             }
         }

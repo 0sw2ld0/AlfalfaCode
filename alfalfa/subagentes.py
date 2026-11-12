@@ -143,6 +143,14 @@ def cargar_tipos(cwd, hogar):
                 'instrucciones': cuerpo[:MAX_MENSAJE], 'solo_lectura': False, 'herramientas': herramientas,
                 'modelo': modelo, 'esfuerzo': datos.get('effort') or datos.get('reasoning_effort') or None,
                 'origen': str(archivo)}
+    # Los de OpenCode que el usuario autorizó (alfalfa/importadas); no tapan a los de arriba.
+    try:
+        from .importadas import Importadas
+        for nombre, tipo in Importadas(cwd, hogar).agentes().items():
+            if nombre not in tipos and len(tipos) < MAX_TIPOS:
+                tipos[nombre] = tipo
+    except Exception as exc:  # noqa: BLE001 - una configuración ajena rota no deja sin subagentes
+        avisos.append('Agentes importados: ' + type(exc).__name__)
     return tipos, avisos
 
 
@@ -281,6 +289,20 @@ class Subagentes:
         self.agentes = {}
         self._contador = 0
 
+    def revisor_de_diff(self, modelo):
+        """Subagente de una sola respuesta, sin herramientas ni contexto del principal."""
+        from uuid import uuid4
+
+        from .proveedores.nativo.runtime import NativeRuntime
+        ident = 'revision-' + uuid4().hex[:10]
+        task = dict(id=self.gestor.task['id'] + '-' + ident, cwd=self.gestor.task['cwd'],
+                    model=modelo, effort='low', status='running', review=True,
+                    revision_diff=True, subagente_de=self.gestor.task['id'])
+        self.carpeta.mkdir(parents=True, exist_ok=True, mode=0o700)
+        sub = Subagente(ident, 'Revisión de cambios', 'revisor', task, self.carpeta)
+        gestor = _GestorDeSubagente(self.gestor, sub, lambda: None)
+        return NativeRuntime(gestor, task)
+
     # --- lo que ve la app -------------------------------------------------
     def lista(self):
         return [a.fila() for a in self.agentes.values()]
@@ -336,13 +358,17 @@ class Subagentes:
         if nombre_tipo not in tipos:
             raise ValueError('No existe el tipo de agente «' + nombre_tipo + '». Hay: ' + ', '.join(tipos) + '.')
         tipo = tipos[nombre_tipo]
+        modelo = str(args.get('model') or tipo.get('modelo') or self.gestor.task.get('model'))
+        equipo = getattr(self.gestor, 'equipo', None)
+        if equipo:
+            equipo.comprobar_modelo(modelo)
         self._contador += 1
         ident = 'a' + str(self._contador)
         nombre = ' '.join(str(args.get('description') or '').split())[:80] or mensaje.split('\n')[0][:60]
         principal = self.gestor.task
         task = dict(id=principal['id'] + '-' + ident, cwd=principal['cwd'], objective=mensaje, status='created',
                     provider='ollama', runner='native',
-                    model=str(args.get('model') or tipo.get('modelo') or principal.get('model')),
+                    model=modelo,
                     effort=str(args.get('reasoning_effort') or tipo.get('esfuerzo') or principal.get('effort')
                                or 'medium'),
                     modo=principal.get('modo'), subagente_de=principal['id'],
@@ -364,6 +390,11 @@ class Subagentes:
                 historia.pop()  # la llamada que lanza este subagente aún no tiene resultado
             from .proveedores.nativo.historial import Mensajes
             sub.rt.state['messages'] = Mensajes([{'role': 'system', 'content': ''}] + historia[-200:])
+        # Delegar no limpia la procedencia: también el hijo pide permiso por
+        # acciones propuestas a partir de datos que recibió el principal.
+        from .contenido_externo import MOTIVO, restaurar
+        sub.rt.state[MOTIVO] = list(padre_rt.state.get(MOTIVO, ()))
+        restaurar(sub.rt)
         self.agentes[ident] = sub
         self.gestor.event(principal, 'system', 'Subagente ' + ident + ' (' + nombre_tipo + ', ' + task['model']
                           + ') empezó: ' + nombre)
@@ -388,6 +419,7 @@ class Subagentes:
         excluidas = list(terminal.excluidas()) + list(HERRAMIENTAS_DEL_PRINCIPAL)
         if solo_lee:
             excluidas += list(terminal.ESCRITURA)
+        excluidas += list(tipo.get('excluidas') or [])
         if tipo.get('herramientas'):
             from .proveedores.nativo.herramientas import COMPLEMENTOS_TOOLS, ON_REQUEST_TOOLS
             permitidas = set(tipo['herramientas']) | set(SIEMPRE)
@@ -406,8 +438,10 @@ class Subagentes:
                            excluded_tools=tuple(dict.fromkeys(excluidas)),
                            working_text='Subagente trabajando…',
                            process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
-                                        'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1'},
-                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False),
+                                        'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
+                                        'ALFALFA_SESION': sub.task['id']},
+                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False,
+                                                           protegidas=(gestor.home, *gestor.rutas_equipo)),
                            command_policy=OnRequestPolicy(gestor.reglas), tolerant_edit=True,
                            complementos=gestor.complementos, project_docs=gestor.project_docs(),
                            compaction='codex', compact_limit=gestor.compact_limit)
@@ -519,7 +553,7 @@ class Subagentes:
                              'o ciérralo con close_agent.')
         return datos
 
-    async def enviar(self, args):
+    async def enviar(self, args, *, origenes=()):
         sub = self._buscar(args.get('agent'))
         mensaje = str(args.get('message') or '').strip()
         if not mensaje:
@@ -528,6 +562,10 @@ class Subagentes:
             raise ValueError('message es demasiado largo (máximo ' + str(MAX_MENSAJE) + ' caracteres).')
         if sub.estado == 'cerrado':
             raise ValueError('El subagente ' + sub.id + ' está cerrado; lanza otro con spawn_agent.')
+        from .contenido_externo import MOTIVO
+        contaminado = list(dict.fromkeys(list(sub.rt.state.get(MOTIVO, ())) + list(origenes)))
+        sub.rt.state[MOTIVO] = contaminado
+        sub.rt.save()
         if sub.vivo and args.get('interrupt') is not True:
             sub.cola.append(mensaje)
             return dict(sub.resultado(), note='Lo leerá antes de su siguiente respuesta.')
@@ -538,6 +576,7 @@ class Subagentes:
         if len(self.vivos()) >= MAX_VIVOS:
             raise ValueError('Ya hay ' + str(MAX_VIVOS) + ' subagentes trabajando; espera o cierra alguno.')
         sub.rt = self._runtime(sub, self.tipos().get(sub.tipo, TIPOS_INTEGRADOS['general']))
+        sub.rt.state[MOTIVO] = contaminado
         self._empezar(sub, mensaje)
         if args.get('background') is True:
             return dict(sub.resultado(), note='Trabaja en paralelo; recoge su informe con wait_agent.')

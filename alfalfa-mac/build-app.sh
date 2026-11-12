@@ -10,11 +10,13 @@
 #
 # Uso:  ./build-app.sh                       → firma Developer ID si hay certificado, si no ad hoc
 #       IDENTIDAD=- ./build-app.sh           → firma ad hoc aunque haya certificado (para este Mac)
+#       IDENTIDAD=- CONFIGURACION=debug ./build-app.sh → compila una app de depuración
 #       REGENERAR_REQUISITOS=1 ./build-app.sh → vuelve a fijar las versiones de motor-requisitos.txt
 set -euo pipefail
 cd "$(dirname "$0")"
 MAC="$(pwd)"
 RAIZ="$(cd .. && pwd)"
+. "$RAIZ/distribucion/cuybrowser.sh"
 
 APP="dist/AlfalfaCode.app"
 CACHE=".build/empaquetado"
@@ -24,8 +26,16 @@ COMPILACION="${COMPILACION:-$(date +%Y%m%d%H%M)}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.13.14}"
 PYTHON_CLAVE="cpython-$PYTHON_VERSION-macos-aarch64-none"
 PYTHON_MENOR="${PYTHON_VERSION%.*}"
+CONFIGURACION="${CONFIGURACION:-release}"
 [ -n "$VERSION" ] || { echo "✗ no se pudo leer __version__ de alfalfa/__init__.py" >&2; exit 1; }
 command -v uv >/dev/null || { echo "✗ falta uv (brew install uv)" >&2; exit 1; }
+case "$CONFIGURACION" in
+  debug|release) ;;
+  *) echo "✗ CONFIGURACION debe ser debug o release" >&2; exit 1 ;;
+esac
+
+CUYBROWSER_ORIGEN="$CACHE/cuybrowser-$CUYBROWSER_VERSION-macos-arm64"
+cuybrowser_preparar "$CUYBROWSER_ORIGEN"
 
 # --- 1. Python propio (en caché: sólo se descarga la primera vez) ---------------------
 PYTHON_ORIGEN="$CACHE/python/$PYTHON_CLAVE"
@@ -45,12 +55,16 @@ if [ ! -f "$REQUISITOS" ] || [ -n "${REGENERAR_REQUISITOS:-}" ]; then
 fi
 
 # --- 3. La app de Mac ------------------------------------------------------------------
-swift build -c release --arch arm64
-BIN="$(swift build -c release --arch arm64 --show-bin-path)/AlfalfaCode"
+swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch arm64
+BIN="$(swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch arm64 --show-bin-path)/AlfalfaCode"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN" "$APP/Contents/MacOS/AlfalfaCode"
+CUYBROWSER="$APP/Contents/Helpers/cuybrowser"
+install -m 755 "$CUYBROWSER_ORIGEN" "$CUYBROWSER"
+cuybrowser_huella_correcta "$CUYBROWSER" \
+  || { echo "✗ CuyBrowser copiado no coincide con su huella SHA-256 fijada" >&2; exit 1; }
 # El icono va en Resources: la app empaquetada no usa la carpeta de recursos de SwiftPM.
 cp Sources/AlfalfaCode/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
@@ -66,6 +80,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleLocalizations</key>      <array><string>es</string></array>
   <key>CFBundleVersion</key>            <string>$COMPILACION</string>
   <key>CFBundleShortVersionString</key> <string>$VERSION</string>
+  <key>AlfalfaCuyBrowserVersion</key>    <string>$CUYBROWSER_VERSION</string>
   <key>CFBundleExecutable</key>         <string>AlfalfaCode</string>
   <key>CFBundlePackageType</key>        <string>APPL</string>
   <key>CFBundleIconFile</key>           <string>AppIcon</string>
@@ -87,6 +102,7 @@ PY="$MOTOR/python/bin/python3"
 LIB="$MOTOR/python/lib/python$PYTHON_MENOR"
 mkdir -p "$MOTOR"
 ditto "$PYTHON_ORIGEN" "$MOTOR/python"
+ditto "$RAIZ/distribucion/licencias/cuybrowser" "$MOTOR/licencias/cuybrowser"
 
 # Lo que un motor sin interfaz gráfica ni compilador no usa: menos peso y menos binarios que firmar.
 rm -rf "$MOTOR/python/include" "$MOTOR/python/share" "$MOTOR/python/lib/pkgconfig" \
@@ -194,6 +210,7 @@ while IFS= read -r f; do
   case "$f" in
     *.so|*.dylib) ;;
     */python/bin/*) firmar "$f" Motor.entitlements; n=$((n+1)) ;;
+    "$CUYBROWSER") cuybrowser_firmar "$f" "$IDENTIDAD" CuyBrowser.entitlements; n=$((n+1)) ;;
     *) firmar "$f"; n=$((n+1)) ;;
   esac
 done < "$BINARIOS"
@@ -207,6 +224,8 @@ PRUEBA_HOME="$(mktemp -d)"
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$MOTOR/alfalfa" --version
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$PY" -I -B -c \
   'import alfalfa.terminal, alfalfa.empaquetado as e, cuysearch, mcp, jsonschema, httpx; assert e.en_la_app(), "no se ve dentro de la app"'
+cuybrowser_comprobar_app "$APP" "$PRUEBA_HOME"
+echo "CuyBrowser $CUYBROWSER_VERSION: firma y arranque comprobados."
 "$MOTOR/bin/rg" --version | head -1
 # Sin otro git en el PATH, el de sustitución explica y falla; nunca llama a /usr/bin/git.
 AVISO_GIT="$(env -i PATH=/usr/bin:/bin "$MOTOR/sin-herramientas/git" status 2>&1 || true)"

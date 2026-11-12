@@ -28,6 +28,25 @@ public struct MissingKey: Equatable, Sendable {
     }
 }
 
+/// Los modelos de un proveedor en el selector: los recomendados arriba y el resto en «Más modelos».
+public enum ModelMenuSplit {
+    /// Los que la lista marca `recomendado: false` van a «Más modelos»; los marcados y los que no dicen
+    /// nada (Ollama, Alfalfa, los compatibles) se quedan arriba. Conserva el orden de la lista.
+    public static func split(_ names: [String], in models: [ModelInfo]) -> (recommended: [String], more: [String]) {
+        var recommended: [String] = []
+        var more: [String] = []
+        for name in names {
+            let listed = ModelProvider.listed(name, in: models)
+            if models.first(where: { $0.name == listed })?.recommended == false {
+                more.append(name)
+            } else {
+                recommended.append(name)
+            }
+        }
+        return (recommended, more)
+    }
+}
+
 /// Cómo se enseñan ventanas, precios y costes en el selector y en el panel.
 public enum CatalogFormat {
     /// Aviso que acompaña a cada modelo gratis.

@@ -97,7 +97,9 @@ def commands(spawned):
 def test_policy_is_enabled_only_by_terminal_manager_and_integrators_keep_their_catalog(session):
     rt, *_ = session
     assert isinstance(rt.command_policy, OnRequestPolicy)
-    assert rt.tool_specs is ON_REQUEST_TOOLS
+    # El catálogo on-request y, detrás, las herramientas de aprendizaje de AlfalfaCode (alfalfa/aprendizaje).
+    assert rt.tool_specs[:len(ON_REQUEST_TOOLS)] == ON_REQUEST_TOOLS
+    assert [t['function']['name'] for t in rt.tool_specs[len(ON_REQUEST_TOOLS):]] == ['memoria', 'habilidad']
     integrador = NativeRuntime(rt.manager, dict(rt.task, id='integrador'))
     assert integrador.command_policy is None and integrador.process_sandbox is None and integrador.tool_specs is TOOLS
     run = next(t for t in TOOLS if t['function']['name'] == 'run_command')['function']
@@ -357,9 +359,10 @@ REQUESTS = {
 
 def test_the_four_reasons_are_the_same_everywhere():
     # 'regla' (reglas del usuario, test_alfalfa_reglas.py) se suma a los cuatro de la política.
-    # 'modo' lo añaden Manual y Aceptar ediciones (permisos/modos.py); 'edicion' no es de la política.
+    # 'modo' lo añaden Manual y Aceptar ediciones (permisos/modos.py); 'edicion' y 'aprendizaje' (guardar
+    # memoria o una habilidad, alfalfa/aprendizaje) no son de la política.
     assert MOTIVOS == ('peligroso', 'red', 'salir_sandbox', 'reintento', 'regla', 'modo')
-    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {'edicion'}
+    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {'edicion', 'aprendizaje', 'contenido_externo'}
     assert set(MOTIVOS) == set(REQUESTS) | {'regla', 'modo'}
 
 
@@ -494,7 +497,7 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
     (tmp_path / 'basura').mkdir()
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]), ALFALFA_HOME=str(tmp_path / 'home'))
     proc = subprocess.Popen([sys.executable, '-c', STDIO_SESSION], cwd=tmp_path, env=env, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False, bufsize=0)
     rows = []
     try:
         while True:
@@ -502,7 +505,7 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
             row = json.loads(proc.stdout.readline())
             rows.append(row)
             if row['tipo'] == 'permiso':
-                proc.stdin.write(json.dumps(dict(tipo='permiso', id=row['id'], aprobado=True)) + '\n')
+                proc.stdin.write((json.dumps(dict(tipo='permiso', id=row['id'], aprobado=True)) + '\n').encode('utf-8'))
                 proc.stdin.flush()
             if row['tipo'] == 'turno_terminado':
                 break
@@ -513,8 +516,9 @@ def test_real_stdio_normal_command_without_permission_and_dangerous_with_reason(
             proc.kill()
             proc.wait()
     permissions = [r for r in rows if r['tipo'] == 'permiso']
-    assert len(permissions) == 1
-    assert permissions[0]['argv'] == ['rm', '-rf', 'basura'] and permissions[0]['motivo'] == 'peligroso'
+    # Leer el proyecto no añade el permiso de contenido externo: sólo pregunta la orden peligrosa.
+    assert [p['motivo'] for p in permissions] == ['peligroso']
+    assert all(p['argv'] == ['rm', '-rf', 'basura'] for p in permissions)
     assert permissions[0]['proposito'] == 'Borrar la carpeta desechable'
     assert (tmp_path / 'normal').read_text() == 'x' and not (tmp_path / 'basura').exists()
     assert rows[-1]['tipo'] == 'turno_terminado' and rows[-1]['estado'] == 'completed', rows[-1]

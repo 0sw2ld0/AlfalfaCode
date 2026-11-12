@@ -122,12 +122,22 @@ def test_native_runtime_completes_local_task_without_cuysearch(tmp_path, monkeyp
     monkeypatch.delenv('ALFALFA_CUYSEARCH_URL', raising=False)
     m = manager(tmp_path, monkeypatch)
     (Path.cwd() / 'value.txt').write_text('bad')
+    permisos = []
+
+    class Aprobar:
+        denied = 0
+
+        async def __call__(self, args):
+            permisos.append(args)
+
+    m.approval.interior = Aprobar()
     try:
         with patch.object(NativeRuntime, 'request', local_inference):
             assert asyncio.run(m.run(m.task['objective'])) == 0
         assert (Path.cwd() / 'value.txt').read_text() == 'good'
         assert m.task['status'] == 'completed'
         assert m.task['total_tokens'] == 36
+        assert permisos == []  # leer el proyecto no obliga a aprobar la edición en modo auto
         for name in ('event', 'save', 'transcript', 'context', 'conversation_task_error', 'terminate',
                      'directory', 'tasks', 'runners', 'processes', 'native_approvals', 'vision_slots'):
             assert hasattr(m, name)

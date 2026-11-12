@@ -8,6 +8,9 @@ struct SidePanel: View {
     let snapshot: GitSnapshot?
     let ollama: Bool?
     let timeline: Timeline?
+    /// El proveedor del modelo de la sesión («ollama», «openai»…) y su nombre para mostrar.
+    var providerID = "ollama"
+    var providerName = "Ollama"
     var canCompact = false
     var onCompact: (() -> Void)?
     var onStopProcess: ((String) -> Void)?
@@ -98,7 +101,7 @@ struct SidePanel: View {
                 }
                 lists(timeline)
                 if parts.estimated {
-                    Text("Reparto estimado por tamaño; el total lo mide Ollama.")
+                    Text("Reparto estimado por tamaño; el total lo mide \(providerName).")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 }
             } else {
@@ -347,12 +350,24 @@ struct SidePanel: View {
             } icon: {
                 Image(systemName: "arrow.triangle.branch")
             }
-            HStack(spacing: 6) {
-                Image(systemName: "circle.fill").font(.system(size: 7))
-                    .foregroundStyle(ollama == true ? Theme.alfalfa : (ollama == false ? Theme.danger : Theme.muted))
-                Text("Ollama")
-                Text(ollama == true ? "conectado" : (ollama == false ? "sin conexión" : "comprobando"))
-                    .foregroundStyle(Theme.muted)
+            if providerID == "ollama" {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.fill").font(.system(size: 7))
+                        .foregroundStyle(ollama == true ? Theme.alfalfa : (ollama == false ? Theme.danger : Theme.muted))
+                    Text("Ollama")
+                    Text(ollama == true ? "conectado" : (ollama == false ? "sin conexión" : "comprobando"))
+                        .foregroundStyle(Theme.muted)
+                }
+            } else {
+                // Con OpenAI, Anthropic u otro proveedor en la nube, el estado de Ollama no importa.
+                Label {
+                    HStack(spacing: 6) {
+                        Text(providerName)
+                        Text("proveedor del modelo").foregroundStyle(Theme.muted)
+                    }
+                } icon: {
+                    Image(systemName: "cloud")
+                }
             }
         }
         .font(.system(size: 13)).foregroundStyle(Theme.secondary)

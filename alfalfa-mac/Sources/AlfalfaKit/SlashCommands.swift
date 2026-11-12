@@ -50,6 +50,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
     case nuevo, modelo, esfuerzo, modo, compactar, contexto, estado, revisar, inicializar
     case renombrar, fijar, bifurcar, archivar, copiar, exportar, detener
     case procesos, cerrarProcesos = "cerrar-procesos"
+    case aprender
 
     public var name: String { rawValue }
 
@@ -73,6 +74,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .detener: return ["stop"]
         case .procesos: return ["ps"]
         case .cerrarProcesos: return ["clean"]
+        case .aprender: return ["learn"]
         }
     }
 
@@ -96,6 +98,7 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .detener: return "Detiene el turno en marcha"
         case .procesos: return "Lista los juegos, apps y servidores que siguen abiertos"
         case .cerrarProcesos: return "Cierra todas las órdenes en segundo plano"
+        case .aprender: return "Convierte una carpeta, una URL o unas notas en una habilidad que tú apruebas"
         }
     }
 
@@ -120,16 +123,17 @@ public enum SlashCommand: String, CaseIterable, Sendable {
         case .detener: return "stop.circle"
         case .procesos: return "terminal"
         case .cerrarProcesos: return "xmark.circle"
+        case .aprender: return "graduationcap"
         }
     }
 
     /// Admite texto detrás: `/modelo glm-5.3-flash:cloud`, `/renombrar Nuevo título`.
-    public var takesArgument: Bool { [.modelo, .esfuerzo, .modo, .contexto, .renombrar].contains(self) }
+    public var takesArgument: Bool { [.modelo, .esfuerzo, .modo, .contexto, .renombrar, .aprender].contains(self) }
 
     /// Como `available_during_task` de Codex: lo que cambia el hilo espera a que acabe el turno.
     public var availableDuringTurn: Bool {
         switch self {
-        case .revisar, .inicializar, .bifurcar: return false
+        case .revisar, .inicializar, .bifurcar, .aprender: return false
         default: return true
         }
     }

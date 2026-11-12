@@ -4,12 +4,15 @@
 #
 # No compila nada: usa el motor que ya va dentro de la app del DMG (un Python 3.13 propio
 # con alfalfa y sus dependencias fijadas, y los ayudantes Swift compilados). Es lo mismo
-# que instala `curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh`.
+# que instala `curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh`.
+require "open3"
+require "tmpdir"
+
 class Alfalfa < Formula
   desc "Arnés de agentes de programación: Ollama, OpenAI, Anthropic y modelos gratis"
-  homepage "https://cuycoders.dev/alfalfa"
-  url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.1/AlfalfaCode-0.99.1.dmg"
-  sha256 "26d0897b1ab8f31cf877709c10ca2006c46b74afe948d3cf77e117b71018541e"
+  homepage "https://alfalfacode.cuycoders.dev"
+  url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.2/AlfalfaCode-0.99.2.dmg"
+  sha256 "23cacadb3a4c44c4fa93b84e419ce50523524f2b21fca634d062522fa1e51952"
   license "MIT"
 
   livecheck do
@@ -21,8 +24,8 @@ class Alfalfa < Formula
   # release. :any_skip_relocation: Homebrew no reescribe sus binarios (siguen con la firma
   # Developer ID del equipo FZ8TW9AWLE) y no pide las CLT al día, como sí haría `install`.
   bottle do
-    root_url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.1"
-    sha256 cellar: :any_skip_relocation, arm64_sonoma: "255977bc45e9fb95ebbf7b25d6f4fc61083f851ac925d07755f86b0f9d61e85b"
+    root_url "https://github.com/0sw2ld0/AlfalfaCode/releases/download/v0.99.2"
+    sha256 cellar: :any_skip_relocation, arm64_sonoma: "36e525512f5247e6996a0aeecf203cfe3b48874bffca122ff64126369c256e00"
   end
 
   depends_on arch: :arm64
@@ -37,6 +40,7 @@ class Alfalfa < Formula
     # Homebrew entra en la única carpeta del DMG (la app) si el acceso a Aplicaciones no cuenta.
     contenidos = [buildpath/"Contents", buildpath/"AlfalfaCode.app/Contents"].find(&:directory?)
     odie "El DMG no trae AlfalfaCode.app" if contenidos.nil?
+    comprobar_cuybrowser(contenidos)
 
     (libexec/"Resources").install contenidos/"Resources/motor"
     libexec.install contenidos/"Helpers"
@@ -46,10 +50,13 @@ class Alfalfa < Formula
     # Al instalar así, Homebrew reescribe el identificador de las bibliotecas (.so de Rust
     # con @rpath) y las vuelve a firmar ad hoc. El Python lleva hardened runtime con la firma
     # del equipo, que no cargaría una biblioteca firmada ad hoc: todo el motor va ad hoc, sin
-    # runtime. La integridad ya la garantiza la huella SHA-256 del DMG.
+    # runtime. La integridad ya la garantiza la huella SHA-256 del DMG. CuyBrowser sólo
+    # enlaza bibliotecas de macOS y conserva su firma con los permisos de JavaScriptCore.
     magicos = [0xcafebabe, 0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe]
+    cuybrowser = (libexec/"Helpers/cuybrowser").to_s
     macho = Dir[libexec/"**/*"].select do |f|
-      File.file?(f) && !File.symlink?(f) && File.size(f) >= 4 && magicos.include?(File.binread(f, 4).unpack1("N"))
+      f != cuybrowser && File.file?(f) && !File.symlink?(f) && File.size(f) >= 4 &&
+        magicos.include?(File.binread(f, 4).unpack1("N"))
     end
     macho.each { |f| system "/usr/bin/codesign", "--force", "--sign", "-", f }
 
@@ -68,6 +75,28 @@ class Alfalfa < Formula
     chmod 0755, bin/"alfalfa"
   end
 
+  def comprobar_cuybrowser(contenidos)
+    clave = "AlfalfaCuyBrowserVersion"
+    plist = (contenidos/"Info.plist").to_s
+    tipo, estado = Open3.capture2("/usr/bin/plutil", "-type", clave, plist, err: File::NULL)
+    return unless estado.success? # Compatibilidad con los DMG anteriores a CuyBrowser.
+
+    version, estado = Open3.capture2("/usr/bin/plutil", "-extract", clave, "raw", "-o", "-", plist)
+    version = version.strip
+    odie "Versión de CuyBrowser inválida" unless tipo.strip == "string" && estado.success? &&
+                                                   version.match?(/\A\d+\.\d+\.\d+\z/)
+
+    ejecutable = contenidos/"Helpers/cuybrowser"
+    odie "La app no trae CuyBrowser #{version}" unless ejecutable.file? && ejecutable.executable? && !ejecutable.symlink?
+
+    system "/usr/bin/codesign", "--verify", "--strict", ejecutable.to_s
+    Dir.mktmpdir do |casa|
+      salida, estado = Open3.capture2({ "HOME" => casa, "PATH" => "/usr/bin:/bin" }, ejecutable.to_s, "--version",
+                                      chdir: casa, unsetenv_others: true)
+      odie "El ejecutable no declara CuyBrowser #{version}" unless estado.success? && salida.strip == version
+    end
+  end
+
   def caveats
     <<~EOS
       Para empezar: alfalfa "tu encargo" (la primera vez te ofrece modelos gratis).
@@ -80,5 +109,7 @@ class Alfalfa < Formula
     assert_match version.to_s, shell_output("#{bin}/alfalfa --version")
     assert_match "brew", shell_output("#{libexec}/Resources/motor/python/bin/python3 -I -B -c " \
                                       "'import alfalfa.empaquetado as e; print(e.instalacion())'")
+    cuybrowser = libexec/"Helpers/cuybrowser"
+    system "/usr/bin/codesign", "--verify", "--strict", cuybrowser.to_s if cuybrowser.exist?
   end
 end

@@ -27,7 +27,7 @@ brew install 0sw2ld0/tap/alfalfa              # la CLI
 o, sólo la CLI y sin Homebrew ni sudo:
 
 ```bash
-curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh
+curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 ```
 
 También vale bajar el DMG de la
@@ -58,7 +58,7 @@ Para desinstalar:
 
 ```bash
 brew uninstall alfalfa && brew uninstall --cask alfalfacode
-curl -fsSL https://cuycoders.dev/alfalfa/instalar.sh | sh -s -- --desinstalar
+curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar
 ```
 
 Ninguna de las dos borra `~/.alfalfa`, donde viven tus sesiones y ajustes.
@@ -121,8 +121,8 @@ El modelo dice con quién se habla:
 | Modelo | Proveedor |
 |---|---|
 | `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
-| `openai/gpt-6-luna` | OpenAI, con tu clave de la API (Responses API) |
-| `anthropic/claude-haiku-5-5`, `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5` | Anthropic (Claude), con tu clave de la API (Messages API) |
+| `openai/gpt-6-luna`, `openai/<modelo>` | OpenAI, con tu clave de la API (Responses API) |
+| `anthropic/claude-sonnet-5-5`, `anthropic/<modelo>` | Anthropic (Claude), con tu clave de la API (Messages API) |
 | `openrouter/…`, `opencode/…`, `<proveedor>/…` | un proveedor compatible con OpenAI del catálogo, con tu clave |
 | `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
 
@@ -147,11 +147,12 @@ también abre «Proveedores…» en el selector de modelo.
 Con tu clave de la API de Anthropic (se consigue en
 https://platform.claude.com/settings/keys), el uso se cobra en tu cuenta.
 
-- El selector ofrece Claude Haiku 5.5, Claude Sonnet 5.5 (el de por defecto si
-  Anthropic es el proveedor por defecto) y Claude Opus 5.5. Otros modelos de Claude
-  se añaden en `proveedores.json` (`"anthropic": {"modelos": ["claude-fable-5-1"]}`).
+- El selector recomienda Claude Haiku 5.5, Claude Sonnet 5.5 (el de por defecto si
+  Anthropic es el proveedor por defecto) y Claude Opus 5.5, y ofrece debajo los demás
+  modelos de tu cuenta (ver «Todos los modelos con tu clave»).
 - El esfuerzo de la sesión es el de Claude (`low` a `max`), con razonamiento
-  adaptativo. El razonamiento firmado vuelve al modelo con los resultados de las
+  adaptativo, ajustado a lo que admite cada modelo: Opus 4.6 no tiene `xhigh` y se
+  queda en `high`. El razonamiento firmado vuelve al modelo con los resultados de las
   herramientas, sólo en memoria.
 - El prompt del sistema y las herramientas van en la caché de prompts, y la
   conversación usa la caché automática. El coste cuenta aparte lo leído y lo
@@ -178,6 +179,40 @@ arroba, vale si la dirección ya está guardada o se fija a mano con
 El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
 ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
 enseña una barra con el % de la cuota del mes.
+
+### Todos los modelos con tu clave (OpenAI y Anthropic)
+
+Con tu propia clave de OpenAI o de Anthropic pagas tú el uso, así que el selector
+ofrece todos los modelos de tu cuenta que sirven para programar, no sólo los
+recomendados. (Un código de cortesía de Alfalfa Cloud sigue con los modelos que el
+servicio da a ese código.)
+
+- Con la clave se pide la lista real a `GET /v1/models` de cada proveedor, con un
+  tiempo de espera corto (5 s). Se guarda en `$ALFALFA_HOME/catalogo/modelos-openai.json`
+  y `modelos-anthropic.json` con su fecha y una huella de la cuenta (nunca la clave) y
+  se renueva cada 6 horas al listar los modelos; tras un fallo no se reintenta hasta
+  pasados 10 minutos. El motor nunca espera a la red: en cada turno lee la copia guardada.
+- Sin clave, sin red o si la lista nunca llegó, salen los modelos de ese proveedor en
+  el catálogo de models.dev.
+- Se cruza con models.dev para la ventana, el precio, los tramos de contexto largo, la
+  visión, el razonamiento y los esfuerzos. De Anthropic además vale lo que la propia API
+  dice de cada modelo (`capabilities`: esfuerzos, visión, razonamiento adaptativo;
+  `max_input_tokens`, `max_tokens` y `lifecycle`).
+- Sólo salen modelos de chat que llaman herramientas y no están retirados. En OpenAI
+  quedan fuera los embeddings, la voz (TTS, transcripción, audio y realtime, que no
+  hablan la Responses API), la imagen y el vídeo, la moderación, la búsqueda y los de
+  completions antiguos; en Anthropic, los `deprecated` y `retired`. Las instantáneas con
+  fecha de un modelo que también está (`gpt-4o-2024-08-06` junto a `gpt-4o`) no se repiten.
+- Un modelo que la API devuelve y models.dev no describe sale igual, con «no se sabe»:
+  sin precio y con la visión sin saber (se dejan adjuntar imágenes).
+- Arriba van los recomendados (GPT-6 Luna; Claude Haiku, Sonnet y Opus 5.5), que
+  conservan sus datos propios (la ventana de Luna, el tramo largo de Haiku), y los que
+  añadas a mano en `proveedores.json` (`"openai": {"modelos": ["gpt-6-sol"]}`); debajo,
+  el resto, los más nuevos primero. En la app, dentro del grupo del proveedor, el resto
+  va en el submenú «Más modelos».
+- El esfuerzo de la sesión se ajusta a cada modelo: el más cercano por debajo de entre
+  los que admite (GPT-5 no tiene `xhigh` y pide `high`; GPT-5 Pro sólo admite `high`).
+  A los que no razonan (GPT-4o, GPT-4.1) no se les manda razonamiento.
 
 ### Catálogo de modelos (models.dev)
 
@@ -338,6 +373,8 @@ alfalfa --modelo deepseek-v4.1-flash:cloud "corrige la prueba que falla"
 alfalfa --sesiones
 alfalfa --reanudar ID "sigue"
 alfalfa --bifurcar ID --turno T "prueba otra solución"
+alfalfa --volver ID --turno T          # conversación y código a antes de ese mensaje
+alfalfa --rehacer ID                   # devuelve el código que quitó el último deshacer
 alfalfa --comprobar-orden git push
 ```
 
@@ -374,6 +411,52 @@ del proyecto con `inspect_image`, como `view_image` en Codex: el mismo modelo de
 la sesión recibe la imagen y responde a la pregunta. Sin visión, la herramienta
 no se ofrece. Una aplicación que integra AlfalfaCode puede delegarlo en otra
 sesión con `alfalfa.ajustes.vision_delegada`.
+
+Al revés, el agente también puede enseñarte imágenes y vídeos, como en la app de Codex.
+Si responde con una línea `![Tolgrenn — caminar](/ruta/lamina.png)`, la app de Mac
+pinta ahí la imagen con el texto como pie de foto, y varias seguidas forman una
+cuadrícula. Valen PNG, JPG, HEIC, WebP, GIF (animado) y, en un reproductor sin sonido
+y en bucle si es corto, MP4 y MOV. Sólo archivos locales que existan, con ruta
+absoluta, `~/` o relativa a la carpeta de la sesión: una URL web se queda como enlace y
+nunca se descarga nada. Un clic la abre en Vista rápida y el menú contextual la muestra
+en Finder o la copia. Copiar o exportar la respuesta sigue dando el Markdown original, y
+en la terminal se ve la ruta.
+
+## Archivos: PDF, texto, código, Word y Excel
+
+```bash
+alfalfa --archivo informe.pdf --archivo datos.xlsx "resume el informe y cuadra las cifras"
+```
+
+Además de imágenes se adjuntan PDF, texto y código (txt, md, csv, json, yaml, py, swift,
+ts, go…), Word (.docx) y Excel (.xlsx): hasta 8 por mensaje, con un tope de 20 MB por
+PDF, Word o Excel y de 2 MB por archivo de texto. El texto lleva una etiqueta por
+archivo, `<file name="informe.pdf" path="/ruta/original">`, que la app enseña como un
+chip en la burbuja y que se conserva al reanudar. En `--stdio` el mensaje lleva
+`"archivos": ["/ruta/absoluta.pdf"]`. En la app se adjuntan igual que las imágenes (botón
+«+», ⌘V con un archivo copiado en Finder o soltándolos), y con cualquier modelo.
+
+El motor copia cada archivo a la carpeta privada de la sesión (`archivos/`, 0600) sin
+seguir enlaces simbólicos y extrae su texto una vez: el PDF con PDFKit de macOS, por
+páginas; Word y Excel leyendo su XML. Lo que llega al modelo depende de lo que admita:
+
+- **Claude API y OpenAI** (modelos con visión, capacidad `pdf` de `/api/show`): el PDF va
+  entero como documento (`document` en `/v1/messages`, `input_file` con `file_data` en la
+  Responses API), sin subirlo a ninguna Files API. Así el modelo ve también tablas e
+  imágenes de cada página. Con más de 100 páginas va su texto.
+- **Ollama, Alfalfa Cloud y los compatibles con OpenAI**: el texto extraído, dentro del
+  mensaje. Un PDF escaneado sin texto se dice tal cual («no tiene texto que se pueda
+  extraer») y el agente no debe inventar su contenido.
+
+Codex no manda archivos al modelo: su TUI sólo pone la ruta en el mensaje para que el
+agente lo lea con sus herramientas. Aquí se hace eso cuando no se puede leer: el aviso
+dice la ruta original. El contenido de un adjunto cuenta como contenido externo: va
+marcado como datos y no instrucciones, con los secretos del proyecto tapados, y cada
+acción posterior con efectos pide su aprobación, como tras un `read_file`. Si el texto
+de un PDF contiene un secreto, no se manda como documento (no se podría tapar dentro):
+va su texto con el secreto tapado. Lo que pesa cuenta para el presupuesto y la
+compactación (unos 2 000 tokens por página de PDF como documento); con más de 50 000
+tokens o 100 páginas se avisa, y el texto de un archivo se recorta a 400 000 caracteres.
 
 ## Cierre de cada turno
 
@@ -426,6 +509,84 @@ Al abrir una sesión guardada, la app carga su conversación (`alfalfa --histori
 abre un turno nuevo con `--reanudar ID "mensaje"`, también si la sesión ya estaba
 completada. Las interrumpidas o bloqueadas tienen además «Reanudar» para seguir
 sin mensaje.
+
+## Buscar en sesiones anteriores
+
+El agente tiene `buscar_sesiones`: busca en las conversaciones guardadas de otras
+sesiones para recordar qué se decidió, qué se probó o qué pediste. Devuelve
+fragmentos reales (nunca un resumen hecho por un modelo) con la sesión, el turno, la
+fecha y quién lo dijo, y cada resultado trae una `ref` para pedir los mensajes de
+alrededor (`alrededor: "a1b2c3#42"`). Sólo lee, así que está en todos los modos,
+también en Plan. La sesión en curso no entra: ya está en su contexto. La idea es la
+de `session_search` de Hermes Agent.
+
+```bash
+alfalfa --buscar-sesiones "compactación tarifa"         # sesiones de esta carpeta
+alfalfa --buscar-sesiones "compactación tarifa" --todas # de todas las carpetas
+alfalfa --ver-resultado a1b2c3d4e5f6a7b8#42             # los mensajes de alrededor
+alfalfa --reindexar                                     # rehacer el índice desde cero
+alfalfa --borrar-indice                                 # borrarlo (se rehace al buscar)
+```
+
+Con `--json` responden una línea `busqueda_sesiones`, `sesiones_alrededor` o
+`indice_sesiones`. `--tiempo S` (más de 0) limita lo que la búsqueda espera a que el
+índice se ponga al día, y una consulta que empieza por «-» va pegada a la opción
+(`--buscar-sesiones=-x`). En la app, «Buscar» de la barra lateral busca a la vez en
+los títulos y, con tres letras o más, dentro de las conversaciones (la misma orden,
+con `--todas`, `--incluir-externas` y `--tiempo 3`; al escribir otra letra, la
+búsqueda anterior se termina); al pulsar un resultado se abre su sesión en ese
+mensaje, y lo que viene de fuera lleva «de fuera».
+
+- **Dónde busca el agente.** Por defecto, sólo en las sesiones de la misma carpeta de
+  trabajo. Ampliarlo a todas lo decides tú: `alfalfa --alcance-busqueda todas` (se
+  guarda en `proveedores.json`; `carpeta` lo devuelve) o `ALFALFA_BUSCAR_SESIONES=todas`.
+- **Índice.** `$ALFALFA_HOME/indice/sesiones.sqlite3`, SQLite con FTS5 (sin tildes ni
+  mayúsculas; si las palabras enteras no dan nada, se prueban como prefijos). Si el Python
+  no trae FTS5, se busca con LIKE en la misma tabla. Se pone al día solo y por partes:
+  de cada `messages.jsonl` lee sólo lo que hay detrás de lo ya indexado, empezando por
+  las sesiones más recientes y con un tope de tiempo, así que una búsqueda del agente
+  nunca espera a indexarlo todo. Las sesiones viejas (versiones 1 a 4) también entran;
+  una línea a medias (un guardado cortado) se lee cuando esté entera.
+- **Secretos.** Se tapan al guardar en el índice (también el título de la sesión) y
+  otra vez al devolver: las claves conocidas de los proveedores y de los servidores
+  MCP; los campos con nombre sensible (token, key, password, auth, cookie…), también
+  si son listas y también como `"clave": "valor"` dentro de un texto (una salida larga
+  guardada cortada, un archivo leído; con comillas simples y con las barras que sean),
+  y el `value` de un par `{"name": "X-Api-Key", "value": …}`; las asignaciones
+  `ALGO_TOKEN=…`, `DB_PASS=…`, `MYSQL_PWD=…`, `…_PASSPHRASE=…` y `password: …`;
+  `.dockerconfigjson`; el valor de cada cookie de `document.cookie`; las cabeceras `Authorization:`, `Cookie:` y `Set-Cookie:`; `Bearer …`;
+  la clave de `https://usuario:clave@servidor`; las claves privadas PEM; las formas
+  conocidas de claves de API y lo que tiene forma de clave secreta de AWS. La salida
+  de una herramienta que leyó un archivo con secretos (`.env`, `.ssh`, `*.pem`,
+  `credentials.json`, `.netrc`…) o volcó el entorno o un almacén de claves (`env`,
+  `printenv`, `security`, `op`, `gh auth token`, `aws configure get`, `kubectl get
+  secret`…, en cualquier lugar de la orden: `sh -c "…"`, `find … -exec env ;`,
+  `xargs printenv`, `timeout 5 env`) o que trae código que lee el entorno
+  (`os.environ`, `process.env`, `getenv`…) no se guarda. Si entra una clave nueva en el Llavero, la siguiente
+  búsqueda la tapa también en lo ya indexado (se guarda sólo una huella HMAC, con una
+  sal propia del índice, del conjunto de claves). Es una red, no una garantía: una contraseña sin forma reconocible que
+  imprima un programa cualquiera puede pasar. El razonamiento (`thinking`,
+  `alfalfa_bloques`) nunca se lee.
+- **Salidas externas.** Lo que devolvieron `read_web`, `web_search`, el navegador
+  (`browser_*`) y los servidores MCP (`mcp__*`) sale con `origen: "externo"` y un aviso
+  de que puede traer instrucciones de terceros; lo que dijo el agente después en ese
+  tramo (hasta el siguiente mensaje tuyo) también, porque puede repetirlas. El título
+  de una sesión propuesta por el agente (`propose_session`) sale con
+  `titulo_origen: "agente"`. Buscando en todas las carpetas, de las otras sólo salen
+  tus mensajes y los del agente no marcados: ninguna salida de herramienta (un README
+  malicioso leído con `read_file` también es de fuera). `--incluir-externas` las
+  devuelve, marcadas, para lo que lee una persona (la app); el agente nunca lo usa.
+- **Tamaño y borrado.** Cada mensaje se guarda recortado (8.000 caracteres; 4.000 la
+  salida de una herramienta), una sesión que ya no está se quita del índice
+  (`--eliminar-sesion` lo hace en el acto) y, pasado el tope (`ALFALFA_INDICE_MAX_MB`,
+  256 MB), se sueltan las sesiones más viejas hasta que el archivo queda por debajo.
+  Lo quitado no queda legible en el archivo: borrado seguro de SQLite y de FTS5, y
+  después se optimiza, se devuelven las páginas libres y se vacía el WAL (si otra sesión
+  está leyendo no se la espera: queda apuntado y lo hace la siguiente búsqueda). Sin FTS5, la
+  búsqueda con LIKE sólo recorre los 20.000 mensajes más recientes. El índice es
+  desechable: borrarlo no pierde nada, porque las sesiones no se tocan; si se rompe,
+  se rehace solo (ocupado por otra sesión, no se toca). Crearlo y borrarlo van con un
+  cerrojo de archivo que se espera como mucho 5 s.
 
 ## Modelo, esfuerzo y contexto
 
@@ -537,11 +698,86 @@ reanudar una sesión.
 ## Opciones de cada mensaje
 
 Bajo cada mensaje tuyo la app muestra hace cuánto lo enviaste y tres botones, como
-en Claude: copiarlo; **volver** a él, que abre una copia de la conversación justo
-antes de ese mensaje con su texto en el cuadro para cambiarlo y reenviarlo; y
-**bifurcar**, que abre una sesión nueva con la conversación hasta ese mensaje y su
-respuesta. Los dos usan `--solo-bifurcar ID --turno T`; los archivos del proyecto
-no cambian.
+en Claude: copiarlo; **volver** a él; y **bifurcar**, que abre una sesión nueva con
+la conversación hasta ese mensaje y su respuesta (`--solo-bifurcar ID --turno T`; los
+archivos no cambian).
+
+## Volver a un mensaje y deshacer el código
+
+Antes y después de cada turno, AlfalfaCode guarda una instantánea del contenido de la
+carpeta de trabajo en un git aparte, fuera del proyecto:
+`$ALFALFA_HOME/instantaneas/<huella de la carpeta>` (`--git-dir` ahí, `--work-tree`
+en la carpeta). El `.git` del proyecto no se toca y funciona igual en una carpeta que
+no es repositorio. Como guarda la carpeta entera, cubre también lo que cambian las
+órdenes (`run_command`), no sólo las ediciones. Guarda los bytes tal cual (sin los
+`text`, `eol` ni `working-tree-encoding` de los `.gitattributes`). Respeta los
+`.gitignore`, el `.git/info/exclude` del proyecto y el ignore global de git; salta las
+cachés que ya conocen los permisos (`__pycache__`, `.pytest_cache`…), las carpetas
+`.tmp-…/`, `node_modules/` y los entornos de Python, los repositorios anidados, los
+archivos que no se pueden leer y los de más de 5 MB, y apunta todo lo que deja fuera.
+Las instantáneas de más de 30 días se borran, y también las más viejas si el almacén
+pasa de 2 GB (nunca las de los dos últimos días ni las de deshacer y rehacer).
+`ALFALFA_INSTANTANEAS=0` las apaga; un fallo al guardar una nunca para el turno.
+
+En un repositorio git no copia lo que el proyecto ya tiene: el almacén lee sus objetos
+(`objects/info/alternates` al almacén común, también desde un worktree) y la primera
+instantánea parte del árbol de HEAD, así que sólo escribe lo cambiado y lo nuevo. Se
+toma mientras el modelo ya responde: sólo la esperan las herramientas que pueden
+cambiar archivos (editar, órdenes, parches, subagentes, MCP…). Si tarda, la app y la
+terminal dicen «Preparando deshacer…» con el tamaño. Si no termina en 90 s, avisa una
+vez de que deshacer no está disponible en esa carpeta y no lo reintenta hasta el día
+siguiente. Si el proyecto reescribe su historia y un `git gc` borra objetos que una
+instantánea tomaba prestados, esos archivos no se restauran (salen como «perdido»).
+
+Al pulsar **volver** la app pregunta qué vuelve a antes del mensaje:
+
+- **Conversación y código**: la conversación sigue en una copia justo antes del
+  mensaje, con su texto en el cuadro, y los archivos vuelven a como estaban.
+- **Sólo conversación**: como hasta ahora; los archivos no cambian.
+- **Sólo código**: los archivos vuelven y la conversación sigue igual.
+
+Antes de tocar nada enseña qué archivos vuelven y cuáles no:
+
+- Sólo se restaura sin preguntar lo que el agente apuntó en la evidencia durante esos
+  turnos y sigue como lo dejó. Lo que cambió sin huella durante un turno con órdenes o
+  subagentes viene marcado como «probablemente una orden», para que lo confirmes. Lo
+  que cambiaste después del turno, lo que otro cambió durante un turno sin órdenes y
+  lo que el agente no tocó se queda como está, salvo que lo marques uno por uno.
+- Nunca borra algo que ya existía al empezar el turno sólo porque las instantáneas no
+  lo guardaban (un `.env` ignorado, un archivo grande, un repositorio anidado): se
+  queda y se avisa.
+- Restaurar no sigue enlaces ni escribe fuera de la carpeta, conserva los permisos y
+  atributos de los archivos que reescribe (sólo cambia su bit de ejecución) y sólo
+  quita carpetas vacías que creó el turno.
+- Dice con honestidad lo que no se deshace, leyendo las órdenes de esos turnos con el
+  clasificador de los permisos: `git push` y otras publicaciones, commits y ramas
+  (el `.git` no entra en las instantáneas), instalaciones, archivos fuera de la
+  carpeta, llamadas de red, cambios del sistema, herramientas MCP o del navegador,
+  las órdenes de los subagentes y los archivos que cambió el agente fuera de lo que
+  guardan las instantáneas.
+
+Al deshacer se guarda el estado que se quita: la conversación muestra una marca
+«Código deshecho» con **Rehacer**, que lo devuelve con la misma regla (lo que
+cambiaste después de deshacer no se pisa). Los archivos restaurados reciben una
+huella nueva en la evidencia (`changes`, `via: "deshacer"`) y la revisión del espacio
+sube, así que ninguna comprobación anterior sigue valiendo.
+
+Desde la terminal:
+
+```bash
+alfalfa --volver ID --turno T --vista-previa        # qué haría, sin tocar nada
+alfalfa --volver ID --turno T                       # conversación y código
+alfalfa --volver ID --turno T --alcance codigo      # sólo el código, en la misma sesión
+alfalfa --volver ID --turno T --alcance conversacion
+alfalfa --rehacer ID [--deshecho D]
+```
+
+En una terminal interactiva pregunta archivo por archivo por los que cambiaste
+después; si no, `--forzar RUTA` (se repite) los restaura igualmente. Con `--json`
+responde con líneas del protocolo de `--stdio`: `deshacer_vista` y `rehacer_vista`
+(vista previa), `deshecho` y, si la conversación sigue en otra sesión,
+`sesion_cambiada`. El historial (`--historial ID --json`) trae la marca como el campo
+`deshacer` de su evento.
 
 ## Modos de permisos
 
@@ -556,6 +792,13 @@ en cualquier momento; vale desde el siguiente turno.
 | `ediciones` | Aceptar ediciones: edita sin preguntar y pregunta antes de cada orden que no sólo lee |
 | `plan` | Sólo lee (sin herramientas de escritura ni órdenes) y propone un plan |
 | `omitir` | Aprueba todo sin preguntar, también fuera del sandbox; las reglas `prohibida` siguen mandando. La app pide confirmación |
+
+El hogar de AlfalfaCode (`ALFALFA_HOME`, por defecto `~/.alfalfa`) queda fuera de las
+herramientas de archivos y de las escrituras del sandbox, incluso al abrir una sesión
+en `~` o dentro del propio hogar. La protección se conserva en hooks, servidores MCP
+locales, diagnósticos y subagentes. Antes de iniciar el sandbox se comprueban los
+metadatos del hogar: si contiene archivos con enlaces duros o no se puede completar
+el recorrido, se rechaza el arranque para evitar escrituras por otro nombre.
 
 ## Permitir en esta sesión
 
@@ -629,17 +872,134 @@ corriente se duerme igual. Sólo sigue despierto con la tapa cerrada si está en
 con una pantalla externa (modo «clamshell»). Tampoco usa `pmset` ni pide contraseña de
 administrador.
 
+## Errores al editar (servidores de lenguaje)
+
+Como OpenCode, el agente ve los errores de lo que acaba de editar sin pedirlos: tras cada
+`write_file`, `edit_file` o `apply_patch`, el resultado de esa misma llamada trae los
+diagnósticos **nuevos** de los archivos tocados, con archivo, línea y columna, como
+mucho 20, primero los errores. «Nuevo» se decide alineando con difflib las líneas de
+antes y de después de la edición: un error viejo que bajó porque se añadieron líneas
+encima no cuenta, y uno igual a otro que se arregló en otro sitio sí. En un parche de
+varios archivos, lo de antes de cada uno se calcula con los demás también como antes.
+Ningún documento queda abierto en el servidor entre ediciones, así que lo que cambie
+una orden en disco se vuelve a leer.
+
+```json
+{"path": "Sources/Demo/Suma.swift", "before": "…", "after": "…",
+ "diagnosticos": {"nuevos": ["Sources/Demo/Suma.swift:2:16 error [SourceKit] Cannot convert value of type 'String' to expected argument type 'Int'"],
+                  "errores": 1, "revisado_con": ["sourcekit-lsp"],
+                  "nota": "Diagnósticos automáticos tras editar: orientan, pero no son una comprobación…"}}
+```
+
+Usa lo que ya está instalado; no instala nada:
+
+| Archivos | Servidor de lenguaje | Si no hay |
+|---|---|---|
+| Swift | `sourcekit-lsp` (viene con Xcode), con una base de datos de compilación propia | — |
+| Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff (o si falla), los errores de sintaxis del propio Python |
+| TypeScript/JavaScript | `typescript-language-server` (el del PATH antes que el de `node_modules`) | — |
+
+Además, si el proyecto tiene su linter configurado (`ruff.toml` o `[tool.ruff]`,
+la configuración de ESLint, `.swiftlint.yml`), se pasa sólo sobre los archivos tocados.
+Un linter que sale con un código que no es de «sin avisos» o «con avisos» (configuración
+rota, regla que no existe) cuenta como fallido, nunca como limpio.
+
+- Los servidores arrancan la primera vez que hacen falta, siguen vivos durante la sesión
+  (también para sus subagentes) y se cierran con ella.
+- **No alargan el turno**: cada edición espera como mucho 3 s
+  (`ALFALFA_DIAGNOSTICOS_ESPERA`). Lo que no contesta a tiempo se queda fuera y el
+  resultado lo dice en `sin_respuesta` («sourcekit-lsp no contestó en 3 s (sigue
+  arrancando…)»); un servidor que arranca sigue arrancando y sirve en la siguiente
+  edición. Uno que no termina de arrancar en 90 s se da por perdido en la sesión.
+  Con un paquete Swift, la primera edición prepara el paquete en el sandbox (unos 2 s, más
+  la caché de módulos del SDK la primera vez en el Mac, que se comparte entre proyectos) y
+  suele decir «prepara el paquete…»; después, centésimas. Si se cancela el turno, no queda
+  nada corriendo.
+- Un fallo de los diagnósticos nunca hace fallar la edición: la edición se hizo y el
+  resultado lo dice.
+- **No son una comprobación**: la evidencia sólo cuenta `run_checks`, y el resultado lo
+  recuerda en `nota`. Que no haya diagnósticos nuevos no verifica nada.
+- **Aislamiento y permisos**, porque estos programas cargan código del proyecto:
+  - pyright, `typescript-language-server`, ESLint, ruff y SwiftLint corren en el mismo
+    sandbox Seatbelt que las órdenes del agente (sin red, escribiendo sólo en el proyecto
+    y en las carpetas temporales). Sin Seatbelt no se lanzan.
+  - En **Manual** y **Aceptar ediciones**, donde apruebas cada orden, los que ejecutan
+    código del proyecto (pyright con el intérprete de su configuración, tsserver con sus
+    plugins, ESLint con su configuración JS) piden permiso una vez por sesión. Un programa
+    de `node_modules/.bin` lo pide en cualquier modo. ruff y SwiftLint sólo leen y no lo
+    piden. Un «no» también vale para toda la sesión.
+  - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
+    el sandbox bloquea): ejecuta el compilador de Swift sobre los archivos editados con tus
+    permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete y
+    sesión (Omitir permisos lo concede solo).
+  - **`sourcekit-lsp` nunca evalúa un `Package.swift`.** Un manifiesto es código y puede pedir
+    cualquier opción al compilador sin escribir su nombre (con `dlsym` o `@_silgen_name`,
+    por ejemplo, cargar un programa del repositorio como plugin de macros), así que ninguna
+    lista de nombres prohibidos lo cierra. En su lugar, AlfalfaCode evalúa el manifiesto
+    **dentro del sandbox** con `swift package describe` y sólo se queda con datos: los
+    objetivos de Swift, sus fuentes dentro del paquete y las dependencias entre ellos. Compila
+    en el sandbox, con `swiftc -emit-module` y opciones fijas, los módulos de los objetivos de
+    los que dependen otros, y escribe un `compile_commands.json` en
+    `~/Library/Caches/alfalfa/sourcekit`, donde el sandbox de las órdenes no escribe. Sus únicas
+    opciones son `-module-name`, `-sdk`, `-target`, `-swift-version`, `-parse-as-library` y
+    `-I`/`-F` de esa caché y de la plataforma: ninguna sale del manifiesto. `sourcekit-lsp` se
+    lanza en modo base de datos de compilación con esa carpeta como raíz y sólo recibe
+    archivos que están en la base; uno que no estuviera (el propio `Package.swift`) le haría
+    buscar un paquete. Los archivos sueltos van igual, cada uno con su orden fija. Si los
+    ajustes no se pueden sacar así, ese paquete se queda sin diagnósticos de Swift (se dice):
+    nunca se cae al modo SwiftPM.
+  - Por eso no se cargan las macros ni los plugins del paquete, ni las dependencias de otros
+    paquetes, ni los objetivos de C: los diagnósticos del código que los usa quedan
+    incompletos. Los módulos de otros objetivos se vuelven a compilar cuando cambian sus fuentes.
+  - `sourcekit-lsp` **no se lanza** si el proyecto trae algo que le haría ejecutar órdenes
+    o cambiar su configuración (`buildServer.json`, `.bsp/`, `.sourcekit-lsp/`,
+    `compile_commands.json`, `compile_flags.txt`, también en `build/`), desde la carpeta
+    del archivo hasta la raíz. Si aparece uno con el servidor en marcha, se cierra. Si
+    cambia el manifiesto o qué archivos hay, el paquete se prepara de nuevo y el servidor
+    se reinicia con la base nueva.
+  - Un programa del PATH que en realidad está dentro del proyecto (un `node_modules/.bin` o
+    un `.venv/bin` del repo puesto en el PATH) cuenta como del proyecto y pide permiso.
+- En la app, la fila de la edición enseña «2 errores · 1 aviso» y «incompleto» si algún
+  servidor no contestó.
+
+Está **encendido por defecto**. Para apagarlo:
+
+- en la terminal, `ALFALFA_DIAGNOSTICOS=0 alfalfa "…"` o `alfalfa --sin-diagnosticos "…"`;
+- para el usuario, `{"diagnosticos": false}` en `~/.alfalfa/ajustes.json`;
+- en un proyecto, `{"diagnosticos": false}` en `.alfalfa/ajustes.json`. El proyecto sólo
+  puede apagarlo: nunca enciende lo que el usuario apagó;
+- en la app, **Ajustes ▸ General ▸ Ver los errores al editar**. Vale desde la siguiente
+  edición, también en las sesiones abiertas. Por `--stdio`:
+  `{"tipo":"diagnosticos","activo":false}`.
+
 ## Mensajes con el agente ocupado
 
 Lo que escribes mientras el agente trabaja queda «en cola» y entra en su siguiente
-paso. Debajo del mensaje en cola hay dos botones:
+paso. Debajo del mensaje en cola hay una fila de acciones, como en Claude:
 
+- **Copiar**: copia su texto, sin las imágenes.
+- **Editar** (flecha circular): lo quita de la cola y lo devuelve al cuadro con sus
+  imágenes, detrás de lo que ya hubieras escrito.
 - **Redirigir**, como steer de Codex: el modelo deja la respuesta que estaba
   pensando y la empieza otra vez con tu mensaje dentro, sin cortar el turno.
   También corta las esperas de `wait_agent` y `command_status`; una orden que ya
   corre termina antes.
+- **Quitar** (✕): lo saca de la cola sin enviarlo.
 - **Enviar ahora**, como Claude Code: detiene el turno en marcha y tu mensaje abre
   el siguiente. La sesión sigue abierta («Turno interrumpido por el usuario»).
+
+Redirigir y Enviar ahora sólo salen con un turno en marcha. Editar y Quitar sólo
+funcionan mientras el mensaje no haya entrado en el contexto del modelo. Si ya entró,
+la app avisa («Ya lo leyó el agente») y el mensaje se queda en la conversación.
+
+Por `--stdio`, cada `{"tipo":"mensaje"}` puede llevar un `id` propio. Con
+`{"tipo":"quitar_de_cola","id":…}` el motor lo saca de la cola y responde
+`{"tipo":"quitado_de_cola","id":…,"quitado":true}`. Si no lo saca, responde con
+`"quitado":false` y un `motivo`: `entregado` si el modelo ya lo tiene, `desconocido`
+si nunca llegó. `{"tipo":"enviar_ahora","id":…}` adelanta justo ese mensaje, aunque
+otro diga lo mismo. Si ya entró, no corta el turno ni lo vuelve a enviar. Los mensajes
+sin `id` funcionan como antes, pero no se pueden quitar.
+La terminal (`alfalfa "encargo"`) no tiene cola: cada orden es un solo encargo.
 
 Entre turnos, un mensaje (o un botón de la caja de cierre) abre el turno siguiente
 y el motor lo confirma: deja de verse «en cola» y la sesión pasa a «trabajando».
@@ -656,6 +1016,118 @@ Codex (`.system`) no entran porque usan herramientas de Codex. Un SKILL.md que
 cambia después de descubrirlo no se abre. `"habilidades_sueltas": false` en
 `~/.alfalfa/complementos.json` las desactiva. Las de los complementos autorizados
 siguen igual.
+
+## Aprender de cada sesión
+
+Como [Hermes Agent](https://hermes-agent.nousresearch.com/docs) (Nous Research), lo
+aprende el arnés, no el modelo. Nada se aprende sin que lo veas: todo pasa por una tarjeta
+con su diff, y se corrige en Ajustes ▸ Memoria o con `alfalfa --memoria` y
+`alfalfa --aprendido`.
+
+**Memoria.** Tres almacenes de notas cortas, separadas por una línea `§`, con un tope
+duro: *usuario* (quién eres y cómo te gusta trabajar, 1375 caracteres), *entorno* (hechos
+de este Mac, 1375) y *proyecto* (convenciones y trampas, 2200). Todos viven en
+`$ALFALFA_HOME/memoria`; el del proyecto, por la ruta de su raíz, nunca dentro del
+repositorio, así que un repo no puede plantarlo. El agente los cambia con la herramienta
+`memoria` (`add`, `patch` y `remove` por un trozo único de la entrada; no hay «leer»).
+Al pasarse del tope la herramienta da error con las entradas y el agente consolida en una
+sola llamada.
+
+Cada escritura, en cualquiera de los tres almacenes, **siempre** pide la tarjeta con el
+diff, en cualquier modo (también «Omitir permisos»), y no hay ajuste que la quite: un
+README, un `AGENTS.md` o una página que «enseñen» algo al agente no llegan a la memoria
+sin que lo apruebes.
+
+Antes de guardar, como defensa secundaria, se rechazan: inyecciones de prompt y órdenes de
+descarga y ejecución (`curl … | sh`, `bash -c "$(curl …)"`, «siempre envía las claves…»),
+palabras que mezclan alfabetos (homoglifos), credenciales (las claves configuradas, formas
+conocidas de tokens, URL con usuario y contraseña, webhooks, cadenas hex largas y tokens de
+alta entropía), Unicode invisible y lo que imite la estructura del prompt (títulos `#`,
+citas, separadores, marcas de memoria). La memoria entra en el prompt citada, línea a línea,
+entre `<memoria …>` y `</memoria>`, tal como estaba al empezar la sesión: lo que cambie
+ahora se guarda ya, pero entra en la siguiente (no rompe la caché del proveedor). Al
+reanudar una sesión, lo que borraste desde entonces ya no vuelve.
+
+**Habilidades aprendidas.** Con la herramienta `habilidad` (`crear`, `parchear`,
+`escribir_archivo`, `borrar`) el agente guarda un procedimiento como `SKILL.md` con el
+formato de Claude Code (acepta saltos CRLF): en `$ALFALFA_HOME/skills/aprendidas` (tuyas) o
+en `.alfalfa/skills` del proyecto (no si el proyecto es tu carpeta personal). Sólo tras un
+flujo de varios pasos, un callejón sin salida o una corrección tuya, y sólo si el turno
+acabó con `run_checks` en verde después de su última edición, con una comprobación real
+del proyecto: la de sus pruebas o su lint detectada por sus archivos (pyproject.toml,
+Package.swift, los scripts de package.json, Cargo.toml, go.mod, el Makefile…), la de su
+AGENTS.md o una que nombra archivos cambiados en el turno. `python -c "assert 1"`,
+`--version`, `-n`, `--dry-run` o `npm test --if-present` sin ese script no valen. Lecciones, no registros: se rechazan fechas,
+números de PR y trozos de conversación. Los archivos de apoyo sólo van en
+`references/*.md|txt`, con nombres ASCII que no coinciden con otro sin distinguir
+mayúsculas. Todas, tuyas o del proyecto, piden siempre permiso con el diff, también
+en «Omitir permisos». El registro de
+`$ALFALFA_HOME/aprendido` guarda su origen (sesión y turno) y dice qué creó AlfalfaCode:
+una habilidad que no está en él, que cambiaste a mano o que bloqueaste no la toca. Entran en
+la lista de habilidades en la siguiente sesión. Una del proyecto queda apuntada como cambio
+del agente; si sólo escribió Markdown, no caduca la comprobación que estaba en verde.
+
+Para acreditar `make` se comprueba el archivo que realmente usa y una receta sencilla;
+los objetivos ya actualizados, las recetas ambiguas o las suites con cero pruebas o todas
+omitidas no valen. La carpeta efectiva de la orden cuenta. Si el envoltorio no puede
+validarse, ejecuta directamente las pruebas o el lint del proyecto.
+
+Las herramientas de archivos no escriben habilidades en `.alfalfa/skills`, `.agents/skills`,
+`.claude/skills` ni `.codex/skills`, tampoco en subproyectos. Las órdenes mantienen esas
+carpetas de instrucciones de solo lectura; las habilidades se guardan con su tarjeta.
+Antes de abrir el sandbox se comprueba que ninguna comparta archivos mediante enlaces
+duros. Si no se puede completar la comprobación, no se abre para escribir.
+
+**Repaso al cerrar el turno.** Si el turno tuvo muchos pasos, un fallo superado o una
+corrección tuya y cerró con `wrap_up`, una pasada breve sin razonamiento decide si hay algo
+que recordar o un procedimiento que guardar. Corre con el turno ya cerrado (en `--stdio`,
+después de `turno_terminado`) y como mucho 20 s; si llega otro mensaje o pulsas «Detener»,
+se deja (en la terminal, Ctrl-C). Usa el mismo proveedor y su modelo más barato
+de la familia, o el de `modelo_revision`; con un proveedor de plan o local sólo corre si lo
+eliges. Cuenta la entrada y la salida máxima contra el presupuesto y no corre si no
+alcanza. **Nunca aplica nada**: lo que propone queda pendiente y sale como tarjeta con el
+diff («Guardar» o «Descartar»; en la terminal, con la orden para aplicarlo), sin repetir lo
+que ya estaba propuesto. Al reabrir la sesión en la app, sus tarjetas pendientes vuelven.
+
+**`/aprender`** convierte una carpeta, una URL o unas notas en una habilidad
+(`/aprender docs/despliegue.md`, `/aprender https://…`), con la misma aprobación.
+
+La tarjeta enseña siempre el diff entero: un cambio que no cabe se rechaza, no se recorta.
+En Plan y en solo lectura no hay escrituras. Estas escrituras las hace el arnés, no una
+orden dentro del sandbox, así que validan cada ruta (relativa, sin `..` ni ocultos, nunca
+dentro de `.git` sin distinguir mayúsculas) y se hacen componente a componente con
+descriptores que no siguen enlaces, para que un enlace que aparezca a mitad no se siga.
+Los ajustes se releen en cada uso: apagar algo en Ajustes ▸ Memoria vale ya.
+
+El hogar de AlfalfaCode (`$ALFALFA_HOME`: memoria, habilidades aprendidas, propuestas,
+ajustes, proveedores, complementos, hooks, reglas y sesiones) no lo tocan ni las
+herramientas de archivos ni las órdenes, aunque caiga dentro de la carpeta de trabajo (una
+sesión en `~` con `~/.alfalfa`): las herramientas lo rechazan y el sandbox Seatbelt
+deniega escribir en él por su ruta real y sin distinguir mayúsculas, y renombrarlo. Lo que
+llegue a la memoria por otro camino se vuelve a escanear al empezar cada sesión, y una
+propuesta pendiente se recalcula desde sus operaciones: si no coincide con su diff, se
+descarta.
+
+```bash
+alfalfa --memoria                              # los tres almacenes de esta carpeta
+alfalfa --memoria escribir usuario --texto "Prefiere commits pequeños."   # o por la entrada estándar
+alfalfa --memoria quitar entorno "Xcode 25"
+alfalfa --aprendido                            # habilidades, propuestas y ajustes
+alfalfa --aprendido ver pasar-pruebas          # usuario:NOMBRE o proyecto:NOMBRE si hay dos
+alfalfa --aprendido bloquear pasar-pruebas     # el agente ya no la cambia; tú sí (editar)
+alfalfa --aprendido pendientes ver ID          # una propuesta con su diff entero
+alfalfa --aprendido aplicar ID                 # o descartar ID
+alfalfa --aprendido ajustes revision no        # memoria, habilidades o revision
+alfalfa --aprendido proyecto no                # no aprender nada en esta carpeta
+```
+
+`ALFALFA_APRENDER=0` lo apaga todo y `ALFALFA_APRENDER_REVISION=0` sólo el repaso. En
+`--stdio` el permiso trae `motivo: "aprendizaje"` y `diff`; el repaso emite
+`aprendizaje_propuesto` (`id`, `clase`, `almacen` o `accion`/`alcance`/`nombre`, `motivo`,
+`diff`) y la orden `{"tipo":"aprendizaje","id":…,"aplicar":true|false}` lo resuelve con
+`aprendizaje_resuelto` (`aplicado`, `descartada`, `texto`). Con `--json`, `--memoria`
+responde `memoria`; `--aprendido`, `aprendido` (o `habilidad` con `ver` y `pendiente` con
+`pendientes ver`).
 
 ## Subagentes
 
@@ -674,6 +1146,7 @@ tarjeta, que dice qué subagente pide.
   los tuyos en `.alfalfa/agents/*.md`, `.claude/agents/*.md` del proyecto,
   `~/.alfalfa/agents` o `~/.claude/agents`, con el formato de Claude Code
   (`name`, `description`, `tools`, `model` en la cabecera e instrucciones debajo).
+  También los de OpenCode que autorices (ver «Venir de OpenCode, Codex o Claude Code»).
   `tools: Read, Grep` se traduce a `read_file` y `search`; un modelo de Claude
   (`sonnet`, `inherit`…) usa el de la sesión.
 - Como en Codex, hay 6 trabajando como mucho y un subagente no lanza otros. En
@@ -685,6 +1158,117 @@ tarjeta, que dice qué subagente pide.
 La app los enseña en el panel «Subagentes» (tipo, modelo, estado, lo que hacen y
 sus pasos) y en el pie («2 subagentes trabajando»); sus pasos no se mezclan con la
 conversación principal.
+
+## Venir de OpenCode, Codex o Claude Code
+
+Un proyecto preparado para otra herramienta funciona en AlfalfaCode sin tocar nada.
+`alfalfa --importar` dice qué encontró en la carpeta y en qué estado está; en la app
+está en Ajustes ▸ Importar.
+
+| Herramienta | Qué se lee | Qué se usa |
+|---|---|---|
+| Estándar AGENTS.md | `AGENTS.md` / `AGENTS.override.md` de la raíz del repositorio a la carpeta de trabajo | Instrucciones |
+| Claude Code | `CLAUDE.md`, `.claude/CLAUDE.md` y `CLAUDE.local.md` de esas mismas carpetas; `.mcp.json` del proyecto; `.claude/commands/*.md` (del proyecto y de `~/.claude/commands`) | Instrucciones, servidores MCP, órdenes «/» |
+| OpenCode | `opencode.json(c)` y `.opencode/opencode.json(c)` del proyecto, `~/.config/opencode/opencode.json(c)`, `.opencode/agent(s)/*.md` y `.opencode/command(s)/*.md` | `mcp`, `agent`/`agents`, `command`/`commands` e `instructions` (formatos V1 y V2) |
+| Codex | `~/.codex/config.toml` y `.codex/config.toml` del proyecto | `[mcp_servers.*]`, `developer_instructions` y `project_doc_fallback_filenames` |
+
+**Instrucciones.** Entran en este orden y en el mismo tope de 32 KiB:
+`developer_instructions` de Codex (como hace Codex, delante); en cada carpeta, de la
+raíz a la de trabajo, `AGENTS.override.md`, `AGENTS.md` o un nombre alternativo de
+Codex, y después los CLAUDE.md; al final, los archivos de `instructions` de OpenCode
+(nunca URL). Un archivo que ya entró no se repite: ni el mismo, ni un enlace a él,
+ni otro con el mismo texto, y un CLAUDE.md que sólo dice `@AGENTS.md` no añade nada.
+Un archivo que enlaza fuera del proyecto no se lee. El `AGENTS.md` de `~/.alfalfa`
+sigue yendo primero.
+
+**Servidores MCP, agentes y órdenes «/»: se autorizan una vez, viendo qué hacen.**
+Como los complementos, lo que viene de una configuración ajena no se activa hasta
+que lo autorizas. La lista enseña de qué herramienta y de qué archivo viene cada
+uno y su definición sin resolver. De un servidor stdio enseña la orden entera con
+sus argumentos, sin recortar; una de más de 8000 caracteres (contados en crudo) no se
+usa. La de un servidor del proyecto se ve tal cual se ejecutará. En la de uno tuyo se
+tapan sólo los valores que son claramente una credencial: `--token=…`,
+`NOMBRE_TOKEN=…` (como `docker run -e`), el valor que sigue a `--api-key`, una cabecera
+(`Authorization: …`, `Cookie: …`, también tras `--header=` o `-H`), un token con prefijo
+conocido (`ghp_`, `github_pat_`, `sk-`, `xoxb-`, `glpat-`…), las claves con nombre de
+credencial de un JSON (y el `value` de un `{"name": "Authorization", …}`), y de una URL de
+cualquier esquema (también `postgresql://`, `mongodb+srv://`, `redis://`) o sin él, la
+contraseña de `usuario:contraseña@` (siempre, aunque sea corta), los valores secretos
+de la consulta o del fragmento y un tramo con forma de token. Los caracteres
+de control salen escritos. También enseña la ruta del ejecutable, avisando si es del
+repositorio, también si un servidor tuyo acaba lanzando un binario del repositorio
+abierto. Pasa con un `npx`, `npm exec`, `pnpm dlx` o `bunx` (aunque sean los globales),
+que ejecutan el `node_modules/.bin/<paquete>` del proyecto si existe, buscándolo desde la
+carpeta del proceso hacia arriba. Entonces la huella incluye ese binario y todo su
+contenido, y la autorización no vale en otro repositorio ni si el binario cambia. Si
+la definición declara un PATH, se busca con él, y un tramo vacío cuenta como la
+carpeta del proceso. Por último, la carpeta que podrá escribir, si
+tendrá internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
+Al empezar una sesión, un aviso dice qué queda sin autorizar.
+
+```bash
+alfalfa --importar                                # qué hay, su definición y su huella
+alfalfa --importar --autorizar mcp:docs@HUELLA    # lo que viste (la clave corta vale si no hay dudas)
+alfalfa --importar --autorizar todo               # en una terminal: todos los pendientes
+alfalfa --importar --autorizar todo --sin-internet
+alfalfa --importar --retirar agente:revisor
+```
+
+`CLAVE@HUELLA` sólo autoriza si el archivo sigue diciendo lo que viste: si cambió
+entre la lista y la autorización, se rechaza. Sin huella, o con `todo`, hace falta
+una terminal de verdad. Dentro de una sesión de AlfalfaCode no se autoriza nada,
+porque un agente no se da permisos. La app autoriza siempre con la huella, y
+«Autorizar todo» pide confirmación.
+
+La autorización queda en `~/.alfalfa/importadas.json` como una huella de lo que se
+usará (HMAC con una clave de este Mac). Si cambia algo (otra orden, otros argumentos,
+otro entorno, el archivo `{file:…}` del prompt de un agente), vuelve a «sin
+autorizar». Otro proyecto con un servidor del mismo nombre no hereda la autorización.
+
+- Los servidores corren como los de `mcp.json`: stdio dentro del sandbox Seatbelt
+  (con internet salvo `--sin-internet`) y cada llamada pide permiso. Sólo reciben el
+  entorno que declaran. Las referencias (`{env:X}` de OpenCode, `${X}` de Claude Code,
+  `env_vars` y `bearer_token_env_var` de Codex) se resuelven en memoria al abrir la
+  sesión y nunca entregan una clave de proveedor. Lo que sale de ellas, también en la
+  URL, se redacta como el entorno del servidor. Ninguna clave se copia a ningún
+  sitio. La lista enseña los valores literales que puso el proyecto y oculta los de
+  tu configuración.
+- La carpeta de un servidor stdio es la única que puede escribir. La de uno del
+  proyecto queda dentro del proyecto; si la raíz del repositorio es tu carpeta
+  personal (dotfiles), dentro de la carpeta de trabajo. Ninguna puede ser tu carpeta
+  personal ni una que la contenga. Tampoco puede estar dentro de `~/.alfalfa` ni
+  contenerla, ni estar dentro de un `.git` o de un repositorio desnudo, cuyos hooks
+  correrían fuera del sandbox. Las comparaciones no distinguen mayúsculas, como el
+  disco del Mac (`.GIT`, `~/.ALFALFA`). Si lo es, el servidor no se usa. El sandbox
+  tampoco abre para escribir una carpeta de trabajo que esté dentro de un `.git`.
+- `mcp.json` y los complementos ganan. Las capas de OpenCode se fusionan campo a
+  campo como en OpenCode: la más cercana gana, así que `{"gh": {"disabled": true}}`
+  en el proyecto apaga el `gh` del usuario. Luego va lo del proyecto (de la carpeta
+  de trabajo a la raíz, también las intermedias) y por último lo del usuario. Un
+  nombre repetido sale como «duplicado». Si lo tapado es algo que ya autorizaste, se
+  avisa.
+- Diferencias con las otras herramientas:
+  - OpenCode deja vacía una `{env:X}` que no existe; aquí el servidor no se inicia sin ella.
+  - Codex sigue sin una variable de `env_vars` que no existe; aquí también, con un aviso.
+  - OAuth no se usa, sólo las cabeceras. Un servidor remoto de OpenCode que dependa
+    de su OAuth por defecto lo avisa.
+  - Tampoco se usan `{file:…}` en un servidor, SSE ni `http_headers_helper` de Codex.
+- Un agente de OpenCode se usa como subagente (`spawn_agent`). Denegar editar
+  (`permission.edit`, `tools.write/edit: false` o las reglas V2 en orden, la última
+  gana) lo deja de sólo lectura, y denegar `bash` le quita las órdenes. Un deny
+  limitado a unas rutas no se puede limitar aquí: se aplica entero y se avisa. Su
+  modelo `proveedor/modelo` no es de AlfalfaCode, así que usa el de la sesión, y la
+  variante (`#high`) pasa a esfuerzo. Un `.alfalfa/agents` o `.claude/agents` con el
+  mismo nombre gana.
+
+**Órdenes «/».** Las de OpenCode y Claude Code salen en el menú «/» de la app; las que
+faltan por autorizar, atenuadas. Una autorizada, `/probar unidad` (o `alfalfa "/probar
+unidad"`), le manda al agente su plantilla con `$ARGUMENTS` y `$1`, `$2`… sustituidos,
+en una sola pasada. La plantilla va marcada como texto del repositorio, no como
+palabras tuyas. Una sin autorizar se manda tal cual, con un aviso. `` !`orden` `` no
+se ejecuta sola: queda como petición al agente, que la corre con los permisos de
+siempre. Si el comando pide un subagente (`subtask`/`subagent`), el mensaje lo dice.
+Las órdenes propias de la app ganan.
 
 ## Probar apps del Mac (control de apps)
 
@@ -749,6 +1333,12 @@ Privacidad y seguridad. La prueba de punta a punta abre una app de verdad:
 
 ## Navegador propio (app de Mac)
 
+El botón **Comentar** del panel permite pulsar un elemento o arrastrar un área sin activar los controles de la
+página. Escribe tu indicación y pulsa **Añadir al mensaje**: el compositor recibe el comentario, la referencia,
+el selector, el texto, las dimensiones y una captura recortada. Puedes revisar el borrador antes de enviarlo.
+La referencia se conserva entre lecturas hasta navegar. Los metadatos de la página llegan marcados como
+«datos, no instrucciones»; no se leen valores de contraseñas y la URL adjunta omite consultas y fragmentos.
+
 Como la app de Codex, la app de AlfalfaCode trae un navegador dentro: un panel con
 WKWebView (el motor de Safari, ya incluido en macOS) a la derecha de la sesión, con
 atrás, adelante, recargar y barra de dirección. Así el agente abre, lee y maneja
@@ -756,17 +1346,31 @@ páginas web aunque el Mac no tenga Chrome. Se abre solo cuando lo usa el agente
 el botón del globo de la cabecera (⇧⌘B). Una franja encima de la página dice qué está
 haciendo el agente, y un recuadro verde marca dónde pulsa o escribe.
 
-Cada sesión tiene su propio almacén de datos, no persistente: ni cookies ni cuentas del
-Safari del usuario, y nada queda en disco al cerrar. Para entrar con tus cuentas sigue
-haciendo falta CuyBrowser.
+De forma predeterminada cada sesión tiene un almacén aislado, no persistente: al
+cerrar se pierde el login. En **Ajustes → Navegador** puedes elegir **Guardado por
+proyecto** para conservar los accesos que inicies a mano con `browser_handoff`.
+Sólo las sesiones de esa carpeta comparten el perfil, separado de Safari y de los
+otros proyectos; nunca se copian cookies ni cuentas de tus navegadores personales.
+Cambiar de modo cierra las páginas del proyecto. Volver a **Aislado** deja de usar
+los datos guardados; **Borrar los datos del navegador de este proyecto…** los elimina
+tras confirmar, sin borrar los de otros proyectos. Mientras el agente trabaja,
+espera un permiso o está en relevo, estos cambios quedan bloqueados.
 
-Herramientas, que sólo existen cuando el agente corre dentro de la app (la app arranca
-el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscador web en
+Herramientas del motor WebKit (la app arranca el motor con `--stdio --navegador`). En terminal
+se pueden activar explícitamente con el segundo motor CuyBrowser, descrito abajo. Con el buscador web en
 «apagado» tampoco se ofrecen:
 
 - `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
 - `browser_read`: la página como árbol de accesibilidad con referencias
   (`- button «Enviar pedido» [e7] (envía el formulario)`) o como texto.
+- `browser_console`: los últimos mensajes de consola, errores sin capturar y rechazos de promesas.
+- `browser_network`: peticiones `fetch`, XHR y recursos observados (método, URL, estado y duración),
+  sin cuerpos ni cabeceras y con parámetros sensibles de URL redactados. Es observación desde la página,
+  no un HAR completo: puede omitir tráfico anterior, de marcos, workers o iniciado fuera de estos mecanismos.
+  Ambas herramientas sólo leen, guardan hasta 200 entradas por navegación y aceptan `limit`.
+- `browser_viewport`: `preset` mobile (390×844), tablet (768×1024), desktop (1100×800), o
+  `width` y `height` entre 200 y 4096 píxeles CSS. La vista se escala para caber en el panel.
+  Cambia el tamaño para probar el diseño adaptable; conserva la identidad de AlfalfaCode y no emula un dispositivo.
 - `browser_click` y `browser_type`: por referencia (`ref`) o por el texto visible
   (`target`); `browser_type` también elige en un desplegable y con `submit` pulsa Intro.
 - `browser_scroll`: la página, el contenedor que se desplaza o hasta un elemento.
@@ -774,6 +1378,20 @@ el motor con `--stdio --navegador`; en la terminal no se ofrecen). Con el buscad
   `question`, la mira el modelo de visión y vuelve la respuesta.
 - `browser_eval`: JavaScript que lee, en un mundo aislado de sólo lectura que la página
   no ve; con `modifies: true`, en la propia página y con permiso.
+- `browser_handoff`: el agente espera mientras haces tu parte (login, 2FA, captcha o pago).
+  El panel muestra el motivo, **Continuar** (⇧⌘↩) y **Cancelar**. Con `until.url_contains`,
+  Continuar requiere ese fragmento en la dirección. Las acciones del agente se bloquean
+  mientras espera, incluso en Plan; a los cinco minutos o al detener el turno se cancela.
+  El agente nunca resuelve captchas por su cuenta.
+- `browser_wait`: esperar texto visible, una referencia visible, un fragmento de URL o la
+  carga; una condición por llamada, con un plazo de hasta 30 segundos.
+- `browser_key`: Intro, Escape, Tab o flechas; admite `ref` y `target` para elegir el foco.
+  Si Intro enviaría un formulario, se pregunta antes.
+- `browser_hover`: pasar el puntero por un elemento, con eventos y CSS reales de WebKit,
+  sin mover tu ratón. Requiere que el panel de la app esté visible.
+- `browser_upload`: elegir hasta diez archivos del proyecto en un campo de subida (20 MiB
+  en total). Siempre pide permiso, también si la web los enviaría inmediatamente; no sigue
+  enlaces que salgan del proyecto. Teclas, hover y subida se deshabilitan en Plan y sólo lectura.
 - `browser_download`: descargar a una ruta del proyecto, sólo de direcciones públicas
   (también después de cada redirección y mirando a qué IP resuelve el nombre), hasta
   200 MB y unos 5 minutos; si no, se cancela y no queda nada a medias.
@@ -808,6 +1426,69 @@ El motor decide los permisos y la app sólo ejecuta (`alfalfa/navegador.py` y
 `"permiso":{"tipo":"formulario",…}` si la acción necesita aprobación: el motor pregunta
 y repite la petición con `permitido`.
 
+### Chromium con CuyBrowser
+
+En Ajustes → Navegador se puede elegir **CuyBrowser · Chromium** para las sesiones nuevas.
+WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
+
+```sh
+alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
+```
+
+La distribución de AlfalfaCode incluye CuyBrowser 0.6.0 en `Helpers`. Los clones y las
+instalaciones anteriores pueden usar un `cuybrowser` compatible de `PATH`. Para elegirlo
+en una instalación que ya lo incluye, usa el interruptor en Ajustes → Navegador o la opción
+`--cuybrowser-desde-path` de la CLI. El motor comprueba `exactOrigins` y `localNetwork`
+antes de abrir Chromium.
+
+`alfalfa --cuybrowser-estado` comprueba qué navegador compatible está disponible. Si falta,
+la app ofrece descargar Chromium de Playwright y `alfalfa --descargar-chromium` pide confirmación
+en la terminal. La descarga se comparte entre proyectos y cada uno conserva su perfil propio.
+En el primer uso interactivo de `--motor-navegador cuybrowser` puedes guardar la elección
+para la terminal. Se cambia con `alfalfa --cuybrowser-cli activar` o `desactivar`.
+
+El motor pide permiso una vez por sesión para iniciar el servidor fuera del sandbox. Usa HTTP
+autenticado en un puerto propio de `127.0.0.1`, sin proxies ni redirecciones. El hogar de CuyBrowser
+vive en `ALFALFA_HOME/cuybrowser/<hash de la raíz canónica del proyecto>` y conserva los logins
+de ese proyecto. Un bloqueo exclusivo impide que dos sesiones compartan el mismo navegador.
+No adopta un daemon preexistente ni detiene procesos de otros clientes. Al cerrar, detiene sólo
+su servidor y su daemon; los perfiles propios permanecen. Nunca copia cookies personales ni usa attach.
+
+La política de ese hogar debe conservar `approval: native-dialog`, todas las confirmaciones
+sensibles, bloqueo de campos sensibles y `attach.enabled: false`. El cliente comprueba `policy_show`
+antes de actuar y pide las confirmaciones a CuyBrowser mediante `confirm`: la persona decide en
+el diálogo del sistema. No se duplica la tarjeta sensible de AlfalfaCode. **Omitir permisos sólo
+omite las preguntas del motor; los diálogos independientes de CuyBrowser siguen activos.**
+Manual conserva su permiso por sitio y Plan/sólo lectura deshabilitan las herramientas de escritura.
+Para contraseñas, 2FA y captchas se usa el relevo; el agente nunca los resuelve ni disfraza su identidad.
+
+Las dieciséis herramientas mantienen sus nombres. El contenido web, los mensajes, las URLs y los
+títulos siguen marcados como datos, no instrucciones. Estas diferencias se comunican al agente:
+
+| Herramienta | Comportamiento de CuyBrowser |
+| --- | --- |
+| Navegar, leer, consola, red, viewport, pulsar, escribir, desplazar, captura, esperar y hover | Traducción HTTP nativa. Los diagnósticos de red no incluyen duraciones, cuerpos ni cabeceras. `type` admite campos editables, no selecciona opciones de un `<select>` nativo. |
+| `browser_eval` | Requiere `modifies: true` y que una persona haya habilitado `evaluate` en la política privada. Siempre pasa por su diálogo nativo. No existe un mundo JavaScript de sólo lectura y el motor no habilita la función automáticamente. |
+| `browser_handoff` | Espera la decisión de la persona en el diálogo del sistema, hasta 120 segundos. `until` devuelve un error de capacidad. Cancelar el turno detiene exclusivamente este navegador para interrumpir el relevo. |
+| `browser_key` | Usa el foco actual; `ref` y `target` para cambiarlo devuelven un error de capacidad. |
+| `browser_upload` | Hasta diez archivos del proyecto y 20 MiB. Rechaza enlaces simbólicos, duros, rutas privadas y salidas del proyecto. Prepara copias privadas de sólo lectura fuera del hogar de CuyBrowser; su diálogo aprueba esos mismos bytes aunque el proyecto cambie mientras espera. Las copias se eliminan al terminar o cancelar. |
+| `browser_download` | Descargar una URL a un archivo del proyecto requiere WebKit; CuyBrowser devuelve un error explícito. No se suplanta con JavaScript ni `fetch`. |
+
+El modo estricto de subrecursos requiere `strictResources: true`. Si el servidor sólo garantiza
+documentos por origen exacto, se rechaza ese modo y se indica usar WebKit. Una lista de hostnames
+nunca sustituye la política por origen (esquema, host y puerto). Sólo se configura la política del
+hogar exclusivo de AlfalfaCode, inicialmente cerrada antes de abrir el navegador.
+La excepción `local_network.allow_origins` se concede únicamente tras el permiso independiente
+de red local. Como las reglas de WebKit, la barrera de subrecursos compara URLs; la resolución
+de IP se comprueba en Python al navegar, y no protege contra cambios de DNS en cada recurso.
+Los permisos de **Una vez** viajan separados de los permisos de sesión/proyecto, mediante
+`origins.visit` con identificador propio y capacidad `visitLeases`. El motor retira los identificadores
+de `status.consumed_visits` antes de generar otra política, y al cerrar el navegador. Una respuesta
+atrasada no puede convertir una visita consumida en confianza permanente.
+El servidor compatible emplea un proxy privado antes de lanzar el perfil para proteger también
+recursos, workers y WebSocket, sin interceptar TLS. Los service workers se deshabilitan en ese perfil
+restringido; los workers dedicados y compartidos pueden funcionar.
+
 ## SwiftPM y apps dentro del sandbox
 
 SwiftPM abre su propio sandbox y macOS no deja anidarlo. Dentro del de AlfalfaCode,
@@ -827,9 +1508,10 @@ con un turno en marcha. También aceptan su nombre en inglés (`/model`, `/compa
 
 `/nuevo`, `/modelo`, `/esfuerzo`, `/compactar`, `/contexto`, `/estado`, `/revisar`,
 `/inicializar` (crea un AGENTS.md, como `/init` de Codex), `/renombrar`, `/fijar`,
-`/bifurcar`, `/archivar`, `/copiar`, `/exportar` (la conversación en Markdown) y
-`/detener`. Lo que empieza por «/» y no es una orden, como una ruta, se envía como
-mensaje normal.
+`/bifurcar`, `/archivar`, `/copiar`, `/exportar` (la conversación en Markdown),
+`/aprender` (ver «Aprender de cada sesión») y `/detener`. Lo que empieza por «/» y no es una orden, como una ruta, se envía como
+mensaje normal. Las órdenes del proyecto de OpenCode y Claude Code también salen en el
+menú (ver «Venir de OpenCode, Codex o Claude Code»).
 
 ## Cargar un chat de Ollama
 
@@ -889,9 +1571,14 @@ versión en sus dependencias.
 | `permisos/`, `seatbelt/`, `reglas/` | Permisos bajo demanda, sandbox de macOS y reglas de `reglas.toml` |
 | `mcp_cliente/`, `complementos/`, `hooks/` | Servidores MCP, complementos y hooks compatibles con Claude Code |
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
+| `importadas/` | Proyectos de OpenCode, Codex y Claude Code: MCP, agentes, órdenes «/» e instrucciones |
+| `deshacer/` | Instantáneas por turno en un git paralelo, volver con el código y rehacer |
+| `busqueda_sesiones/` | `buscar_sesiones` y `--buscar-sesiones`: índice FTS5 de las conversaciones guardadas |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
+| `diagnosticos/` | Servidores de lenguaje y linters tras cada edición |
 | `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |
 | `proveedores/openai.py`, `proveedores/anthropic.py` | OpenAI (Responses API) y Claude (Messages API) con la clave del usuario |
+| `proveedores/lista_api.py` | La lista real de modelos de OpenAI y Anthropic (`GET /v1/models`), con caché |
 
 ## Integrarlo en otra aplicación
 
@@ -930,6 +1617,14 @@ app de Mac está en [alfalfa-mac/TERCEROS.md](alfalfa-mac/TERCEROS.md).
 
 La búsqueda web usa la librería [CuySearch](https://github.com/0sw2ld0/CuySearch)
 (MIT) como dependencia.
+
+«Aprender de cada sesión» toma ideas, no código, de
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs) (Nous Research, MIT): sus
+almacenes de memoria con tope y escaneo, `skill_manage` y su repaso en segundo plano.
+
+La idea de `buscar_sesiones` viene de `session_search` de
+[Hermes Agent](https://hermes-agent.nousresearch.com/docs) (Nous Research); no se tomó
+código.
 
 El catálogo de modelos viene de [models.dev](https://models.dev) (MIT); ver
 [alfalfa/catalogo/PROCEDENCIA.md](alfalfa/catalogo/PROCEDENCIA.md).

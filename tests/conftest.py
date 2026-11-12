@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 # La suite no debe heredar el entorno de quien la corre: una sesión de
 # AlfalfaCode exporta su hogar, su Ollama y sus referencias.
@@ -8,9 +9,20 @@ for _nombre in [n for n in os.environ if n.startswith(_PREFIJOS)]:
 # Ni los procesos hijos de la suite (`alfalfa --stdio` de verdad) mantienen el Mac despierto:
 # test_mantener_despierto lo enciende donde lo prueba.
 os.environ['ALFALFA_MANTENER_DESPIERTO'] = '0'
+# Ni las configuraciones de OpenCode, Codex y Claude Code de quien corre la suite (alfalfa/importadas),
+# tampoco en los procesos hijos.
+os.environ['ALFALFA_IMPORTAR_CASA'] = tempfile.mkdtemp(prefix='casa-ajena-')
+# Ni lanzan servidores de lenguaje ni linters tras cada edición: test_diagnosticos los enciende.
+os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
+# Ni la revisión de aprendizaje al cerrar el turno pide nada al modelo falso: test_aprendizaje la enciende.
+os.environ['ALFALFA_APRENDER_REVISION'] = '0'
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
+
+from tests.aislamiento_python import preparar  # noqa: E402
+
+preparar()
 
 
 @pytest.fixture(autouse=True)
@@ -38,10 +50,34 @@ def _catalogo_sin_red(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _lista_de_modelos_sin_red(monkeypatch):
+    """`GET /v1/models` de OpenAI y Anthropic nunca sale a la red: sin copia guardada, models.dev.
+    Las pruebas de la lista ponen su propio transporte falso."""
+    import httpx
+
+    from alfalfa.proveedores import lista_api
+
+    def sin_red(peticion):
+        raise httpx.ConnectError('sin red en las pruebas', request=peticion)
+
+    monkeypatch.setattr(lista_api, '_transporte', httpx.MockTransport(sin_red))
+    lista_api.olvidar()
+    yield
+    lista_api.olvidar()
+
+
+@pytest.fixture(autouse=True)
 def _sin_habilidades_del_usuario(tmp_path_factory, monkeypatch):
     """Las habilidades sueltas de ~/.claude/skills y ~/.codex/skills de quien corre la suite no entran."""
     from alfalfa.complementos import cargador
     monkeypatch.setattr(cargador, 'CASA', tmp_path_factory.mktemp('casa'))
+
+
+@pytest.fixture(autouse=True)
+def _sin_configuraciones_ajenas_del_usuario(tmp_path_factory, monkeypatch):
+    """~/.codex/config.toml, ~/.config/opencode y ~/.claude/commands de quien corre la suite no entran."""
+    from alfalfa import importadas
+    monkeypatch.setattr(importadas, 'CASA', tmp_path_factory.mktemp('casa-ajena'))
 
 
 @pytest.fixture(autouse=True)
@@ -84,3 +120,32 @@ def _como_con_ollama(monkeypatch):
     test_primera_vez lo quita donde prueba la bienvenida."""
     from alfalfa import primera_vez
     monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: True)
+
+
+@pytest.fixture(autouse=True)
+def _sourcekit_en_un_temporal(tmp_path_factory, monkeypatch):
+    """Ninguna prueba compila en el ~/Library/Caches/alfalfa/sourcekit de quien corre la suite.
+
+    La carpeta temporal tiene la misma forma que la de verdad (…/Library/Caches/alfalfa/sourcekit), así
+    que el TMPDIR de sourcekit-lsp contiene «alfalfa» como en el Mac del usuario: un manifiesto que mire
+    eso se porta en las pruebas como se portaría de verdad. Una sola para toda la suite, para que la caché
+    de módulos del SDK se haga una vez.
+    """
+    import hashlib
+
+    from alfalfa import diagnosticos
+    base = tmp_path_factory.getbasetemp() / 'Library' / 'Caches' / 'alfalfa' / 'sourcekit'
+    monkeypatch.setattr(diagnosticos, 'carpeta_de_sourcekit',
+                        lambda raiz: base / hashlib.sha256(str(raiz).encode()).hexdigest()[:16])
+
+
+_CACHE_DEL_USUARIO = os.path.join(os.path.expanduser('~'), 'Library', 'Caches', 'alfalfa')
+_HABIA_CACHE = os.path.exists(_CACHE_DEL_USUARIO)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Si la suite creó ~/Library/Caches/alfalfa, alguna prueba lanzó sourcekit-lsp sin redirigir su caché."""
+    if not _HABIA_CACHE and os.path.exists(_CACHE_DEL_USUARIO):
+        session.exitstatus = 1
+        print('\nERROR: la suite creó ' + _CACHE_DEL_USUARIO + '; una prueba no redirigió la caché de '
+              'sourcekit-lsp (bórrala y busca cuál).')

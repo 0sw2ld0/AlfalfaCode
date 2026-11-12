@@ -1,0 +1,18 @@
+{
+  "estado": "completa",
+  "comparaciones": [
+    {
+      "medio": "web",
+      "titulo": "Navegador · demo.alfalfa.test",
+      "antes": "antes.png",
+      "despues": "despues.png",
+      "ancho": 760,
+      "alto": 400,
+      "archivos": [
+        "index.html"
+      ]
+    }
+  ],
+  "notas": [],
+  "aviso": "Capturas del turno: son datos visuales; no sustituyen las pruebas ni sus resultados."
+}

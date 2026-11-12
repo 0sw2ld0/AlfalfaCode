@@ -20,10 +20,18 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var ollama: Bool?
     @Published private(set) var answered: Set<String> = []
     @Published private(set) var stopping = false
+    @Published private(set) var reviewingCode = false
+    @Published private(set) var workingQueue = false
+    @Published private var liveBrowserExport: String?
+    private var pendingQueueAction: TaskQueueAction?
+    private var previousQueueID: String?
     /// Imágenes elegidas para la próxima indicación.
     @Published var draftImages: [URL] = []
     /// Texto que la vista pone en el cuadro al abrir la sesión (volver a un mensaje).
     @Published var pendingDraft: String?
+    /// El principio del mensaje al que se llega desde la búsqueda de la barra lateral: la vista lo
+    /// busca en la conversación, lleva ahí el desplazamiento y lo borra.
+    @Published var searchAnchor: String?
     /// «Este modelo no ve imágenes» al pegar o soltar una con un modelo sin visión.
     let imageNotice = ImageNotice()
 
@@ -31,12 +39,11 @@ final class LiveSession: ObservableObject, Identifiable {
     /// El navegador propio de la sesión (herramientas browser_* del agente), con su almacén de datos aislado.
     /// Se crea con la primera petición del agente o al pulsar el globo (`openBrowser`).
     @Published private(set) var browser: BrowserEngine?
+    let browserBackend = BrowserEnginePreferences().engine
     private var process: AlfalfaProcess?
     /// El usuario se fue de la sesión: al quedar libre se cierra stdin del proceso.
     private(set) var releaseWhenParked = false
     private var lastRefresh = Date.distantPast
-
-    var sessionID: String? { timeline.session?.id ?? resumeID }
 
     /// Sesión guardada abierta sin proceso: el primer mensaje la reanuda con `--reanudar`.
     private var dormantLauncher: URL?
@@ -49,8 +56,6 @@ final class LiveSession: ObservableObject, Identifiable {
     /// «Seguir en una sesión nueva»: el motor creó la sesión con el resumen; la app la abre.
     var onContinued: ((String) -> Void)?
     var isDormant: Bool { dormantLauncher != nil }
-    /// Se puede escribir: hay proceso abierto o la sesión duerme hasta el siguiente mensaje.
-    var canSend: Bool { timeline.status.isActive || isDormant }
     /// La orden alfalfa con la que arrancó, para reanudarla después.
     private var launcher: URL?
     /// Interrumpida o bloqueada: se puede reanudar sin mensaje. Una completada necesita uno.
@@ -96,16 +101,20 @@ final class LiveSession: ObservableObject, Identifiable {
         self.mode = mode
     }
 
-    func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false) {
+    func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
-        let arguments = Launcher.stdioArguments(task: task, resume: resumeID,
-                                                model: resumeID == nil || settingsChanged ? model : nil,
-                                                effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
-                                                images: images.map(\.path), mode: mode, wait: wait,
-                                                parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-                                                keepAwake: Preferences().keepAwake, browser: true,
-                                                budget: Preferences().sessionBudget(for: sessionID),
-                                                monthlyBudget: Preferences().monthlyBudget)
+        liveBrowserExport = nil
+        let browserPreferences = BrowserEnginePreferences()
+        let arguments = Launcher.stdioArguments(
+            task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
+            effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
+            images: images.map(\.path), mode: mode, wait: wait,
+            parent: parentSessionID, title: parentSessionID == nil ? nil : title,
+            keepAwake: Preferences().keepAwake, browser: true,
+            budget: Preferences().sessionBudget(for: sessionID), monthlyBudget: Preferences().monthlyBudget,
+            diagnostics: Preferences().diagnostics, commitSignature: Preferences().commitSignature, queue: queue,
+            browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
+            cuyBrowserFromPath: browserPreferences.fromPath)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
@@ -126,16 +135,36 @@ final class LiveSession: ObservableObject, Identifiable {
 
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
+        if case let .taskQueue(queue) = message,
+           pendingQueueAction.map({ queue.acknowledges($0, previousID: previousQueueID) }) ?? true {
+            pendingQueueAction = nil
+            workingQueue = queue.running
+        }
+        if case let .codeReview(review) = message { reviewingCode = review.state == "revisando" }
+        if case .error = message {
+            pendingQueueAction = nil
+            reviewingCode = false
+            workingQueue = timeline.taskQueue?.running == true
+        }
         onChange?()
         // El motor no abrió turno con ese mensaje: vuelve al cuadro, con sus imágenes.
         if case let .messageRejected(rejection) = message {
             // El cuadro añade el texto a lo que ya se haya escrito (Composer); las imágenes se suman.
-            if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta." { pendingDraft = rejection.text }
+            if !rejection.text.isEmpty, rejection.text != "Mira la imagen adjunta.",
+               rejection.text != "Lee el archivo adjunto." { pendingDraft = rejection.text }
             draftImages = ImageSupport.restoredImages(current: draftImages, returned: rejection.images)
         }
-        if case let .turnFinished(outcome) = message { onTurnFinished?(outcome) }
+        // «Quitar» o «Editar» de un mensaje en cola: el motor lo sacó (o ya lo leyó, y queda el aviso).
+        if case let .unqueued(id, removed, reason) = message,
+           let gone = timeline.unqueued(id: id, removed: removed, reason: reason), gone.action == .edit {
+            returnToComposer(gone.text)
+        }
+        if case let .turnFinished(outcome) = message {
+            liveBrowserExport = outcome.state == "completed" ? outcome.wrapUp?.browserExport?.id : nil
+            onTurnFinished?(outcome)
+        }
         if case let .browser(request) = message { answerBrowser(request) }
-        if releaseWhenParked, process != nil, timeline.liveProcesses.isEmpty,
+        if releaseWhenParked, !reviewingCode, !workingQueue, process != nil, timeline.liveProcesses.isEmpty,
            let action = ReleasePolicy.onUpdate(status: timeline.status) {
             shutdown(interrupt: action == .cancelAndClose)
         }
@@ -152,6 +181,10 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     private func exited(code: Int32, stderr: String) {
+        workingQueue = false
+        pendingQueueAction = nil
+        reviewingCode = false
+        liveBrowserExport = nil
         timeline.processExited(code: code)
         let detail = stderr.split(separator: "\n").suffix(3).joined(separator: "\n")
         if !detail.isEmpty && !timeline.finished { timeline.addNotice(detail) }
@@ -188,20 +221,22 @@ final class LiveSession: ObservableObject, Identifiable {
         if isDormant, !clean.isEmpty || !images.isEmpty {
             let urls = draftImages
             draftImages = []
-            wake(with: clean.isEmpty ? "Mira la imagen adjunta." : clean, images: urls)
+            wake(with: clean.isEmpty ? Attachments.placeholder(for: images) : clean, images: urls)
             return
         }
         guard !clean.isEmpty || !images.isEmpty, process != nil else { return }
-        timeline.addUser(ImageTags.join(clean, images: images), queued: true)
-        process?.send(.message(clean, images: images))
+        let queueID = Self.newQueueID()
+        timeline.addUser(ImageTags.join(clean, images: images), queued: true, queueID: queueID)
+        process?.send(.message(clean, images: images, id: queueID))
         draftImages = []
     }
 
     /// «Enviar ahora» de un mensaje en cola, como en Claude Code: el turno en marcha se corta y
     /// este mensaje abre el siguiente. La sesión sigue abierta.
-    func sendNow(_ text: String) {
+    /// Con `item`, va el id con el que se encoló: el motor adelanta justo ese mensaje.
+    func sendNow(_ text: String, item: Int? = nil) {
         guard process != nil, timeline.status.isRunning else { return }
-        process?.send(.sendNow(text))
+        process?.send(.sendNow(text, id: item.flatMap { timeline.queueIDs[$0] }))
     }
 
     /// «Redirigir», como steer de Codex: el modelo deja lo que estaba pensando y lee ya los
@@ -215,11 +250,60 @@ final class LiveSession: ObservableObject, Identifiable {
     func reply(_ text: String) {
         if isDormant { wake(with: text); return }
         guard process != nil, timeline.status.isActive, !timeline.status.isRunning else { return }
-        timeline.addUser(text, queued: true)
-        process?.send(.message(text))
+        let queueID = Self.newQueueID()
+        timeline.addUser(text, queued: true, queueID: queueID)
+        process?.send(.message(text, id: queueID))
     }
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
+
+    func queue(_ action: TaskQueueAction, tasks: [String] = [], mode: String = "serie", parallelism: Int = 2,
+               initial: Bool = false) {
+        guard canSend else { return }
+        if (action == .prepare || action == .start) && !initial {
+            guard !timeline.status.isRunning, !reviewingCode, !workingQueue else { return }
+        }
+        if isDormant { openWaiting() }
+        guard let process else { return }
+        if action == .prepare || action == .start {
+            workingQueue = true
+            pendingQueueAction = action
+            previousQueueID = timeline.taskQueue?.id
+        }
+        process.send(.taskQueue(action, tasks: tasks, mode: mode, parallelism: parallelism))
+    }
+
+    func reviewCode(_ review: CodeReview, model: String) {
+        guard review.canRequest, canSend, !reviewingCode, !timeline.status.isRunning,
+              CodeReview.identity(of: model) != CodeReview.identity(of: review.author) else { return }
+        if isDormant { openWaiting() }
+        reviewingCode = true
+        process?.send(.reviewCode(turn: review.turn, model: model))
+    }
+
+    func cancelCodeReview() {
+        if isDormant { openWaiting() }
+        process?.send(.cancelCodeReview)
+    }
+
+    /// El usuario escribió en el cuadro: la frase sugerida se va. Sin sugerencia no toca la línea
+    /// de tiempo, para no repintar la sesión con cada tecla.
+    func dismissSuggestion() {
+        if timeline.suggestion != nil { timeline.dismissSuggestion() }
+    }
+
+    /// La tarjeta de una propuesta de aprendizaje: sólo desde sus botones. Con la sesión dormida
+    /// la propuesta sigue en Ajustes ▸ Memoria.
+    func resolveLearning(_ id: String, apply: Bool) {
+        let key = "aprendizaje:" + id
+        guard !answered.contains(key) else { return }
+        guard let process else {
+            timeline.addNotice("La sesión está cerrada: guarda o descarta la propuesta en Ajustes ▸ Memoria.")
+            return
+        }
+        answered.insert(key)
+        process.send(.learning(id: id, apply: apply))
+    }
 
     /// Como /model en Codex: vale para el siguiente turno; el que está en marcha sigue igual.
     func change(model newModel: String? = nil, effort newEffort: String? = nil, mode newMode: String? = nil) {
@@ -332,6 +416,13 @@ final class LiveSession: ObservableObject, Identifiable {
         onChange?()
     }
 
+    /// La marca de un deshacer o rehacer del código; el panel vuelve a leer los cambios de la carpeta.
+    func addUndo(_ step: UndoStep) {
+        timeline.addUndo(step)
+        onChange?()
+        Task { await refreshPanel() }
+    }
+
     func addNotice(_ text: String) {
         timeline.addNotice(text)
         onChange?()
@@ -351,7 +442,7 @@ final class LiveSession: ObservableObject, Identifiable {
     /// Bifurcar o volver a un mensaje lo necesitan; con un turno en marcha no se toca.
     func releaseProcess() async -> Bool {
         guard process != nil else { return true }
-        guard !timeline.status.isRunning else { return false }
+        guard !timeline.status.isRunning, !reviewingCode, !workingQueue else { return false }
         shutdown(interrupt: false)
         for _ in 0..<100 where process != nil {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -371,6 +462,7 @@ final class LiveSession: ObservableObject, Identifiable {
         guard process != nil else { return }
         // Un juego o un servidor en segundo plano se cerraría con el proceso: se queda abierto.
         guard timeline.liveProcesses.isEmpty else { return }
+        if reviewingCode || workingQueue { releaseWhenParked = true; return }
         switch ReleasePolicy.onLeave(status: timeline.status) {
         case .closeNow: shutdown(interrupt: false)
         case .cancelAndClose: shutdown()
@@ -383,8 +475,31 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// Hay un proceso vivo esperando órdenes, sin turno ni permiso en curso.
     var isParked: Bool {
-        process != nil && ReleasePolicy.isParked(timeline.status)
+        process != nil && !reviewingCode && !workingQueue && ReleasePolicy.isParked(timeline.status)
     }
+}
+
+// MARK: - Mensajes en cola
+
+extension LiveSession {
+    /// «Quitar» (X) y «Editar» de un mensaje en cola. Se pide al motor, que sólo lo saca si aún
+    /// no entró en el contexto; sin proceso no hay cola en el motor y se quita ya.
+    func unqueue(item: Int, action: UnqueueAction) {
+        if process == nil {
+            if let text = timeline.removeQueued(item: item), action == .edit { returnToComposer(text) }
+            return
+        }
+        guard let id = timeline.requestUnqueue(item: item, action: action) else { return }
+        process?.send(.unqueue(id))
+    }
+
+    /// Como el rechazo por imágenes: el texto se suma a lo que haya en el cuadro y las imágenes, a las suyas.
+    fileprivate func returnToComposer(_ text: String) {
+        let parts = ImageTags.split(text)
+        if !parts.text.isEmpty { pendingDraft = parts.text }
+        draftImages = ImageSupport.restoredImages(current: draftImages, returned: parts.attachments)
+    }
+
 }
 
 // MARK: - Sesiones hijas
@@ -406,8 +521,9 @@ extension LiveSession {
             return
         }
         guard process != nil else { return }
-        timeline.addUser(note, queued: true)
-        process?.send(.message(note))
+        let queueID = Self.newQueueID()
+        timeline.addUser(note, queued: true, queueID: queueID)
+        process?.send(.message(note, id: queueID))
     }
 }
 
@@ -424,6 +540,16 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Presupuesto: los topes nuevos valen ya, también a mitad de turno.
     func setBudget(session: Double?, month: Double?) {
         process?.send(.budget(session: session, month: month))
+    }
+
+    /// Ajustes ▸ General ▸ Ver los errores al editar: vale desde la siguiente edición.
+    func setDiagnostics(_ on: Bool) {
+        process?.send(.diagnostics(on))
+    }
+
+    /// Ajustes ▸ General ▸ Firmar los commits: vale desde el siguiente `git commit`.
+    func setCommitSignature(_ on: Bool) {
+        process?.send(.commitSignature(on))
     }
 
     /// El tope propio de esta sesión (nil: sigue el de Ajustes).
@@ -447,7 +573,10 @@ extension LiveSession {
     @discardableResult
     func openBrowser() -> BrowserEngine {
         if let browser { return browser }
-        let engine = BrowserEngine()
+        let engine = BrowserEngine(dataStore: BrowserProfiles.shared.dataStore(forProject: cwd))
+        engine.onAnnotation = { [weak self] annotation, comment in
+            self?.addBrowserAnnotation(annotation, comment: comment)
+        }
         browser = engine
         return engine
     }
@@ -458,6 +587,20 @@ extension LiveSession {
         browser = nil
     }
 
+    func browserExportBlock(_ id: String) -> String? {
+        guard process?.isRunning == true, liveBrowserExport == id else {
+            return "La propuesta ya no está disponible en el motor de esta sesión."
+        }
+        if readOnly || mode == PermissionMode.plan.rawValue { return "Plan y solo lectura no permiten guardar." }
+        if timeline.status.isRunning || reviewingCode || workingQueue { return "Espera a que termine el trabajo." }
+        return nil
+    }
+
+    func exportBrowserTest(id: String, path: String) {
+        guard browserExportBlock(id) == nil else { return }
+        process?.send(.exportBrowserTest(id: id, path: path))
+    }
+
     /// El agente usa el navegador: el panel se abre y la respuesta vuelve al motor. El motor las
     /// manda de una en una; BrowserEngine.perform las ejecuta en orden aunque una llegue tarde.
     private func answerBrowser(_ request: BrowserRequest) {
@@ -466,5 +609,16 @@ extension LiveSession {
             let reply = await engine.perform(request)
             self?.process?.send(.browserReply(reply))
         }
+    }
+}
+
+// MARK: - Permisos por sitio
+
+extension LiveSession {
+    /// Sólo desde los botones con el alcance visible; nunca concede confianza por una respuesta de la página.
+    func answerSitePermission(_ id: String, scope: String) {
+        guard !answered.contains(id), ["una_vez", "sesion", "proyecto"].contains(scope) else { return }
+        answered.insert(id)
+        process?.send(.permission(id: id, approved: true, site: scope))
     }
 }

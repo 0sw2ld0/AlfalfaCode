@@ -36,6 +36,16 @@ def nombre(clave):
     return valor if isinstance(valor, str) and valor else NOMBRES[clave]
 
 
+def firma_de_commits():
+    """La línea `Co-Authored-By` que se añade a los `git commit` del agente, o None para no firmar.
+
+    Por defecto es la de AlfalfaCode (`alfalfa.firma.FIRMA`). Un integrador la cambia por la suya o la
+    quita. El usuario la apaga con `--sin-firma`, `ALFALFA_FIRMA=0` o Ajustes ▸ General.
+    """
+    from .firma import FIRMA
+    return FIRMA
+
+
 def ramas_de_avance():
     """Ramas, además de main y origin/main, a las que un agente puede avanzar con `git merge --ff-only`."""
     return ()

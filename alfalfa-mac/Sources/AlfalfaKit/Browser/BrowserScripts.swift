@@ -8,7 +8,8 @@ enum BrowserScripts {
     /// Lo que comparten todos: referencias, visibilidad, rol, nombre accesible y búsqueda.
     static let prelude = #"""
     const A = globalThis.__alfalfa ??= { refs: new Map(), next: 1, doc: null };
-    if (A.doc !== document) { A.refs = new Map(); A.next = 1; A.doc = document; }
+    if (A.doc !== document) { A.refs = new Map(); A.next = 1; A.doc = document; A.documentID = null; }
+    A.documentID ??= String(Date.now()) + ":" + String(Math.random());
     const clean = (t, n = 120) => {
       const s = String(t ?? '').replace(/\s+/g, ' ').trim();
       return s.length > n ? s.slice(0, n - 1) + '…' : s;
@@ -156,9 +157,9 @@ extension BrowserScripts {
     const max = Math.max(500, Math.min(args.max || 15000, 15000));
     if (args.modo === 'texto') {
       const text = (document.body?.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-      return { texto: text.slice(0, max), recortado: text.length > max };
+      return { texto: text.slice(0, max), recortado: text.length > max, documento: A.documentID };
     }
-    A.refs = new Map(); A.next = 1;
+    // Las anotaciones del usuario y las lecturas comparten referencias hasta la siguiente navegación.
     const CONTEXT = new Set(['form', 'navigation', 'main', 'dialog']);
     const lines = [];
     let size = 0, cut = false, last = '';
@@ -238,7 +239,7 @@ extension BrowserScripts {
       if (t) push(el, 'text «' + t + '»');
     }
     if (document.body) walk(document.body);
-    return { arbol: lines.join('\n'), referencias: A.next - 1, recortado: cut };
+    return { arbol: lines.join('\n'), referencias: A.next - 1, recortado: cut, documento: A.documentID };
     """#
 
 }
@@ -265,7 +266,7 @@ extension BrowserScripts {
     el.dispatchEvent(new PointerEvent('pointerup', opts));
     el.dispatchEvent(new MouseEvent('mouseup', opts));
     el.click();
-    return { elemento: describe(el) };
+    return form ? { elemento: describe(el), envio_formulario: true } : { elemento: describe(el) };
     """#
 
 }

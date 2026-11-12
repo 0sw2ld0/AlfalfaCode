@@ -13,23 +13,35 @@ from __future__ import annotations
 
 import base64
 import json
+import re
+import time
 from urllib.parse import urlsplit
 
 import httpx
 
-from . import Proveedor
+from . import Proveedor, elegir_esfuerzo, lista_api, ordenar_por_fecha, sin_instantaneas
 from .ollama import validar_url
 
 URL = 'https://api.openai.com/v1'
-# Lo que se ofrece en el selector, con la ventana real (developers.openai.com, 2026-11-09).
+# Los recomendados, arriba en el selector, con la ventana real (developers.openai.com, 2026-11-09).
 # Por encima de 272K tokens de entrada OpenAI cobra 2× la entrada y 1,5× la salida de toda
-# la petición: el modo Ahorro de la sesión compacta antes (catalogo.tarifa).
+# la petición: el modo Ahorro de la sesión compacta antes (catalogo.tarifa). Con la clave
+# se ofrecen además los demás modelos de chat de la cuenta (`GET /v1/models`), debajo.
 CATALOGO = {
-    'gpt-6-luna': {'nombre': 'GPT-6 Luna', 'ventana': 1_050_000, 'vision': True},
+    'gpt-6-luna': {'nombre': 'GPT-6 Luna', 'ventana': 1_050_000, 'vision': True,
+                   'esfuerzos': ['none', 'low', 'medium', 'high', 'xhigh', 'max']},
 }
 MODELO_POR_DEFECTO = 'gpt-6-luna'
 # El esfuerzo de la sesión es el de OpenAI tal cual; `think: false` lo apaga.
 ESFUERZOS = {'low': 'low', 'medium': 'medium', 'high': 'high', 'xhigh': 'xhigh', 'max': 'max'}
+# Lo que `GET /v1/models` devuelve y no es un modelo de chat que hable la Responses API
+# (developers.openai.com/api/docs/models): embeddings, voz (TTS, transcripción, audio y
+# realtime, que sólo hablan Chat Completions o la Realtime API), imagen y vídeo, moderación,
+# búsqueda y computer use (ya apagados) y los de completions antiguos.
+NO_CHAT = re.compile(r'embedding|tts|whisper|transcri|audio|realtime|^gpt-live|translate|diariz|image|dall-e|'
+                     r'sora|moderation|search|computer-use|instruct|^babbage|^davinci', re.IGNORECASE)
+# Los que razonan cuando el catálogo no los describe: serie o y GPT-5 en adelante.
+_RAZONA = re.compile(r'^(o\d|gpt-(?:[5-9]|\d\d))')
 
 
 def _mime(dato):
@@ -51,6 +63,14 @@ def _imagen(dato):
     return {'type': 'input_image', 'detail': 'auto', 'image_url': 'data:' + _mime(dato) + ';base64,' + dato}
 
 
+def _archivos(lista):
+    """Los PDF adjuntos (alfalfa.adjuntos) como `input_file` con `file_data`, sin la Files API."""
+    return [{'type': 'input_file', 'filename': str(d.get('nombre') or 'documento.pdf')[:200],
+             'file_data': 'data:application/pdf;base64,' + d['data']}
+            for d in lista or [] if isinstance(d, dict) and isinstance(d.get('data'), str) and d['data']
+            and d.get('mime') == 'application/pdf']
+
+
 def _texto(valor):
     return valor if isinstance(valor, str) else ('' if valor is None else json.dumps(valor, ensure_ascii=False))
 
@@ -61,8 +81,29 @@ def _argumentos(valor):
     return json.dumps(valor if valor is not None else {}, ensure_ascii=False)
 
 
-def traducir_peticion(payload, esfuerzo=None, identificador=None):
-    """El cuerpo de `/v1/responses` para un `/api/chat` de Ollama."""
+def es_de_chat(modelo):
+    """¿Un id de la lista de OpenAI que puede ser un modelo de chat por la Responses API?"""
+    return isinstance(modelo, str) and not NO_CHAT.search(modelo)
+
+
+def razonamiento(modelo):
+    """(razona, esfuerzos admitidos) de un modelo de OpenAI: lo propio, lo de models.dev o, si
+    nadie lo describe, por su nombre (razona None: no se sabe; esfuerzos None: los de la sesión)."""
+    if modelo in CATALOGO:
+        return True, list(CATALOGO[modelo]['esfuerzos'])
+    from .. import catalogo
+    ficha = catalogo.ficha('openai', modelo)
+    if ficha:
+        return bool(ficha.get('razona')), (list(ficha['esfuerzos']) if ficha.get('esfuerzos') else None)
+    return (True if _RAZONA.match(str(modelo or '')) else None), None
+
+
+def traducir_peticion(payload, esfuerzo=None, identificador=None, razona=None, admitidos=None):
+    """El cuerpo de `/v1/responses` para un `/api/chat` de Ollama.
+
+    `razona` False: el modelo no razona y no se manda `reasoning` (GPT-4.1 lo rechaza).
+    `admitidos`: los esfuerzos que acepta el modelo; se pide el más cercano al de la sesión.
+    """
     instrucciones, entrada = [], []
     # Las llamadas sin resultado todavía, en orden: el motor guarda cada
     # resultado como {'role': 'tool', 'tool_name': …} sin el id de la llamada.
@@ -113,7 +154,8 @@ def traducir_peticion(payload, esfuerzo=None, identificador=None):
                                 'arguments': _argumentos(funcion.get('arguments'))})
                 pendientes.append((ident, nombre))
         else:
-            partes = ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes
+            partes = _archivos(mensaje.get('documentos')) \
+                + ([{'type': 'input_text', 'text': contenido}] if contenido else []) + imagenes
             entrada.append({'role': 'user', 'content': partes or [{'type': 'input_text', 'text': ''}]})
     cerrar_pendientes()
 
@@ -130,7 +172,16 @@ def traducir_peticion(payload, esfuerzo=None, identificador=None):
     if isinstance(opciones.get('num_predict'), int) and opciones['num_predict'] > 0:
         cuerpo['max_output_tokens'] = opciones['num_predict']
     # Los modelos que razonan no admiten temperature ni top_p: no se mandan.
-    if payload.get('think') is False:
+    if razona is False:
+        pass
+    elif admitidos:
+        if payload.get('think') is False:
+            nivel = 'none' if 'none' in admitidos else elegir_esfuerzo(admitidos, 'minimal')
+        else:
+            nivel = elegir_esfuerzo(admitidos, ESFUERZOS.get(esfuerzo, 'medium'))
+        if nivel:
+            cuerpo['reasoning'] = {'effort': nivel, **({} if nivel == 'none' else {'summary': 'auto'})}
+    elif payload.get('think') is False:
         cuerpo['reasoning'] = {'effort': 'none'}
     else:
         cuerpo['reasoning'] = {'effort': ESFUERZOS.get(esfuerzo, 'medium'), 'summary': 'auto'}
@@ -198,7 +249,10 @@ def mostrar(modelo):
     externa = catalogo.ficha('openai', modelo) or {}
     ficha = CATALOGO.get(modelo) or {'ventana': externa.get('ventana') or 128000,
                                      'vision': bool(externa.get('vision'))}
-    capacidades = ['completion', 'tools', 'thinking'] + (['vision'] if ficha.get('vision') else [])
+    razona = razonamiento(modelo)[0]
+    # La Responses API lee PDF (`input_file`) en los modelos con visión: texto e imagen de cada página.
+    capacidades = ['completion', 'tools'] + ([] if razona is False else ['thinking']) \
+        + (['vision', 'pdf'] if ficha.get('vision') else [])
     info = {'capabilities': capacidades, 'remote_host': URL, 'remote_model': modelo,
             'details': {'family': 'gpt'}, 'model_info': {'openai.context_length': ficha['ventana']}}
     if modelo not in CATALOGO and not externa:
@@ -236,7 +290,8 @@ class Transporte(httpx.AsyncBaseTransport):
             return _json(200, {'models': [{'name': m} for m in CATALOGO]})
         if ruta != '/api/chat':
             return _json(404, {'error': 'ruta no disponible con OpenAI: ' + ruta})
-        cuerpo = traducir_peticion(pedido, self.tarea.get('effort'))
+        razona, admitidos = razonamiento(pedido.get('model'))
+        cuerpo = traducir_peticion(pedido, self.tarea.get('effort'), razona=razona, admitidos=admitidos)
         respuesta = await self.http.post(self.url + '/responses', json=cuerpo)
         try:
             datos = respuesta.json()
@@ -299,23 +354,61 @@ class OpenAI(Proveedor):
         return httpx.AsyncClient(base_url='https://openai.alfalfa.invalid',
                                  transport=Transporte(self.url(), clave, tarea, timeout), timeout=timeout)
 
-    def modelos(self):
+    def lista(self, red=True):
+        """Las filas de `GET /v1/models` de esta cuenta (caché de `lista_api`), o None si no hay."""
+        clave = self.clave()
+        if not clave:
+            return None
+        try:
+            url = self.url()
+        except ValueError:
+            return None
+        return lista_api.modelos(self.id, url, clave, lambda: lista_api.bajar_openai(url, clave), red)
+
+    def candidatos(self, red=True):
+        """Los ids de chat que se ofrecen además de los recomendados: los de la cuenta o, sin
+        clave o sin lista, los de models.dev. Fuera lo que no es de chat, lo que no llama
+        herramientas y lo retirado; un modelo que models.dev no describe se queda."""
+        from .. import catalogo
+        api = self.lista(red)
+        if api is None:
+            ids = list((catalogo.proveedor(self.id) or {}).get('modelos') or {})
+        else:
+            hoy = time.strftime('%Y-%m-%d')
+            ids = [m['id'] for m in api if not (m.get('apagado') and m['apagado'] <= hoy)]
+        elegidos = []
+        for m in ids:
+            ficha = self.ficha(m)
+            if not es_de_chat(m) or (ficha and (not ficha.get('herramientas') or ficha.get('estado') == 'deprecated')):
+                continue
+            elegidos.append(m)
+        fechas = {m['id']: m.get('fecha') for m in api or []}
+        return ordenar_por_fecha(sin_instantaneas(elegidos),
+                                 lambda m: (self.ficha(m) or {}).get('fecha') or fechas.get(m))
+
+    def modelos(self, red=True):
+        """Los recomendados (`CATALOGO` y los que el usuario añadió en proveedores.json) arriba,
+        con `recomendado: true`; debajo, los demás modelos de chat con `recomendado: false`."""
         from . import configuracion
         extra = [m for m in configuracion.de('openai').get('modelos') or [] if isinstance(m, str)]
-        nombres = list(CATALOGO) + [m for m in extra if m not in CATALOGO]
+        recomendados = list(CATALOGO) + [m for m in dict.fromkeys(extra) if m not in CATALOGO]
+        resto = [m for m in self.candidatos(red) if m not in recomendados]
+        return [self._fila(m, True) for m in recomendados] + [self._fila(m, False) for m in resto]
+
+    def _fila(self, m, recomendado):
         from .. import catalogo
-        filas = []
-        for m in nombres:
-            ficha = self.ficha(m)
-            resumen = catalogo.resumen(ficha, self.id)
-            # Ve imágenes: lo propio, lo del catálogo o «no se sabe» (None).
-            resumen['vision'] = resumen.get('vision') if ficha else None
-            if m in CATALOGO:
-                resumen['ventana'] = CATALOGO[m]['ventana']
-                resumen['vision'] = CATALOGO[m]['vision']
-            filas.append({'name': 'openai/' + m, 'model': 'openai/' + m, 'proveedor': self.id,
-                          'nombre': CATALOGO.get(m, {}).get('nombre', m), **resumen})
-        return filas
+        ficha = self.ficha(m)
+        resumen = catalogo.resumen(ficha, self.id)
+        # Ve imágenes: lo propio, lo del catálogo o «no se sabe» (None).
+        resumen['vision'] = resumen.get('vision') if ficha else None
+        propia = CATALOGO.get(m)
+        if propia:
+            resumen['ventana'] = propia['ventana']
+            resumen['vision'] = propia['vision']
+            resumen['esfuerzos'] = list(propia['esfuerzos'])
+        nombre = (propia or {}).get('nombre') or (ficha or {}).get('nombre') or m
+        return {'name': 'openai/' + m, 'model': 'openai/' + m, 'proveedor': self.id, 'nombre': nombre,
+                'recomendado': recomendado, **resumen}
 
     def estado(self):
         return dict(super().estado(), clave=self.configurado())

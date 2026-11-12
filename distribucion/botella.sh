@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hace el bottle de Homebrew de la fórmula `alfalfa` a partir del DMG de una release, sin
-# compilar nada y sin Homebrew: el motor de la app tal cual, con su firma Developer ID.
+# compilar nada y sin Homebrew: el motor de la app y sus ayudantes, con su firma Developer ID.
 #
 #   distribucion/botella.sh AlfalfaCode-0.99.0.dmg 0.99.0 carpeta/de/salida
 #
@@ -14,6 +14,7 @@
 # --build-from-source): libexec/Resources/motor, libexec/Helpers, libexec/instalacion y
 # bin/alfalfa. Si cambias uno, cambia el otro.
 set -euo pipefail
+. "$(dirname "$0")/cuybrowser.sh"
 
 DMG="${1:?uso: botella.sh <dmg> <versión> <salida>}"
 VERSION="${2:?falta la versión}"
@@ -35,6 +36,7 @@ if [ -z "${BOTELLA_SIN_EQUIPO:-}" ]; then
 fi
 [ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION" ] \
   || { echo "✗ la app del DMG no es la versión $VERSION" >&2; exit 1; }
+cuybrowser_comprobar_app "$APP" "$TMP"
 
 KEG="$TMP/alfalfa/$VERSION"
 mkdir -p "$KEG/libexec/Resources" "$KEG/bin"

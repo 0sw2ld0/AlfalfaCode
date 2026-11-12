@@ -1,0 +1,50 @@
+[
+  {
+    "area" : false,
+    "cssHeight" : 844,
+    "cssWidth" : 390,
+    "ok" : true,
+    "pickerBounds" : "{{0, 0}, {389.74522000000002, 844}}",
+    "preset" : "mobile",
+    "rect" : "{{20, 30}, {160, 60}}",
+    "selector" : "#boton",
+    "visibleFrame" : "{{65, 2.2282620193436742e-11}, {290.18957345971643, 627.99999999997772}}",
+    "webBounds" : "{{0, 0}, {390, 844}}"
+  },
+  {
+    "area" : true,
+    "cssHeight" : 844,
+    "cssWidth" : 390,
+    "ok" : true,
+    "pickerBounds" : "{{0, 0}, {389.74522000000002, 844}}",
+    "preset" : "mobile",
+    "rect" : "{{30.000000000000004, 20}, {200, 100}}",
+    "selector" : "#boton",
+    "visibleFrame" : "{{65, 2.2282620193436742e-11}, {290.18957345971643, 627.99999999997772}}",
+    "webBounds" : "{{0, 0}, {390, 844}}"
+  },
+  {
+    "area" : false,
+    "cssHeight" : 800,
+    "cssWidth" : 1100,
+    "ok" : true,
+    "pickerBounds" : "{{0, 0}, {1100, 800.11905000000002}}",
+    "preset" : "desktop",
+    "rect" : "{{20, 30}, {160, 60}}",
+    "selector" : "#boton",
+    "visibleFrame" : "{{0, 161.04545454545951}, {420, 305.45454545454049}}",
+    "webBounds" : "{{0, 0}, {1100, 800}}"
+  },
+  {
+    "area" : true,
+    "cssHeight" : 800,
+    "cssWidth" : 1100,
+    "ok" : true,
+    "pickerBounds" : "{{0, 0}, {1100, 800.11905000000002}}",
+    "preset" : "desktop",
+    "rect" : "{{30, 20}, {200.00000000000003, 100}}",
+    "selector" : "#boton",
+    "visibleFrame" : "{{0, 161.04545454545951}, {420, 305.45454545454049}}",
+    "webBounds" : "{{0, 0}, {1100, 800}}"
+  }
+]

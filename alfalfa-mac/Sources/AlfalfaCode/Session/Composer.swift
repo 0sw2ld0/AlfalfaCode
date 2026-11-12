@@ -27,21 +27,24 @@ struct Composer: View {
             HStack(spacing: 10) {
                 attachButton
                 field
+                if suggestion != nil { tabHint }
                 if session.timeline.status.isRunning { stopButton } else { sendButton }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Theme.border))
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                guard allowsImages else { session.imageNotice.show(); return true }
-                return ImagePicker.drop(providers, into: $session.draftImages)
+                // Los archivos se adjuntan siempre; las imágenes, sólo si el modelo las ve.
+                ImagePicker.drop(providers, into: $session.draftImages, withImages: allowsImages) {
+                    session.imageNotice.show()
+                }
             }
             .confirmationDialog(ImageChoiceButtons.title, isPresented: $askingAboutImages) {
                 ImageChoiceButtons(alternatives: app.imageAlternatives(to: session.model)) { choice in
                     session.change(model: choice.model)
                     send()
                 } dropImages: {
-                    session.draftImages = []
+                    session.draftImages.removeAll(where: Attachments.isImage)
                     send()
                 }
             } message: {
@@ -51,6 +54,7 @@ struct Composer: View {
 
             ComposerToolbar(session: session)
         }
+        .task(id: session.cwd) { imported = await app.importedConfig(in: session.cwd).config }
         .frame(maxWidth: Theme.column)
         .padding(.horizontal, 40).padding(.bottom, 24)
         .frame(maxWidth: .infinity)
@@ -64,31 +68,48 @@ struct Composer: View {
     @State private var selection = 0
     /// Al enviar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
+    /// Lo que trae la carpeta de OpenCode, Codex y Claude Code: sus órdenes «/» salen en el menú.
+    @State private var imported: ImportedConfig?
 
     /// Con un modelo que se sabe que no ve imágenes no se adjuntan; si no se sabe, sí.
     private var allowsImages: Bool { app.allowsImages(session.model) }
 
     private var attachButton: some View {
-        Button { ImagePicker.choose(into: &session.draftImages) } label: {
-            Image(systemName: allowsImages ? "plus" : "eye.slash").foregroundStyle(Theme.secondary)
+        Button { ImagePicker.choose(into: &session.draftImages, withImages: allowsImages) } label: {
+            Image(systemName: "plus").foregroundStyle(Theme.secondary)
                 .frame(width: 22, height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(allowsImages ? "Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)" : ImageSupport.notice)
-        .accessibilityLabel(allowsImages ? "Adjuntar imágenes" : ImageSupport.notice)
-        .disabled(!session.canSend || !allowsImages)
+        .help(ImageSupport.attachHelp(allowsImages: allowsImages))
+        .accessibilityLabel(allowsImages ? "Adjuntar imágenes o archivos" : "Adjuntar archivos")
+        .disabled(!session.canSend)
+    }
+
+    /// La frase sugerida del último cierre, como en la app de Codex: sale en gris con el cuadro vacío.
+    private var suggestion: String? { text.isEmpty ? session.timeline.suggestion : nil }
+
+    /// «Tab» al lado de la sugerencia: así se sabe cómo usarla.
+    private var tabHint: some View {
+        Text("Tab").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.border))
+            .help("Tab pone la sugerencia en el cuadro para editarla o enviarla")
+            .accessibilityHidden(true)
     }
 
     private var field: some View {
-        TextField("Añade una indicación", text: $text, axis: .vertical)
+        TextField(suggestion ?? "Añade una indicación", text: $text, axis: .vertical)
             .textFieldStyle(.plain).lineLimit(1...8).font(Theme.body)
             .accessibilityLabel("Indicación para el agente")
+            .accessibilityHint(suggestion.map { "Sugerencia: \($0). Tab la escribe en el cuadro." } ?? "")
+            // Escribir encima (o aceptarla) la retira hasta el siguiente cierre.
+            .onChange(of: text) { _, new in if !new.isEmpty { session.dismissSuggestion() } }
             // Una imagen soltada sobre el texto llega como su ruta: se adjunta en su lugar.
             .onChange(of: text) { old, new in
                 guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
                 text = dropped.text
-                guard allowsImages else { session.imageNotice.show(); return }
-                ImagePicker.add(dropped.images, to: &session.draftImages)
+                if !allowsImages, dropped.images.contains(where: Attachments.isImage) { session.imageNotice.show() }
+                ImagePicker.add(dropped.images, to: &session.draftImages, withImages: allowsImages)
             }
             .onSubmit(submit)
             .onChange(of: text) { selection = 0 }
@@ -115,8 +136,13 @@ struct Composer: View {
             .onKeyPress(.upArrow) { move(-1) }
             .onKeyPress(.downArrow) { move(1) }
             .onKeyPress(.tab) {
-                guard let option = suggestions[safe: selection] else { return .ignored }
-                complete(option)
+                if let option = suggestions[safe: selection] {
+                    complete(option)
+                    return .handled
+                }
+                // Con el cuadro vacío, Tab acepta la sugerencia: queda escrita, no se envía.
+                guard let suggestion else { return .ignored }
+                text = suggestion
                 return .handled
             }
             .onKeyPress(.escape) {
@@ -172,7 +198,7 @@ struct Composer: View {
             }
             // «/Users/…» u otra cosa que no es una orden: va como mensaje normal.
         }
-        if !session.draftImages.isEmpty, !allowsImages {
+        if session.draftImages.contains(where: Attachments.isImage), !allowsImages {
             askingAboutImages = true
             return
         }
@@ -214,6 +240,17 @@ private extension Composer {
             if !enabled { detail += running ? " · espera a que acabe el turno" : " · continúa la sesión primero" }
             return CommandSuggestion(id: command.name, symbol: command.symbol, title: "/" + command.name,
                                      detail: detail, enabled: enabled, action: .command(command))
+        } + projectCommands(input.name)
+    }
+
+    /// Las órdenes «/» de OpenCode y Claude Code de la carpeta (`alfalfa --importar`).
+    func projectCommands(_ prefix: String) -> [CommandSuggestion] {
+        (imported?.commands(matching: prefix) ?? []).map { item in
+            let authorized = item.state == "autorizado"
+            let detail = [item.detail, item.tool + " · " + item.place].filter { !$0.isEmpty }.joined(separator: " · ")
+            return CommandSuggestion(id: "proyecto:" + item.name, symbol: "text.badge.star", title: "/" + item.name,
+                                     detail: authorized ? detail : detail + " · sin autorizar: Ajustes ▸ Importar",
+                                     enabled: authorized, action: .project(item.name))
         }
     }
 
@@ -255,6 +292,7 @@ private extension Composer {
         switch option.action {
         case let .command(command): text = "/" + command.name + (command.takesArgument ? " " : "")
         case let .argument(command, value): text = "/" + command.name + " " + value
+        case let .project(name): text = "/" + name + " "
         }
     }
 
@@ -269,6 +307,9 @@ private extension Composer {
             }
         case let .argument(command, value):
             run(command, value)
+        case let .project(name):
+            // Detrás van sus argumentos; ↩ lo manda como mensaje y el motor pone su plantilla.
+            text = "/" + name + " "
         }
     }
 
@@ -312,6 +353,10 @@ private extension Composer {
         case .cerrarProcesos: session.stopProcess("todos")
         case .estado: session.showStatus()
         case .revisar, .inicializar: session.send(command.prompt ?? "")
+        case .aprender:
+            // El motor la expande (alfalfa/aprendizaje): reúne el material y propone la habilidad.
+            guard !value.isEmpty else { text = "/aprender "; return }
+            session.send("/aprender " + value)
         case .renombrar:
             guard !value.isEmpty else { text = "/renombrar "; return }
             withRow { app.rename($0, to: value) }

@@ -56,6 +56,8 @@ MOTIVO_TERMINAL = {
     'regla': 'regla del usuario',
     'modo': 'el modo pide permiso para cada cambio',
     'edicion': 'edición de archivos (modo Manual)',
+    'aprendizaje': 'guardar lo aprendido (memoria o habilidad)',
+    'contenido_externo': 'acción tras leer contenido externo',
 }
 
 
@@ -82,6 +84,9 @@ def describe(args, command):
         lines.append('Regla: ' + str(args['regla']))
     if args.get('justificacion'):
         lines.append('Justificación: ' + str(args['justificacion']))
+    if args.get('diff'):
+        # Entero: lo que se aprueba es exactamente esto (el arnés rechaza antes lo que no cabe).
+        lines.append(str(args['diff']).rstrip('\n'))
     if args.get('reintento_de'):
         lines.append('Reintento del intento ' + str(args['reintento_de']) + ': ' + str(args.get('sin_sandbox', '')))
     elif args.get('fallo_sandbox'):
@@ -97,19 +102,27 @@ class TerminalApproval:
         self.denied = 0
 
     async def __call__(self, args):
+        from ..auditoria_equipo import marcar_respuesta
+
         command = shlex.join(args['argv'])
         print(describe(args, command), file=self.stdout, flush=True)
         # Ejecutar sin sandbox, y cualquier excepción on-request, nunca se concede en automático.
         unsandboxed = bool(args.get('sin_sandbox'))
         folder = self.root / args['cwd'] if isinstance(args.get('cwd'), str) and args['cwd'] not in ('', '.') else None
         if self.auto and not unsandboxed and not args.get('motivo') and solo_lectura(args['argv'], self.root, folder):
+            marcar_respuesta('solo_lectura')
             print('AlfalfaCode · Lectura aprobada automáticamente.', file=self.stdout, flush=True)
             return
         # Never read redirected stdin; EOF is a denial, never implicit approval.
         accepted = session = False
+        marcar_respuesta('sin_respuesta')
+        site_scope = None
         if self.stdin.isatty() and self.stdout.isatty():
-            question = ('Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
+            question = ('¿Autorizar esta llamada tras leer contenido externo? [s/N] '
+                        if args.get('motivo') == 'contenido_externo' else
+                        'Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
                         if args.get('mcp') else
+                        '¿Guardarlo? [s/N] ' if args.get('motivo') == 'aprendizaje' else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
                         if unsandboxed else
                         'Sandbox Seatbelt con red: escribe sólo en la carpeta, $TMPDIR y /private/tmp. ¿Ejecutar? '
@@ -119,6 +132,9 @@ class TerminalApproval:
                         '[s/N] ')
             if args.get('para_sesion'):
                 question = question.replace('[s/N] ', '[s/t/N] (t: también el resto de la sesión) ')
+            if args.get('sitio'):
+                question = ('Sitio: [u] una visita, [t] este origen durante esta sesión, '
+                            '[p] siempre en este proyecto, [N] rechazar: ')
             print(question, end='', file=self.stdout, flush=True)
             # A bounded line, no executor thread left blocked after cancellation.
             # The CLI installs signal handlers so Ctrl-C still cancels this wait.
@@ -129,12 +145,17 @@ class TerminalApproval:
             loop.add_reader(fd, lambda: ready.done() or ready.set_result(None))
             try:
                 await ready
-                respuesta = self.stdin.readline(100).strip().casefold()
+                linea = self.stdin.readline(100)
+                respuesta = linea.strip().casefold()
+                marcar_respuesta('terminal' if linea else 'sin_respuesta')
                 session = bool(args.get('para_sesion')) and respuesta in ('t', 'todo', 'sesion', 'sesión')
                 accepted = session or respuesta in ('s', 'si', 'sí')
+                if args.get('sitio'):
+                    site_scope = {'u': 'una_vez', 't': 'sesion', 'p': 'proyecto'}.get(respuesta)
+                    accepted = site_scope is not None
             finally:
                 loop.remove_reader(fd)
         if not accepted:
             self.denied += 1
             raise ValueError('Comando rechazado; no se ejecutó. No lo repitas ni reformules para eludir el rechazo.')
-        return 'sesion' if session else None
+        return site_scope or ('sesion' if session else None)

@@ -30,6 +30,10 @@ public struct AgentEvent: Equatable, Sendable {
     public var compaction: Compaction?
     /// Llamada a herramienta (`herramienta`): nombre, fase y descripción; nil en motores anteriores.
     public var tool: ToolInfo? = nil
+    /// El código se deshizo o se rehízo (`deshacer`): la conversación pinta su marca con «Rehacer».
+    public var undo: UndoStep? = nil
+    /// El id del mensaje en cola que entrega este eco; permite distinguir textos idénticos.
+    public var queueID: String? = nil
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -163,6 +167,10 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     /// El navegador propio: enviar un formulario, escribir una contraseña, descargar, JavaScript
     /// que cambia la página o abrir una dirección local.
     case browser = "navegador"
+    /// Guardar memoria o una habilidad aprendida (alfalfa/aprendizaje): la tarjeta trae el diff.
+    case learn = "aprendizaje"
+    /// Acción propuesta después de leer archivos, web, un servidor o un subagente.
+    case externalContent = "contenido_externo"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -175,6 +183,8 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .edit: return "Edición de archivos"
         case .app: return "Controlar una app"
         case .browser: return "Navegador"
+        case .learn: return "Guardar lo aprendido"
+        case .externalContent: return "Contenido externo"
         }
     }
 
@@ -298,11 +308,17 @@ public struct PermissionRequest: Equatable, Sendable {
     public var forSession: Bool = false
     /// Presente sólo al mirar o manejar otra app (motivo `app`).
     public var app: AppTarget?
+    /// Lo que cambia al guardar memoria o una habilidad aprendida (motivo `aprendizaje`).
+    public var diff: String?
+    /// Origen exacto y proyecto; habilita los cuatro alcances del permiso de navegación.
+    public var site: BrowserSitePermission?
 
     public init(id: String, argv: [String], purpose: String, reason: PermissionReason? = nil,
                 reasons: [PermissionReason]? = nil, justification: String? = nil, rule: String? = nil,
                 retryOf: String? = nil, detail: String? = nil, mcp: McpCall? = nil, forSession: Bool = false,
-                app: AppTarget? = nil) {
+                app: AppTarget? = nil, diff: String? = nil, site: BrowserSitePermission? = nil) {
+        self.site = site
+        self.diff = diff
         self.forSession = forSession
         self.app = app
         self.id = id
@@ -322,6 +338,10 @@ public struct PermissionRequest: Equatable, Sendable {
     /// Qué concede aprobar esta única decisión, según el más amplio de sus motivos
     /// (el mismo orden que la pregunta de la terminal); nil sin motivos on-request.
     public var scope: String? {
+        if reasons.contains(.externalContent) {
+            return "El agente ha leído datos que pueden contener órdenes ajenas al encargo. "
+                + "Esta aprobación sólo autoriza la llamada indicada; los demás permisos siguen vigentes."
+        }
         if reasons.contains(.retry) {
             return "El sandbox probablemente bloqueó la orden. Se repetirá una vez, igual, sin sandbox: "
                 + "con todos los permisos de tu usuario y con red."
@@ -336,6 +356,10 @@ public struct PermissionRequest: Equatable, Sendable {
         if reasons.contains(.edit) { return "El modo Manual pide permiso antes de editar archivos." }
         if reasons.contains(.mode) {
             return "Tu modo pide permiso para cada orden que no sólo lee; se ejecutará dentro del sandbox, sin red."
+        }
+        if reasons.contains(.learn) {
+            return "Lo escribe AlfalfaCode, fuera del sandbox: en tu memoria o tus habilidades, o en .alfalfa/skills "
+                + "del proyecto. Entra en la próxima sesión."
         }
         if reasons.contains(.browser) {
             return "Lo hará el navegador de la sesión, que ves en el panel: aislado, sin tus cuentas "
@@ -494,12 +518,16 @@ public struct ModelInfo: Equatable, Identifiable, Sendable {
     public var missingKey: MissingKey?
     /// Si ve imágenes: true, false o nil cuando no se sabe (entonces se deja adjuntar).
     public var vision: Bool?
+    /// OpenAI y Anthropic con clave: true para los recomendados, false para «Más modelos»; nil los demás.
+    public var recommended: Bool?
     public var id: String { name }
 
     public init(name: String, label: String? = nil, provider: String = "ollama", providerName: String? = nil,
                 context: Int? = nil, price: ModelPrice? = nil, free: Bool = false, notice: String? = nil,
-                missingKey: MissingKey? = nil, vision: Bool? = nil, cheapUntil: Int? = nil) {
+                missingKey: MissingKey? = nil, vision: Bool? = nil, cheapUntil: Int? = nil,
+                recommended: Bool? = nil) {
         self.cheapUntil = cheapUntil
+        self.recommended = recommended
         self.name = name
         self.label = label ?? name
         self.provider = provider
@@ -621,7 +649,9 @@ public struct WebSearchSettings: Equatable, Sendable {
 
 /// Salidas del proceso hijo. Los `tipo` desconocidos no producen ningún caso.
 public enum AlfalfaMessage: Equatable, Sendable {
+    case codeReview(CodeReview)
     case session(SessionInfo)
+    case taskQueue(TaskQueue)
     case event(AgentEvent)
     case permission(PermissionRequest)
     /// `session`: se aprobó también para el resto de la sesión.
@@ -644,6 +674,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case providers(defaultProvider: String, providers: [ProviderStatus])
     /// `--buscador --json` y `--fijar-searxng`: el buscador web de los agentes.
     case webSearch(WebSearchSettings)
+    case cuyBrowserPreparation(CuyBrowserPreparation)
     /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
     case quota([Quota])
     /// `--activar-codigo`: el código quedó atado a este Mac.
@@ -657,6 +688,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `--reportar`: el reporte de error se envió, o por qué no.
     case reported(ReportResult)
     case ollamaChats([OllamaChat])
+    /// `--importar --json`: lo que trae la carpeta de OpenCode, Codex y Claude Code, y su estado.
+    case imported(ImportedConfig)
     case update(UpdateInfo)
     /// Respuesta a `--marcar`, `--eliminar-sesion` y `--solo-bifurcar`.
     case sessionChanged(id: String, forkedFrom: String?)
@@ -673,10 +706,35 @@ public enum AlfalfaMessage: Equatable, Sendable {
     /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
     /// se duerma por inactividad mientras trabaja un turno.
     case keepingAwake(Bool)
+    /// `preparando`: el motor guarda la instantánea para deshacer el turno; la fila viva lo dice
+    /// («Preparando deshacer… (8306 archivos, 1,2 GB)») en vez de «Pensando». nil: ya terminó.
+    case preparingUndo(String?)
     /// `presupuesto`: topes y gasto de la sesión y del mes, el aviso del 80 % y el corte, y la caché.
     case budget(BudgetStatus, cache: CacheSavings?)
     /// `navegador`: el agente pide algo al navegador propio de la app (BrowserEngine).
     case browser(BrowserRequest)
+    /// `--volver … --vista-previa` y `--rehacer … --vista-previa`: qué se restauraría y qué no.
+    case undoPreview(UndoPreview)
+    /// `--volver` y `--rehacer`: el código se deshizo o se rehízo.
+    case undone(UndoStep)
+    /// `quitado_de_cola`: respuesta a «Quitar» o «Editar» de un mensaje en cola. `removed` si se
+    /// quitó; si no, `reason` es `entregado` (el modelo ya lo leyó) o `desconocido`.
+    case unqueued(id: String, removed: Bool, reason: String?)
+    /// `alfalfa --memoria --json`: los tres almacenes de memoria y los ajustes de aprendizaje.
+    case memory(MemoryState)
+    case browserSiteSettings(BrowserSiteSettingsState)
+    /// `alfalfa --aprendido --json`: habilidades aprendidas, propuestas sin revisar y ajustes.
+    case learned(LearnedState)
+    /// `alfalfa --aprendido ver NOMBRE --json`: los archivos de una habilidad aprendida.
+    case learnedSkillFiles(reference: String, files: [String: String])
+    /// `aprendizaje_propuesto`: la revisión al cerrar el turno propone guardar algo; espera a la tarjeta.
+    case learningProposal(LearningProposal)
+    /// `aprendizaje_resuelto`: la respuesta a la tarjeta (`{"tipo":"aprendizaje"}`); `discarded` si
+    /// se descartó (no se deduce del texto).
+    case learningResolved(id: String, applied: Bool, discarded: Bool = false, text: String)
+
+    /// `--buscar-sesiones CONSULTA --json`: fragmentos de las conversaciones guardadas.
+    case sessionSearch(SessionSearch)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -686,6 +744,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
               object["version"] as? Int == protocolVersion,
               let kind = object["tipo"] as? String else { return nil }
         switch kind {
+        case "revision_codigo":
+            return CodeReview(value: object["revision"]).map(Self.codeReview)
+        case "navegador_sitios":
+            return BrowserSiteSettingsState(object).map { .browserSiteSettings($0) }
         case "sesion":
             return sessionInfo(object).map(Self.session)
         case "evento":
@@ -703,7 +765,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                                  justification: text(object["justificacion"]), rule: text(object["regla"]),
                                                  retryOf: text(object["reintento_de"]), detail: text(object["sin_sandbox"]),
                                                  mcp: mcpCall(object["mcp"]), forSession: bool(object["para_sesion"]) ?? false,
-                                                 app: appTarget(object["app"])))
+                                                 app: appTarget(object["app"]), diff: text(object["diff"]),
+                                                 site: BrowserSitePermission(object["sitio"])))
         case "permiso_resuelto":
             guard let id = object["id"] as? String, let approved = bool(object["aprobado"]) else { return nil }
             return .permissionResolved(id: id, approved: approved, reason: object["motivo"] as? String ?? "",
@@ -713,22 +776,14 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),
                             details: details(object))
         case "error":
-            if let rejected = object["rechazado"] as? [String: Any] {
-                let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
-                    guard let model = text(row["modelo"]) else { return nil }
-                    return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
-                }
-                return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
-                                                         reason: text(object["motivo"]),
-                                                         text: rejected["texto"] as? String ?? "",
-                                                         images: rejected["imagenes"] as? [String] ?? [],
-                                                         alternatives: alternatives))
-            }
-            return .error(object["texto"] as? String ?? "")
+            return error(object)
         case "turno_terminado":
             return outcome(object).map { .turnFinished($0) }
         case "fin":
             return outcome(object).map { .finished($0) }
+        case "encargos":
+            guard let queue = TaskQueue(value: object["cola"]) else { return nil }
+            return .taskQueue(queue)
         case "historial":
             guard let id = object["sesion"] as? String, let rows = object["eventos"] as? [[String: Any]] else { return nil }
             let events = rows.compactMap(agentEvent)
@@ -752,7 +807,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                  providerName: text(row["nombre_proveedor"]), context: integer(row["ventana"]),
                                  price: modelPrice(row["precio"]), free: bool(row["gratis"]) ?? false,
                                  notice: text(row["aviso"]), missingKey: missingKey(row["falta_clave"]),
-                                 vision: bool(row["vision"]), cheapUntil: integer(row["barato_hasta"]))
+                                 vision: bool(row["vision"]), cheapUntil: integer(row["barato_hasta"]),
+                                 recommended: bool(row["recomendado"]))
             })
         case "proveedores":
             guard let rows = object["proveedores"] as? [[String: Any]] else { return nil }
@@ -766,6 +822,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             })
         case "buscador":
             return webSearch(object).map { .webSearch($0) }
+        case "cuybrowser_preparacion":
+            return CuyBrowserPreparation(object: object).map { .cuyBrowserPreparation($0) }
         case "cuota":
             guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
             return .quota(quotas(rows))
@@ -791,6 +849,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         case "conectado":
             guard let provider = text(object["proveedor"]) else { return nil }
             return .connected(provider: provider, model: text(object["modelo"]))
+        case "importadas":
+            return ImportedConfig(object).map(Self.imported)
         case "chats_ollama":
             guard let rows = object["chats"] as? [[String: Any]] else { return nil }
             return .ollamaChats(rows.compactMap { row in
@@ -829,16 +889,43 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return BrowserRequest(object: object).map(AlfalfaMessage.browser)
         case "despierto":
             return bool(object["activo"]).map(Self.keepingAwake)
+        case "preparando":
+            return .preparingUndo(text(object["texto"]))
+        case "quitado_de_cola":
+            guard let id = text(object["id"]), let removed = bool(object["quitado"]) else { return nil }
+            return .unqueued(id: id, removed: removed, reason: text(object["motivo"]))
         case "presupuesto":
             return BudgetStatus(object: object).map { .budget($0, cache: CacheSavings(object: object["cache"])) }
         case "subagente_evento":
             guard let agent = text(object["agente"]), let role = object["rol"] as? String,
                   let content = object["texto"] as? String else { return nil }
             return .subagentEvent(agent: agent, AgentEvent(role: role, text: content, time: number(object["hora"]) ?? 0))
+        case "deshacer_vista", "rehacer_vista":
+            return UndoPreview.parse(object).map(Self.undoPreview)
+        case "deshecho":
+            return UndoStep.parse(object, text: object["texto"] as? String ?? "").map(Self.undone)
+        case "busqueda_sesiones":
+            return SessionSearch(object: object).map(Self.sessionSearch)
         case "sesion_cambiada":
             guard let id = text(object["id"]) else { return nil }
             if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }
             return .sessionChanged(id: id, forkedFrom: text(object["bifurcada_de"]))
+        case "memoria":
+            return MemoryState(object).map(Self.memory)
+        case "aprendido":
+            return LearnedState(object).map(Self.learned)
+        case "habilidad":
+            guard let skill = object["habilidad"] as? [String: Any], let scope = text(skill["alcance"]),
+                  let name = text(skill["nombre"]) else { return nil }
+            let files = (skill["archivos"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
+            return .learnedSkillFiles(reference: scope + ":" + name, files: files)
+        case "aprendizaje_propuesto":
+            return LearningProposal(object).map(Self.learningProposal)
+        case "aprendizaje_resuelto":
+            guard let id = text(object["id"]) else { return nil }
+            return .learningResolved(id: id, applied: bool(object["aplicado"]) ?? false,
+                                     discarded: bool(object["descartada"]) ?? false,
+                                     text: object["texto"] as? String ?? "")
         case "actualizacion":
             guard let installed = object["instalada"] as? String, let available = bool(object["hay_nueva"]) else { return nil }
             return .update(UpdateInfo(installed: installed, latest: text(object["ultima"]), available: available,
@@ -866,7 +953,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
         return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
-                          compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]))
+                          compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]),
+                          undo: UndoStep.parse(row["deshacer"], text: text), queueID: Self.text(row["id_cola"]))
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.
@@ -1009,6 +1097,21 @@ public enum AlfalfaMessage: Equatable, Sendable {
 
     private static func wrapUp(_ value: Any?) -> WrapUp? { WrapUp(cierre: value) }
 
+    /// `error`; con `rechazado`, el mensaje que no abrió turno y vuelve al cuadro.
+    private static func error(_ object: [String: Any]) -> AlfalfaMessage {
+        guard let rejected = object["rechazado"] as? [String: Any] else { return .error(object["texto"] as? String ?? "") }
+        let alternatives = (object["con_vision"] as? [[String: Any]] ?? []).compactMap { row -> ModelChoice? in
+            guard let model = text(row["modelo"]) else { return nil }
+            return ModelChoice(model: model, label: text(row["nombre"]) ?? model)
+        }
+        return .messageRejected(MessageRejection(message: object["texto"] as? String ?? "",
+                                                 reason: text(object["motivo"]),
+                                                 text: rejected["texto"] as? String ?? "",
+                                                 images: (rejected["imagenes"] as? [String] ?? [])
+                                                    + (rejected["archivos"] as? [String] ?? []),
+                                                 alternatives: alternatives))
+    }
+
     private static func summary(_ row: [String: Any]) -> SessionSummary? {
         guard let id = row["id"] as? String, let state = row["estado"] as? String else { return nil }
         return SessionSummary(id: id, task: row["encargo"] as? String, cwd: row["cwd"] as? String, state: state,
@@ -1017,67 +1120,5 @@ public enum AlfalfaMessage: Equatable, Sendable {
                               title: text(row["titulo"]), pinned: bool(row["fijada"]) ?? false,
                               archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]),
                               parent: text(row["padre"]), cost: amount(row["coste"]))
-    }
-}
-
-/// Entradas hacia el proceso hijo: una línea JSON por mensaje.
-public enum AlfalfaCommand: Equatable, Sendable {
-    /// `session`: aprobar también lo mismo durante el resto de la sesión.
-    case permission(id: String, approved: Bool, session: Bool = false)
-    case message(String, images: [String] = [])
-    case cancel
-    /// «Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
-    case sendNow(String)
-    /// «Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno.
-    case redirect
-    /// Compactar (`/compactar`, «Compactar sesión»): ya entre turnos, o antes de la siguiente
-    /// respuesta del modelo si hay uno en marcha. Las instrucciones centran el resumen.
-    case compact(instructions: String? = nil)
-    /// `/contexto` y el aviso de tarifa: Ahorro o Contexto completo. Vale ya, también a mitad de turno.
-    case contextMode(ContextMode)
-    /// «Seguir en una sesión nueva»: corta el turno, compacta y abre otra con el resumen.
-    case continueInNewSession
-    /// Detener una orden en segundo plano (`p1`) o todas (`todos`).
-    case stopProcess(String)
-    /// Modelo y esfuerzo para los turnos siguientes.
-    case settings(model: String?, effort: String?, mode: String? = nil)
-    /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
-    case keepAwake(Bool)
-    /// Ajustes ▸ General ▸ Presupuesto: los topes en dólares (nil, sin tope). Vale ya, también a mitad de turno.
-    case budget(session: Double?, month: Double?)
-    /// La respuesta del navegador propio a una petición `navegador`.
-    case browserReply(BrowserReply)
-
-    public var line: String {
-        let object: [String: Any]
-        switch self {
-        case let .permission(id, approved, session):
-            object = approved && session ? ["tipo": "permiso", "id": id, "aprobado": true, "sesion": true]
-                : ["tipo": "permiso", "id": id, "aprobado": approved]
-        case let .message(text, images):
-            object = images.isEmpty ? ["tipo": "mensaje", "texto": text]
-                : ["tipo": "mensaje", "texto": text, "imagenes": images]
-        case .cancel: object = ["tipo": "cancelar"]
-        case let .sendNow(text): object = ["tipo": "enviar_ahora", "texto": text]
-        case .redirect: object = ["tipo": "redirigir"]
-        case let .contextMode(mode): object = ["tipo": "contexto", "modo": mode.rawValue]
-        case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
-        case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
-        case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
-        case let .budget(session, month):
-            object = ["tipo": "presupuesto", "sesion": session.map { $0 as Any } ?? NSNull(),
-                      "mes": month.map { $0 as Any } ?? NSNull()]
-        case let .browserReply(reply): object = reply.object
-        case let .compact(instructions):
-            object = instructions.map { ["tipo": "compactar", "instrucciones": $0] } ?? ["tipo": "compactar"]
-        case let .settings(model, effort, mode):
-            var fields: [String: Any] = ["tipo": "ajustes"]
-            if let model { fields["modelo"] = model }
-            if let effort { fields["esfuerzo"] = effort }
-            if let mode { fields["modo"] = mode }
-            object = fields
-        }
-        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
-        return String(decoding: data, as: UTF8.self) + "\n"
     }
 }

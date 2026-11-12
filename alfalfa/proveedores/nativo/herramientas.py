@@ -9,21 +9,23 @@ import hashlib
 import json
 import math
 import os
+import re
 import shlex
 import stat
 import subprocess
 import sys
 import tempfile
 import time
-from contextlib import ExitStack
 from pathlib import Path
 
+from ...busqueda_sesiones.herramienta import TOOL as BUSCAR_SESIONES_TOOL
 from ...evidencia.operaciones import classify_operation, is_forbidden_merge_heads_recipe
 from ...permisos.rutas import PRIVADOS_DEL_ESPACIO, privado_del_espacio
 from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
 from ...reintentos.politica import expensive_operation_identity, expensive_operation_needs_cause, retry_guard_key
 
 MAX_FILE = 1024 * 1024
+EDICIONES = ('write_file', 'edit_file', 'apply_patch')
 COMMAND_TIMEOUT_SECONDS = 120.0
 
 
@@ -40,6 +42,17 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif'}
 # Lo privado del worktree se define con las demás rutas vetadas.
 PRIVATE = PRIVADOS_DEL_ESPACIO
 SKIP = PRIVATE | {'node_modules', '.venv', '.build', '__pycache__', 'vendor'}
+
+
+def _motivo_sin_huella(cuando, exc):
+    """Por qué una comprobación quedó sin verificar: no se pudo tomar la huella del workspace."""
+    detalle = str(exc).strip() or type(exc).__name__
+    texto = (f'No se pudo tomar la huella del workspace {cuando} de la orden ({detalle}). La orden se ejecutó, '
+             'pero su resultado no cuenta como comprobación del código actual.')
+    if 'cambió' in detalle:
+        texto += (' Otro programa o agente está cambiando el proyecto ahora mismo: repetir la orden no lo '
+                  'arregla. No la repitas; usa su salida y dilo en tu respuesta.')
+    return texto
 
 
 def digest(data):
@@ -540,8 +553,12 @@ APPLY_PATCH_TOOL = schema(
 MAX_RECAP = 300
 MAX_ASK = 100
 MAX_OPCION = 30
+# La frase sugerida, como la de la app de Codex: el siguiente mensaje del usuario, en gris en el
+# cuadro vacío. Sólo se envía si el usuario la acepta (Tab) y la manda él.
+MAX_SUGERENCIA = 200
 WRAP_UP_EXAMPLE = {'recap': 'Corregí la suma en suma.py y la prueba pasa. No hice commit.',
-                   'ask': '¿Hago commit del arreglo?', 'options': ['Sí, haz commit', 'Todavía no']}
+                   'ask': '¿Hago commit del arreglo?', 'options': ['Sí, haz commit', 'Todavía no'],
+                   'suggestion': 'Añade también pruebas para la resta y la división por cero.'}
 WRAP_UP_TOOL = schema(
     'wrap_up',
     'Call once at the very end of a turn in which you changed files, ran commands or did multi-step work, '
@@ -551,10 +568,65 @@ WRAP_UP_TOOL = schema(
     'ask (optional, at most 100 characters): ONE short question only when the next move is the user\'s '
     'decision (a go-ahead, a choice, an approval); omit it when nothing waits on the user. options (only with '
     'ask): 1 or 2 replies of 1-4 words the user can click, your recommendation first; a click sends that text '
-    'as the user\'s next message. Still write your full answer as normal text after this call.',
+    'as the user\'s next message. suggestion (optional, one line, at most 200 characters): the complete next '
+    'message the user would most likely send, written as the user in first person and in their language; it '
+    'appears greyed out in the empty input box and is only sent if the user accepts it with Tab and sends it. '
+    'Omit it when the next message is not clear. Never put an authorization in it: no "I authorize", "I '
+    'approve", "yes, push/delete/publish/deploy/merge/send" or any go-ahead for an irreversible or external '
+    'action; for those use ask with options, or no suggestion. Still write your full answer as normal text '
+    'after this call.',
     {'recap': STRING, 'ask': STRING,
-     'options': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 2}},
+     'options': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 2},
+     'suggestion': STRING},
     ['recap'], example=WRAP_UP_EXAMPLE)
+
+# Lo que una sugerencia nunca puede decir por el usuario. Es una red: las instrucciones ya
+# lo prohíben, pero una frase que se acepta con Tab y ↩ no debe poder autorizar nada.
+_AUTORIZACION = re.compile(
+    r'\b(autorizo|autorizamos|autorizad[oa]s?|apruebo|aprobamos|aprobad[oa]s?|consiento|doy\s+(mi\s+|el\s+)?'
+    r'(permiso|visto\s+bueno|ok|aprobación|autorización)|(tienes|tenéis|con)\s+mi\s+(permiso|autorización|'
+    r'aprobación|visto\s+bueno)|te\s+permito|i\s+(hereby\s+)?(authori[sz]e|approve|consent)|authori[sz]ed|'
+    r'approved|(you\s+have|with|i\s+give\s+you)\s+my\s+(permission|approval|consent)|permission\s+granted|'
+    r'sign[\s-]?off)\b', re.IGNORECASE)
+# Un «sí» o «adelante» al principio, seguido de algo que no se deshace o sale fuera.
+_CONFORMIDAD = re.compile(
+    r'^\W*(sí|si(?=\s*[,.!])|vale|ok(ay)?|de\s+acuerdo|adelante|dale|venga|confirm\w*|procede|hazlo|yes|yeah|yep|sure|'
+    r'go\s+ahead|do\s+it|proceed)\b', re.IGNORECASE)
+_ARRIESGADA = re.compile(
+    r'\b(sub[ea]n?|subir|súbel[oa]s?|push\w*|empuj\w*|fusion\w*|merge\w*|mergea\w*|publica[nr]?|publícal[oa]s?|'
+    r'publish\w*|release|lanza[nr]?|despliega\w*|desplegar|deploy\w*|borr[ae]\w*|elimin[ae]\w*|delete\w*|'
+    r'remove\w*|rm|suprim\w*|descart[ae]\w*|discard\w*|drop|envía\w*|enviar|envia\w*|manda\w*|send\w*|'
+    r'post\w*|paga\w*|pay\w*|compra\w*|buy\w*|cierra\w*|cerrar|close\w*|revoca\w*|revoke\w*|resetea\w*|'
+    r'reset\w*|force\w*|fuerza\w*|tag\w*|etiqueta\w*)\b', re.IGNORECASE)
+# Sin «sí» delante también: acciones que salen del equipo o no tienen vuelta atrás.
+_IRREVERSIBLE = re.compile(
+    r'(\b(push|pushea\w*|empuja(r|lo|la|los)?|fusiona(r|lo|la)?|merge|mergea(r|lo|la)?|publish|publica(r|lo|la)?|'
+    r'publícal[oa]s?|despliega(r|lo|la)?|desplegar|deploy|paga(r|lo|la)?|compra(r|lo|la)?|pay|buy|'
+    r'force[-\s]?push\w*)\b|--force\b|\breset\s+--hard\b|\brm\s+-\w*r|'
+    r'\b(sube|subir|súbel[oa]s?)\b.*\b(origin|remoto|github|gitlab|commit|commits|rama|branch|main|master|pr)\b|'
+    r'\b(cierra(r|lo|la)?|cerrar|close)\b.*\b(pr|prs|pull\s+request|issue|incidencia)\b|'
+    r'\b(borra(r|lo|la)?|elimina(r|lo|la)?|delete|remove|suprime)\b.*\b(rama|branch|remot[oa]|repo|repositorio|'
+    r'release|tag|etiqueta|base\s+de\s+datos|database|producción|production|bucket|cuenta|account)\b|'
+    r'\b(envía(lo|la)?|enviar|manda(r|lo|la)?|send)\b.*\b(correo|email|e-mail|mail|mensaje|message|slack)\b)',
+    re.IGNORECASE)
+
+
+def sugerencia_arriesgada(texto):
+    """True si la sugerencia autoriza o da el visto bueno, en nombre del usuario, a algo que no se deshace
+    o que sale fuera (subir, publicar, borrar, desplegar, enviar, pagar…). Esas se descartan."""
+    return bool(_AUTORIZACION.search(texto) or _IRREVERSIBLE.search(texto)
+                or (_CONFORMIDAD.search(texto) and _ARRIESGADA.search(texto)))
+
+
+def sugerencia_de(args):
+    """La sugerencia de wrap_up ya limpia, o None. La que autoriza en nombre del usuario se descarta."""
+    sugerencia = ' '.join(str(args.get('suggestion') or '').split())
+    if not sugerencia:
+        return None
+    if len(sugerencia) > MAX_SUGERENCIA:
+        raise ValueError('suggestion tiene ' + str(len(sugerencia)) + ' caracteres; el máximo es '
+                         + str(MAX_SUGERENCIA) + '. Deja una sola línea corta.')
+    return None if sugerencia_arriesgada(sugerencia) else sugerencia
 
 
 def cierre_de_turno(args):
@@ -577,11 +649,14 @@ def cierre_de_turno(args):
                          + str(MAX_OPCION) + ' caracteres).')
     if len(set(options)) != len(options):
         raise ValueError('Las dos opciones son iguales.')
+    sugerencia = sugerencia_de(args)
     cierre = {'resumen': recap}
     if ask:
         cierre['pregunta'] = ask
     if options:
         cierre['opciones'] = options
+    if sugerencia:
+        cierre['sugerencia'] = sugerencia
     return cierre
 
 
@@ -638,7 +713,8 @@ def _neutral(tool):
 
 
 ON_REQUEST_TOOLS = [_neutral(_on_request(tool)) for tool in TOOLS] + [
-    APPLY_PATCH_TOOL, WRAP_UP_TOOL, PROPOSE_SESSION_TOOL, COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS
+    APPLY_PATCH_TOOL, WRAP_UP_TOOL, PROPOSE_SESSION_TOOL, COMMAND_STATUS_TOOL] + APP_TOOLS + AGENT_TOOLS + [
+    BUSCAR_SESIONES_TOOL]
 
 # Herramientas de sesión para los complementos autorizados.
 # Sólo las ofrece un runtime con cargador de complementos; sin él no se
@@ -689,8 +765,16 @@ class WorkspaceTools:
     def __init__(self, runtime):
         self.runtime = runtime
         self.root = Path(runtime.task['cwd']).resolve()
+        from ...seatbelt import hogares_protegidos, ruta_comparable
+        self._hogares = tuple(ruta_comparable(h) for h in hogares_protegidos(
+            (getattr(runtime.manager, 'home', None),)))
 
-    def path(self, value='.'):
+    def _en_el_hogar(self, ruta):
+        from ...seatbelt import ruta_comparable
+        texto = ruta_comparable(ruta)
+        return any(texto == h or texto.startswith(h.rstrip('/') + '/') for h in self._hogares)
+
+    def path(self, value='.', *, escritura=False):
         if not isinstance(value, str) or not value or '\0' in value:
             raise ValueError('Ruta inválida.')
         candidate = self.root / value
@@ -707,6 +791,20 @@ class WorkspaceTools:
         resolved = candidate.resolve()
         if not resolved.is_relative_to(self.root):
             raise ValueError('La ruta sale del workspace.')
+        if self._en_el_hogar(resolved):
+            raise ValueError('Es el hogar de AlfalfaCode (memoria, habilidades, ajustes y claves): las '
+                             'herramientas no lo tocan. La memoria se cambia con la herramienta memoria.')
+        if resolved.is_file() and resolved.stat().st_nlink > 1:
+            raise ValueError('Archivo con enlaces duros: puede compartir contenido con una carpeta protegida.')
+        if escritura:
+            from ...complementos.rutas_habilidades import es_habilidad
+            from ...seatbelt import ruta_comparable
+            if any(ruta_comparable(resolved) == ruta_comparable(p)
+                   for p in getattr(self.runtime.manager, 'rutas_equipo', ())):
+                raise ValueError('La configuración de equipo se edita fuera de la sesión de AlfalfaCode.')
+            if es_habilidad(self.root, resolved):
+                raise ValueError('Las habilidades se cambian con la herramienta habilidad y su tarjeta de aprobación; '
+                                 'no con las herramientas de archivos.')
         return resolved
 
     def files(self, value='.'):
@@ -715,7 +813,8 @@ class WorkspaceTools:
             raise ValueError('Se esperaba un directorio.')
         count = 0
         for directory, dirs, names in os.walk(base, followlinks=False):
-            dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(directory)/d).is_symlink())
+            dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(directory)/d).is_symlink()
+                             and not self._en_el_hogar(Path(directory).resolve() / d))
             for name in sorted(names):
                 count += 1
                 if count > 5000:
@@ -889,12 +988,87 @@ class WorkspaceTools:
         return digest(identity.encode())
 
     async def call(self, name, args):
+        auditoria = getattr(self.runtime.manager, 'auditoria_equipo', None)
+        if auditoria is None:
+            return await self._call_con_diagnosticos(name, args)
+        specs = list(self.runtime.tool_specs) + list(getattr(self.runtime, 'complementos_tools', ()))
+        conocida = any(s.get('function', {}).get('name') == name for s in specs)
+        mcp = getattr(self.runtime, 'mcp', None)
+        etiqueta = 'mcp' if mcp is not None and mcp.es_propia(name) else name if conocida else 'desconocida'
+        with auditoria.herramienta(self.runtime.task, etiqueta) as registro:
+            resultado = await self._call_con_diagnosticos(name, args)
+            salida = resultado if isinstance(resultado, dict) else {}
+            fallo = 'error' in salida or salida.get('exit_code') or salida.get('timed_out') or salida.get('ok') is False
+            registro['estado'] = 'error' if fallo else 'terminada'
+            if type(salida.get('exit_code')) is int:
+                registro['codigo_salida'] = salida['exit_code']
+            operacion = salida.get('operation_id')
+            if name in ('run_command', 'run_checks') and isinstance(operacion, str):
+                if re.fullmatch(r'operation-[0-9]{6,12}', operacion):
+                    registro['operacion'] = operacion
+            if salida.get('en_segundo_plano') is True:
+                registro['segundo_plano'] = True
+            return resultado
+
+    async def _call_con_diagnosticos(self, name, args):
+        result = await self._call(name, args)
+        if name in EDICIONES and isinstance(result, dict) and 'error' not in result:
+            # Los errores de lo que se acaba de editar, en el resultado del mismo paso
+            # (alfalfa/diagnosticos). Sólo con un gestor que los ofrece: la terminal y la app.
+            diagnosticos = getattr(self.runtime.manager, 'diagnosticos', None)
+            if diagnosticos is not None and not self.runtime.task.get('review'):
+                from ...permisos import modos
+                cambios = result.get('changes') if name == 'apply_patch' else [result]
+                try:
+                    informe = await diagnosticos.tras_editar(
+                        self.root, cambios or [], self._contenido_previo, pedir=self._permiso_de_diagnosticos,
+                        modo=modos.modo_de(self.runtime.task))
+                except Exception as exc:  # noqa: BLE001 — los diagnósticos nunca hacen fallar una edición hecha
+                    informe = {'nuevos': [], 'errores': 0, 'avisos': 0,
+                               'sin_respuesta': ['Los diagnósticos fallaron ('
+                                                               + (str(exc) or type(exc).__name__)[:200] + ').'],
+                               'nota': 'La edición se hizo. Sin diagnósticos: verifica con run_checks.'}
+                if informe:
+                    # Copia: el resultado de edit_file es la misma fila que guarda state['changes'].
+                    result = dict(result, diagnosticos=informe)
+        return result
+
+    async def _permiso_de_diagnosticos(self, argv, proposito, sin_sandbox):
+        """Pide al usuario lanzar un servidor de lenguaje o linter; ValueError si no lo da.
+
+        Fuera del sandbox es el mismo permiso que una orden sin sandbox; dentro, el de
+        Manual y «Aceptar ediciones». En Omitir permisos lo concede la aprobación sola.
+        """
+        from ...permisos import bajo_demanda, modos
+        motivo = bajo_demanda.SALIR if sin_sandbox else modos.MOTIVO_MODO
+        peticion = {'argv': [str(a) for a in argv], 'purpose': proposito, 'motivo': motivo, 'motivos': [motivo]}
+        if sin_sandbox:
+            peticion['sin_sandbox'] = proposito
+        plazo = getattr(self.runtime.manager, 'unsandboxed_approval_seconds', UNSANDBOXED_APPROVAL_SECONDS)
+        if plazo is None:
+            return await self.runtime.approve(peticion)
+        return await asyncio.wait_for(self.runtime.approve(peticion), plazo)
+
+    def _contenido_previo(self, sha):
+        """El contenido anterior a una edición, de su copia privada `before-<sha>`, o None."""
+        if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{64}', sha):
+            return None
+        try:
+            return (self.runtime.directory / ('before-' + sha)).read_bytes()
+        except OSError:
+            return None
+
+    async def _call(self, name, args):
+        if self.runtime.task.get('revision_diff'):
+            raise ValueError('El revisor sólo recibe el diff congelado: no puede invocar herramientas.')
         if self.runtime.task.get('conversation_only'):
             self.runtime.reject_conversation_tool(name)
         if name in self.runtime.excluded_tools:
             raise ValueError('Herramienta no configurada o deshabilitada: ' + name)
         mcp = getattr(self.runtime, 'mcp', None)
         if mcp is not None and mcp.es_propia(name) and not self.runtime.task.get('review'):
+            from ...contenido_externo import autorizar
+            await autorizar(self.runtime, name, args if isinstance(args, dict) else {})
             # El gestor valida contra el esquema cargado y pide el permiso.
             return await mcp.llamar(name, args)
         # Se trabaja con la versión normalizada; lo que envió el modelo queda intacto.
@@ -903,6 +1077,8 @@ class WorkspaceTools:
         if self.runtime.task.get('review') and name in ('write_file', 'edit_file', 'run_command', 'run_checks',
                                                         'apply_patch', 'app_action'):
             raise ValueError('Revisión de solo lectura: esta herramienta está deshabilitada.')
+        from ...contenido_externo import autorizar
+        await autorizar(self.runtime, name, args)
         if name == 'update_plan':
             pasos, explicacion = plan_valido(args)
             texto = texto_del_plan(pasos, explicacion)
@@ -937,7 +1113,11 @@ class WorkspaceTools:
             if propuestas:
                 cierre['sesiones'] = propuestas
             self.runtime.task['cierre'] = cierre
-            return {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
+            resultado = {'mostrado': True, 'nota': 'Ahora escribe tu respuesta final como texto normal.'}
+            if str(args.get('suggestion') or '').strip() and 'sugerencia' not in cierre:
+                resultado['sugerencia'] = ('Descartada: autorizaba en nombre del usuario algo irreversible o '
+                                           'externo. Para eso, pregunta con ask y options.')
+            return resultado
         if name == 'propose_session':
             # Tampoco ejecuta nada: la tarjeta sale con el cierre del turno y decide el usuario.
             propuesta = sesion_propuesta(args)
@@ -958,6 +1138,12 @@ class WorkspaceTools:
             if name == 'abrir_habilidad':
                 return cargador.abrir_habilidad(args['habilidad'])
             return cargador.invocar_comando(args['comando'], args.get('argumentos', ''))
+        if name in ('memoria', 'habilidad'):
+            # Sólo AlfalfaCode (alfalfa/aprendizaje): escribe en su hogar o en .alfalfa/skills.
+            aprendizaje = getattr(self.runtime.manager, 'aprendizaje', None)
+            if aprendizaje is None:
+                raise ValueError('Esta sesión no guarda memoria ni habilidades.')
+            return await aprendizaje.llamar(self.runtime, name, args)
         if name in ('run_command', 'run_checks'):
             return await self.command(args, verification=name == 'run_checks')
         if name in ('app_list', 'app_state', 'app_action'):
@@ -975,8 +1161,19 @@ class WorkspaceTools:
         if name.startswith('browser_'):
             navegador = getattr(self.runtime.manager, 'navegador', None)
             if navegador is None:
-                raise ValueError('El navegador propio sólo existe dentro de la app de AlfalfaCode.')
-            return await navegador.llamar(self.runtime, name, args)
+                raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
+            from ...navegador_actividad import ejecutar
+            exportacion = getattr(self.runtime.manager, 'exportacion_navegador', None)
+            pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+            try:
+                resultado = (await exportacion.llamar(navegador, self.runtime, name, args, ejecutar=ejecutar)
+                             if exportacion is not None else await ejecutar(self.runtime, navegador, name, args))
+            finally:
+                if pruebas is not None and name == 'browser_handoff':
+                    pruebas.tras_relevo(self.runtime)
+            if pruebas is not None:
+                await pruebas.navegador(self.runtime, name, resultado)
+            return resultado
         if name in ('spawn_agent', 'wait_agent', 'send_input', 'close_agent', 'list_agents'):
             subagentes = getattr(self.runtime.manager, 'subagentes', None)
             if subagentes is None:
@@ -986,7 +1183,8 @@ class WorkspaceTools:
             if name == 'wait_agent':
                 return await subagentes.esperar(args)
             if name == 'send_input':
-                return await subagentes.enviar(args)
+                from ...contenido_externo import MOTIVO
+                return await subagentes.enviar(args, origenes=self.runtime.state.get(MOTIVO, ()))
             if name == 'close_agent':
                 return await subagentes.cerrar(args)
             return subagentes.listar()
@@ -1023,10 +1221,13 @@ class WorkspaceTools:
             fondo.aviso()
             return estado
         if name == 'apply_patch':
-            return self.apply_patch(args['input'])
+            return await self.apply_patch(args['input'])
         if name == 'inspect_image':
             path = self.path(args['path'])
             return await self.runtime.vision(path, args['question'])
+        if name == 'buscar_sesiones':
+            from ...busqueda_sesiones.herramienta import llamar
+            return await llamar(self.runtime, args)
         if name == 'web_search':
             from . import web
             return await web.buscar(args['query'], args.get('domains'))
@@ -1057,7 +1258,7 @@ class WorkspaceTools:
                         if len(rows) >= 100:
                             return {'matches': rows, 'truncated': True}
             return {'matches': rows, 'truncated': False}
-        path = self.path(args['path'])
+        path = self.path(args['path'], escritura=name != 'read_file')
         if name == 'read_file':
             data, text = self.read(path)
             lines = text.splitlines(keepends=True)
@@ -1084,23 +1285,31 @@ class WorkspaceTools:
             after = args['content'].encode()
         if len(after) > MAX_FILE:
             raise ValueError('Archivo demasiado grande.')
+        if before != after:
+            await self._prueba_antes_de_editar([path])
+        # La ruta y el contenido pueden haber cambiado mientras se tomaba la captura.
+        path = self.path(args['path'], escritura=True)
+        latest = digest(self.read(path)[0]) if path.exists() else 'NEW'
+        if latest != expected:
+            raise ValueError('El archivo cambió durante la edición; vuelve a leerlo.')
         # Preserve a private preimage for review/recovery; never auto-rollback user work.
         if before is not None:
             backup = self.runtime.directory / ('before-'+digest(before))
             if not backup.exists():
                 atomic_write(backup, before, 0o600)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.path(args['path'])
-        latest = digest(path.read_bytes()) if path.exists() else 'NEW'
-        if latest != expected:
-            raise ValueError('El archivo cambió durante la edición; vuelve a leerlo.')
         atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if before is not None else 0o644)
         change = {'path': str(path.relative_to(self.root)), 'before': expected, 'after': digest(after)}
         self.runtime.state.setdefault('changes', []).append(change)
         self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0)+1
         return change
 
-    def apply_patch(self, text):
+    async def _prueba_antes_de_editar(self, paths):
+        pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
+        if pruebas is not None:
+            await pruebas.antes_de_editar(self.runtime, [str(path.relative_to(self.root)) for path in paths])
+
+    async def apply_patch(self, text):
         """Aplica un parche de Codex: todo o nada, con las mismas rutas y copias que edit_file."""
         from ...apply_patch import NoEncaja, ParchInvalido, leer, planificar
         try:
@@ -1110,7 +1319,7 @@ class WorkspaceTools:
         seen = {}
 
         def current(name):
-            path = self.path(name)
+            path = self.path(name, escritura=True)
             if not path.exists():
                 seen[name] = (path, None, None)
                 return None
@@ -1123,14 +1332,16 @@ class WorkspaceTools:
             raise ValueError(str(exc) + ' No se escribió nada.') from None
         writes = []
         for name, content, action in plan:
-            path, before, _ = seen.get(name) or (self.path(name), None, None)
+            path, before, _ = seen.get(name) or (self.path(name, escritura=True), None, None)
             after = None if content is None else content.encode()
             if after is not None and len(after) > MAX_FILE:
                 raise ValueError('Archivo demasiado grande: ' + name + '. No se escribió nada.')
             writes.append((name, path, before, after, action))
-        # Nada cambió por debajo mientras se calculaba: si no, no se escribe.
-        for name, path, before, _, _ in writes:
-            now = path.read_bytes() if path.is_file() else None
+        await self._prueba_antes_de_editar([path for _, path, before, after, _ in writes if before != after])
+        # Revalida todas las rutas y contenidos tras la captura antes de aplicar el parche.
+        for name, _, before, _, _ in writes:
+            path = self.path(name, escritura=True)
+            now = self.read(path)[0] if path.exists() else None
             if now != before:
                 raise ValueError('El archivo ' + name + ' cambió durante el parche; vuelve a leerlo. '
                                  'No se escribió nada.')
@@ -1140,12 +1351,12 @@ class WorkspaceTools:
                 backup = self.runtime.directory / ('before-' + digest(before))
                 if not backup.exists():
                     atomic_write(backup, before, 0o600)
+            self.path(name, escritura=True)
             if after is None:
                 if path.exists():
                     path.unlink()
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                self.path(name)
                 atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644)
             change = {'path': str(path.relative_to(self.root)),
                       'before': digest(before) if before is not None else 'NEW',
@@ -1157,8 +1368,7 @@ class WorkspaceTools:
                 'summary': 'Parche aplicado: ' + ', '.join(c['action'] + ' ' + c['path'] for c in changes) + '.'}
 
     async def command(self, args, verification=False):
-        with ExitStack() as resources:
-            return await self._command(args, verification, resources)
+        return await self._command(args, verification)
 
     def command_cwd(self, args):
         """Carpeta absoluta de la orden: la raíz o una subcarpeta existente del workspace."""
@@ -1181,7 +1391,7 @@ class WorkspaceTools:
         value = args.get('timeout_seconds') if isinstance(args, dict) else None
         return float(value) if isinstance(value, int) and not isinstance(value, bool) else COMMAND_TIMEOUT_SECONDS
 
-    async def _command(self, args, verification, resources):
+    async def _command(self, args, verification):
         cwd = self.command_cwd(args)
         argv = list(args['argv'])
         corregido = argv_sin_comillas_de_shell(argv, cwd)
@@ -1191,6 +1401,13 @@ class WorkspaceTools:
                              'llevaría esos caracteres y no existe. Repite la orden con argv = '
                              + json.dumps(corregido, ensure_ascii=False) + '. No se ejecutó.')
         str(args['purpose'])  # sin propósito, KeyError como antes; aquí no se usa
+        # La firma de AlfalfaCode en un `git commit` (alfalfa/firma.py), antes del permiso:
+        # la tarjeta enseña la orden que de verdad se ejecuta.
+        from ... import firma
+        firmada = firma.firmar(argv, firma.texto(self.runtime.manager))
+        if firmada is not argv:
+            argv = firmada
+            args = {**args, 'argv': list(argv)}
         revision = self.runtime.state.get('workspace_revision', 0)
         guard_identity = expensive_operation_identity(argv)
         guard_key = None
@@ -1213,12 +1430,12 @@ class WorkspaceTools:
         if policy is None:
             await self.runtime.approve(args)
             launch, sandbox = await self._sandboxed(args, argv)
-            return await self._launch(args, argv, launch, sandbox, verification, resources, revision, cwd,
+            return await self._launch(args, argv, launch, sandbox, verification, revision, cwd,
                                       guard_key, guard_generation, guard_attempts)
 
         async def attempt(launch, sandbox, extra):
             # Cada intento parte de la revisión vigente: un reintento ve la del fallido.
-            return await self._launch(args, argv, launch, sandbox, verification, resources,
+            return await self._launch(args, argv, launch, sandbox, verification,
                                       self.runtime.state.get('workspace_revision', 0), cwd,
                                       guard_key, guard_generation, guard_attempts, extra)
 
@@ -1227,7 +1444,7 @@ class WorkspaceTools:
         plazo = getattr(self.runtime.manager, 'unsandboxed_approval_seconds', UNSANDBOXED_APPROVAL_SECONDS)
         return await policy.execute(self, args, argv, attempt, unsandboxed_timeout=plazo)
 
-    async def _launch(self, args, argv, launch, sandbox, verification, resources, revision, cwd,
+    async def _launch(self, args, argv, launch, sandbox, verification, revision, cwd,
                       guard_key, guard_generation, guard_attempts, extra=None):
         """Lanza un intento ya autorizado y registra su resultado."""
         # Any arbitrary command can change source files. Invalidate prior evidence
@@ -1237,7 +1454,7 @@ class WorkspaceTools:
             self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0)+1
         revision = self.runtime.state.get('workspace_revision', 0)
         self.runtime.save()
-        from ...evidencia.espacio import MutationWatch, capture, for_mutation_watch, matches
+        from ...evidencia.espacio import capture
         if verification and argv and Path(str(argv[0])).name == 'git':
             # `git diff` reescribe el índice al refrescar sus datos de stat, aun
             # con GIT_OPTIONAL_LOCKS=0, y esa escritura invalidaba la propia
@@ -1251,28 +1468,15 @@ class WorkspaceTools:
                 await asyncio.to_thread(refrescar)
             except (OSError, subprocess.SubprocessError):
                 pass
-        context = await capture(self.root) if verification else None
-        guard = None
-        if context is not None:
-            registration = asyncio.create_task(asyncio.to_thread(MutationWatch, [context]))
+        # La huella de antes; la de después se compara con ella al acabar. Si no se
+        # puede tomar, la orden corre igual y queda sin verificar, con el motivo:
+        # rechazarla tumbaba run_checks entero (un proyecto enorme, un permiso).
+        context = sin_huella = None
+        if verification:
             try:
-                guard = await asyncio.shield(registration)
-            except asyncio.CancelledError:
-                # Registration runs in a worker; cancellation must reclaim its handles.
-                def reclaim(done):
-                    if not done.cancelled() and done.exception() is None:
-                        done.result().close()
-                registration.add_done_callback(reclaim)
-                raise
-            except OSError as exc:
-                raise ValueError('No se pudo vigilar el workspace durante la comprobación.') from exc
-            resources.callback(guard.close)
-            try:
-                stable = matches(for_mutation_watch(context)) and not guard.changed()
-            except OSError:
-                stable = False
-            if not stable:
-                raise ValueError('El workspace cambió antes de iniciar la comprobación.')
+                context = await capture(self.root)
+            except Exception as exc:  # noqa: BLE001 - cualquier fallo de la huella deja la orden sin verificar
+                sin_huella = _motivo_sin_huella('antes', exc)
         # The approval authorizes this exact command, not a reusable executable prefix.
         env = {k: os.environ[k] for k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'DEVELOPER_DIR') if k in os.environ}
         # Sin esto, `git diff --check` o `git status` refrescan el índice al
@@ -1305,8 +1509,8 @@ class WorkspaceTools:
                 result['retry_guard_key'] = guard_key
                 result['retry_guard_content_generation'] = guard_generation
                 result['retry_guard_attempts_by_class'] = dict(guard_attempts)
-            return self._record_command_result(args, result, revision, verification, cwd,
-                                               exception=True, context=context, guard=guard)
+            return self._record_command_result(args, result, revision, verification, cwd, exception=True,
+                                               huella=await self._huella_despues(context, sin_huella))
         self.runtime.manager.processes[self.runtime.task['id']] = proc
         # Si el arnés cae de golpe, al volver mata este grupo (ver reap_orphans).
         if isinstance(getattr(proc, 'pid', None), int):
@@ -1389,11 +1593,12 @@ class WorkspaceTools:
             self._adopt_command_writes(desde, presentes)
             if not (result.get('timed_out') or result.get('exception') or result.get('output_limit_exceeded')):
                 revision = self._revision_tras_orden(previa, revision)
-        # Publish only after process cleanup; no await after the final watch read.
+        # La huella de después, ya con el proceso recogido.
+        huella = await self._huella_despues(context, sin_huella) if verification else None
         return self._record_command_result(args, result, revision, verification, cwd,
                                            timed_out=bool(result.get('timed_out')),
                                            exception=bool(result.get('exception')),
-                                           context=context, guard=guard)
+                                           huella=huella)
 
     async def _adopt_timed_out(self, args, proc, collector, captured, total, sandbox, cwd, fondo):
         """La orden agotó su tiempo y sigue viva: pasa a segundo plano en vez de cortarse.
@@ -1548,20 +1753,26 @@ class WorkspaceTools:
                 self.runtime.state.setdefault('changes', []).append(
                     {'path': name, 'before': sha, 'after': after, 'via': 'run_command'})
 
+    async def _huella_despues(self, context, sin_huella):
+        """Los campos de la comprobación sobre el workspace: la huella de después contra la de antes."""
+        if context is None:
+            return {'workspace_stable': False, 'workspace_unverified': sin_huella} if sin_huella else {}
+        from ...evidencia.espacio import tras_la_orden
+        try:
+            igual, foto = await asyncio.to_thread(tras_la_orden, context)
+        except Exception as exc:  # noqa: BLE001 - como antes de la orden: sin huella, sin verificar
+            return {'workspace_context': context, 'workspace_stable': False,
+                    'workspace_unverified': _motivo_sin_huella('después', exc)}
+        # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo; la
+        # foto devuelta las incluye para que la comprobación no caduque luego por ellas.
+        return {'workspace_context': foto, 'workspace_stable': igual}
+
     def _record_command_result(self, args, result, revision, verification, cwd, *,
-                               prohibited=False, exception=False, timed_out=False, context=None, guard=None):
-        if context is not None:
-            from ...evidencia.espacio import cambio_sin_trabajo, con_caches, for_mutation_watch, matches
-            result['workspace_context'] = context
-            try:
-                result['workspace_stable'] = (matches(for_mutation_watch(context)) and guard is not None
-                                              and not guard.changed())
-                if not result['workspace_stable'] and cambio_sin_trabajo(context, guard):
-                    # Una orden que sólo creó o borró cachés (.pytest_cache/) no cambió el trabajo;
-                    # la foto las incluye para que la comprobación no caduque por ellas.
-                    result['workspace_stable'] = True
-                    result['workspace_context'] = con_caches(context, guard)
-            except OSError:
+                               prohibited=False, exception=False, timed_out=False, huella=None):
+        if huella:
+            result.update(huella)
+            if result.get('workspace_stable') and self.runtime.state.get('workspace_revision', 0) != revision:
+                # Otra herramienta cambió el trabajo mientras corría la orden.
                 result['workspace_stable'] = False
         output = str(result.get('output') or '')
         classification = classify_operation(args['argv'], args['purpose'], cwd, output,

@@ -6,8 +6,8 @@ public enum Links {
     // MARK: - Constantes
 
     /// Qué datos recibe y guarda Alfalfa Cloud, lo que hace la app y las condiciones del servicio.
-    public static let privacy = URL(string: "https://cuycoders.dev/alfalfa/privacidad/")!
+    public static let privacy = URL(string: "https://alfalfacode.cuycoders.dev/privacidad/")!
 
     /// Qué es Alfalfa Cloud y sus códigos de cortesía.
-    public static let cloud = URL(string: "https://cuycoders.dev/alfalfa/cloud/")!
+    public static let cloud = URL(string: "https://alfalfacode.cuycoders.dev/cloud/")!
 }

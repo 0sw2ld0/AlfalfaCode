@@ -19,6 +19,10 @@ from .lectura import dentro_del_espacio as _dentro_del_espacio
 from .lectura import salida_incompleta as _salida_incompleta
 from .operaciones import classify_operation, operation_record_key
 
+# Por qué una comprobación en verde no cuenta, cuando no es culpa de la orden: el workspace
+# cambió mientras corría o no se pudo tomar su huella.
+SIN_VERIFICAR_POR_EL_ESPACIO = frozenset({'workspace_unverified', 'workspace_changed_during_check'})
+
 _MAX_MESSAGE = 800
 _MAX_PENDING_DETAILS = 10
 _MAX_PATH_DETAIL = 160
@@ -350,7 +354,7 @@ class RunEvidence:
                   'session_id': str(self.runtime.task.get('id') or ''),
                   'fingerprint': self.fingerprint()}
         for key in ('error', 'timed_out', 'exception', 'output_limit_exceeded',
-                    'workspace_context', 'workspace_stable',
+                    'workspace_context', 'workspace_stable', 'workspace_unverified',
                     'retry_guard_key', 'retry_guard_content_generation',
                     'retry_guard_attempts_by_class', 'execution_complete',
                     # Política on-request de AlfalfaCode: aislamiento y relación entre intentos.
@@ -400,7 +404,13 @@ class RunEvidence:
         record['verification_status'] = ('sufficient' if self._check_sufficient(record)
                                          else self._insufficient_check_reason(record))
         self.runtime.state.setdefault('checks', []).append(record)
-        if record['classification'].get('disposition') == 'failure' or record['verification_status'] != 'sufficient':
+        # Un verde que no se pudo verificar porque el proyecto cambiaba (otro agente, otro programa)
+        # no es un fallo: sólo no cuenta como comprobación. Apuntarlo como pendiente hacía que el
+        # modelo repitiera la orden sin fin, y mientras el otro siguiera trabajando nunca salía.
+        sin_verificar = (record['classification'].get('disposition') == 'pass'
+                         and record['verification_status'] in SIN_VERIFICAR_POR_EL_ESPACIO)
+        if not sin_verificar and (record['classification'].get('disposition') == 'failure'
+                                  or record['verification_status'] != 'sufficient'):
             self._add_finding(record, source='check')
         self._record_resolution_attempts(record)
         self._refresh_incidents()
@@ -413,6 +423,8 @@ class RunEvidence:
 
     @staticmethod
     def _insufficient_check_reason(check):
+        if check.get('workspace_unverified'):
+            return 'workspace_unverified'
         if check.get('workspace_stable') is False:
             return 'workspace_changed_during_check'
         if check.get('timed_out'):
@@ -678,6 +690,34 @@ class RunEvidence:
                 and evidence.get('output_storage_truncated') == check.get('output_storage_truncated')
                 and evidence.get('execution_complete') == check.get('execution_complete')
                 and evidence.get('timed_out') == bool(check.get('timed_out')))
+
+    def verificacion_bloquea(self, informe):
+        """¿Una verificación «failed» o «stale» (`report()` o `handoff()`) deja el turno pendiente?
+
+        Si la sesión no cambió nada, sólo cuenta una comprobación fallida: una orden de
+        consulta que falló (run_command) es información, como en `bloqueantes()`.
+        """
+        if informe.get('status') not in ('failed', 'stale'):
+            return False
+        return bool(self.runtime.state.get('changes') or informe.get('check_failures'))
+
+    def bloqueantes(self):
+        """Lo de `unresolved` que impide cerrar el turno: {id: resumen}.
+
+        Una orden fallida (run_command) en una sesión que no cambió nada (responder una
+        pregunta, investigar) es información: «python --version» sin python instalado es
+        la respuesta, no trabajo pendiente. Sigue apuntada en `unresolved`, pero no hace
+        saltar el aviso de «Antes de terminar» ni deja la sesión bloqueada: lo hacía, y no
+        había nada que arreglar.
+        """
+        self._refresh_incidents()
+        state = self.runtime.state
+        pendientes = state.get('unresolved') or {}
+        if state.get('changes'):
+            return dict(pendientes)
+        registros = state.get('unresolved_records') or {}
+        return {ident: resumen for ident, resumen in pendientes.items()
+                if (registros.get(ident) or {}).get('source') != 'operation'}
 
     def _refresh_incidents(self):
         self._import_legacy_unresolved()

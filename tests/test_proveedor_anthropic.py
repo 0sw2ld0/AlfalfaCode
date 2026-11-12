@@ -295,8 +295,11 @@ def test_los_modelos_de_anthropic_salen_en_su_seccion():
     assert 'anthropic' in [p.id for p in proveedores.disponibles()]
     llavero.guardar('anthropic', CLAVE)
     filas = proveedores.obtener('anthropic').modelos()
-    assert [f['name'] for f in filas] == ['anthropic/claude-haiku-5-5', 'anthropic/claude-sonnet-5-5',
-                                          'anthropic/claude-opus-5-5']
+    # Los recomendados arriba; sin red, debajo los de models.dev.
+    assert [f['name'] for f in filas[:3]] == ['anthropic/claude-haiku-5-5', 'anthropic/claude-sonnet-5-5',
+                                              'anthropic/claude-opus-5-5']
+    assert [f['recomendado'] for f in filas[:3]] == [True, True, True]
+    assert len(filas) > 3 and not any(f['recomendado'] for f in filas[3:])
     assert {f['proveedor'] for f in filas} == {'anthropic'}
     haiku = filas[0]
     assert haiku['nombre'] == 'Claude Haiku 5.5'
@@ -307,7 +310,8 @@ def test_los_modelos_de_anthropic_salen_en_su_seccion():
     assert anthropic.mostrar('claude-haiku-5-5')['model_info']['anthropic.context_length'] == 1000000
     assert proveedores.obtener('anthropic').precio('claude-haiku-5-5')['tramo']['desde'] == 100000
     configuracion.cambiar('anthropic', 'modelos', ['claude-fable-5-1'])
-    assert [f['name'] for f in proveedores.obtener('anthropic').modelos()][-1] == 'anthropic/claude-fable-5-1'
+    filas = proveedores.obtener('anthropic').modelos()
+    assert [f['name'] for f in filas if f['recomendado']][-1] == 'anthropic/claude-fable-5-1'
     modelos, fallos = proveedores.listar_modelos()
     assert 'anthropic/claude-sonnet-5-5' in [m['name'] for m in modelos] and 'anthropic' not in fallos
 

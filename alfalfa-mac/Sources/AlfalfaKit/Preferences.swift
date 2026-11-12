@@ -20,6 +20,8 @@ public struct Preferences {
         public static let sessionBudgets = "ajustes.presupuestoPorSesion"
         /// Ancho de la barra lateral izquierda, arrastrando su borde.
         public static let sidebarWidth = "barra.ancho"
+        public static let diagnostics = "ajustes.diagnosticos"
+        public static let commitSignature = "ajustes.firmaCommits"
         public static let section = "ajustes.seccion"
     }
 
@@ -76,6 +78,20 @@ public struct Preferences {
     public var sidebarWidth: Double {
         get { SidebarWidth.clamp((defaults.object(forKey: Key.sidebarWidth) as? NSNumber)?.doubleValue ?? SidebarWidth.standard) }
         nonmutating set { defaults.set(SidebarWidth.clamp(newValue), forKey: Key.sidebarWidth) }
+    }
+
+    /// Ver los errores al editar: tras cada edición del agente, el servidor de lenguaje y el linter
+    /// del proyecto miran los archivos tocados. Encendido si nunca se tocó.
+    public var diagnostics: Bool {
+        get { defaults.object(forKey: Key.diagnostics) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.diagnostics) }
+    }
+
+    /// Firmar los commits: el agente añade «Co-Authored-By: AlfalfaCode» a cada `git commit`.
+    /// Encendido si nunca se tocó.
+    public var commitSignature: Bool {
+        get { defaults.object(forKey: Key.commitSignature) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.commitSignature) }
     }
 
     // MARK: - Inicializadores

@@ -44,7 +44,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var dormant: [String: LiveSession] = [:]
     private var openedAtLaunch = false
     /// Texto que espera en el cuadro de una sesión bifurcada al abrirla.
-    private var pendingDrafts: [String: String] = [:]
+    var pendingDrafts: [String: String] = [:]
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
     @Published private(set) var models: [ModelInfo] = []
@@ -79,6 +79,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var newSnapshot: GitSnapshot?
     @Published private(set) var newOllama: Bool?
     @Published var search = ""
+    /// Resultados de buscar `search` dentro de las conversaciones (`--buscar-sesiones`).
+    @Published var contentSearch: SessionSearch?
+    @Published var searchingContent = false
+    /// Ancla de búsqueda para una sesión guardada que aún no se ha abierto.
+    var pendingAnchors: [String: String] = [:]
     @Published var showArchived = false
     @Published var sessionError: String?
     @Published var update: UpdateCheck?
@@ -97,7 +102,7 @@ final class AppModel: ObservableObject {
         recents = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
         applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
-        // ⌘V con una imagen en el portapapeles la adjunta al compositor visible, como en Codex.
+        // ⌘V con una imagen (o un archivo copiado en Finder) la adjunta al compositor visible, como en Codex.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
                   event.charactersIgnoringModifiers == "v", let self,
@@ -110,11 +115,11 @@ final class AppModel: ObservableObject {
     private func attachPasted(_ url: URL) {
         switch route {
         case .new:
-            guard allowsImages(model) else { newImageNotice.show(); return }
+            guard allowsImages(model) || !Attachments.isImage(url) else { newImageNotice.show(); return }
             ImagePicker.add([url], to: &draftImages)
         case let .live(id):
             guard let session = session(id) else { return }
-            guard allowsImages(session.model) else { session.imageNotice.show(); return }
+            guard allowsImages(session.model) || !Attachments.isImage(url) else { session.imageNotice.show(); return }
             ImagePicker.add([url], to: &session.draftImages)
         case .past: break
         }
@@ -376,7 +381,7 @@ final class AppModel: ObservableObject {
 
     func startTask() {
         var task = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if task.isEmpty, !draftImages.isEmpty { task = "Mira la imagen adjunta." }
+        if task.isEmpty, !draftImages.isEmpty { task = Attachments.placeholder(for: draftImages.map(\.path)) }
         guard !task.isEmpty, let folder, let launcher else { return }
         select(folder: folder)
         let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: task, resumeID: nil,
@@ -399,12 +404,20 @@ final class AppModel: ObservableObject {
         open(session, launcher: launcher, task: nil)
     }
 
-    private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = []) {
+    func startQueue(tasks: [String], mode: String, parallelism: Int) {
+        guard let folder, let launcher else { return }
+        let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: "Cola de encargos", resumeID: nil,
+                                  model: model, effort: effort, readOnly: readOnly, mode: self.mode)
+        open(session, launcher: launcher, task: nil, queue: true)
+        session.queue(.prepare, tasks: tasks, mode: mode, parallelism: parallelism, initial: true)
+    }
+
+    private func open(_ session: LiveSession, launcher: URL, task: String?, images: [URL] = [], queue: Bool = false) {
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         watchFamily(session)
         live.insert(session, at: 0)
         route = .live(session.id)
-        session.start(launcher: launcher, task: task, images: images)
+        session.start(launcher: launcher, task: task, images: images, queue: queue)
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             await reload()
@@ -441,6 +454,7 @@ final class AppModel: ObservableObject {
         }
         dormant[summary.id] = session
         session.pendingDraft = pendingDrafts.removeValue(forKey: summary.id)
+        session.searchAnchor = pendingAnchors.removeValue(forKey: summary.id)
         let resumable = Presentation.resumable(summary.state)
         Task { await loadHistory(summary.id, into: session, launcher: launcher, resumable: resumable) }
     }
@@ -450,7 +464,12 @@ final class AppModel: ObservableObject {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
                                                           directory: home)
             for case let .history(_, events, wrapUp, context, tokens, cost) in messages {
-                session.restore(Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost),
+                var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost)
+                for case var .taskQueue(queue) in messages {
+                    queue.recover()
+                    timeline.taskQueue = queue
+                }
+                session.restore(timeline,
                                 launcher: launcher, resumable: resumable)
                 historyError[id] = nil
                 return
@@ -575,7 +594,7 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
-    private func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
+    func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
         guard let launcher else { return nil }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: arguments, directory: home)

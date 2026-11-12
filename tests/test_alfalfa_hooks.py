@@ -102,7 +102,9 @@ class Sesion:
             for ident in list(self.transport.pending):
                 if ident not in vistos:
                     vistos.add(ident)
-                    self.transport.receive(json.dumps(dict(tipo='permiso', id=ident, aprobado=self.respuesta)))
+                    peticion = next(e for e in self.eventos('permiso') if e['id'] == ident)
+                    respuesta = self.respuesta(peticion) if callable(self.respuesta) else self.respuesta
+                    self.transport.receive(json.dumps(dict(tipo='permiso', id=ident, aprobado=respuesta)))
             await asyncio.sleep(0.01)
 
     def correr(self, pasos, prompt='Prueba de hooks.', cerrar=True):
@@ -538,14 +540,14 @@ def test_allow_de_un_hook_no_sustituye_el_permiso_mcp(tmp_path, monkeypatch, res
         'PreToolUse': [grupo(orden(registro, 'json', permitir), 'mcp__.*')],
         'PostToolUse': [grupo(orden(registro, 'nada'), 'mcp__.*')]}},
         servidores={'prueba': dict(orden=sys.executable, argumentos=[SERVIDOR_MCP], tiempo_inicio=60)},
-        respuesta=respuesta)
+        respuesta=lambda p: p.get('motivo') == 'contenido_externo' or respuesta)
     codigo, modelo = s.correr([
         llamada('buscar_herramientas', {'consulta': 'contador'}),
         llamada('buscar_herramientas', {'consulta': 'select:mcp__prueba__contar'}),
         llamada('mcp__prueba__contar', {'nota': 'hook'}, 'call-mcp')])
     contador = s.root / 'contador.txt'
     assert (contador.exists() and int(contador.read_text()) == 1) is respuesta
-    permiso, = s.eventos('permiso')  # el allow del hook no evitó preguntar
+    permiso, = s.eventos('permiso')  # el allow del hook no evita el permiso MCP
     assert permiso['mcp']['nombre'] == 'mcp__prueba__contar'
     entradas = [f['entrada'] for f in leer(registro)]
     # Buscar y cargar esquemas no dispara los hooks de herramientas MCP.

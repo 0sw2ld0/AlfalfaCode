@@ -90,9 +90,10 @@ def cliente_http(servidor):
 
 
 class Conexion:
-    def __init__(self, servidor, cwd, limpiar):
+    def __init__(self, servidor, cwd, limpiar, *, protegidas=()):
         self.servidor = servidor
         self.cwd = cwd
+        self.protegidas = protegidas
         self.limpiar = limpiar
         self.sesion = None
         self.herramientas = []
@@ -161,7 +162,7 @@ class Conexion:
         if self.servidor.transporte == 'stdio':
             from mcp.client.stdio import StdioServerParameters, stdio_client
             cwd = self.servidor.cwd or self.cwd
-            sandbox = SeatbeltSandbox(cwd, network=self.servidor.red)
+            sandbox = SeatbeltSandbox(cwd, network=self.servidor.red, protegidas=self.protegidas)
             orden = await sandbox.prepare([self.servidor.orden, *self.servidor.argumentos])
             # stderr del servidor a un tubo propio: nunca se copia en bruto a
             # registros ni eventos; sólo su cola, ya limpia, en un diagnóstico.

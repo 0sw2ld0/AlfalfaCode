@@ -148,11 +148,14 @@ def test_writable_roots_resolve_symlinks_and_ignore_wide_tmpdir(tmp_path):
 
 
 def test_protected_metadata_regex_matches_codex_and_nested_git():
-    assert protected_metadata_name_regex('/a.b/', '.git', nested=False) == r'^/a\.b/\.git(/.*)?$'
-    assert protected_metadata_name_regex('/', '.git', nested=False) == r'^/\.git(/.*)?$'
+    # Como Codex, pero el nombre sin distinguir mayúsculas: en APFS `.GIT` es el mismo `.git`.
+    assert protected_metadata_name_regex('/a.b/', '.git', nested=False) == r'^/a\.b/\.[gG][iI][tT](/.*)?$'
+    assert protected_metadata_name_regex('/', '.git', nested=False) == r'^/\.[gG][iI][tT](/.*)?$'
     root = '/p/' + RARO
     rx = re.compile(protected_metadata_name_regex(root, '.git'))
     for path in ('/.git', '/.git/hooks', '/.git/hooks/pre-commit', '/sub/.git', '/sub/x/.git/config'):
+        assert rx.match(root + path), path
+    for path in ('/.GIT/hooks', '/sub/.Git/config'):
         assert rx.match(root + path), path
     for path in ('/.gitignore', '/.github/x', '/x.git', '/sub/.gitmodules'):
         assert not rx.match(root + path), path
@@ -247,13 +250,11 @@ def test_unreadable_directory_seals_its_whole_subtree(tmp_path):
     try:
         assert seatbelt.nested_metadata_ancestors(real) == ([], [real + '/hidden'])
         sandbox = SeatbeltSandbox(str(ws), tmpdir=str(tmp_path / 'no'), home='/nonexistent-home')
-        policy, params = sandbox.policy()
+        # Sin poder descartar habilidades con hardlinks previos no se abre para escribir.
+        with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+            sandbox.policy()
     finally:
         hidden.chmod(0o755)
-    assert sealed(policy, params) == {real + '/hidden'}
-    # Sus padres se anclan uno a uno; lo de dentro ya lo cubre el subárbol.
-    assert anchored(policy, params) == outer_ancestors(sandbox)
-    assert real + '/hidden' not in policy
     # Uno ilegible dentro de otro: basta con sellar el exterior.
     (ws / 'hidden' / 'inner').chmod(0)
     hidden.chmod(0)
@@ -540,20 +541,17 @@ def test_real_unreadable_directory_cannot_hide_a_git_from_renaming(tmp_path):
     hidden.chmod(0)
     try:
         # La política se construye con hidden/ ilegible, como la vería el recorrido.
-        command = SeatbeltSandbox(str(root)).command_args(['/bin/sh', '-c', script, 'x', away])
+        with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+            SeatbeltSandbox(str(root)).command_args(['/bin/sh', '-c', script, 'x', away])
         hidden.chmod(0o755)
-        proc = subprocess.run(command, cwd=root, capture_output=True, timeout=30, start_new_session=True)
-        assert proc.returncode != 0, proc.stdout + proc.stderr
-        assert b'Operation not permitted' in proc.stderr
         assert not os.path.lexists(away)
         assert (hooks / 'pre-commit').read_text() == '#!/bin/sh\nexit 0\n'
         for argv in (['/bin/mv', 'hidden/child', 'otro'], ['/bin/rm', '-rf', 'hidden'],
                      ['/bin/mv', 'hidden', 'otro']):
             hidden.chmod(0)
-            command = SeatbeltSandbox(str(root)).command_args(argv)
+            with pytest.raises(SandboxUnavailable, match='comprobar.*habilidades'):
+                SeatbeltSandbox(str(root)).command_args(argv)
             hidden.chmod(0o755)
-            proc = subprocess.run(command, cwd=root, capture_output=True, timeout=30, start_new_session=True)
-            assert proc.returncode != 0, (argv, proc.stderr)
         assert (hooks / 'pre-commit').is_file() and not (root / 'otro').exists()
         # Los archivos del subárbol sellado se siguen editando.
         code, output = sandboxed(SeatbeltSandbox(str(root)), ['/bin/sh', '-c', 'echo y > hidden/nota'], root)
@@ -587,3 +585,20 @@ def test_real_network_connection_is_blocked(tmp_path):
         assert code != 0, output
     finally:
         server.close()
+
+
+@real
+def test_real_git_with_other_case_stays_protected(tmp_path):
+    """Seatbelt no media el renombrado que sólo cambia mayúsculas (`mv .git .GIT`): ninguna regla
+    lo niega, ni `literal` ni `subpath`. Por eso la protección no depende del nombre exacto: con
+    `.GIT` los hooks siguen sin poder escribirse y la carpeta sigue sin poder salir de su sitio."""
+    root = tmp_path / 'ws'
+    (root / '.git' / 'hooks').mkdir(parents=True)
+    sandbox = SeatbeltSandbox(str(root))
+    sandboxed(sandbox, ['/bin/mv', '.git', '.GIT'], root)  # puede cambiar el nombre visible
+    for argv in (['/bin/sh', '-c', 'echo x > .GIT/hooks/pre-commit'], ['/bin/sh', '-c', 'echo x > .git/hooks/x'],
+                 ['/bin/mv', '.GIT', 'fuera'], ['/bin/mv', '.git', 'fuera'], ['/bin/rm', '-rf', '.GIT/hooks']):
+        code, output = sandboxed(SeatbeltSandbox(str(root)), argv, root)
+        assert code != 0, (argv, output)
+    assert [p.name.casefold() for p in root.iterdir()] == ['.git']
+    assert (root / '.git' / 'hooks').is_dir() and not any((root / '.git' / 'hooks').iterdir())

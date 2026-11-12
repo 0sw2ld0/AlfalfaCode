@@ -13,6 +13,9 @@ struct NewTaskView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var focused: Bool
     @State private var importingOllama = false
+    @State private var planningQueue = false
+    @State private var showingBrowserFirstRun = false
+    @AppStorage("ajustes.navegador.primerInicioVisto") private var browserFirstRunSeen = false
     /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
     @Environment(\.openSettings) private var openSettings
@@ -29,6 +32,13 @@ struct NewTaskView: View {
                     }
                     folders
                     ollamaButton
+                    Button { planningQueue = true } label: { Label("Cola de encargos", systemImage: "list.number") }
+                        .disabled(model.folder == nil || model.launcher == nil || model.firstRun != nil)
+                        .sheet(isPresented: $planningQueue) {
+                            TaskQueueEditor(folder: model.folder ?? "") { tasks, mode, parallelism in
+                                model.startQueue(tasks: tasks, mode: mode, parallelism: parallelism)
+                            }
+                        }
                     resumeList
                 }
                 Spacer(minLength: 0)
@@ -39,9 +49,22 @@ struct NewTaskView: View {
             }
             .frame(maxWidth: .infinity)
             Divider().overlay(Theme.border)
-            SidePanel(folder: model.folder, snapshot: model.newSnapshot, ollama: model.newOllama, timeline: nil)
+            SidePanel(folder: model.folder, snapshot: model.newSnapshot, ollama: model.newOllama, timeline: nil,
+                      providerID: ModelProvider.id(of: model.model, in: model.models),
+                      providerName: model.currentProviderName)
                 .frame(width: 300)
         }
+        .onChange(of: shouldShowBrowserFirstRun, initial: true) { _, show in
+            if show { showingBrowserFirstRun = true }
+        }
+        .sheet(isPresented: $showingBrowserFirstRun, onDismiss: { browserFirstRunSeen = true }, content: {
+            BrowserFirstRunCard().environmentObject(model)
+        })
+    }
+
+    private var shouldShowBrowserFirstRun: Bool {
+        !browserFirstRunSeen && model.firstRun == nil && model.launcher != nil
+            && model.providers.contains(where: \.configured) && model.connecting == nil
     }
 
     private var header: some View {
@@ -124,22 +147,23 @@ struct NewTaskView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             ImageNoticeLine(notice: model.newImageNotice)
             HStack(spacing: 10) {
-                Button { ImagePicker.choose(into: &model.draftImages) } label: {
-                    Image(systemName: allowsImages ? "plus" : "eye.slash").foregroundStyle(Theme.secondary)
+                Button { ImagePicker.choose(into: &model.draftImages, withImages: allowsImages) } label: {
+                    Image(systemName: "plus").foregroundStyle(Theme.secondary)
                         .frame(width: 22, height: 22).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(allowsImages ? "Adjuntar imágenes (también puedes pegarlas o soltarlas aquí)" : ImageSupport.notice)
-                .accessibilityLabel(allowsImages ? "Adjuntar imágenes" : ImageSupport.notice)
-                .disabled(!allowsImages)
+                .help(ImageSupport.attachHelp(allowsImages: allowsImages))
+                .accessibilityLabel(allowsImages ? "Adjuntar imágenes o archivos" : "Adjuntar archivos")
                 TextField("Describe una tarea o haz una pregunta", text: $model.draft, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(1...5).focused($focused)
                     .accessibilityLabel("Encargo")
                     .onChange(of: model.draft) { old, new in
                         guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
                         model.draft = dropped.text
-                        guard allowsImages else { model.newImageNotice.show(); return }
-                        ImagePicker.add(dropped.images, to: &model.draftImages)
+                        if !allowsImages, dropped.images.contains(where: Attachments.isImage) {
+                            model.newImageNotice.show()
+                        }
+                        ImagePicker.add(dropped.images, to: &model.draftImages, withImages: allowsImages)
                     }
                     .onSubmit(start)
                 Button(action: start) {
@@ -153,15 +177,16 @@ struct NewTaskView: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                guard allowsImages else { model.newImageNotice.show(); return true }
-                return ImagePicker.drop(providers, into: $model.draftImages)
+                ImagePicker.drop(providers, into: $model.draftImages, withImages: allowsImages) {
+                    model.newImageNotice.show()
+                }
             }
             .confirmationDialog(ImageChoiceButtons.title, isPresented: $askingAboutImages) {
                 ImageChoiceButtons(alternatives: model.imageAlternatives(to: model.model)) { choice in
                     model.model = choice.model
                     model.startTask()
                 } dropImages: {
-                    model.draftImages = []
+                    model.draftImages.removeAll(where: Attachments.isImage)
                     model.startTask()
                 }
             } message: {
@@ -192,7 +217,7 @@ struct NewTaskView: View {
     /// Empezar; con imágenes que el modelo elegido no ve, antes se pregunta qué hacer.
     private func start() {
         guard canStart else { return }
-        if !model.draftImages.isEmpty, !allowsImages {
+        if model.draftImages.contains(where: Attachments.isImage), !allowsImages {
             askingAboutImages = true
             return
         }

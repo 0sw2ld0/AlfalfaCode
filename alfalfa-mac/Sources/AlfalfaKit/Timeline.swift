@@ -78,6 +78,24 @@ public struct ToolEvent: Equatable, Identifiable, Sendable {
     }
 }
 
+/// Qué se hace con un mensaje en cola al quitarlo: tirarlo («Quitar») o devolverlo al cuadro («Editar»).
+public enum UnqueueAction: Equatable, Sendable {
+    case remove
+    case edit
+}
+
+/// «Quitar» o «Editar» pedido al motor: el elemento y para qué.
+struct Unqueuing: Equatable, Sendable {
+    var item: Int
+    var action: UnqueueAction
+}
+
+/// Un mensaje que salió de la cola sin llegar al modelo: su texto, con las etiquetas de imagen.
+public struct Unqueued: Equatable, Sendable {
+    public var text: String
+    public var action: UnqueueAction
+}
+
 public enum TimelineItem: Equatable, Identifiable, Sendable {
     case user(id: Int, text: String, queued: Bool)
     case agent(id: Int, text: String)
@@ -92,12 +110,16 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     case compaction(id: Int, Compaction)
     /// Aviso de tarifa por contexto largo; `answered` cuando ya se eligió (o se compactó).
     case priceWarning(id: Int, PriceWarning, answered: Bool)
+    /// El código se deshizo o se rehízo; `redone` cuando un rehacer posterior ya lo devolvió.
+    case undo(id: Int, UndoStep, redone: Bool)
+    /// Lo que la revisión al cerrar el turno propone guardar (memoria o habilidad), con su diff.
+    case learning(id: Int, LearningProposal, state: LearningProposalState)
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
              let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
-             let .priceWarning(id, _, _): return id
+             let .priceWarning(id, _, _), let .undo(id, _, _), let .learning(id, _, _): return id
         }
     }
 }
@@ -165,6 +187,8 @@ public struct Timeline: Equatable, Sendable {
     public private(set) var compacting = false
     /// El arnés mantiene el Mac despierto: sólo mientras trabaja un turno y con el ajuste encendido.
     public private(set) var keepingAwake = false
+    /// «Preparando deshacer…» mientras el motor guarda la instantánea del turno; nil si no.
+    public private(set) var preparingUndo: String?
     /// Topes en dólares de la sesión y del mes y lo gastado (`presupuesto`); nil en motores anteriores.
     public private(set) var budget: BudgetStatus?
     /// Lo que ahorró la caché de prompts en la sesión; nil sin caché.
@@ -194,6 +218,8 @@ public struct Timeline: Equatable, Sendable {
         return nil
     }
     public static let subagentStepLimit = 200
+    /// Lo que se dice cuando el motor ya no puede quitar un mensaje de la cola.
+    public static let alreadyRead = "Ya lo leyó el agente: el mensaje sigue en la conversación."
     public private(set) var totalTokens = 0
     /// Coste estimado de la sesión en USD (precios de models.dev); nil si el modelo no cobra por token.
     public private(set) var totalCost: Double?
@@ -205,10 +231,17 @@ public struct Timeline: Equatable, Sendable {
     /// Hora y turno de cada mensaje del usuario, por id de elemento: «Hace 12 minutos», volver y bifurcar.
     public private(set) var userTimes: [Int: Double] = [:]
     public private(set) var userTurns: [Int: String] = [:]
+    /// El id que comparten la app y el motor de cada mensaje en cola, por id de elemento.
+    public private(set) var queueIDs: [Int: String] = [:]
+    /// «Quitar» o «Editar» que esperan la respuesta del motor, por id de la cola.
+    private var unqueuing: [String: Unqueuing] = [:]
     /// Orden aprobada que aún no ha devuelto resultado, y desde cuándo (segundos desde 1970).
     /// Una compilación o un script largo tarda: la tarjeta lo enseña en vez de parecer colgada.
     public private(set) var runningPermission: RunningCommand?
     public private(set) var finished = false
+    public var taskQueue: TaskQueue?
+    /// El usuario ya escribió algo encima de la frase sugerida: no vuelve hasta el próximo cierre.
+    public private(set) var suggestionDismissed = false
     private var counter = 0
 
     public init() {}
@@ -231,7 +264,7 @@ public struct Timeline: Equatable, Sendable {
         totalCost = cost
         // Una sesión guardada no está trabajando: lo que quedó sin resultado, quedó cortado.
         closeOpenCalls()
-        if let wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
+        if let wrapUp { appendWrapUp(wrapUp) }
         status = .idle
         compacting = false
     }
@@ -246,11 +279,54 @@ public struct Timeline: Equatable, Sendable {
     private mutating func nextID() -> Int { counter += 1; return counter }
 
     /// Mensaje local del usuario: se muestra en cola hasta que el agente lo incorpora.
-    public mutating func addUser(_ text: String, queued: Bool) {
+    /// `queueID`: el id con el que se envió al motor, para poder quitarlo de la cola.
+    @discardableResult
+    public mutating func addUser(_ text: String, queued: Bool, queueID: String? = nil) -> Int {
         closeWrapUps()
         let id = nextID()
         items.append(.user(id: id, text: text, queued: queued))
         userTimes[id] = Date().timeIntervalSince1970
+        if queued, let queueID { queueIDs[id] = queueID }
+        return id
+    }
+
+    /// Se pidió quitar o editar este mensaje y el motor aún no ha respondido.
+    public func isUnqueuing(item id: Int) -> Bool {
+        queueIDs[id].map { unqueuing[$0] != nil } ?? false
+    }
+
+    /// «Quitar» o «Editar» de un mensaje en cola: el id que hay que pedir al motor que saque.
+    /// nil si ya no está en cola, se envió sin id o ya se pidió.
+    public mutating func requestUnqueue(item id: Int, action: UnqueueAction) -> String? {
+        guard queuedIndex(of: id) != nil, let queueID = queueIDs[id], unqueuing[queueID] == nil else { return nil }
+        unqueuing[queueID] = Unqueuing(item: id, action: action)
+        return queueID
+    }
+
+    /// La respuesta del motor (`quitado_de_cola`). Si lo quitó, o nunca llegó a su cola, sale de
+    /// la conversación y se devuelve su texto. Si el modelo ya lo leyó, se queda con un aviso.
+    public mutating func unqueued(id queueID: String, removed: Bool, reason: String?) -> Unqueued? {
+        guard let pending = unqueuing.removeValue(forKey: queueID) else { return nil }
+        if removed || reason == "desconocido" {
+            return removeQueued(item: pending.item).map { Unqueued(text: $0, action: pending.action) }
+        }
+        items.append(.notice(id: nextID(), text: Self.alreadyRead))
+        return nil
+    }
+
+    /// Quita un mensaje que sigue en cola y devuelve su texto. Sin proceso no hay cola en el
+    /// motor: «Quitar» y «Editar» lo hacen directamente.
+    @discardableResult
+    public mutating func removeQueued(item id: Int) -> String? {
+        guard let index = queuedIndex(of: id), case let .user(_, text, _) = items[index] else { return nil }
+        items.remove(at: index)
+        userTimes[id] = nil
+        if let queueID = queueIDs.removeValue(forKey: id) { unqueuing[queueID] = nil }
+        return text
+    }
+
+    private func queuedIndex(of id: Int) -> Int? {
+        items.firstIndex { if case .user(id, _, true) = $0 { return true } else { return false } }
     }
 
     /// El mensaje rechazado sale de la conversación (vuelve al cuadro) y queda el aviso. Sin turno
@@ -264,7 +340,7 @@ public struct Timeline: Equatable, Sendable {
             guard case let .user(id, text, _) = item, userTurns[id] == nil else { return false }
             let parts = ImageTags.split(text)
             return parts.text == wanted
-                || (!wantedImages.isEmpty && parts.images.map(ImageSupport.canonicalPath) == wantedImages)
+                || (!wantedImages.isEmpty && parts.attachments.map(ImageSupport.canonicalPath) == wantedImages)
         }
         if let index = items.lastIndex(where: matches) { items.remove(at: index) }
         items.append(.notice(id: nextID(), text: rejection.message))
@@ -285,6 +361,46 @@ public struct Timeline: Equatable, Sendable {
         return nil
     }
 
+    /// La marca de un deshacer o rehacer del código. Un rehacer deja sin botón el deshacer que devuelve.
+    public mutating func addUndo(_ step: UndoStep) {
+        if step.isRedo, let redone = step.redoOf {
+            for index in items.indices {
+                if case let .undo(id, previous, false) = items[index], previous.id == redone {
+                    items[index] = .undo(id: id, previous, redone: true)
+                }
+            }
+        }
+        items.append(.undo(id: nextID(), step, redone: false))
+    }
+
+    /// El deshacer que «Rehacer» devolvería ahora: el último sin rehacer.
+    public var redoableUndo: UndoStep? {
+        for item in items.reversed() {
+            if case let .undo(_, step, redone) = item, !step.isRedo { return redone ? nil : step }
+        }
+        return nil
+    }
+
+    /// La frase sugerida del último cierre, para el cuadro vacío, como en la app de Codex. Nil en
+    /// cuanto el usuario escribe, manda otro mensaje (la caja queda contestada) o hay un turno en marcha.
+    public var suggestion: String? {
+        guard !suggestionDismissed, !status.isRunning else { return nil }
+        for item in items.reversed() {
+            switch item {
+            case let .wrapUp(_, wrapUp, answered): return answered ? nil : wrapUp.suggestion
+            case .user: return nil
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    /// El usuario escribió en el cuadro: la sugerencia se va hasta el siguiente cierre.
+    public mutating func dismissSuggestion() {
+        guard suggestion != nil else { return }
+        suggestionDismissed = true
+    }
+
     /// Quita la caja de cierre (la ✕ de la tarjeta).
     public mutating func dismissWrapUp(id: Int) {
         items.removeAll { if case .wrapUp(id, _, _) = $0 { return true } else { return false } }
@@ -303,6 +419,12 @@ public struct Timeline: Equatable, Sendable {
                 items[index] = .priceWarning(id: id, warning, answered: true)
             }
         }
+    }
+
+    /// Cada cierre trae su propia sugerencia: la descartada del anterior no la tapa.
+    private mutating func appendWrapUp(_ wrapUp: WrapUp) {
+        items.append(.wrapUp(id: nextID(), wrapUp, answered: false))
+        suggestionDismissed = false
     }
 
     /// Un mensaje nuevo deja contestadas las cajas anteriores: sus botones ya no aplican.
@@ -338,6 +460,8 @@ public struct Timeline: Equatable, Sendable {
             case let .compaction(_, compaction):
                 parts.append("---\n\n*Conversación compactada.* Resumen para el modelo:\n\n" + compaction.summary)
             case let .priceWarning(_, warning, _): parts.append("> " + warning.text)
+            case let .undo(_, step, _): parts.append("> " + step.text)
+            case let .learning(_, proposal, _): parts.append("> **Aprendizaje propuesto:** " + proposal.title)
             default: break
             }
         }
@@ -353,6 +477,21 @@ public struct Timeline: Equatable, Sendable {
 
     public mutating func apply(_ message: AlfalfaMessage) {
         switch message {
+        case let .taskQueue(queue):
+            taskQueue = queue
+            if let tokens = queue.sessionTokens { totalTokens = tokens }
+            if let cost = queue.sessionCost { totalCost = cost }
+            status = queue.running ? (pendingPermissions.isEmpty ? .working : .waitingPermission) : .idle
+        case let .codeReview(review):
+            if let tokens = review.sessionTokens { totalTokens = tokens }
+            if let cost = review.sessionCost { totalCost = cost }
+            for index in items.indices {
+                if case let .wrapUp(id, wrapUp, answered) = items[index], wrapUp.review?.turn == review.turn {
+                    var updated = wrapUp
+                    updated.review = review
+                    items[index] = .wrapUp(id: id, updated, answered: answered)
+                }
+            }
         case let .session(info):
             session = info
             // Al reanudar llega lo ya gastado: sin esto, el panel diría 0 hasta acabar el turno.
@@ -387,6 +526,7 @@ public struct Timeline: Equatable, Sendable {
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            preparingUndo = nil
             closeOpenCalls()
             // Los mensajes ya entregados sin turno conocido son de este turno.
             if let turn = outcome.turn {
@@ -411,11 +551,12 @@ public struct Timeline: Equatable, Sendable {
             if !outcome.summary.isEmpty && outcome.exitCode != 0 && !showsAgentText(outcome.summary) {
                 items.append(.notice(id: nextID(), text: BlockedSummary.readable(outcome.summary)))
             }
-            if let wrapUp = outcome.wrapUp { items.append(.wrapUp(id: nextID(), wrapUp, answered: false)) }
+            if let wrapUp = outcome.wrapUp { appendWrapUp(wrapUp) }
         case let .finished(outcome):
             runningPermission = nil
             compacting = false
             keepingAwake = false
+            preparingUndo = nil
             closeOpenCalls()
             totalTokens = outcome.tokens
             if let cost = outcome.cost { totalCost = cost }
@@ -435,6 +576,7 @@ public struct Timeline: Equatable, Sendable {
             subagentSteps[agent] = steps
         case let .quota(rows): quotas = rows
         case let .keepingAwake(on): keepingAwake = on
+        case let .preparingUndo(text): preparingUndo = text
         case let .budget(status, cache):
             budget = status
             if let cache { cacheSavings = cache }
@@ -445,8 +587,28 @@ public struct Timeline: Equatable, Sendable {
                                      + (which == .session ? "de esta sesión." : "del mes en este Mac.")))
             }
         case .continued: break
+        // Lo resuelve `unqueued(id:removed:reason:)`, que devuelve el texto quitado a la sesión.
+        case .unqueued: break
         case .sessions, .models, .providers, .webSearch, .activated, .reported, .update, .sessionChanged, .history,
-             .ollamaChats, .browser, .firstRun, .connecting, .connected:
+             .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview, .sessionSearch,
+             .cuyBrowserPreparation:
+            break
+        case let .undone(step): addUndo(step)
+        case let .learningProposal(proposal):
+            // Al reabrir la sesión el motor vuelve a mandar las que siguen esperando: una tarjeta por id.
+            let shown = items.contains { item in
+                if case let .learning(_, other, _) = item { return other.id == proposal.id }
+                return false
+            }
+            if !shown { items.append(.learning(id: nextID(), proposal, state: .pending)) }
+        case let .learningResolved(id, applied, discarded, text):
+            for index in items.indices {
+                if case let .learning(itemID, proposal, .pending) = items[index], proposal.id == id {
+                    let state: LearningProposalState = applied ? .applied(text) : discarded ? .discarded : .failed(text)
+                    items[index] = .learning(id: itemID, proposal, state: state)
+                }
+            }
+        case .memory, .learned, .learnedSkillFiles, .browserSiteSettings:
             break
         }
     }
@@ -460,6 +622,10 @@ public struct Timeline: Equatable, Sendable {
     }
 
     private mutating func apply(_ event: AgentEvent) {
+        if let undo = event.undo {
+            addUndo(undo)
+            return
+        }
         if let warning = event.priceWarning {
             items.append(.priceWarning(id: nextID(), warning, answered: warning.mode == .full))
             return
@@ -484,9 +650,16 @@ public struct Timeline: Equatable, Sendable {
             // orden) ya no está corriendo.
             closeOpenCalls()
             let id: Int
-            if let index = items.firstIndex(where: { if case .user(_, event.text, true) = $0 { return true } else { return false } }),
+            let queued = items.firstIndex { item in
+                guard case let .user(id, text, true) = item else { return false }
+                if let queueID = event.queueID { return queueIDs[id] == queueID }
+                return text == event.text // Motores anteriores sin id.
+            }
+            if let index = queued,
                case let .user(existing, text, _) = items[index] {
                 items[index] = .user(id: existing, text: text, queued: false)
+                // Ya no está en cola; un «Quitar» pedido antes recibirá «entregado».
+                queueIDs[existing] = nil
                 id = existing
             } else {
                 id = nextID()
@@ -599,11 +772,15 @@ public struct Timeline: Equatable, Sendable {
 
     /// El proceso salió. Si no hubo `fin`, o salió con 130, la sesión queda interrumpida.
     public mutating func processExited(code: Int32) {
+        taskQueue?.recover()
         runningPermission = nil
+        // Sin proceso nadie responderá: «Quitar» y «Editar» vuelven a valer (y ya quitan aquí).
+        unqueuing.removeAll()
         closeOpenCalls()
         compacting = false
         // macOS suelta la aserción con el proceso.
         keepingAwake = false
+        preparingUndo = nil
         // Con el proceso de alfalfa se cierran sus órdenes en segundo plano.
         processes = processes.map { var row = $0; if row.alive { row.alive = false; row.stopped = true }; return row }
         denyPending(reason: "Sesión terminada")

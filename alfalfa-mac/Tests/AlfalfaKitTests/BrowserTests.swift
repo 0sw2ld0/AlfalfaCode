@@ -177,6 +177,7 @@ final class BrowserTests: XCTestCase {
         XCTAssertTrue(first.ok, first.error ?? "")
         XCTAssertEqual(first.result["elemento"] as? String, "button «Contar»")
         XCTAssertEqual(first.result["navego"] as? Bool, false)
+        XCTAssertNil(first.result["envio_formulario"])
         let value1 = try await pageText(engine, "cuenta")
 
         XCTAssertEqual(value1, "Pulsado 1")
@@ -203,6 +204,7 @@ final class BrowserTests: XCTestCase {
         XCTAssertEqual(value3, "Sin enviar")
         let sent = await perform(engine, "pulsar", ["ref": submit, "permitido": ["formulario"]])
         XCTAssertTrue(sent.ok, sent.error ?? "")
+        XCTAssertEqual(sent.result["envio_formulario"] as? Bool, true)
         let value4 = try await pageText(engine, "estado")
 
         XCTAssertEqual(value4, "Enviado")

@@ -31,12 +31,46 @@ public enum CodeActions {
     }
 }
 
-/// Imágenes adjuntas a un mensaje. El arnés las copia reducidas a la sesión.
+/// Imágenes y archivos adjuntos a un mensaje. El arnés copia las imágenes reducidas a la sesión
+/// y de los archivos (PDF, texto, código, Word, Excel) extrae su texto (alfalfa/adjuntos.py).
+/// La app guarda unas y otros en la misma lista; al enviar se separan por su extensión.
 public enum Attachments {
     public static let extensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp"]
+    /// Lo mismo que `alfalfa.adjuntos.TIPOS`.
+    public static let fileExtensions: Set<String> = [
+        "pdf", "docx", "xlsx",
+        "txt", "text", "md", "markdown", "rst", "adoc", "org", "tex", "log", "csv", "tsv", "json", "jsonl", "ndjson",
+        "yaml", "yml", "toml", "ini", "cfg", "conf", "xml", "html", "htm", "css", "scss", "less", "svg",
+        "py", "pyi", "ipynb", "js", "mjs", "cjs", "jsx", "ts", "tsx", "vue", "svelte", "swift", "m", "mm", "h", "hpp",
+        "c", "cc", "cpp", "cxx", "cs", "java", "kt", "kts", "scala", "go", "rs", "rb", "php", "pl", "lua", "r",
+        "jl", "dart", "ex", "exs", "erl", "hs", "clj", "sql", "graphql", "proto", "sh", "bash", "zsh", "fish",
+        "ps1", "bat", "gradle", "cmake", "mk", "dockerfile", "tf", "hcl", "nix", "diff", "patch", "srt", "vtt",
+    ]
+    static let fileNames: Set<String> = ["dockerfile", "makefile", "readme", "license", "gemfile", "procfile", "justfile"]
+    /// Ocho imágenes y ocho archivos por mensaje, como en el arnés.
     public static let maximum = 8
 
     public static func isImage(_ url: URL) -> Bool { url.isFileURL && extensions.contains(url.pathExtension.lowercased()) }
+
+    /// PDF, texto, código, Word o Excel: no hace falta que el modelo vea imágenes.
+    public static func isFile(_ url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        let ext = url.pathExtension.lowercased()
+        return ext.isEmpty ? fileNames.contains(url.lastPathComponent.lowercased()) : fileExtensions.contains(ext)
+    }
+
+    public static func isAttachable(_ url: URL) -> Bool { isImage(url) || isFile(url) }
+
+    /// Las rutas de imágenes (`imagenes`) y las de archivos (`archivos`), en su orden.
+    public static func partition(_ paths: [String]) -> (images: [String], files: [String]) {
+        let urls = paths.map { URL(fileURLWithPath: $0) }
+        return (urls.filter(isImage).map(\.path), urls.filter { !isImage($0) }.map(\.path))
+    }
+
+    /// El texto de un mensaje que sólo trae adjuntos, como `SOLO_IMAGENES` y `SOLO_ARCHIVOS` del motor.
+    public static func placeholder(for paths: [String]) -> String {
+        partition(paths).images.isEmpty ? "Lee el archivo adjunto." : "Mira la imagen adjunta."
+    }
 
     /// Guarda una imagen pegada (PNG) en la carpeta de adjuntos y devuelve su ruta.
     public static func store(png data: Data, in directory: URL) throws -> URL {
@@ -55,33 +89,48 @@ public enum Attachments {
     }
 }
 
-/// Las etiquetas `<image name=[Image #N] path="...">` que el arnés añade al texto.
+/// Las etiquetas `<image name=[Image #N] path="...">` y `<file name="…" path="…">` que el arnés
+/// añade al texto.
 public enum ImageTags {
-    /// Rutas de las imágenes y el texto sin etiquetas.
-    public static func split(_ text: String) -> (images: [String], text: String) {
-        guard let regex = try? NSRegularExpression(pattern: #"<image name=\[Image #\d+\] path="([^"\n]+)"></image>\n?"#) else {
-            return ([], text)
+    static let imagePattern = #"<image name=\[Image #\d+\] path="([^"\n]+)"></image>\n?"#
+    static let filePattern = #"<file name="[^"\n]*" path="([^"\n]+)"></file>\n?"#
+
+    /// Rutas de las imágenes, de los archivos, de todos los adjuntos (en el orden en que van) y
+    /// el texto sin etiquetas.
+    public static func split(_ text: String) -> (images: [String], files: [String], attachments: [String], text: String) {
+        func paths(_ pattern: String, in text: String) -> (matches: [String], clean: String) {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return ([], text) }
+            let range = NSRange(text.startIndex..., in: text)
+            let found = regex.matches(in: text, range: range).compactMap { match in
+                Range(match.range(at: 1), in: text).map { String(text[$0]) }
+            }
+            return (found, regex.stringByReplacingMatches(in: text, range: range, withTemplate: ""))
         }
-        let range = NSRange(text.startIndex..., in: text)
-        let images = regex.matches(in: text, range: range).compactMap { match in
-            Range(match.range(at: 1), in: text).map { String(text[$0]) }
-        }
-        let clean = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
-        return (images, clean.trimmingCharacters(in: .whitespacesAndNewlines))
+        let files = paths(filePattern, in: text)
+        let images = paths(imagePattern, in: files.clean)
+        return (images.matches, files.matches, images.matches + files.matches,
+                images.clean.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Texto con etiquetas, como lo escribe `alfalfa.imagenes.con_etiquetas`.
+    /// Texto con etiquetas, como lo escriben `alfalfa.imagenes.con_etiquetas` y
+    /// `alfalfa.adjuntos.con_etiquetas`. En `images` pueden ir también archivos: van con la suya.
     public static func join(_ text: String, images: [String]) -> String {
-        let tags = images.enumerated().map { "<image name=[Image #\($0.offset + 1)] path=\"\($0.element)\"></image>" }
-        return (tags + [text]).filter { !$0.isEmpty }.joined(separator: "\n")
+        let parts = Attachments.partition(images)
+        let files = parts.files.map { path in
+            let name = URL(fileURLWithPath: path).lastPathComponent
+                .replacingOccurrences(of: #"["<>\n\r]"#, with: "_", options: .regularExpression)
+            return "<file name=\"\(name)\" path=\"\(path)\"></file>"
+        }
+        let tags = parts.images.enumerated().map { "<image name=[Image #\($0.offset + 1)] path=\"\($0.element)\"></image>" }
+        return (files + tags + [text]).filter { !$0.isEmpty }.joined(separator: "\n")
     }
 }
 
-/// Una imagen soltada sobre el cuadro de texto: el campo de AppKit la recibe antes que
-/// la app y escribe su ruta. Como en Codex, esa ruta se quita del texto y se adjunta.
+/// Una imagen o un archivo soltado sobre el cuadro de texto: el campo de AppKit lo recibe antes
+/// que la app y escribe su ruta. Como en Codex, esa ruta se quita del texto y se adjunta.
 public enum DroppedImages {
-    /// Si lo que se acaba de insertar (`old` → `new`) son sólo rutas de imágenes que
-    /// existen, el texto sin ellas y las imágenes; si no (se escribió o pegó otra cosa), nil.
+    /// Si lo que se acaba de insertar (`old` → `new`) son sólo rutas de imágenes o archivos
+    /// admitidos que existen, el texto sin ellas y los adjuntos; si no (se escribió o pegó otra cosa), nil.
     public static func extract(old: String, new: String,
                                exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) })
         -> (text: String, images: [URL])? {
@@ -118,7 +167,7 @@ public enum DroppedImages {
         }
         func valid(_ parts: [String]) -> [URL]? {
             let urls = parts.map(url)
-            guard !urls.isEmpty, urls.allSatisfy({ $0.map { Attachments.isImage($0) && exists($0) } ?? false }) else { return nil }
+            guard !urls.isEmpty, urls.allSatisfy({ $0.map { Attachments.isAttachable($0) && exists($0) } ?? false }) else { return nil }
             return urls.compactMap { $0 }
         }
         // Una sola ruta, aunque tenga espacios («Captura de pantalla 2026….png»).

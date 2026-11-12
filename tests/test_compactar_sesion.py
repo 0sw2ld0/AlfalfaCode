@@ -49,7 +49,7 @@ class Cliente:
         self.filas = []
         self.proc = subprocess.Popen([sys.executable, '-c', SESION, *argumentos], cwd=tmp_path, env=env,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                     text=True)
+                                     bufsize=0)
 
     def hasta(self, condicion):
         while True:
@@ -63,14 +63,14 @@ class Cliente:
         return self.hasta(lambda f: f['tipo'] == tipo)
 
     def enviar(self, **valor):
-        self.proc.stdin.write(json.dumps(valor) + '\n')
+        self.proc.stdin.write((json.dumps(valor) + '\n').encode())
         self.proc.stdin.flush()
 
     def cerrar(self):
         self.proc.stdin.close()
         self.proc.wait(timeout=15)
         self.filas.extend(json.loads(linea) for linea in self.proc.stdout.read().splitlines())
-        return self.proc.stderr.read()
+        return self.proc.stderr.read().decode()
 
     def peticiones(self):
         ruta = self.cwd / 'requests.jsonl'

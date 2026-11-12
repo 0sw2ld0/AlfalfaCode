@@ -4,22 +4,41 @@ import json
 import os
 import re
 import signal
+import sqlite3
 import sys
 import time
 from contextlib import redirect_stdout
 from pathlib import Path
 from uuid import uuid4
 
+from .equipo import ErrorDeEquipo
 from .permisos.terminal import solo_lectura
 
 VERSION = 2
 MAX_MENSAJE = 20000
 # El texto de un mensaje que sólo trae imágenes (también lo usa la app de Mac).
 SOLO_IMAGENES = 'Mira la imagen adjunta.'
+SOLO_ARCHIVOS = 'Lee el archivo adjunto.'
 # Campos opcionales del evento `permiso` (política on-request); los clientes v2
 # anteriores los ignoran.
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
-                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion')
+                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion',
+                 # Guardar memoria o una habilidad aprendida (motivo «aprendizaje»): lo que cambia.
+                 'diff', 'sitio')
+
+
+# Largo máximo del id que la app da a un mensaje en cola.
+MAX_ID_EN_COLA = 100
+
+
+class EnCola(str):
+    """Un mensaje en cola con el id que le dio la app (`{"tipo":"mensaje","id":…}`). Sigue
+    siendo su texto: el resto del motor lo trata igual que a un mensaje sin id."""
+
+    def __new__(cls, texto, ident):
+        mensaje = super().__new__(cls, texto)
+        mensaje.id = ident
+        return mensaje
 
 
 # Lo que devuelve next_message cuando toca compactar entre turnos.
@@ -37,6 +56,8 @@ class Transport:
         self.interrupted = False
         # Mensajes aceptados que el motor aún no ha incorporado a su historial.
         self.inbox = []
+        # Ids de todos los mensajes con id aceptados: el que ya no está en `inbox` entró.
+        self.ids_vistos = set()
         self.wake = asyncio.Event()
         # Credenciales declaradas para servidores MCP (mcp_cliente): se redactan igual.
         self.secretos = set()
@@ -44,8 +65,13 @@ class Transport:
         self.stop_process = None
         # {"tipo":"mantener_despierto","activo":bool}: el interruptor de Ajustes, ya.
         self.keep_awake = None
+        # {"tipo":"diagnosticos","activo":bool}: el de «Ver los errores al editar», desde la siguiente edición.
+        self.diagnostics = None
+        # {"tipo":"firma","activo":bool}: el de «Firmar los commits», desde el siguiente git commit.
+        self.signature = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
+        self.for_site = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
         # siguiente inferencia. True, o el texto de las instrucciones del usuario.
         self.compact_pending = False
@@ -70,6 +96,16 @@ class Transport:
         self.pending_settings = {}
         # Peticiones al navegador de la app (alfalfa/navegador.py) que esperan respuesta.
         self.navegador_pendientes = {}
+        # {"tipo":"aprendizaje","id":…,"aplicar":bool}: la tarjeta de una propuesta de la revisión.
+        self.learning = None
+        # El repaso de aprendizaje del último turno, que corre después de `turno_terminado`.
+        self.repaso = None
+        self.revisar_codigo = None
+        self.revision_codigo = None
+        self.exportar_prueba = None
+        self.exportacion = None
+        self.encargos = None
+        self.cola_encargos = None
 
     def clean(self, value):
         from . import proveedores
@@ -87,18 +123,55 @@ class Transport:
         print(json.dumps(self.clean(dict(version=VERSION, tipo=tipo, **fields)), ensure_ascii=False),
               file=self.output, flush=True)
 
-    def resolve(self, ident, approved, reason, session=False):
+    def resolve(self, ident, approved, reason, session=False, site=None):
         """`session`: el usuario aprobó para el resto de la sesión (sólo si la petición lo ofrecía)."""
         future = self.pending.pop(ident)
         self.emit('permiso_resuelto', id=ident, aprobado=approved, motivo=reason,
-                  **({'sesion': True} if approved and session else {}))
+                  **({'sesion': True} if approved and session else {}),
+                  **({'sitio': site} if approved and site else {}))
         if not future.done():
-            future.set_result('sesion' if approved and session else approved)
+            future.origen_equipo = {'Respuesta del cliente': 'cliente_stdio', 'solo_lectura': 'solo_lectura',
+                                    'Sesión interrumpida': 'interrumpido'}.get(reason, 'sin_respuesta')
+            future.set_result(site if approved and site else 'sesion' if approved and session else approved)
+
+    @property
+    def exportando(self):
+        return self.exportacion is not None and not self.exportacion.done()
+
+    def pedir_exportacion(self, ident, ruta):
+        if self.exportar_prueba is None:
+            self.emit('error', texto='La propuesta ya no está disponible en el motor de esta sesión.')
+        elif self.exportando:
+            self.emit('error', texto='Ya se está guardando una prueba de navegador.')
+        else:
+            self.exportacion = asyncio.create_task(self._exportar(ident, ruta))
+
+    async def _exportar(self, ident, ruta):
+        try:
+            guardada = await self.exportar_prueba(ident, ruta)
+        except ValueError as exc:
+            self.emit('error', texto=str(exc))
+        except OSError:
+            self.emit('error', texto='No se pudo crear la prueba dentro de tests/e2e del proyecto.')
+        else:
+            self.emit('evento', rol='system', hora=time.time(), texto=f'Prueba guardada en {guardada}. No se ejecutó.')
+
+    async def cancelar_exportacion(self):
+        tarea, self.exportacion = self.exportacion, None
+        if tarea is not None and not tarea.done():
+            tarea.cancel()
+            await asyncio.gather(tarea, return_exceptions=True)
 
     def stop(self):
         if self.stopped:
             return
         self.stopped = True
+        if self.cola_encargos is not None and self.cola_encargos.activa:
+            self.cola_encargos.worker.cancel()
+        if self.revision_codigo is not None and not self.revision_codigo.done():
+            self.revision_codigo.cancel()
+        if self.exportando:
+            self.exportacion.cancel()
         self.wake.set()
         for ident in list(self.pending):
             self.resolve(ident, False, 'Sesión interrumpida')
@@ -127,7 +200,20 @@ class Transport:
         return pending
 
     def interrumpir_turno(self):
-        """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta."""
+        """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta. Entre
+        turnos corta el repaso de aprendizaje, si está en marcha."""
+        if self.cola_encargos is not None and self.cola_encargos.activa:
+            asyncio.create_task(self.cola_encargos.detener())
+            return True
+        if not self.in_turn and self.exportando:
+            self.exportacion.cancel()
+            return True
+        if not self.in_turn and self.revision_codigo is not None and not self.revision_codigo.done():
+            self.revision_codigo.cancel()
+            return True
+        if not self.in_turn and self.repaso is not None and not self.repaso.done():
+            self.repaso.cancel()
+            return True
         if self.stopped or not self.in_turn or not self.worker or self.worker.done():
             return False
         self.turno_cortado = True
@@ -136,8 +222,20 @@ class Transport:
         self.worker.cancel()
         return True
 
-    def enviar_ahora(self, text):
-        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente."""
+    def enviar_ahora(self, text, ident=None):
+        """«Enviar ahora» de un mensaje en cola: corta el turno y el mensaje abre el siguiente.
+        Con `ident` (el id de la app) va justo ese mensaje; si ya no está en la cola (el modelo
+        ya lo leyó) no se corta nada ni se vuelve a enviar."""
+        if ident is not None:
+            if not isinstance(ident, str) or not ident or len(ident) > MAX_ID_EN_COLA:
+                raise ValueError()
+            n = next((n for n, m in enumerate(self.inbox) if getattr(m, 'id', None) == ident), None)
+            if n is None:
+                return
+            self.inbox.insert(0, self.inbox.pop(n))
+            self.interrumpir_turno()
+            self.wake.set()
+            return
         if not isinstance(text, str) or not text.strip():
             raise ValueError()
         if text in self.inbox:
@@ -153,6 +251,23 @@ class Transport:
         """«Redirigir» (steer de Codex): el modelo lee ya los mensajes en cola, sin cortar el turno."""
         if self.in_turn and self.inbox:
             self.redireccion.set()
+
+    def quitar_de_cola(self, ident):
+        """Quitar (o devolver al cuadro para editar) un mensaje en cola. Sólo si aún no entró en
+        el contexto del modelo; la respuesta `quitado_de_cola` dice si se quitó."""
+        if not isinstance(ident, str) or not ident or len(ident) > MAX_ID_EN_COLA:
+            raise ValueError()
+        for n, mensaje in enumerate(self.inbox):
+            if getattr(mensaje, 'id', None) == ident:
+                del self.inbox[n]
+                if not self.inbox:
+                    # Un «Redirigir» pedido por él ya no tiene nada que meter en el turno.
+                    self.redireccion.clear()
+                self.emit('quitado_de_cola', id=ident, quitado=True)
+                return
+        # `entregado`: el modelo ya lo tiene; `desconocido`: nunca llegó a la cola.
+        self.emit('quitado_de_cola', id=ident, quitado=False,
+                  motivo='entregado' if ident in self.ids_vistos else 'desconocido')
 
     def take_messages(self):
         messages, self.inbox = self.inbox, []
@@ -176,25 +291,36 @@ class Transport:
             await self.wake.wait()
         return None
 
-    def message(self, text, images=()):
-        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex."""
-        from . import imagenes
+    def message(self, text, images=(), ident=None, files=()):
+        """Un mensaje del usuario. `images`: rutas absolutas que se adjuntan como en Codex;
+        `files`: las de PDF, texto, código, Word o Excel (alfalfa.adjuntos).
+        `ident`: el id que le da la app para poder quitarlo de la cola; sin él, como siempre."""
+        from . import adjuntos, imagenes
+        if ident is not None and not (isinstance(ident, str) and 0 < len(ident) <= MAX_ID_EN_COLA):
+            self.emit('error', texto='`id` tiene que ser texto de hasta 100 caracteres.')
+            return
         if images and not (isinstance(images, list) and all(isinstance(r, str) for r in images)):
             self.emit('error', texto='`imagenes` tiene que ser una lista de rutas.')
             return
-        if images and isinstance(text, str) and not text.strip():
-            text = SOLO_IMAGENES
+        if files and not (isinstance(files, list) and all(isinstance(r, str) for r in files)):
+            self.emit('error', texto='`archivos` tiene que ser una lista de rutas.')
+            return
+        if (images or files) and isinstance(text, str) and not text.strip():
+            text = SOLO_IMAGENES if images else SOLO_ARCHIVOS
         if not isinstance(text, str) or not text.strip() or len(text) > MAX_MENSAJE:
             self.emit('error', texto='El mensaje debe ser texto no vacío de hasta 20000 caracteres.')
             return
         try:
-            text = imagenes.con_etiquetas(text, list(images))
-        except imagenes.ImagenInvalida as exc:
+            text = adjuntos.con_etiquetas(imagenes.con_etiquetas(text, list(images)), list(files))
+        except (imagenes.ImagenInvalida, adjuntos.ArchivoInvalido) as exc:
             self.emit('error', texto=str(exc))
             return
         if self.stopped:
             self.emit('error', texto='La sesión se está cerrando; el mensaje no se entregó.')
         else:
+            if ident is not None:
+                text = EnCola(text, ident)
+                self.ids_vistos.add(ident)
             self.inbox.append(text)
             self.wake.set()
 
@@ -226,6 +352,9 @@ class Transport:
             raise ValueError('El navegador de la app no respondió a tiempo.') from None
         finally:
             self.navegador_pendientes.pop(ident, None)
+            if accion == 'relevo':
+                # Correlacionado: timeout, interrupción y respuestas tardías no dejan la app bloqueada.
+                self.emit('navegador', id=ident, accion='cancelar_relevo')
 
     def take_settings(self):
         cambios, self.pending_settings = self.pending_settings, {}
@@ -239,11 +368,14 @@ class Transport:
             if value.get('tipo') == 'cancelar':
                 self.stop()
             elif value.get('tipo') == 'mensaje':
-                self.message(value.get('texto'), value.get('imagenes') or [])
+                self.message(value.get('texto'), value.get('imagenes') or [], value.get('id'),
+                             value.get('archivos') or [])
             elif value.get('tipo') == 'enviar_ahora':
-                self.enviar_ahora(value.get('texto'))
+                self.enviar_ahora(value.get('texto'), value.get('id'))
             elif value.get('tipo') == 'redirigir':
                 self.redirigir()
+            elif value.get('tipo') == 'quitar_de_cola':
+                self.quitar_de_cola(value.get('id'))
             elif value.get('tipo') == 'interrumpir':
                 self.interrumpir_turno()
             elif value.get('tipo') == 'ajustes':
@@ -278,6 +410,39 @@ class Transport:
                     raise ValueError()
                 from .presupuesto import importe
                 self.budget(**{k: importe(value[k]) for k in ('sesion', 'mes') if k in value})
+            elif value.get('tipo') == 'diagnosticos':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.diagnostics is None:
+                    raise ValueError()
+                self.diagnostics(activo)
+            elif value.get('tipo') == 'firma':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.signature is None:
+                    raise ValueError()
+                self.signature(activo)
+            elif value.get('tipo') == 'aprendizaje':
+                ident, aplicar = value.get('id'), value.get('aplicar')
+                if not isinstance(ident, str) or not isinstance(aplicar, bool) or self.learning is None:
+                    raise ValueError()
+                self.learning(ident, aplicar)
+            elif value.get('tipo') == 'revisar_codigo':
+                ident, modelo = value.get('turno'), value.get('modelo')
+                if not isinstance(ident, str) or not isinstance(modelo, str) or self.revisar_codigo is None:
+                    raise ValueError()
+                self.revisar_codigo(ident, modelo)
+            elif value.get('tipo') == 'cancelar_revision_codigo':
+                if self.revision_codigo is not None and not self.revision_codigo.done():
+                    self.revision_codigo.cancel()
+            elif value.get('tipo') == 'exportar_prueba_navegador':
+                ident, ruta = value.get('id'), value.get('ruta')
+                if (not isinstance(ident, str) or not re.fullmatch(r'[0-9a-f]{32}', ident)
+                        or not isinstance(ruta, str) or len(ruta) > 100):
+                    raise ValueError()
+                self.pedir_exportacion(ident, ruta)
+            elif value.get('tipo') == 'encargos':
+                if self.encargos is None:
+                    raise ValueError()
+                self.encargos(value)
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:
@@ -293,9 +458,13 @@ class Transport:
                 if not isinstance(ident, str) or ident not in self.pending:
                     raise ValueError()
                 approved = value.get('aprobado') is True
+                site = value.get('sitio')
+                if site is not None and (ident not in self.for_site or site not in ('una_vez', 'sesion', 'proyecto')):
+                    raise ValueError()
                 session = value.get('sesion') is True and ident in self.for_session
                 self.for_session.discard(ident)
-                self.resolve(ident, approved, 'Respuesta del cliente', session=session)
+                self.for_site.discard(ident)
+                self.resolve(ident, approved, 'Respuesta del cliente', session=session, site=site)
             else:
                 raise ValueError()
         except (ValueError, TypeError):
@@ -316,6 +485,8 @@ class Transport:
                 transport.pending[ident] = future
                 if args.get('para_sesion'):
                     transport.for_session.add(ident)
+                if isinstance(args.get('sitio'), dict):
+                    transport.for_site.add(ident)
                 if transport.stopped:
                     transport.resolve(ident, False, 'Sesión interrumpida')
                 # Las excepciones on-request (motivo) siempre esperan al cliente.
@@ -325,21 +496,24 @@ class Transport:
                     transport.resolve(ident, True, 'solo_lectura')
                 try:
                     approved = await future
+                    from .auditoria_equipo import marcar_respuesta
+                    marcar_respuesta(getattr(future, 'origen_equipo', 'sin_respuesta'))
                 finally:
                     transport.for_session.discard(ident)
+                    transport.for_site.discard(ident)
                     if ident in transport.pending:
                         transport.resolve(ident, False, 'Sesión interrumpida' if transport.stopped
                                           else 'Sin respuesta a tiempo')
                 if not approved:
                     self.denied += 1
                     raise ValueError('Comando rechazado; no se ejecutó.')
-                return approved if approved == 'sesion' else None
+                return approved if approved in ('una_vez', 'sesion', 'proyecto') else None
 
         return Approval()
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager, keep_awake
+    from .terminal import TerminalManager, diagnostics, keep_awake, signature
     manager = None
     reader_task = None
     pipe = None
@@ -348,15 +522,22 @@ async def run(args, transport):
     try:
         from .terminal import resolve_fork
         resolve_fork(args)
-        esperar = bool(getattr(args, 'esperar', False)) and bool(args.reanudar) and not args.encargo
-        manager = TerminalManager(args.encargo, resume=args.reanudar, model=args.modelo,
+        cola = getattr(args, 'cola_encargos', None)
+        esperar = ((bool(getattr(args, 'esperar', False)) and bool(args.reanudar))
+                   or cola is not None) and not args.encargo
+        manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None else None),
+                                  resume=args.reanudar, model=args.modelo,
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                                   navegador=bool(getattr(args, 'navegador', False)),
+                                  motor_navegador=getattr(args, 'motor_navegador', None),
+                                  perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
+                                  origen_cuybrowser=getattr(args, 'origen_cuybrowser', None),
                                   budget=getattr(args, 'presupuesto', None),
-                                  monthly_budget=getattr(args, 'presupuesto_mes', None))
+                                  monthly_budget=getattr(args, 'presupuesto_mes', None),
+                                  diagnosticos=diagnostics(args), firma=signature(args))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -373,6 +554,7 @@ async def run(args, transport):
                        **({'bifurcada_de': manager.task['bifurcada_de']} if manager.task.get('bifurcada_de') else {}),
                        **({'continuada_de': manager.task['continuada_de']['sesion']}
                           if isinstance(manager.task.get('continuada_de'), dict) else {}))
+        manager.anunciar_equipo()
         # Los topes y lo gastado en la sesión y en el mes, para el panel y los Ajustes.
         topes = manager.presupuesto.para_el_cliente()
         if topes:
@@ -416,7 +598,10 @@ async def run(args, transport):
             asyncio.ensure_future(detener())
 
         transport.stop_process = detener_proceso
-        transport.keep_awake = manager.despierto.cambiar
+        transport.keep_awake = lambda activo: manager.cola_encargos.cambiar('despierto', activo)
+        transport.signature = lambda activo: manager.cola_encargos.cambiar('firma', activo)
+        # En solo lectura no hay diagnósticos, pero el interruptor de la app se acepta igual.
+        transport.diagnostics = lambda activo: manager.cola_encargos.cambiar('diagnosticos', activo)
 
         def cambiar_contexto(modo):
             try:
@@ -426,6 +611,63 @@ async def run(args, transport):
 
         transport.context_mode = cambiar_contexto
         transport.budget = manager.cambiar_presupuesto
+        transport.learning = manager.aprendizaje.resolver
+        transport.cola_encargos = manager.cola_encargos
+        if manager.exportacion_navegador is not None:
+            transport.exportar_prueba = manager.exportacion_navegador.guardar
+
+        def encargos(valor):
+            accion = valor.get('accion')
+            if accion in ('preparar', 'iniciar') and (transport.in_turn or transport.compacting or transport.inbox
+                    or transport.exportando
+                    or transport.revision_codigo is not None and not transport.revision_codigo.done()):
+                transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de iniciar la cola.')
+                return
+            try:
+                if accion == 'preparar':
+                    manager.aplicar_ajustes(transport.take_settings())
+                    manager.cola_encargos.preparar(valor.get('encargos'), valor.get('modo', 'serie'),
+                                                    valor.get('paralelos', 2))
+                elif accion == 'iniciar':
+                    manager.cola_encargos.iniciar()
+                elif accion == 'pausar':
+                    manager.cola_encargos.pausar()
+                elif accion == 'detener':
+                    asyncio.create_task(manager.cola_encargos.detener())
+                elif accion == 'cancelar':
+                    manager.cola_encargos.cancelar()
+                else:
+                    raise ValueError('Acción de cola desconocida.')
+            except ValueError as exc:
+                transport.emit('error', texto=str(exc))
+
+        transport.encargos = encargos
+        manager.cola_encargos.avisar()
+        if cola:
+            from .encargos import leer_archivo
+            manager.cola_encargos.preparar(*leer_archivo(cola))
+            manager.cola_encargos.iniciar()
+
+        def pedir_revision(ident, modelo):
+            if (transport.in_turn or transport.compacting or transport.inbox
+                    or manager.cola_encargos.activa or transport.exportando
+                    or transport.revision_codigo is not None and not transport.revision_codigo.done()):
+                transport.emit('error', texto='Espera a que termine el trabajo en marcha antes de revisar el cierre.')
+                return
+
+            async def revisar():
+                await _cancelar_repaso(transport)
+                try:
+                    await manager.revision_codigo.ejecutar(ident, modelo)
+                except ValueError as exc:
+                    transport.emit('error', texto=str(exc))
+
+            transport.revision_codigo = asyncio.create_task(revisar())
+
+        transport.revisar_codigo = pedir_revision
+        manager.revision_codigo.reabrir()
+        # Las propuestas de aprendizaje de esta sesión que siguen esperando vuelven como tarjeta.
+        manager.aprendizaje.reabrir()
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, transport.stop)
@@ -437,6 +679,11 @@ async def run(args, transport):
         # mensaje abre el siguiente. Cancelar o EOF sin turno en curso cierran
         # con el estado del último turno; con turno en curso lo interrumpen.
         while prompt is not None and not transport.stopped:
+            # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
+            await _cancelar_repaso(transport)
+            await _cancelar_revision(transport)
+            await transport.cancelar_exportacion()
+            await manager.cola_encargos.detener()
             if isinstance(prompt, tuple) and prompt[0] is CONTINUAR:
                 transport.compacting = True
                 transport.worker = asyncio.create_task(manager.continuar_en_nueva())
@@ -473,7 +720,10 @@ async def run(args, transport):
             manager.approval.denied = 0
             cambios = transport.take_settings()
             if cambios:
-                manager.task.update(cambios)
+                try:
+                    manager.aplicar_ajustes(cambios)
+                except ErrorDeEquipo as exc:
+                    transport.emit('error', texto=str(exc))
                 manager.save()
                 transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                                modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
@@ -482,9 +732,12 @@ async def run(args, transport):
             # La app lo quita de la conversación y lo devuelve al cuadro (`rechazado`).
             rechazo = await manager.sin_vision(prompt)
             if rechazo:
+                from .adjuntos import rutas_etiquetadas as archivos_etiquetados
                 from .imagenes import rutas_etiquetadas
-                transport.emit('error', texto=rechazo[0], motivo='sin_vision',
-                               rechazado={'texto': _texto_escrito(prompt), 'imagenes': rutas_etiquetadas(prompt)},
+                rechazado = {'texto': _texto_escrito(prompt), 'imagenes': rutas_etiquetadas(prompt)}
+                if archivos_etiquetados(prompt):
+                    rechazado['archivos'] = archivos_etiquetados(prompt)  # vuelven al cuadro con las imágenes
+                transport.emit('error', texto=rechazo[0], motivo='sin_vision', rechazado=rechazado,
                                con_vision=[{'modelo': ident, 'nombre': nombre} for ident, nombre in rechazo[1]])
                 if not eco:
                     code = 0  # el encargo inicial rechazado no es un fallo; un turno anterior manda
@@ -518,16 +771,30 @@ async def run(args, transport):
             topes = manager.presupuesto.para_el_cliente()
             if topes:
                 transport.emit('presupuesto', **topes)
+            if estado in ('completed', 'blocked'):
+                # Aparte del turno: Detener no lo corta, y el turno ya está cerrado para la app.
+                transport.repaso = asyncio.create_task(manager.repasar())
             # Un «compactar» que llegó tras la última respuesta del turno se hace ya.
             if transport.compact_pending:
                 transport.compact_now, transport.compact_pending = transport.compact_pending, False
             prompt = await transport.next_message()
+    except ErrorDeEquipo as exc:
+        code = 1
+        transport.emit('error', texto=str(exc))
+        if manager:
+            manager.task.update(status='failed', summary=str(exc))
     except Exception:
         code = 1
         transport.emit('error', texto='No se pudo iniciar o ejecutar la sesión.')
         if manager:
             manager.task.update(status='failed', summary='Fallo de ejecución')
     finally:
+        await _cancelar_revision(transport)
+        await transport.cancelar_exportacion()
+        if transport.repaso is not None and not transport.repaso.done():
+            # La sesión se cierra: el repaso se deja (el turno ya estaba cerrado).
+            transport.repaso.cancel()
+            await asyncio.gather(transport.repaso, return_exceptions=True)
         if reader_task:
             reader_task.cancel()
             await asyncio.gather(reader_task, return_exceptions=True)
@@ -538,9 +805,11 @@ async def run(args, transport):
             loop.remove_signal_handler(sig)
         task = manager.task if manager else {}
         if manager:
+            await manager.cola_encargos.detener()
             # Como Codex al salir: los procesos en segundo plano se cierran con la sesión.
             await manager.fondo.detener_todos()
             await manager.close_mcp()
+            await manager.cerrar_diagnosticos()
             manager.save()
             manager.close()
         if code == 1:
@@ -548,6 +817,20 @@ async def run(args, transport):
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
     return code
+
+
+async def _cancelar_revision(transport):
+    revision, transport.revision_codigo = transport.revision_codigo, None
+    if revision is not None and not revision.done():
+        revision.cancel()
+        await asyncio.gather(revision, return_exceptions=True)
+
+
+async def _cancelar_repaso(transport):
+    repaso, transport.repaso = transport.repaso, None
+    if repaso is not None and not repaso.done():
+        repaso.cancel()
+        await asyncio.gather(repaso, return_exceptions=True)
 
 
 def gasto(task, turno=None):
@@ -568,12 +851,23 @@ def gasto(task, turno=None):
     return datos
 
 
+def _sin_nacer(directory):
+    """Sólo el `lock`: una sesión que arrancaba y no llegó a guardar su task.json (cortada a medias,
+    o abierta ahora mismo). No es una sesión rota y no tiene nada que enseñar."""
+    try:
+        return os.listdir(directory) in ([], ['lock'])
+    except OSError:
+        return False
+
+
 def sessions():
     base = Path(os.environ.get('ALFALFA_HOME') or Path.home() / '.alfalfa') / 'sesiones'
     rows = []
     if base.is_dir() and not base.is_symlink():
         for directory in base.iterdir():
             if not directory.is_dir() or directory.is_symlink():
+                continue
+            if _sin_nacer(directory):
                 continue
             try:
                 path = directory / 'task.json'
@@ -605,19 +899,18 @@ MARCAS = {'titulo': str, 'fijada': bool, 'archivada': bool}
 
 
 def _texto_escrito(texto):
-    """Lo que escribió el usuario: sin etiquetas de imagen ni el relleno de un mensaje que
-    sólo traía imágenes (la app pintó su burbuja sin texto y lo devuelve al cuadro tal cual)."""
-    from .imagenes import CIERRE, ETIQUETA
-    limpio = ETIQUETA.sub('', texto).replace(CIERRE, '').strip()
-    return '' if limpio == SOLO_IMAGENES else limpio
+    """Lo que escribió el usuario: sin etiquetas de imagen o de archivo ni el relleno de un mensaje
+    que sólo traía adjuntos (la app pintó su burbuja sin texto y lo devuelve al cuadro tal cual)."""
+    from .adjuntos import sin_etiquetas
+    limpio = sin_etiquetas(texto)
+    return '' if limpio in (SOLO_IMAGENES, SOLO_ARCHIVOS) else limpio
 
 
 def _sin_etiquetas(texto):
-    from .imagenes import CIERRE, ETIQUETA
+    from .adjuntos import rutas_etiquetadas, sin_etiquetas
     if not isinstance(texto, str):
         return texto
-    limpio = ETIQUETA.sub('', texto).replace(CIERRE, '').strip()
-    return limpio or 'Imagen adjunta'
+    return sin_etiquetas(texto) or ('Archivo adjunto' if rutas_etiquetadas(texto) else 'Imagen adjunta')
 
 
 def _marcas(directory):
@@ -703,6 +996,11 @@ def gestionar(args):
             transport.emit('sesion_cambiada', id=ident, **{'marcas': marcar(ident, campo, valor)})
         elif args.eliminar_sesion:
             destino = eliminar(args.eliminar_sesion)
+            try:
+                from .busqueda_sesiones import quitar
+                quitar(args.eliminar_sesion)
+            except (OSError, ValueError, sqlite3.Error):
+                pass  # la próxima actualización del índice la quita igual: ya no está en disco
             transport.emit('sesion_cambiada', id=args.eliminar_sesion, eliminada=True, papelera=str(destino))
         else:
             from . import sesiones as registro
@@ -757,6 +1055,9 @@ def history(ident):
                 evento['turno'] = row['turno']
             if isinstance(row.get('herramienta'), dict):
                 evento['herramienta'] = row['herramienta']
+            if isinstance(row.get('deshacer'), dict):
+                # Deshacer o rehacer el código: la app pinta su marca con «Rehacer».
+                evento['deshacer'] = row['deshacer']
             if isinstance(row.get('tarifa'), dict):
                 # El aviso de tarifa: la app lo pinta ya contestado (sin botones vivos).
                 evento['tarifa'] = row['tarifa']
@@ -774,6 +1075,8 @@ def history(ident):
         eventos += propios
     cierre = turnos[-1].get('cierre') if turnos else None
     extra = {'cierre': cierre} if isinstance(cierre, dict) else {}
+    if task.get('cola_encargos'):
+        extra['encargos'] = task['cola_encargos']
     if isinstance(task.get('context_tokens'), int) and isinstance(task.get('context_limit'), int):
         from .terminal import desglose_de
         extra['contexto'] = dict(tokens=task['context_tokens'], limite=task['context_limit'], **desglose_de(task))
@@ -784,7 +1087,7 @@ def history(ident):
 
 def check_command(argv):
     """`alfalfa --comprobar-orden ARGV`: lo que deciden las reglas, como `codex execpolicy check`."""
-    from . import reglas
+    from . import equipo, reglas
     from .terminal import home_dir
     home = home_dir()
     transport = Transport(sys.stdout)
@@ -792,8 +1095,10 @@ def check_command(argv):
         transport.emit('error', texto='Indica la orden que quieres comprobar.')
         return 1
     try:
-        evaluation = reglas.desde_hogar(home).evaluar(list(argv))
-    except reglas.ReglasInvalidas as exc:
+        personales = reglas.desde_hogar(home)
+        politica = equipo.cargar(Path.cwd())
+        evaluation = (politica.combinar(personales) if politica else personales).evaluar(list(argv))
+    except (reglas.ReglasInvalidas, ErrorDeEquipo) as exc:
         transport.emit('error', texto=str(exc))
         return 1
     transport.emit('reglas', orden=list(argv), **evaluation.como_dict())
@@ -822,7 +1127,11 @@ def entry(args):
             return 1
     if getattr(args, 'historial', None):
         try:
-            transport.emit('historial', sesion=args.historial, **history(args.historial))
+            datos = history(args.historial)
+            cola = datos.pop('encargos', None)
+            transport.emit('historial', sesion=args.historial, **datos)
+            if cola:
+                transport.emit('encargos', cola=cola)
             return 0
         except Exception:
             transport.emit('error', texto='No se pudo leer el historial de esa sesión.')

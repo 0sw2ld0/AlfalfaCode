@@ -50,6 +50,13 @@ Modificado para AlfalfaCode en noviembre de 2026:
    Codex, que no existe en AlfalfaCode. La red queda cerrada salvo `network=True`.
 6. Antes de cada orden se lanza la misma política con `/usr/bin/true` para distinguir un
    fallo del sandbox de un fallo de la orden.
+7. El hogar de AlfalfaCode del entorno y el de la sesión quedan de solo lectura aunque
+   caigan dentro de una raíz escribible o contengan el workspace. Se protegen también
+   sus antecesores frente a movimientos, las mayúsculas y las formas NFC/NFD de Unicode.
+   Los procesos de hooks, MCP, diagnósticos y subagentes conservan esta protección.
+   Como Seatbelt protege rutas, se comprueban los metadatos del hogar antes de construir
+   la política: si ya contiene archivos con enlaces duros, no se puede iniciar el sandbox.
+   Las herramientas tampoco abren archivos con enlaces duros ni recorren el hogar.
 
 ## Política on-request
 

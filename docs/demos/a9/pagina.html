@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparación ficticia A9</title>
+<style>
+  body { margin: 0; padding: 22px; font: 17px system-ui; background: #f0ede6; color: #201812; }
+  h1 { font-size: 26px; }
+  button { border: 0; border-radius: 9px; padding: 15px 24px; color: white; background: #9b402c; }
+  .webkit { display: none; }
+  @supports (hanging-punctuation: first) {
+    .chromium { display: none; }
+    .webkit { display: block; }
+    button { background: #225b80; }
+  }
+</style>
+<h1>Comparación ficticia A9</h1>
+<p>Una sola URL, los mismos 390 × 844 píxeles CSS.</p>
+<p class="webkit">Rama CSS WebKit · botón azul</p>
+<p class="chromium">Rama CSS Chromium · botón teja</p>
+<button type="button">Botón de ensayo</button>
+<script>
+  console.error('Error ficticio A9 · ' + (CSS.supports('hanging-punctuation', 'first') ? 'WebKit' : 'Chromium'));
+</script>
+</html>

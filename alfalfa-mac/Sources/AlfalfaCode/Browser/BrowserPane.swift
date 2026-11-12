@@ -1,5 +1,6 @@
 import AlfalfaKit
 import AppKit
+import Combine
 import SwiftUI
 import WebKit
 
@@ -19,17 +20,38 @@ struct BrowserPane: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            Text(browser.profileDescription).font(.system(size: 10.5)).foregroundStyle(Theme.secondary)
+                .padding(.vertical, 4).frame(maxWidth: .infinity).background(Theme.card)
             if browser.isLoading {
                 ProgressView(value: browser.progress).progressViewStyle(.linear).tint(Theme.alfalfa)
                     .frame(height: 2).padding(.horizontal, 0)
             } else {
                 Divider().overlay(Theme.border)
             }
+            if let handoff = browser.handoff { BrowserHandoffCard(browser: browser, handoff: handoff) }
+            if let size = browser.viewport {
+                Text("\(Int(size.width)) × \(Int(size.height)) píxeles CSS · Vista a escala")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.secondary)
+                    .padding(.vertical, 4).frame(maxWidth: .infinity).background(Theme.card)
+            }
             if let line = agentLine { agentBanner(line) }
             if let notice = browser.notice { noticeBanner(notice) }
+            BrowserAnnotationCard(browser: browser)
             ZStack {
                 Color.white
-                BrowserHost(view: browser.webView)
+                if let size = browser.viewport {
+                    GeometryReader { available in
+                        let scale = min(1, available.size.width / size.width, available.size.height / size.height)
+                        BrowserHost(view: browser.webView, viewport: size)
+                            .frame(width: size.width, height: size.height)
+                            .scaleEffect(scale, anchor: .topLeading)
+                            .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .background(Color.gray.opacity(0.12))
+                } else {
+                    BrowserHost(view: browser.webView)
+                }
                 if browser.url == nil { emptyState }
             }
         }
@@ -38,6 +60,7 @@ struct BrowserPane: View {
         .background(Theme.sidebar)
         .onChange(of: browser.url) { _, url in if !editing { address = url?.absoluteString ?? "" } }
         .onAppear { address = browser.url?.absoluteString ?? "" }
+        .onChange(of: browser.url) { browser.cancelAnnotation() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Navegador")
     }
@@ -73,6 +96,11 @@ struct BrowserPane: View {
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(editing ? Theme.alfalfa.opacity(0.6) : Theme.border))
             .padding(.horizontal, 4)
+            button("text.bubble", "Comentar un elemento o un área",
+                   enabled: browser.url != nil && browser.activity == nil && !browser.isLoading) {
+                browser.cancelAnnotation()
+                browser.isSelectingAnnotation = true
+            }
             button("xmark", "Cerrar el navegador (la página sigue abierta)") { browser.isPanelOpen = false }
         }
         .padding(.horizontal, 8).frame(height: 40)
@@ -88,7 +116,9 @@ struct BrowserPane: View {
         VStack(spacing: 10) {
             Image(systemName: "globe").font(.system(size: 28)).foregroundStyle(Theme.muted)
             Text("Navegador de la sesión").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-            Text("Aislado: sin tus cuentas ni las cookies de Safari. Lo usa el agente y puedes usarlo tú.")
+            Text(browser.profileMode == .project
+                 ? "Usa el perfil guardado de este proyecto. Entra a mano cuando el agente te pase el relevo."
+                 : "Sin tus cuentas ni las cookies de Safari. Lo usa el agente y puedes usarlo tú.")
                 .font(.system(size: 12)).foregroundStyle(Theme.secondary).multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
         }
@@ -153,28 +183,95 @@ struct BrowserPane: View {
 /// El WKWebView de la sesión dentro de SwiftUI. La vista es del navegador, no de SwiftUI: al cerrar
 /// el panel o cambiar de sesión la página sigue cargada.
 private struct BrowserHost: NSViewRepresentable {
+    final class Coordinator {
+        var selection: AnyCancellable?
+        var viewport: CGSize?
+        var constraints: [NSLayoutConstraint] = []
+    }
+
     let view: WKWebView
+    var viewport: CGSize?
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
-        let container = NSView()
-        attach(to: container)
+        let container = BrowserViewportContainer()
+        attach(to: container, coordinator: context.coordinator)
+        if let browser = view.navigationDelegate as? BrowserEngine {
+            context.coordinator.selection = browser.$isSelectingAnnotation.sink { [weak container] selecting in
+                MainActor.assumeIsolated {
+                    if let container { updateSelection(in: container, selecting: selecting) }
+                }
+            }
+        }
         return container
     }
 
     func updateNSView(_ container: NSView, context: Context) {
-        if view.superview !== container { attach(to: container) }
+        if view.superview !== container || context.coordinator.viewport != viewport {
+            attach(to: container, coordinator: context.coordinator)
+        }
+        updateSelection(in: container)
     }
 
-    private func attach(to container: NSView) {
+    private func attach(to container: NSView, coordinator: Coordinator) {
+        if let container = container as? BrowserViewportContainer {
+            container.webView = view
+            container.viewport = viewport
+            container.needsLayout = true
+        }
+        NSLayoutConstraint.deactivate(coordinator.constraints)
+        // Al pasar del panel libre al fijo SwiftUI puede crear otro host para el mismo WKWebView.
+        NSLayoutConstraint.deactivate(view.constraints.filter { $0.identifier == "alfalfa.viewport" })
         view.removeFromSuperview()
         view.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(view)
+        var constraints = [view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                           view.topAnchor.constraint(equalTo: container.topAnchor)]
+        if let viewport {
+            let dimensions = [view.widthAnchor.constraint(equalToConstant: viewport.width),
+                              view.heightAnchor.constraint(equalToConstant: viewport.height)]
+            for dimension in dimensions { dimension.identifier = "alfalfa.viewport" }
+            constraints += dimensions
+        } else {
+            constraints += [view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                            view.bottomAnchor.constraint(equalTo: container.bottomAnchor)]
+        }
+        NSLayoutConstraint.activate(constraints)
+        coordinator.constraints = constraints
+        coordinator.viewport = viewport
+        updateSelection(in: container)
+    }
+
+    /// El selector vive junto al WKWebView: al escalar o centrar la página conserva sus coordenadas CSS.
+    private func updateSelection(in container: NSView, selecting: Bool? = nil) {
+        let current = container.subviews.first { $0 is AnnotationSelectionView }
+        guard let browser = view.navigationDelegate as? BrowserEngine, selecting ?? browser.isSelectingAnnotation else {
+            current?.removeFromSuperview()
+            return
+        }
+        guard current == nil else { return }
+        let picker = BrowserAnnotationPicker.makeView(browser: browser)
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(picker, positioned: .above, relativeTo: view)
         NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            picker.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            picker.topAnchor.constraint(equalTo: view.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+}
+
+/// Mantiene el tamaño CSS después del redondeo visual de AppKit sobre la vista escalada.
+private final class BrowserViewportContainer: NSView {
+    weak var webView: WKWebView?
+    var viewport: CGSize?
+
+    override func layout() {
+        super.layout()
+        guard let webView, let viewport else { return }
+        if webView.frame.size != viewport { webView.setFrameSize(viewport) }
     }
 }
 

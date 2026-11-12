@@ -7,6 +7,9 @@ public struct BrowserRequest: Equatable, Sendable {
 
     public let id: String
     /// abrir, atras, adelante, recargar, leer, pulsar, escribir, desplazar, captura, js o descargar.
+    /// consola y red leen diagnósticos; viewport cambia el tamaño CSS.
+    /// relevo espera a la persona; cancelar_relevo cancela por su id.
+    /// estado identifica el documento; esperar, tecla, hover y subir amplían la interacción.
     public let action: String
     /// El resto de campos de la petición, como JSON.
     public let json: String
@@ -95,6 +98,13 @@ public struct BrowserReply: Equatable, Sendable {
     public static func permission(_ id: String, kind: String, detail: String,
                                   result: [String: Any] = [:]) -> BrowserReply {
         BrowserReply(id: id, body: ["ok": false, "permiso": ["tipo": kind, "detalle": detail], "resultado": result])
+    }
+
+    static func sitePermission(_ id: String, url: String, token: String, initiated: Bool,
+                               result: [String: Any]) -> BrowserReply {
+        BrowserReply(id: id, body: ["ok": false, "permiso": ["tipo": "sitio", "url": url, "token": token,
+                                                           "iniciada": initiated],
+                                     "resultado": result])
     }
 }
 

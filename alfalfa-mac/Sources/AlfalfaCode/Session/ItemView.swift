@@ -2,7 +2,7 @@ import AlfalfaKit
 import SwiftUI
 
 /// Un elemento de la conversación: mensaje, respuesta, registro de trabajo, permiso, aviso,
-/// resumen de fin de turno, ficha de información o marca de compactación.
+/// resumen de fin de turno, ficha de información o marca de compactación o de deshacer.
 struct ItemView: View {
 
     // MARK: - Propiedades
@@ -24,7 +24,9 @@ struct ItemView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case let .events(_, events):
-            WorkLog(events: events, running: liveWork, expanded: $expanded)
+            WorkLog(events: events, running: liveWork,
+                    waiting: liveWork && session.timeline.status == .waitingPermission,
+                    preparing: session.timeline.preparingUndo, expanded: $expanded)
         case let .permission(_, request, state):
             PermissionCard(request: request, state: state, session: session, isFirstPending: isFirstPending)
         case let .notice(_, text):
@@ -38,6 +40,10 @@ struct ItemView: View {
             CompactionMarker(compaction: compaction)
         case let .priceWarning(_, warning, answered):
             PriceWarningCard(warning: warning, answered: answered, session: session)
+        case let .undo(_, step, redone):
+            UndoMarker(step: step, redone: redone, session: session)
+        case let .learning(_, proposal, state):
+            LearningCard(proposal: proposal, state: state, session: session)
         }
     }
 
@@ -59,6 +65,11 @@ struct ItemView: View {
                         }
                     }
                 }
+                if !parts.files.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(parts.files, id: \.self) { path in FileChip(url: URL(fileURLWithPath: path)) }
+                    }
+                }
                 if !parts.text.isEmpty {
                     Text(parts.text).font(Theme.body).lineSpacing(Theme.bodyLineSpacing).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -66,26 +77,13 @@ struct ItemView: View {
                         .background(Theme.bubble, in: RoundedRectangle(cornerRadius: 20))
                 }
                 if queued {
-                    queuedActions(text: text)
+                    QueuedActions(text: text, itemID: itemID, session: session)
                 } else {
                     UserActions(text: ImageTags.split(text).text, itemID: itemID, session: session)
                 }
             }
             .opacity(queued ? 0.7 : 1)
         }
-    }
-
-    private func queuedActions(text: String) -> some View {
-        HStack(spacing: 12) {
-            Text("en cola").foregroundStyle(Theme.muted)
-            if session.timeline.status.isRunning {
-                Button("Redirigir") { session.redirect() }
-                    .help("Que lo lea ya, sin cortar lo que está haciendo (descarta lo que estaba pensando)")
-                Button("Enviar ahora") { session.sendNow(text) }
-                    .help("Detener el turno en marcha y enviar este mensaje")
-            }
-        }
-        .font(.system(size: 11.5)).buttonStyle(.plain).foregroundStyle(Theme.secondary)
     }
 
     private func info(title: String, rows: [InfoRow]) -> some View {
