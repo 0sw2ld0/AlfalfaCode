@@ -298,14 +298,37 @@ def _ruta_ajena(texto, raiz):
         return True
 
 
+def raices_temporales(raiz):
+    """Las carpetas temporales en las que el sandbox de las órdenes ya deja escribir sin preguntar
+    ($TMPDIR resuelto y /private/tmp), de la misma `SeatbeltSandbox.writable_roots()` para que no se
+    separen. Vacío si no se pueden calcular."""
+    from .seatbelt import SandboxUnavailable, SeatbeltSandbox
+    try:
+        return SeatbeltSandbox(str(raiz)).writable_roots()[1:]
+    except (SandboxUnavailable, OSError, ValueError, RuntimeError):
+        return []
+
+
+def _en_temporal(ruta, raiz):
+    """¿La ruta, con sus enlaces resueltos, cae en una carpeta temporal del sandbox? Un enlace de /tmp que
+    apunte al hogar queda fuera: se resuelve antes de comparar."""
+    if not Path(ruta).is_absolute():
+        return False
+    real = os.path.realpath(ruta)
+    return any(real == t or real.startswith(t.rstrip('/') + '/') for t in raices_temporales(raiz))
+
+
 def _edicion_fuera(ruta, raiz):
     from .permisos.ordenes import fuera_del_espacio
     if ruta.startswith('~'):
         return True
     try:
-        return fuera_del_espacio(ruta if '/' in ruta else './' + ruta, raiz)
+        fuera = fuera_del_espacio(ruta if '/' in ruta else './' + ruta, raiz)
     except (OSError, ValueError, RuntimeError):
         return True
+    # $TMPDIR y /private/tmp cuentan como la carpeta: `cat > /private/tmp/x` en el sandbox ya no pregunta,
+    # así que la tarjeta no protegía de nada (y write_file no escribe fuera de la carpeta de todos modos).
+    return fuera and not _en_temporal(ruta, raiz)
 
 
 def _piezas(argv):
