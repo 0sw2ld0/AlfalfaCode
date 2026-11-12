@@ -92,11 +92,11 @@ class ColaEncargos:
             self._resumir()
             self.avisar()
 
-    def cambiar(self, nombre, activo):
+    def cambiar(self, nombre, activo, metodo='cambiar'):
         for gestor in [self.manager, *self.gestores.values()]:
             objeto = getattr(gestor, nombre, None)
             if objeto is not None:
-                objeto.cambiar(activo)
+                getattr(objeto, metodo)(activo)
 
     def cancelar(self):
         if self.activa:
@@ -181,6 +181,7 @@ class ColaEncargos:
                 compact_limit=self.manager.compact_limit, firma=self.manager.firma.activa(), auto=self.manager.auto,
                 keep_awake=self.manager.despierto.activo,
                 diagnosticos=self.manager.diagnosticos.activos() if self.manager.diagnosticos else False,
+                diagnosticos_swift=self.manager.diagnosticos.forzado_swift if self.manager.diagnosticos else None,
                 reglas_equipo=self.manager.equipo)
             self.gestores[ident] = hijo
             hijo.task['titulo'] = fila['titulo']

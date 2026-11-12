@@ -26,7 +26,11 @@ struct ItemView: View {
         case let .events(_, events):
             WorkLog(events: events, running: liveWork,
                     waiting: liveWork && session.timeline.status == .waitingPermission,
-                    preparing: session.timeline.preparingUndo, expanded: $expanded)
+                    preparing: session.timeline.preparingUndo,
+                    // La edición ya está hecha: lo que espera es el permiso de los diagnósticos, no el del agente.
+                    waitingFor: session.timeline.pendingPermissions.first?.reasons.contains(.swiftDiagnostics) == true
+                        ? "los diagnósticos de Swift" : nil,
+                    expanded: $expanded)
                 // Sólo se vuelve a pintar si cambia su grupo: un evento de otro sitio o el contador de
                 // «Pensando» no vuelven a medir las llamadas desplegadas (colgaba la app con salidas largas).
                 .equatable()
