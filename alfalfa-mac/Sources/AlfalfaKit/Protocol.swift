@@ -171,6 +171,9 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     case learn = "aprendizaje"
     /// Acción propuesta después de leer archivos, web, un servidor o un subagente.
     case externalContent = "contenido_externo"
+    /// sourcekit-lsp, que corre fuera del sandbox: diagnósticos opcionales de AlfalfaCode, no una acción
+    /// del agente. Negarlo sólo los apaga en la sesión.
+    case swiftDiagnostics = "diagnosticos_swift"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -185,6 +188,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .browser: return "Navegador"
         case .learn: return "Guardar lo aprendido"
         case .externalContent: return "Contenido externo"
+        case .swiftDiagnostics: return "Diagnósticos de Swift (opcional)"
         }
     }
 
@@ -348,6 +352,11 @@ public struct PermissionRequest: Equatable, Sendable {
     }
 
     private var baseScope: String? {
+        if reasons.contains(.swiftDiagnostics) {
+            return "Es una función de diagnósticos de AlfalfaCode, no una acción del agente: lanzaría sourcekit-lsp "
+                + "fuera del sandbox para ver los errores de los .swift que edite. Negarla sólo desactiva los "
+                + "diagnósticos de Swift en esta sesión; el trabajo sigue igual."
+        }
         if reasons.contains(.retry) {
             return "El sandbox probablemente bloqueó la orden. Se repetirá una vez, igual, sin sandbox: "
                 + "con todos los permisos de tu usuario y con red."

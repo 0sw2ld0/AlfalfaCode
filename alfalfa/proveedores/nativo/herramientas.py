@@ -38,6 +38,8 @@ class _Adoptada(Exception):
 MAX_COMMAND_TIMEOUT_SECONDS = 900
 # Plazo del permiso aparte para ejecutar sin sandbox; vencerlo es un rechazo.
 UNSANDBOXED_APPROVAL_SECONDS = 600.0
+# El permiso de sourcekit-lsp: diagnósticos opcionales de AlfalfaCode, no una acción del agente.
+MOTIVO_DIAGNOSTICOS_SWIFT = 'diagnosticos_swift'
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif'}
 # Lo privado del worktree se define con las demás rutas vetadas.
 PRIVATE = PRIVADOS_DEL_ESPACIO
@@ -1038,21 +1040,33 @@ class WorkspaceTools:
                     result = dict(result, diagnosticos=informe)
         return result
 
-    async def _permiso_de_diagnosticos(self, argv, proposito, sin_sandbox):
+    async def _permiso_de_diagnosticos(self, argv, proposito, sin_sandbox, swift=False):
         """Pide al usuario lanzar un servidor de lenguaje o linter; ValueError si no lo da.
 
-        Fuera del sandbox es el mismo permiso que una orden sin sandbox; dentro, el de
-        Manual y «Aceptar ediciones». En Omitir permisos lo concede la aprobación sola.
+        sourcekit-lsp (`swift`) lleva su propio motivo, «Diagnósticos de Swift»: es una función
+        opcional de AlfalfaCode, no una orden del agente, aunque corra fuera del sandbox. Otro
+        fuera del sandbox es el mismo permiso que una orden sin sandbox; dentro, el de Manual y
+        «Aceptar ediciones». En Omitir permisos lo concede la aprobación sola.
         """
         from ...permisos import bajo_demanda, modos
-        motivo = bajo_demanda.SALIR if sin_sandbox else modos.MOTIVO_MODO
+        motivo = (MOTIVO_DIAGNOSTICOS_SWIFT if swift else bajo_demanda.SALIR if sin_sandbox
+                  else modos.MOTIVO_MODO)
         peticion = {'argv': [str(a) for a in argv], 'purpose': proposito, 'motivo': motivo, 'motivos': [motivo]}
         if sin_sandbox:
             peticion['sin_sandbox'] = proposito
         plazo = getattr(self.runtime.manager, 'unsandboxed_approval_seconds', UNSANDBOXED_APPROVAL_SECONDS)
-        if plazo is None:
-            return await self.runtime.approve(peticion)
-        return await asyncio.wait_for(self.runtime.approve(peticion), plazo)
+        # Un «no» a los diagnósticos no es un «no» al agente: no cuenta como permiso negado, así que
+        # el turno no acaba «bloqueado» por haberlos rechazado (sólo se quedan sin diagnósticos).
+        politica = self.runtime.approval_policy
+        negados = getattr(politica, 'denied', None)
+        try:
+            if plazo is None:
+                return await self.runtime.approve(peticion)
+            return await asyncio.wait_for(self.runtime.approve(peticion), plazo)
+        except (ValueError, asyncio.TimeoutError):
+            if isinstance(negados, int) and isinstance(getattr(politica, 'denied', None), int):
+                politica.denied = negados
+            raise
 
     def _contenido_previo(self, sha):
         """El contenido anterior a una edición, de su copia privada `before-<sha>`, o None."""

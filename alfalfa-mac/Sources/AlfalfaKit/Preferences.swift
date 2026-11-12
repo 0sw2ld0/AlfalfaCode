@@ -21,6 +21,7 @@ public struct Preferences {
         /// Ancho de la barra lateral izquierda, arrastrando su borde.
         public static let sidebarWidth = "barra.ancho"
         public static let diagnostics = "ajustes.diagnosticos"
+        public static let swiftDiagnostics = "ajustes.diagnosticosSwift"
         public static let commitSignature = "ajustes.firmaCommits"
         public static let section = "ajustes.seccion"
     }
@@ -85,6 +86,13 @@ public struct Preferences {
     public var diagnostics: Bool {
         get { defaults.object(forKey: Key.diagnostics) as? Bool ?? true }
         nonmutating set { defaults.set(newValue, forKey: Key.diagnostics) }
+    }
+
+    /// Diagnósticos de Swift: sourcekit-lsp, el único que corre fuera del sandbox. Apagado si nunca se tocó,
+    /// como el LSP de OpenCode; los .swift se comprueban con swift build o swift test.
+    public var swiftDiagnostics: Bool {
+        get { defaults.object(forKey: Key.swiftDiagnostics) as? Bool ?? false }
+        nonmutating set { defaults.set(newValue, forKey: Key.swiftDiagnostics) }
     }
 
     /// Firmar los commits: el agente añade «Co-Authored-By: AlfalfaCode» a cada `git commit`.

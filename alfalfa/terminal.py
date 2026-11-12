@@ -244,7 +244,7 @@ class TerminalManager:
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
-                 cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', origen_cuybrowser=None,
+                 diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', origen_cuybrowser=None,
                  reglas_equipo=_CARGAR_EQUIPO):
         cwd = Path(cwd or Path.cwd()).resolve()
         self.equipo = equipo.cargar(cwd) if reglas_equipo is _CARGAR_EQUIPO else reglas_equipo
@@ -356,7 +356,8 @@ class TerminalManager:
             # Los errores de lo que acaba de editar, en el resultado de la edición (alfalfa/diagnosticos).
             # None decide ALFALFA_DIAGNOSTICOS o los ajustes.json del proyecto y del usuario.
             from .diagnosticos import Diagnosticos
-            self.diagnosticos = None if read_only else Diagnosticos(self.task['cwd'], base, forzado=diagnosticos)
+            self.diagnosticos = None if read_only else Diagnosticos(self.task['cwd'], base, forzado=diagnosticos,
+                                                                   forzado_swift=diagnosticos_swift)
             self.tasks = {ident: self.task}
             self.runners, self.processes, self.native_approvals = {}, {}, {}
             # Juegos, servidores y apps lanzados con background: siguen vivos entre turnos.
@@ -1203,6 +1204,12 @@ def diagnostics(args):
     return False if getattr(args, 'sin_diagnosticos', False) else None
 
 
+def swift_diagnostics(args):
+    """--diagnosticos-swift enciende sourcekit-lsp; si no, deciden ALFALFA_DIAGNOSTICOS_SWIFT y el ajustes.json
+    del usuario (apagado por defecto)."""
+    return True if getattr(args, 'diagnosticos_swift', False) else None
+
+
 def signature(args):
     """--sin-firma la apaga; si no, decide ALFALFA_FIRMA (encendida por defecto)."""
     return False if getattr(args, 'sin_firma', False) else None
@@ -1219,6 +1226,7 @@ async def execute(args):
                               budget=getattr(args, 'presupuesto', None),
                               monthly_budget=getattr(args, 'presupuesto_mes', None),
                               diagnosticos=diagnostics(args), firma=signature(args),
+                              diagnosticos_swift=swift_diagnostics(args),
                               motor_navegador=getattr(args, 'motor_navegador', None),
                               perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
                               origen_cuybrowser=getattr(args, 'origen_cuybrowser', None))
@@ -1305,6 +1313,10 @@ def main(argv=None):
     parser.add_argument('--sin-diagnosticos', action='store_true',
                         help='No consultar servidores de lenguaje ni linters tras cada edición '
                              '(también ALFALFA_DIAGNOSTICOS=0 o {"diagnosticos": false} en .alfalfa/ajustes.json)')
+    parser.add_argument('--diagnosticos-swift', action='store_true',
+                        help='Encender los diagnósticos de Swift (sourcekit-lsp, fuera del sandbox), apagados por '
+                             'defecto: piden su propio permiso (también ALFALFA_DIAGNOSTICOS_SWIFT=1 o '
+                             '{"diagnosticos_swift": true} en el ajustes.json del usuario)')
     parser.add_argument('--sin-firma', action='store_true',
                         help='No firmar como coautor a AlfalfaCode en los git commit del agente '
                              '(también ALFALFA_FIRMA=0)')
