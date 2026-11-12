@@ -5,6 +5,8 @@ public enum PermissionState: Equatable, Sendable {
     case approved
     /// Aprobado también para el resto de la sesión: no volverá a preguntar por lo mismo.
     case approvedForSession
+    /// «No volver a preguntar»: la regla quedó en reglas.toml para las próximas veces.
+    case approvedAlways
     case denied(String)
 }
 
@@ -507,8 +509,9 @@ public struct Timeline: Equatable, Sendable {
         case let .permission(request):
             items.append(.permission(id: nextID(), request: request, state: .pending))
             status = .waitingPermission
-        case let .permissionResolved(id, approved, reason, session):
-            resolve(id: id, state: approved ? (session ? .approvedForSession : .approved) : .denied(reason))
+        case let .permissionResolved(id, approved, reason, session, always):
+            resolve(id: id, state: approved ? (always ? .approvedAlways : session ? .approvedForSession : .approved)
+                    : .denied(reason))
             runningPermission = approved ? RunningCommand(id: id, since: Date().timeIntervalSince1970) : nil
             if pendingPermissions.isEmpty && status == .waitingPermission { status = .working }
         case let .context(tokens, limit, mcp, breakdown, details):

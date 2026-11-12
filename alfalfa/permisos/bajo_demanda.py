@@ -42,6 +42,8 @@ REGLA_USUARIO = 'regla'
 MOTIVOS = (PELIGROSO, RED, SALIR, REINTENTO, REGLA_USUARIO, 'modo')
 
 USE_DEFAULT = 'use_default'
+# Lo que devuelve la aprobación con «No volver a preguntar por órdenes que empiecen por …».
+SIEMPRE = 'siempre'
 REQUIRE_ESCALATED = 'require_escalated'
 JUSTIFICATION_MIN = 10
 JUSTIFICATION_MAX = 500
@@ -122,6 +124,18 @@ class OnRequestPolicy:
         reasons, failure = [], None
         command, label = list(argv), 'none'
         from . import sesion
+        bypass = bool(self.reglas) and not escalated and ruled == 'permitida' and self.reglas.fuera_del_sandbox(argv)
+        if bypass:
+            from ..contenido_externo import contaminada
+            if contaminada(runtime):
+                # Tras leer contenido externo, salir del sandbox vuelve a preguntar (una tarjeta).
+                escalated, bypass = True, False
+        if bypass:
+            # Como `allow` de Codex con bypass_sandbox: el usuario dijo «No volver a preguntar».
+            runtime.manager.event(runtime.task, 'system', 'Permitida siempre por ' + str(rule_text) + ': '
+                                  + shlex.join(argv)[:300] + ' (sin sandbox)')
+            return await launch(list(argv), 'none', {'intento': attempt, 'permisos': [], 'red': True,
+                                                     'regla_sin_sandbox': rule_text})
         if (not escalated and not danger and ruled != 'preguntar'
                 and sesion.aprobadas(runtime.task, [sesion.clave_de_orden(argv, args.get('cwd'), sin_sandbox=True)],
                                      registrar=False)):
@@ -162,7 +176,8 @@ class OnRequestPolicy:
         if reasons:
             await self._ask(runtime, argv, args, reasons, attempt, unsandboxed_timeout,
                             justification=justification, failure=failure, danger=danger,
-                            rule=rule_text if ruled == 'preguntar' else None, equipo=equipo)
+                            rule=rule_text if ruled == 'preguntar' else None, equipo=equipo,
+                            reglas=self.reglas)
         extra = {'intento': attempt, 'permisos': reasons, 'red': network or label == 'none'}
         result = await launch(command, label, extra)
         if label != 'seatbelt' or not self._denied(result):
@@ -178,7 +193,7 @@ class OnRequestPolicy:
             await self._ask(runtime, argv, args, retry_reasons, retry, unsandboxed_timeout,
                             justification=justification, previous=attempt, danger=danger,
                             failure=self._denial_text(attempt, result), equipo=equipo,
-                            rule=rule_text if equipo else None)
+                            rule=rule_text if equipo else None, reglas=self.reglas)
         except ValueError as exc:
             result['reintento'] = 'rechazado: ' + str(exc)
             self._annotate(runtime, result, reintento='rechazado')
@@ -222,7 +237,7 @@ class OnRequestPolicy:
 
     @staticmethod
     async def _ask(runtime, argv, args, reasons, attempt, unsandboxed_timeout, *, justification=None,
-                   failure=None, previous=None, danger=None, rule=None, equipo=False):
+                   failure=None, previous=None, danger=None, rule=None, equipo=False, reglas=None):
         from . import sesion
         unsandboxed = SALIR in reasons or REINTENTO in reasons
         # Como ApprovedForSession de Codex: lo peligroso y lo que una regla manda preguntar, nunca.
@@ -245,6 +260,16 @@ class OnRequestPolicy:
             request['_equipo'] = True
         if para_sesion:
             request['para_sesion'] = True
+        prefijo = None
+        if (unsandboxed and para_sesion and not origenes and reglas is not None
+                and not reglas.evaluar(list(argv)).coincidencias):
+            # «No volver a preguntar por órdenes que empiecen por …», como el
+            # ApprovedExecpolicyAmendment de Codex: nunca tras contenido externo, en órdenes
+            # peligrosas, con una regla que ya decide ni con prefijos que lo permitirían todo.
+            from ..reglas import prefijo_para_siempre
+            prefijo = prefijo_para_siempre(args.get('prefix_rule'), argv)
+            if prefijo:
+                request['prefijo'] = prefijo
         if justification:
             request['justificacion'] = justification
         if previous:
@@ -276,4 +301,29 @@ class OnRequestPolicy:
                              'falta.') from None
         if para_sesion and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
+        if prefijo and respuesta == SIEMPRE:
+            OnRequestPolicy._guardar_siempre(runtime, reglas, prefijo, argv)
         return respuesta
+
+    @staticmethod
+    def _guardar_siempre(runtime, reglas, prefijo, argv):
+        """Escribe la regla en `$ALFALFA_HOME/reglas.toml` y la aplica ya a esta sesión y sus
+        subagentes, que comparten el mismo objeto de reglas. Si no se puede guardar, la orden
+        aprobada se ejecuta igual y se avisa."""
+        import time
+
+        from ..reglas import ReglasInvalidas, guardar_para_siempre
+        home = getattr(runtime.manager, 'home', None)
+        texto = shlex.join(prefijo)
+        try:
+            if home is None:
+                raise ReglasInvalidas('no hay carpeta de AlfalfaCode')
+            nuevas = guardar_para_siempre(home, prefijo, 'Aprobada con «No volver a preguntar» el '
+                                          + time.strftime('%Y-%m-%d') + ' (' + shlex.join(argv)[:120] + ').')
+        except (ReglasInvalidas, OSError) as exc:
+            runtime.manager.event(runtime.task, 'system', 'No se pudo guardar «No volver a preguntar» por «'
+                                  + texto + '»: ' + str(exc)[:200] + '. Esta vez se ejecuta igual.')
+            return
+        reglas.reglas.append(nuevas.reglas[-1])
+        runtime.manager.event(runtime.task, 'system', 'Ya no se preguntará por las órdenes que empiecen por «'
+                              + texto + '»: corren fuera del sandbox. Se quita en reglas.toml.')

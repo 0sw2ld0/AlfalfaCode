@@ -114,7 +114,7 @@ class TerminalApproval:
             print('AlfalfaCode · Lectura aprobada automáticamente.', file=self.stdout, flush=True)
             return
         # Never read redirected stdin; EOF is a denial, never implicit approval.
-        accepted = session = False
+        accepted = session = always = False
         marcar_respuesta('sin_respuesta')
         site_scope = None
         if self.stdin.isatty() and self.stdout.isatty():
@@ -132,6 +132,9 @@ class TerminalApproval:
                         '[s/N] ')
             if args.get('para_sesion'):
                 question = question.replace('[s/N] ', '[s/t/N] (t: también el resto de la sesión) ')
+            if args.get('prefijo'):
+                question = question.replace('/N] ', '/a/N] (a: no volver a preguntar por «'
+                                            + shlex.join(args['prefijo']) + ' …») ', 1)
             if args.get('sitio'):
                 question = ('Sitio: [u] una visita, [t] este origen durante esta sesión, '
                             '[p] siempre en este proyecto, [N] rechazar: ')
@@ -149,7 +152,8 @@ class TerminalApproval:
                 respuesta = linea.strip().casefold()
                 marcar_respuesta('terminal' if linea else 'sin_respuesta')
                 session = bool(args.get('para_sesion')) and respuesta in ('t', 'todo', 'sesion', 'sesión')
-                accepted = session or respuesta in ('s', 'si', 'sí')
+                always = bool(args.get('prefijo')) and respuesta in ('a', 'siempre')
+                accepted = session or always or respuesta in ('s', 'si', 'sí')
                 if args.get('sitio'):
                     site_scope = {'u': 'una_vez', 't': 'sesion', 'p': 'proyecto'}.get(respuesta)
                     accepted = site_scope is not None
@@ -158,4 +162,4 @@ class TerminalApproval:
         if not accepted:
             self.denied += 1
             raise ValueError('Comando rechazado; no se ejecutó. No lo repitas ni reformules para eludir el rechazo.')
-        return site_scope or ('sesion' if session else None)
+        return site_scope or ('siempre' if always else 'sesion' if session else None)
