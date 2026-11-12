@@ -1,1 +1,1 @@
-El selector de «Revisión con otros ojos» agrupa los modelos por proveedor y dice el proveedor del elegido («minimax-m3.1-flash:cloud · Ollama»).
+Crear una rama o hacer un commit ya no pregunta cada vez: la tarjeta ofrece «No volver a preguntar por git commit …», como Codex. Queda una regla en ~/.alfalfa/reglas.toml y esas órdenes corren fuera del sandbox sin preguntar. No se ofrece tras leer contenido externo ni para órdenes peligrosas.
