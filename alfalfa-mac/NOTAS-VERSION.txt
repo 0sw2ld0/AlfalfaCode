@@ -1,6 +1,3 @@
-Tras leer una web o un MCP, el agente ya no pide permiso para editar dentro de la carpeta ni para órdenes en el sandbox sin red; sí lo pide para la red, los secretos, las rutas de fuera y otras apps o agentes. Esos permisos se pueden aprobar para toda la sesión.
-Las tarjetas de permiso de una edición muestran un diff legible en vez del parche en JSON.
-Abrir una edición grande ya no cuelga la app, y el scroll no te devuelve al final mientras lees.
-Si la app se cierra o muere, el motor de la sesión ya no queda vivo: niega los permisos pendientes y guarda la sesión como interrumpida.
-El presupuesto de la sesión se cambia desde el panel derecho, «Compactar sesión» se ve entero y la barra lateral se puede ensanchar o estrechar.
-Esperar tu respuesta a un permiso ya no gasta el presupuesto de tiempo del turno.
+Los diagnósticos de Swift (sourcekit-lsp) vienen apagados, como en OpenCode: son los únicos que necesitan salir del sandbox. Se encienden en Ajustes ▸ General. Si los enciendes, su tarjeta dice que es una función de AlfalfaCode y no del agente, y negarla solo los desactiva.
+Tras leer una web, editar en las carpetas temporales del sandbox ($TMPDIR y /private/tmp) ya no pide permiso; fuera de ellas sigue preguntando.
+El agente deja sus archivos de prueba en .tmp-alfalfa/ dentro del proyecto.
