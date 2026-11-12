@@ -133,7 +133,9 @@ struct PermissionCard: View {
 
     private var deny: some View {
         Button { session.answer(request.id, approved: false) } label: {
-            Text("Negar").fontWeight(.semibold).padding(.horizontal, 16).frame(minHeight: 36)
+            // Negar los de Swift no frena el trabajo: lo dice el botón.
+            Text(request.reasons.contains(.swiftDiagnostics) ? "No, sin diagnósticos de Swift" : "Negar")
+                .fontWeight(.semibold).padding(.horizontal, 16).frame(minHeight: 36)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.cardBorder))
         }
         .buttonStyle(.plain)

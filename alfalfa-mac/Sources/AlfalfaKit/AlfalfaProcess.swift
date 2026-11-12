@@ -64,6 +64,7 @@ public enum Launcher {
                                       title: String? = nil, keepAwake: Bool = true,
                                       browser: Bool = false, budget: Double? = nil,
                                       monthlyBudget: Double? = nil, diagnostics: Bool = true,
+                                      swiftDiagnostics: Bool = false,
                                       commitSignature: Bool = true, queue: Bool = false,
                                       browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa",
@@ -77,6 +78,8 @@ public enum Launcher {
         arguments += [(keepAwake, "--sin-mantener-despierto"), (diagnostics, "--sin-diagnosticos"),
                       (commitSignature, "--sin-firma")]
             .filter { !$0.0 }.map(\.1)
+        // Ajustes ▸ General ▸ Diagnósticos de Swift, encendido (viene apagado).
+        if swiftDiagnostics, diagnostics { arguments.append("--diagnosticos-swift") }
         // Ajustes ▸ General ▸ Presupuesto: los topes en dólares de la sesión y del mes.
         if let budget, budget > 0 { arguments += ["--presupuesto", BudgetFormat.argument(budget)] }
         if let monthlyBudget, monthlyBudget > 0 { arguments += ["--presupuesto-mes", BudgetFormat.argument(monthlyBudget)] }

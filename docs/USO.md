@@ -145,6 +145,18 @@ Con caché de prompts (Anthropic, OpenAI), esos mismos eventos añaden `cache`:
 (USD de la sesión; `ahorro` es negativo mientras escribir en la caché cueste más de lo
 que ahorra leerla).
 
+Diagnósticos de Swift: `sourcekit-lsp` es el único servidor de lenguaje que corre fuera
+del sandbox, así que viene apagado, como el LSP de OpenCode. Los demás diagnósticos
+(pyright, ruff, `typescript-language-server`, ESLint y SwiftLint, todos en el sandbox)
+siguen igual. Se enciende con `--diagnosticos-swift`, `ALFALFA_DIAGNOSTICOS_SWIFT=1`,
+`{"diagnosticos_swift": true}` en el `ajustes.json` del usuario o, en vivo,
+`{"tipo":"diagnosticos_swift","activo":true}`. El `.alfalfa/ajustes.json` del proyecto sólo
+puede apagarlo. Encendido, su permiso llega con `motivo` `diagnosticos_swift` y `sin_sandbox`:
+es una función de AlfalfaCode, no una acción del agente, y negarlo sólo apaga los
+diagnósticos de Swift el resto de la sesión, sin volver a preguntar. Apagado, la primera
+edición de un `.swift` trae en `diagnosticos.sin_respuesta` una línea que recuerda
+comprobarlo con `swift build` o `swift test`.
+
 Contenido externo: después de leer la web (`read_web`, `web_search`), el navegador, un
 servidor MCP, otra app, sesiones antiguas o un adjunto, la sesión queda marcada (también
 al compactar o reanudar). Como en Claude Code y Codex, sólo lo arriesgado pide entonces

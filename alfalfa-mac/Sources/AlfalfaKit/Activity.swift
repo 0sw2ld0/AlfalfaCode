@@ -41,9 +41,15 @@ public struct LiveActivity: Equatable, Sendable {
 
     /// Lo que hace un grupo de llamadas que sigue en marcha: la llamada sin resultado o, si no
     /// hay, «Pensando» (o `preparing`) desde el último evento. Con `waiting`, la llamada espera un permiso.
-    public static func of(group events: [ToolEvent], waiting: Bool = false, preparing: String? = nil) -> LiveActivity {
+    /// `waitingFor`: para qué es el permiso cuando no es la propia llamada («los diagnósticos de Swift»).
+    public static func of(group events: [ToolEvent], waiting: Bool = false, preparing: String? = nil,
+                          waitingFor: String? = nil) -> LiveActivity {
         let calls = ToolCalls.calls(from: events)
         let lastTime = events.last { $0.time > 0 }?.time
+        if waiting, let waitingFor {
+            let since = calls.last(where: { !$0.finished })?.startTime ?? lastTime
+            return LiveActivity(phase: .waiting, phrase: waitingPhrase + " para " + waitingFor, since: since)
+        }
         guard let current = calls.last(where: { !$0.finished }) else {
             return waiting ? LiveActivity(phase: .waiting, phrase: waitingPhrase, since: lastTime)
                 : .thinking(since: lastTime, preparing: preparing)
