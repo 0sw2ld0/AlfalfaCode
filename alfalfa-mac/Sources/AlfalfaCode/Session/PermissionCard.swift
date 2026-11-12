@@ -20,13 +20,16 @@ struct PermissionCard: View {
                 McpCallDetail(call: mcp)
             } else if let app = request.app {
                 AppTargetDetail(app: app)
+            } else if let edit = editDiff {
+                // Una edición: archivo, líneas +/− y su diff, no la llamada en JSON.
+                EditDiffView(diff: edit)
             } else {
                 Text(request.command).font(Theme.mono).textSelection(.enabled)
             }
             if !request.purpose.isEmpty, request.mcp == nil {
                 Text(request.purpose).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
             }
-            if let diff = request.diff, !diff.isEmpty {
+            if editDiff == nil, let diff = request.diff, !diff.isEmpty {
                 // Memoria o habilidad aprendida: lo que se escribiría, antes de aprobarlo.
                 DiffBlock(diff: diff)
             }
@@ -64,6 +67,11 @@ struct PermissionCard: View {
     }
 
     // MARK: - Propiedades privadas
+
+    private var editDiff: EditDiff? {
+        guard request.mcp == nil, request.app == nil, let diff = request.diff, !diff.isEmpty else { return nil }
+        return EditDiff(diff)
+    }
 
     @ViewBuilder private var title: some View {
         switch state {
@@ -113,6 +121,10 @@ struct PermissionCard: View {
         .disabled(session.answered.contains(request.id))
         .help(request.app != nil
               ? "Aprueba y no vuelve a preguntar por esta app en esta sesión."
+              : request.reasons.contains(.externalContent) && editDiff != nil
+              ? "Aprueba y no vuelve a preguntar por estos archivos en esta sesión."
+              : request.reasons.contains(.externalContent) && request.reasons.count == 1
+              ? "Aprueba y no vuelve a preguntar por esta acción en esta sesión, aunque el agente haya leído contenido externo."
               : request.reasons.contains(where: \.leavesSandbox)
               ? "Aprueba y, hasta que acabe la sesión, esta misma orden saldrá del sandbox sin preguntar."
               : "Aprueba y no vuelve a preguntar por esta misma orden en esta sesión.")

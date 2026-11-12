@@ -228,6 +228,13 @@ class OnRequestPolicy:
         # Como ApprovedForSession de Codex: lo peligroso y lo que una regla manda preguntar, nunca.
         para_sesion = PELIGROSO not in reasons and REGLA_USUARIO not in reasons
         clave = sesion.clave_de_orden(argv, args.get('cwd'), sin_sandbox=unsandboxed, red=RED in reasons)
+        # Tras leer contenido externo, la red y la salida del sandbox llevan también ese motivo
+        # (una sola tarjeta) y su propia clave: lo aprobado para la sesión antes no vale.
+        from ..contenido_externo import MOTIVO as EXTERNO, clave_de_orden, contaminada
+        origenes = contaminada(runtime) if (unsandboxed or RED in reasons) else []
+        if origenes:
+            reasons = list(reasons) + [EXTERNO]
+            clave = clave_de_orden(clave)
         if para_sesion and sesion.aprobadas(runtime.task, [clave]):
             runtime.manager.event(runtime.task, 'system', 'Aprobado en esta sesión: ' + shlex.join(argv)[:300]
                                   + (' (sin sandbox)' if unsandboxed else ''))
@@ -248,6 +255,8 @@ class OnRequestPolicy:
             request['regla'] = (request['regla'] + ' · ' + rule) if request.get('regla') else rule
         if RED in reasons:
             request['red'] = True
+        if origenes:
+            request['origen_externo'] = ', '.join(origenes[-6:])
         if unsandboxed:
             # Mismo campo que ya conocían terminal y transporte: nunca se concede solo.
             request['sin_sandbox'] = failure or justification or 'Salida del sandbox solicitada.'
