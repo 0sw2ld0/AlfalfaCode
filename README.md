@@ -896,7 +896,7 @@ Usa lo que ya está instalado; no instala nada:
 
 | Archivos | Servidor de lenguaje | Si no hay |
 |---|---|---|
-| Swift | `sourcekit-lsp` (viene con Xcode), con una base de datos de compilación propia | — |
+| Swift | `sourcekit-lsp` (viene con Xcode), con una base de datos de compilación propia. **Apagado por defecto** (ver abajo) | `swift build` o `swift test` (y SwiftLint si el proyecto lo usa) |
 | Python | `basedpyright-langserver` o `pyright-langserver` | `ruff check` y, sin ruff (o si falla), los errores de sintaxis del propio Python |
 | TypeScript/JavaScript | `typescript-language-server` (el del PATH antes que el de `node_modules`) | — |
 
@@ -931,8 +931,13 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
     piden. Un «no» también vale para toda la sesión.
   - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC de Xcode que
     el sandbox bloquea): ejecuta el compilador de Swift sobre los archivos editados con tus
-    permisos. Por eso pide el permiso de **orden fuera del sandbox**, una vez por paquete y
-    sesión (Omitir permisos lo concede solo).
+    permisos. Por eso viene **apagado**, como el LSP de OpenCode, y se enciende aparte.
+    Encendido, pide su propio permiso, **«Diagnósticos de Swift (opcional)»** (motivo
+    `diagnosticos_swift`), distinto del «Salir del sandbox» de las órdenes: es una función de
+    AlfalfaCode, no una acción del agente. Una vez por paquete y sesión; un «no» sólo apaga
+    los diagnósticos de Swift el resto de la sesión, en todos sus paquetes, y no se vuelve a
+    preguntar (Omitir permisos lo concede solo). Apagado, el resultado de la primera edición
+    de un `.swift` lo recuerda en una línea: se comprueba con `swift build` o `swift test`.
   - **`sourcekit-lsp` nunca evalúa un `Package.swift`.** Un manifiesto es código y puede pedir
     cualquier opción al compilador sin escribir su nombre (con `dlsym` o `@_silgen_name`,
     por ejemplo, cargar un programa del repositorio como plugin de macros), así que ninguna
@@ -972,6 +977,16 @@ Está **encendido por defecto**. Para apagarlo:
 - en la app, **Ajustes ▸ General ▸ Ver los errores al editar**. Vale desde la siguiente
   edición, también en las sesiones abiertas. Por `--stdio`:
   `{"tipo":"diagnosticos","activo":false}`.
+
+Los de Swift (`sourcekit-lsp`) están **apagados por defecto**. Para encenderlos:
+
+- en la terminal, `ALFALFA_DIAGNOSTICOS_SWIFT=1 alfalfa "…"` o `alfalfa --diagnosticos-swift "…"`;
+- para el usuario, `{"diagnosticos_swift": true}` en `~/.alfalfa/ajustes.json`;
+- en la app, **Ajustes ▸ General ▸ Diagnósticos de Swift (sourcekit-lsp, fuera del sandbox)**.
+  Por `--stdio`: `{"tipo":"diagnosticos_swift","activo":true}`.
+
+Un proyecto puede apagarlos con `{"diagnosticos_swift": false}` en `.alfalfa/ajustes.json`,
+pero nunca encenderlos.
 
 ## Mensajes con el agente ocupado
 

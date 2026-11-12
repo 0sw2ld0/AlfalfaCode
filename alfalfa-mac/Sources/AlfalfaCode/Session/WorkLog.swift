@@ -12,7 +12,7 @@ struct WorkLog: View, Equatable {
 
     static func == (lhs: WorkLog, rhs: WorkLog) -> Bool {
         lhs.events == rhs.events && lhs.running == rhs.running && lhs.waiting == rhs.waiting
-            && lhs.preparing == rhs.preparing && lhs.expanded == rhs.expanded
+            && lhs.preparing == rhs.preparing && lhs.waitingFor == rhs.waitingFor && lhs.expanded == rhs.expanded
     }
 
     // MARK: - Propiedades
@@ -23,6 +23,8 @@ struct WorkLog: View, Equatable {
     var waiting = false
     /// «Preparando deshacer…» mientras el motor guarda la instantánea del turno.
     var preparing: String?
+    /// Para qué es el permiso que espera, si no es la propia llamada (los diagnósticos de Swift).
+    var waitingFor: String?
     @Binding var expanded: Bool
 
     var body: some View {
@@ -30,7 +32,8 @@ struct WorkLog: View, Equatable {
         let calls = entries.compactMap { if case let .call(call) = $0 { return call } else { return nil } }
         VStack(alignment: .leading, spacing: 0) {
             if running {
-                LiveActivityRow(activity: LiveActivity.of(group: events, waiting: waiting, preparing: preparing), expanded: $expanded)
+                LiveActivityRow(activity: LiveActivity.of(group: events, waiting: waiting, preparing: preparing,
+                                                                 waitingFor: waitingFor), expanded: $expanded)
             } else {
                 summaryRow(title: title(calls: calls, entries: entries), onlyNotes: calls.isEmpty)
             }

@@ -69,12 +69,21 @@ struct GeneralSettings: View {
             }
             SettingsBlock(title: "Ver los errores al editar",
                           detail: "Tras cada edición, el agente recibe los errores y avisos nuevos de los archivos "
-                          + "que tocó: sourcekit-lsp, pyright y typescript-language-server si están instalados, y "
-                          + "el linter del proyecto (ruff, ESLint, SwiftLint). No instala nada ni alarga el turno "
-                          + "más de unos segundos. Un proyecto puede apagarlo con .alfalfa/ajustes.json.") {
+                          + "que tocó: pyright y typescript-language-server si están instalados, y el linter del "
+                          + "proyecto (ruff, ESLint, SwiftLint), todos en el sandbox. No instala nada ni alarga el "
+                          + "turno más de unos segundos. Un proyecto puede apagarlo con .alfalfa/ajustes.json.") {
                 Toggle("Mirar los archivos editados con el servidor de lenguaje", isOn: $model.diagnostics)
                     .toggleStyle(.switch)
                     .accessibilityLabel("Ver los errores al editar")
+                // sourcekit-lsp no puede ir en el sandbox: va aparte y apagado, como el LSP de OpenCode.
+                Toggle("Diagnósticos de Swift (sourcekit-lsp, fuera del sandbox)", isOn: $model.swiftDiagnostics)
+                    .toggleStyle(.switch)
+                    .disabled(!model.diagnostics)
+                    .accessibilityLabel("Diagnósticos de Swift con sourcekit-lsp, fuera del sandbox")
+                Text("Apagado, los .swift se comprueban con swift build o swift test. Encendido, la primera edición "
+                     + "de un .swift pide permiso; negarlo sólo los desactiva en esa sesión.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             SettingsBlock(title: "Firmar los commits",
                           detail: "Cuando el agente hace un git commit, añade la línea «Co-Authored-By: "
