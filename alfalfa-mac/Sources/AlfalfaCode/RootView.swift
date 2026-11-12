@@ -4,12 +4,19 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
+    /// Arrastrando el borde, entre 200 y 420 pt; se recuerda entre aperturas.
+    @AppStorage(Preferences.Key.sidebarWidth) private var storedWidth = SidebarWidth.standard
+    private var sidebarWidth: Binding<Double> {
+        Binding(get: { SidebarWidth.clamp(storedWidth) }, set: { storedWidth = SidebarWidth.clamp($0) })
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             SidebarView()
-                .frame(width: 260)
+                .frame(width: sidebarWidth.wrappedValue)
             Divider().overlay(Theme.border)
+                .overlay { SidebarResizeHandle(width: sidebarWidth) }
+                .zIndex(1)
             switch model.route {
             case .new:
                 NewTaskView()
@@ -42,6 +49,43 @@ struct RootView: View {
 }
 
 // MARK: - Barra lateral
+
+/// El borde de la barra lateral, como en Claude Code: se arrastra para ensancharla o
+/// estrecharla, con el cursor de redimensionar; doble clic vuelve al ancho de siempre.
+struct SidebarResizeHandle: View {
+    @Binding var width: Double
+    @State private var start: Double?
+
+    var body: some View {
+        Color.clear
+            .frame(width: 9)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { drag in
+                        let origin = start ?? width
+                        start = origin
+                        width = SidebarWidth.dragged(from: origin, by: drag.translation.width)
+                    }
+                    .onEnded { _ in start = nil }
+            )
+            .onTapGesture(count: 2) { width = SidebarWidth.standard }
+            .help("Arrastra para cambiar el ancho de la barra lateral; doble clic para volver al de siempre")
+            .accessibilityElement()
+            .accessibilityLabel("Ancho de la barra lateral")
+            .accessibilityValue("\(Int(width)) puntos")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: width = SidebarWidth.clamp(width + 20)
+                case .decrement: width = SidebarWidth.clamp(width - 20)
+                @unknown default: break
+                }
+            }
+    }
+}
 
 struct SidebarView: View {
     @EnvironmentObject private var model: AppModel

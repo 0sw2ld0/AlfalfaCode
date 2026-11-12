@@ -101,7 +101,10 @@ extension AppModel {
 
     private func sendBudget() {
         let saved = preferences
-        for session in live { session.setBudget(session: saved.sessionBudget, month: saved.monthlyBudget) }
+        // Una sesión con tope propio (puesto desde su panel) lo conserva.
+        for session in live {
+            session.setBudget(session: saved.sessionBudget(for: session.sessionID), month: saved.monthlyBudget)
+        }
     }
 
     func chooseDefaultFolder() {

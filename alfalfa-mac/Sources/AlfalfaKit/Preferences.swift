@@ -16,6 +16,10 @@ public struct Preferences {
         public static let keepAwake = "ajustes.mantenerDespierto"
         public static let sessionBudget = "ajustes.presupuestoSesion"
         public static let monthlyBudget = "ajustes.presupuestoMes"
+        /// Topes propios de algunas sesiones, puestos desde su panel: id → dólares (0, sin tope).
+        public static let sessionBudgets = "ajustes.presupuestoPorSesion"
+        /// Ancho de la barra lateral izquierda, arrastrando su borde.
+        public static let sidebarWidth = "barra.ancho"
         public static let section = "ajustes.seccion"
     }
 
@@ -68,6 +72,12 @@ public struct Preferences {
         nonmutating set { storeBudget(newValue, Key.monthlyBudget) }
     }
 
+    /// Ancho de la barra lateral, siempre dentro de los límites; el de siempre si nunca se tocó.
+    public var sidebarWidth: Double {
+        get { SidebarWidth.clamp((defaults.object(forKey: Key.sidebarWidth) as? NSNumber)?.doubleValue ?? SidebarWidth.standard) }
+        nonmutating set { defaults.set(SidebarWidth.clamp(newValue), forKey: Key.sidebarWidth) }
+    }
+
     // MARK: - Inicializadores
 
     public init(defaults: UserDefaults = .standard) {
@@ -91,6 +101,31 @@ public struct Preferences {
                             exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> String? {
         if let folder = defaultFolder, exists(folder) { return folder }
         return recents.first
+    }
+
+    /// El tope propio de una sesión, puesto desde su panel; nil si sigue el de Ajustes.
+    public func sessionCap(for id: String?) -> SessionCap? {
+        guard let id, let value = (defaults.dictionary(forKey: Key.sessionBudgets)?[id] as? NSNumber)?.doubleValue,
+              value.isFinite, value >= 0 else { return nil }
+        return value > 0 ? .amount(value) : .noCap
+    }
+
+    /// Pone (o, con nil, quita) el tope propio de una sesión. No toca el de Ajustes.
+    public func setSessionCap(_ cap: SessionCap?, for id: String) {
+        var all = defaults.dictionary(forKey: Key.sessionBudgets) ?? [:]
+        switch cap {
+        case .none: all[id] = nil
+        case .noCap: all[id] = 0.0
+        case let .amount(value) where value.isFinite && value > 0: all[id] = value
+        case .amount: all[id] = 0.0
+        }
+        if all.isEmpty { defaults.removeObject(forKey: Key.sessionBudgets) } else { defaults.set(all, forKey: Key.sessionBudgets) }
+    }
+
+    /// El tope que vale para una sesión: el suyo si lo tiene; si no, el de Ajustes.
+    public func sessionBudget(for id: String?) -> Double? {
+        guard let cap = sessionCap(for: id) else { return sessionBudget }
+        return cap.value
     }
 
     // MARK: - Métodos privados

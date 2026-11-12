@@ -104,7 +104,7 @@ final class LiveSession: ObservableObject, Identifiable {
                                                 images: images.map(\.path), mode: mode, wait: wait,
                                                 parent: parentSessionID, title: parentSessionID == nil ? nil : title,
                                                 keepAwake: Preferences().keepAwake, browser: true,
-                                                budget: Preferences().sessionBudget,
+                                                budget: Preferences().sessionBudget(for: sessionID),
                                                 monthlyBudget: Preferences().monthlyBudget)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
         child.onMessage = { [weak self] message in
@@ -424,6 +424,19 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Presupuesto: los topes nuevos valen ya, también a mitad de turno.
     func setBudget(session: Double?, month: Double?) {
         process?.send(.budget(session: session, month: month))
+    }
+
+    /// El tope propio de esta sesión (nil: sigue el de Ajustes).
+    var sessionCap: SessionCap? { Preferences().sessionCap(for: sessionID) }
+
+    /// Desde el panel derecho: cambia el tope sólo de esta sesión (nil vuelve al de Ajustes).
+    /// Se guarda con su id, así que vale también al reanudarla; el de Ajustes no cambia.
+    func setSessionCap(_ cap: SessionCap?) {
+        guard let id = sessionID else { return }
+        let preferences = Preferences()
+        preferences.setSessionCap(cap, for: id)
+        objectWillChange.send()
+        setBudget(session: preferences.sessionBudget(for: id), month: preferences.monthlyBudget)
     }
 }
 
