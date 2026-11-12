@@ -1,3 +1,2 @@
-Si otro agente o programa trabaja en el mismo proyecto, la sesión ya no se queda repitiendo comprobaciones ni termina «bloqueada».
-Una orden de consulta que falla (por ejemplo, python sin el 3) ya no bloquea una sesión que no cambió nada.
-«Revisión con otros ojos» solo aparece cuando el agente cambió algo en ese turno.
+La app trae dentro el navegador CuyBrowser 0.6.0, firmado junto con ella.
+La barra lateral ya no se llena de sesiones «ilegible»: una sesión que falla al arrancar no deja una carpeta vacía.
