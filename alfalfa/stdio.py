@@ -848,12 +848,23 @@ def gasto(task, turno=None):
     return datos
 
 
+def _sin_nacer(directory):
+    """Sólo el `lock`: una sesión que arrancaba y no llegó a guardar su task.json (cortada a medias,
+    o abierta ahora mismo). No es una sesión rota y no tiene nada que enseñar."""
+    try:
+        return os.listdir(directory) in ([], ['lock'])
+    except OSError:
+        return False
+
+
 def sessions():
     base = Path(os.environ.get('ALFALFA_HOME') or Path.home() / '.alfalfa') / 'sesiones'
     rows = []
     if base.is_dir() and not base.is_symlink():
         for directory in base.iterdir():
             if not directory.is_dir() or directory.is_symlink():
+                continue
+            if _sin_nacer(directory):
                 continue
             try:
                 path = directory / 'task.json'

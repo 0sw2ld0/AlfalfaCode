@@ -7,6 +7,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import signal
 import sys
 import time
@@ -426,7 +427,14 @@ class TerminalManager:
             self.save()
         except BaseException:
             self.close()
+            if not resume:
+                # Sin task.json la carpeta nueva no es una sesión: la barra lateral la pintaría «ilegible».
+                self._quitar_si_no_nacio()
             raise
+
+    def _quitar_si_no_nacio(self):
+        if not (self.directory / 'task.json').exists():
+            shutil.rmtree(self.directory, ignore_errors=True)
 
     def close(self):
         comparador = getattr(getattr(self, 'navegador', None), 'comparador', None)
