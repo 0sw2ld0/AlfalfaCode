@@ -141,6 +141,22 @@ Con caché de prompts (Anthropic, OpenAI), esos mismos eventos añaden `cache`:
 (USD de la sesión; `ahorro` es negativo mientras escribir en la caché cueste más de lo
 que ahorra leerla).
 
+Contenido externo: después de leer la web (`read_web`, `web_search`), el navegador, un
+servidor MCP, otra app, sesiones antiguas o un adjunto, la sesión queda marcada (también
+al compactar o reanudar). Como en Claude Code y Codex, sólo lo arriesgado pide entonces
+una aprobación extra (`motivo` o `motivos` con `contenido_externo`):
+
+- sin preguntar: editar o crear archivos dentro de la carpeta (`write_file`, `edit_file`,
+  `apply_patch`) y las órdenes que corren en el sandbox sin red y no son peligrosas;
+- con el sí extra: lo que usa red o sale del sandbox (una sola tarjeta, con `red`,
+  `salir_sandbox` o `reintento` y `contenido_externo`), lo que lee o toca secretos
+  (`.env`, claves, variables como `*_TOKEN`) o rutas de fuera de la carpeta, las
+  herramientas MCP y `spawn_agent`, `send_input`, `close_agent` y `app_action`.
+
+Las órdenes peligrosas preguntan como siempre. El permiso trae `para_sesion` («Permitir en
+esta sesión», con una clave propia: lo aprobado antes de leer contenido externo no vale) y,
+en una edición, `diff` en formato unificado (`--- a/…`, `+++ b/…`) en vez de la llamada.
+
 Presupuesto: `--presupuesto USD` y `--presupuesto-mes USD` (o `ALFALFA_PRESUPUESTO` y
 `ALFALFA_PRESUPUESTO_MES`) ponen los topes de la sesión y del mes en este Mac.
 `{"tipo":"presupuesto","sesion":5,"mes":null}` los cambia ya, también a mitad de turno

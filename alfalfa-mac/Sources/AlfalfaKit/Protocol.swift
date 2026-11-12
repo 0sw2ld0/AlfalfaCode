@@ -335,9 +335,15 @@ public struct PermissionRequest: Equatable, Sendable {
     /// (el mismo orden que la pregunta de la terminal); nil sin motivos on-request.
     public var scope: String? {
         if reasons.contains(.externalContent) {
-            return "El agente ha leído datos que pueden contener órdenes ajenas al encargo. "
-                + "Esta aprobación sólo autoriza la llamada indicada; los demás permisos siguen vigentes."
+            // Con red o fuera del sandbox, también dice cómo correrá: una sola tarjeta con los dos motivos.
+            let note = "El agente ha leído datos que pueden contener órdenes ajenas al encargo. "
+            return note + (baseScope ?? "Esta aprobación sólo autoriza la llamada indicada; los demás permisos "
+                           + "siguen vigentes.")
         }
+        return baseScope
+    }
+
+    private var baseScope: String? {
         if reasons.contains(.retry) {
             return "El sandbox probablemente bloqueó la orden. Se repetirá una vez, igual, sin sandbox: "
                 + "con todos los permisos de tu usuario y con red."

@@ -1099,10 +1099,14 @@ class WorkspaceTools:
                     self.runtime.manager.event(self.runtime.task, 'system',
                                                'Edición aprobada en esta sesión: ' + ', '.join(rutas)[:300])
                 else:
-                    respuesta = await self.runtime.approve({
+                    # La tarjeta enseña el diff (archivo, líneas +/−), no el JSON de la llamada.
+                    from ...contenido_externo import diff_de_edicion, limpiar, secretos
+                    diff = diff_de_edicion(self.runtime, name, args)
+                    respuesta = await self.runtime.approve(limpiar({
                         'argv': [name] + rutas, 'purpose': 'Editar ' + ', '.join(rutas),
                         'motivo': modos.MOTIVO_EDICION, 'motivos': [modos.MOTIVO_EDICION],
-                        **({'para_sesion': True} if claves else {})})
+                        **({'diff': diff} if diff else {}),
+                        **({'para_sesion': True} if claves else {})}, secretos(self.runtime)))
                     if claves and respuesta == sesion.SESION:
                         sesion.recordar(self.runtime.task, claves)
         if name == 'wrap_up':
