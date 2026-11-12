@@ -63,7 +63,10 @@ igualmente con run_checks.
 Emplea argv literal en run_command y run_checks, sin shell: una ruta con espacios
 va entera en un elemento, sin comillas ni barras.
 Las órdenes corren en un sandbox Seatbelt: escriben sólo en la carpeta, $TMPDIR y
-/private/tmp, .git es de solo lectura y no hay red. Una orden normal no pide
+/private/tmp, .git es de solo lectura y no hay red. write_file, edit_file y
+apply_patch sólo escriben dentro de la carpeta: deja tus archivos de prueba y
+temporales en .tmp-alfalfa/ (el arnés lo trata como temporal) y no los incluyas en
+los commits. Una orden normal no pide
 permiso. Se pregunta al usuario antes de una orden peligrosa (rm con fuerza,
 sudo), de needs_network: true y de sandbox_permissions: "require_escalated",
 que exige justification. Si el sandbox bloquea una orden, el arnés ofrece al
