@@ -56,6 +56,7 @@ struct PermissionCard: View {
                         if request.forSession { allowForSession }
                         deny
                     }
+                    if let prefix = request.alwaysPrefix { allowAlways(prefix) }
                 }
             }
         }
@@ -84,6 +85,8 @@ struct PermissionCard: View {
             Text("Aprobado").foregroundStyle(Theme.alfalfa).fontWeight(.semibold)
         case .approvedForSession:
             Text("Aprobado en esta sesión").foregroundStyle(Theme.alfalfa).fontWeight(.semibold)
+        case .approvedAlways:
+            Text("Aprobado · no volverá a preguntar").foregroundStyle(Theme.alfalfa).fontWeight(.semibold)
         case let .denied(reason):
             Text(reason.isEmpty || reason == "Respuesta del cliente"
                  ? "Negado · no se ejecutó" : "Negado · \(reason.lowercased())")
@@ -129,6 +132,22 @@ struct PermissionCard: View {
               : request.reasons.contains(where: \.leavesSandbox)
               ? "Aprueba y, hasta que acabe la sesión, esta misma orden saldrá del sandbox sin preguntar."
               : "Aprueba y no vuelve a preguntar por esta misma orden en esta sesión.")
+    }
+
+    /// «Sí, y no volver a preguntar por órdenes que empiecen por `git commit`», como Codex: queda
+    /// una regla en reglas.toml y esas órdenes corren fuera del sandbox sin preguntar.
+    private func allowAlways(_ prefix: [String]) -> some View {
+        let command = prefix.joined(separator: " ")
+        return Button { session.answer(request.id, approved: true, always: true) } label: {
+            (Text("No volver a preguntar por ") + Text(command).font(Theme.mono) + Text(" …"))
+                .fontWeight(.semibold).lineLimit(1).truncationMode(.middle)
+                .padding(.horizontal, 14).frame(minHeight: 32)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.cardBorder))
+        }
+        .buttonStyle(.plain)
+        .disabled(session.answered.contains(request.id))
+        .help("Aprueba y, desde ahora, las órdenes que empiecen por «\(command)» corren fuera del sandbox "
+              + "sin preguntar, en todas las sesiones. Se quita en ~/.alfalfa/reglas.toml.")
     }
 
     private var deny: some View {

@@ -407,6 +407,10 @@ ON_REQUEST_PROPERTIES = {
                             'only when the sandbox cannot work. Requires justification.'},
     'justification': {'type': 'string', 'description': 'Why the exception is needed (10-500 characters). '
                       'Mandatory with require_escalated.'},
+    'prefix_rule': {'type': 'array', 'items': {'type': 'string'}, 'maxItems': 6, 'description': (
+        'Optional with require_escalated: a short categorical argv prefix the user may approve once and for '
+        'all, e.g. ["git", "commit"] or ["npm", "install"]. It must match the start of the command; '
+        'never a bare interpreter or shell (["git"], ["python3"], ["bash", "-lc"]).')},
 }
 BACKGROUND_PROPERTY = {
     'type': 'boolean', 'description': (
@@ -517,7 +521,9 @@ ON_REQUEST_DESCRIPTION = ('Run exact argv in the workspace inside the Seatbelt s
                           'network. Normal commands run without asking; dangerous commands (rm with force, '
                           'sudo), needs_network and require_escalated ask the user first. A failure that '
                           'looks like a sandbox denial asks the user to retry the same argv without sandbox; '
-                          'do not retry it yourself.')
+                          'do not retry it yourself. Writing to .git (git switch -c, add, commit, stash) '
+                          'needs require_escalated; add prefix_rule (e.g. ["git", "commit"]) so the user can '
+                          'say «No volver a preguntar».')
 _ON_REQUEST_REPLACED = 'Request user approval for exact argv in workspace.'
 
 
@@ -984,6 +990,7 @@ class WorkspaceTools:
             # Purpose is explanatory approval metadata; argv determines effects.
             arguments.pop('purpose', None)
             arguments.pop('justification', None)
+            arguments.pop('prefix_rule', None)
         return json.dumps({'name': name, 'arguments': arguments}, sort_keys=True,
                           ensure_ascii=False, separators=(',', ':'))
 

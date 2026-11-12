@@ -24,7 +24,9 @@ SOLO_ARCHIVOS = 'Lee el archivo adjunto.'
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion',
                  # Guardar memoria o una habilidad aprendida (motivo «aprendizaje»): lo que cambia.
-                 'diff', 'sitio')
+                 'diff', 'sitio',
+                 # «No volver a preguntar por órdenes que empiecen por …» (permisos/bajo_demanda.py).
+                 'prefijo')
 
 
 # Largo máximo del id que la app da a un mensaje en cola.
@@ -74,6 +76,8 @@ class Transport:
         # Permisos que admiten «en esta sesión» (`para_sesion`).
         self.for_session = set()
         self.for_site = set()
+        # Permisos que admiten «No volver a preguntar» (`prefijo`).
+        self.for_always = set()
         # {"tipo":"compactar"} con un turno en marcha: el motor compacta antes de su
         # siguiente inferencia. True, o el texto de las instrucciones del usuario.
         self.compact_pending = False
@@ -132,16 +136,18 @@ class Transport:
             # cortaba el cierre a medias y el motor quedaba huérfano.
             self.salida_rota = True
 
-    def resolve(self, ident, approved, reason, session=False, site=None):
-        """`session`: el usuario aprobó para el resto de la sesión (sólo si la petición lo ofrecía)."""
+    def resolve(self, ident, approved, reason, session=False, site=None, always=False):
+        """`session`: el usuario aprobó para el resto de la sesión (sólo si la petición lo ofrecía).
+        `always`: «No volver a preguntar por órdenes que empiecen por …» (sólo con `prefijo`)."""
         future = self.pending.pop(ident)
         self.emit('permiso_resuelto', id=ident, aprobado=approved, motivo=reason,
-                  **({'sesion': True} if approved and session else {}),
+                  **({'siempre': True} if approved and always else {'sesion': True} if approved and session else {}),
                   **({'sitio': site} if approved and site else {}))
         if not future.done():
             future.origen_equipo = {'Respuesta del cliente': 'cliente_stdio', 'solo_lectura': 'solo_lectura',
                                     'Sesión interrumpida': 'interrumpido'}.get(reason, 'sin_respuesta')
-            future.set_result(site if approved and site else 'sesion' if approved and session else approved)
+            future.set_result(site if approved and site else 'siempre' if approved and always
+                              else 'sesion' if approved and session else approved)
 
     @property
     def exportando(self):
@@ -476,9 +482,13 @@ class Transport:
                 if site is not None and (ident not in self.for_site or site not in ('una_vez', 'sesion', 'proyecto')):
                     raise ValueError()
                 session = value.get('sesion') is True and ident in self.for_session
+                always = value.get('siempre') is True and ident in self.for_always
+                if value.get('siempre') is True and not always:
+                    raise ValueError()
                 self.for_session.discard(ident)
                 self.for_site.discard(ident)
-                self.resolve(ident, approved, 'Respuesta del cliente', session=session, site=site)
+                self.for_always.discard(ident)
+                self.resolve(ident, approved, 'Respuesta del cliente', session=session, site=site, always=always)
             else:
                 raise ValueError()
         except (ValueError, TypeError):
@@ -499,6 +509,8 @@ class Transport:
                 transport.pending[ident] = future
                 if args.get('para_sesion'):
                     transport.for_session.add(ident)
+                if args.get('prefijo'):
+                    transport.for_always.add(ident)
                 if isinstance(args.get('sitio'), dict):
                     transport.for_site.add(ident)
                 if transport.stopped:
@@ -515,13 +527,14 @@ class Transport:
                 finally:
                     transport.for_session.discard(ident)
                     transport.for_site.discard(ident)
+                    transport.for_always.discard(ident)
                     if ident in transport.pending:
                         transport.resolve(ident, False, 'Sesión interrumpida' if transport.stopped
                                           else 'Sin respuesta a tiempo')
                 if not approved:
                     self.denied += 1
                     raise ValueError('Comando rechazado; no se ejecutó.')
-                return approved if approved in ('una_vez', 'sesion', 'proyecto') else None
+                return approved if approved in ('una_vez', 'sesion', 'proyecto', 'siempre') else None
 
         return Approval()
 

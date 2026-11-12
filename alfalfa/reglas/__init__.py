@@ -37,7 +37,7 @@ SEVERIDAD = {PERMITIDA: 0, PREGUNTAR: 1, PROHIBIDA: 2}
 SINONIMOS = {'allow': PERMITIDA, 'prompt': PREGUNTAR, 'forbidden': PROHIBIDA,
              PERMITIDA: PERMITIDA, PREGUNTAR: PREGUNTAR, PROHIBIDA: PROHIBIDA}
 CAMPOS = {'patron': 'pattern', 'decision': 'decision', 'justificacion': 'justification',
-          'coincide': 'match', 'no_coincide': 'not_match'}
+          'coincide': 'match', 'no_coincide': 'not_match', 'fuera_del_sandbox': 'bypass_sandbox'}
 SHELLS = {'bash', 'sh', 'zsh'}
 OPCIONES_SHELL = {'-c', '-lc', '-cl'}
 OPERADORES = ('&&', '||', ';', '|')
@@ -57,6 +57,9 @@ class Regla:
     decision: str
     justificacion: str | None = None
     origen: str = ''
+    # Como `allow` de Codex: la orden corre fuera del sandbox sin preguntar. Sólo con
+    # `fuera_del_sandbox = true`, que escribe «No volver a preguntar» en la tarjeta.
+    sin_sandbox: bool = False
 
     def coincide(self, argv):
         if len(argv) < len(self.patron):
@@ -189,6 +192,95 @@ def ordenes(argv):
     return lista, False
 
 
+def _segmentos(argv):
+    """Las órdenes que de verdad se ejecutan: las de dentro de `bash -lc`, o argv tal cual.
+    None si el script no es analizable."""
+    nombre = argv[0].rsplit('/', 1)[-1] if argv else ''
+    if nombre in SHELLS and len(argv) == 3 and argv[1] in OPCIONES_SHELL:
+        return _palabras(argv[2])
+    return [list(argv)] if argv else None
+
+
+# Prefijos que no se guardan como «no volver a preguntar»: permitirían cualquier cosa.
+# Los de Codex (BANNED_PREFIX_SUGGESTIONS en core/src/exec_policy.rs), comparados enteros.
+PREFIJOS_PROHIBIDOS = {tuple(p) for p in (
+    ['bash'], ['bash', '-c'], ['bash', '-lc'], ['/bin/bash'], ['/bin/bash', '-c'], ['/bin/bash', '-lc'],
+    ['sh'], ['sh', '-c'], ['sh', '-lc'], ['/bin/sh'], ['/bin/sh', '-c'], ['/bin/sh', '-lc'],
+    ['zsh'], ['zsh', '-c'], ['zsh', '-lc'], ['/bin/zsh'], ['/bin/zsh', '-c'], ['/bin/zsh', '-lc'],
+    ['dash'], ['dash', '-c'], ['ksh'], ['ksh', '-c'], ['fish'], ['fish', '-c'],
+    ['env'], ['git'], ['sudo'], ['rm'], ['osascript'], ['Rscript'],
+    ['bun'], ['bun', '-e'], ['bun', 'run'], ['deno'], ['deno', 'eval'], ['julia'], ['julia', '-e'],
+    ['lua'], ['lua', '-e'], ['node'], ['node', '-e'], ['nodejs'], ['nodejs', '-e'],
+    ['npm', 'run'], ['pnpm', 'run'], ['yarn', 'run'], ['perl'], ['perl', '-e'], ['php'], ['php', '-r'],
+    ['py'], ['py', '-3'], ['pypy'], ['pypy3'], ['python'], ['python', '-'], ['python', '-c'],
+    ['python3'], ['python3', '-'], ['python3', '-c'], ['pythonw'], ['pyw'], ['ruby'], ['ruby', '-e'],
+    ['swift'], ['xcrun'], ['open'], ['xargs'], ['find'], ['curl'], ['wget'])}
+MAX_PREFIJO = 6
+
+
+def prefijo_para_siempre(propuesto, argv):
+    """El prefijo que la tarjeta puede ofrecer como «no volver a preguntar», o None.
+
+    Como `derive_requested_execpolicy_amendment_from_prefix_rule` de Codex: el que propone el
+    modelo (`prefix_rule`), si no está prohibido y cubre cada parte de la orden; si no propone
+    ninguno, para git se ofrece la suborden (`git commit`), nunca `git` a secas."""
+    partes = _segmentos(argv)
+    if not partes:
+        return None
+    if propuesto is None and len(partes) == 1 and len(partes[0]) >= 2:
+        orden = partes[0]
+        nombre = orden[0].rsplit('/', 1)[-1]
+        if nombre == 'git' and not orden[1].startswith('-'):
+            propuesto = ['git', orden[1]]
+    if (not isinstance(propuesto, list) or not 1 <= len(propuesto) <= MAX_PREFIJO
+            or not all(isinstance(t, str) and t and t.strip() == t and not set(t) & _ESPECIALES for t in propuesto)):
+        return None
+    if tuple(propuesto) in PREFIJOS_PROHIBIDOS:
+        return None
+    regla = Regla(tuple((t,) for t in propuesto), PERMITIDA)
+    for parte in partes:
+        candidatas = [parte] + ([d] if (d := _sin_envoltorio(parte)) else [])
+        if not any(regla.coincide(c) is not None for c in candidatas):
+            return None
+    return list(propuesto)
+
+
+def guardar_para_siempre(home, prefijo, justificacion):
+    """Añade a `$ALFALFA_HOME/reglas.toml` la regla de «No volver a preguntar», como
+    `append_amendment_and_update` de Codex con `~/.codex/rules/default.rules`.
+
+    Comprueba antes que el archivo resultante se lee bien: si el actual es inválido o la
+    regla lo rompería, no escribe nada (ReglasInvalidas). Devuelve las reglas nuevas."""
+    import json
+    import os
+    import tempfile
+    ruta = Path(home) / ARCHIVO
+    if ruta.is_symlink() or (ruta.exists() and not ruta.is_file()):
+        raise ReglasInvalidas(ARCHIVO + ' debe ser un archivo regular, sin enlaces.')
+    actual = ruta.read_text(encoding='utf-8') if ruta.exists() else ''
+    bloque = ('\n[[regla]]\npatron = ' + json.dumps(list(prefijo), ensure_ascii=False)
+              + '\ndecision = "permitida"\nfuera_del_sandbox = true\njustificacion = '
+              + json.dumps(justificacion, ensure_ascii=False) + '\n')
+    nuevo = actual + ('' if not actual or actual.endswith('\n') else '\n') + bloque
+    if len(nuevo.encode('utf-8')) > MAX_ARCHIVO:
+        raise ReglasInvalidas(ARCHIVO + ' superaría los 512 KB.')
+    try:
+        reglas = leer(tomllib.loads(nuevo))
+    except tomllib.TOMLDecodeError as exc:
+        raise ReglasInvalidas(ARCHIVO + ' no es TOML válido: ' + str(exc)[:200]) from None
+    Path(home).mkdir(parents=True, exist_ok=True)
+    fd, temporal = tempfile.mkstemp(dir=str(Path(home)), prefix='.reglas-', suffix='.toml')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as archivo:
+            archivo.write(nuevo)
+        os.chmod(temporal, 0o600)
+        os.replace(temporal, ruta)
+    except BaseException:
+        Path(temporal).unlink(missing_ok=True)
+        raise
+    return reglas
+
+
 class Reglas:
     def __init__(self, reglas=()):
         self.reglas = list(reglas)
@@ -201,6 +293,22 @@ class Reglas:
 
     def evaluar_una(self, argv):
         return [(r, p) for r in self.reglas if (p := r.coincide(argv)) is not None]
+
+    def fuera_del_sandbox(self, argv):
+        """¿Corre `argv` fuera del sandbox sin preguntar? Como `bypass_sandbox` de Codex
+        (core/src/exec_policy.rs): sólo si ninguna regla es más estricta que `permitida`
+        y cada parte de la orden la permite una regla con `fuera_del_sandbox`."""
+        if self.evaluar(argv).decision != PERMITIDA:
+            return False
+        partes = _segmentos(argv)
+        if not partes:
+            return False
+        permitidas = [r for r in self.reglas if r.decision == PERMITIDA and r.sin_sandbox]
+        for parte in partes:
+            candidatas = [parte] + ([d] if (d := _sin_envoltorio(parte)) else [])
+            if not any(r.coincide(c) is not None for r in permitidas for c in candidatas):
+                return False
+        return True
 
     def evaluar(self, argv):
         """Evaluacion de una orden: la más estricta de todas sus partes."""
@@ -276,8 +384,13 @@ def leer(datos, origen=ARCHIVO):
         justificacion = normal.get('justification')
         if justificacion is not None and (not isinstance(justificacion, str) or not justificacion.strip()):
             raise ReglasInvalidas(donde + ': justificacion debe ser texto no vacío.')
+        sin_sandbox = normal.get('bypass_sandbox', False)
+        if not isinstance(sin_sandbox, bool):
+            raise ReglasInvalidas(donde + ': fuera_del_sandbox debe ser true o false.')
+        if sin_sandbox and decision != PERMITIDA:
+            raise ReglasInvalidas(donde + ': fuera_del_sandbox sólo vale con decision = "permitida".')
         regla = Regla(_patron(normal['pattern'], donde), decision,
-                      justificacion.strip() if justificacion else None, donde)
+                      justificacion.strip() if justificacion else None, donde, sin_sandbox)
         # Como execpolicy: los ejemplos son pruebas que se pasan al cargar.
         for ejemplo in normal.get('match', []) or []:
             argv = _ejemplo(ejemplo, donde)
