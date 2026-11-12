@@ -451,8 +451,9 @@ páginas; Word y Excel leyendo su XML. Lo que llega al modelo depende de lo que 
 Codex no manda archivos al modelo: su TUI sólo pone la ruta en el mensaje para que el
 agente lo lea con sus herramientas. Aquí se hace eso cuando no se puede leer: el aviso
 dice la ruta original. El contenido de un adjunto cuenta como contenido externo: va
-marcado como datos y no instrucciones, con los secretos del proyecto tapados, y cada
-acción posterior con efectos pide su aprobación, como tras un `read_file`. Si el texto
+marcado como datos y no instrucciones, con los secretos del proyecto tapados, y desde
+entonces lo arriesgado pide una aprobación extra (ver «Contenido externo» en
+docs/USO.md), como tras un `read_web`. Si el texto
 de un PDF contiene un secreto, no se manda como documento (no se podría tapar dentro):
 va su texto con el secreto tapado. Lo que pesa cuenta para el presupuesto y la
 compactación (unos 2 000 tokens por página de PDF como documento); con más de 50 000
