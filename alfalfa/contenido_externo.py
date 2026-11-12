@@ -1,10 +1,18 @@
 """Frontera del modelo: datos con origen, permisos por acción y secretos tapados.
 
 La contaminación se conserva en la sesión, también al compactar o reanudar.
-No intentamos adivinar si el modelo obedeció una inyección: después de una
-lectura, cada acción con efectos necesita una aprobación adicional y puntual.
-El navegador conserva sus permisos propios; sus acciones se ampliarán cuando
-termine el trabajo de los PR 33–37.
+No intentamos adivinar si el modelo obedeció una inyección. Después de una lectura
+externa, como en Claude Code y Codex, sólo lo arriesgado pide una aprobación extra:
+
+- sigue sin preguntar editar o crear archivos dentro de la carpeta de trabajo y las
+  órdenes que corren en el sandbox Seatbelt sin red y no son peligrosas;
+- pide permiso lo que usa red o sale del sandbox (lo añade la política on-request,
+  permisos/bajo_demanda.py), lo que lee o toca secretos o rutas de fuera de la
+  carpeta, las herramientas MCP y spawn_agent, send_input, close_agent y app_action.
+
+Ese permiso se puede dar «para esta sesión» (permisos/sesion.py), con su propia
+clave: lo aprobado antes de leer contenido externo no cuenta. El navegador conserva
+sus permisos propios.
 """
 from __future__ import annotations
 
@@ -253,28 +261,184 @@ def restaurar(runtime):
             registrar(runtime, mensaje.get('tool_name'))
 
 
-def _accion(nombre, args):
-    # Memoria y habilidades ya exigen una aprobación puntual con su diff, incluso
-    # en Omitir permisos; Aprendizaje añade allí el motivo y el origen externo.
-    return (nombre in ACCIONES or str(nombre).startswith('mcp__')
-            or nombre == 'command_status' and args.get('stop') is True)
+# Siempre piden el sí extra: manejan otros agentes u otra app del Mac.
+SIEMPRE = frozenset({'spawn_agent', 'send_input', 'close_agent', 'app_action'})
+EDITORAS = frozenset({'write_file', 'edit_file', 'apply_patch'})
+# Programas que sirven para leer secretos aunque corran en el sandbox.
+PROGRAMAS_DE_SECRETOS = frozenset({'security', 'printenv', 'env', 'set', 'export', 'declare'})
+# Programas cuyo trabajo es la red: piden el sí antes, no al fallar en el sandbox sin red.
+PROGRAMAS_DE_RED = frozenset({'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc', 'ncat', 'netcat', 'telnet',
+                              'ftp', 'http', 'https', 'aria2c'})
+_URL_DE_RED = re.compile(r'^(?:https?|ftp|ssh|sftp|wss?)://', re.I)
+_VARIABLE = re.compile(r'\$\{?([A-Za-z_][A-Za-z0-9_]*)|^([A-Za-z_][A-Za-z0-9_]*)=')
+_URL = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*://')
+_MOVER = re.compile(r'^\*\*\* Move to: (.+)$', re.MULTILINE)
+# Rutas de fuera que no son del usuario: tirar la salida o escribir en la terminal.
+_DISPOSITIVOS = frozenset({'/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty'})
+
+
+def contaminada(runtime):
+    """Orígenes externos leídos en la sesión (lista vacía si ninguno)."""
+    return list(getattr(runtime, 'state', {}).get(MOTIVO) or ())
+
+
+def _secreta(texto):
+    from .permisos.rutas import privado_del_espacio, sensible
+    partes = Path(texto).parts
+    return sensible(texto) or any(privado_del_espacio(p) and p not in ('.DS_Store',) for p in partes)
+
+
+def _ruta_ajena(texto, raiz):
+    from .permisos.ordenes import _en_carpeta_del_sistema, fuera_del_espacio
+    if texto in _DISPOSITIVOS or _URL.match(texto) or _en_carpeta_del_sistema(texto):
+        return False
+    try:
+        return fuera_del_espacio(texto, raiz)
+    except (OSError, ValueError, RuntimeError):
+        return True
+
+
+def _edicion_fuera(ruta, raiz):
+    from .permisos.ordenes import fuera_del_espacio
+    if ruta.startswith('~'):
+        return True
+    try:
+        return fuera_del_espacio(ruta if '/' in ruta else './' + ruta, raiz)
+    except (OSError, ValueError, RuntimeError):
+        return True
+
+
+def _piezas(argv):
+    """Cada argumento salvo el programa y, si lleva espacios (un `sh -c '…'`), sus palabras."""
+    import shlex
+    for argumento in argv[1:]:
+        yield argumento
+        if any(c.isspace() for c in argumento):
+            try:
+                palabras = shlex.split(argumento)
+            except ValueError:
+                palabras = argumento.split()
+            yield from palabras
+
+
+def rutas_de_edicion(nombre, args):
+    from .permisos.modos import rutas_de
+    rutas = rutas_de(nombre, args)
+    if nombre == 'apply_patch':
+        rutas += [m.strip() for m in _MOVER.findall(str(args.get('input') or ''))]
+    return list(dict.fromkeys(rutas))
+
+
+def riesgo(nombre, args, raiz, *, sandbox=True):
+    """Por qué esta acción pide un sí extra tras leer contenido externo; None si no lo pide.
+
+    La red, la salida del sandbox y el reintento sin sandbox de una orden no se deciden
+    aquí: los pregunta la política on-request (con el motivo `contenido_externo` añadido),
+    así el usuario contesta una sola tarjeta. Las órdenes peligrosas preguntan como siempre."""
+    nombre = str(nombre)
+    args = args if isinstance(args, dict) else {}
+    if nombre in SIEMPRE:
+        return 'maneja otro agente u otra app del Mac'
+    if nombre.startswith('mcp__'):
+        return 'llama a un servidor MCP, fuera del sandbox'
+    if nombre in EDITORAS:
+        rutas = rutas_de_edicion(nombre, args)
+        if not rutas:
+            return 'edición sin ruta reconocible'
+        for ruta in rutas:
+            if _secreta(ruta):
+                return 'toca un archivo con secretos (' + ruta + ')'
+            if _edicion_fuera(ruta, raiz):
+                return 'edita fuera de la carpeta de trabajo (' + ruta + ')'
+        return None
+    if nombre in ('run_command', 'run_checks'):
+        if not sandbox:
+            return 'no hay sandbox que la contenga'
+        argv = args.get('argv')
+        if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+            return 'orden no analizable'
+        cwd = args.get('cwd')
+        if isinstance(cwd, str) and cwd not in ('', '.') and (Path(cwd).is_absolute() or _ruta_ajena(cwd, raiz)):
+            return 'corre fuera de la carpeta de trabajo'
+        if Path(argv[0]).name in PROGRAMAS_DE_SECRETOS:
+            return 'puede leer secretos (' + Path(argv[0]).name + ')'
+        # Con needs_network o require_escalated ya pregunta la política, con este motivo añadido:
+        # una sola tarjeta. Sin declararlo, un programa de red o una URL piden el sí aquí.
+        declara = args.get('needs_network') is True or args.get('sandbox_permissions') == 'require_escalated'
+        if not declara and Path(argv[0]).name in PROGRAMAS_DE_RED:
+            return 'usa la red (' + Path(argv[0]).name + ')'
+        for pieza in _piezas(argv):
+            if not declara and (pieza in PROGRAMAS_DE_RED or _URL_DE_RED.match(pieza)):
+                return 'usa la red (' + pieza[:120] + ')'
+            if pieza in ('security', 'printenv'):  # dentro de un `sh -c '…'`
+                return 'puede leer secretos (' + pieza + ')'
+            if _secreta(pieza):
+                return 'lee o toca secretos (' + pieza[:120] + ')'
+            variable = _VARIABLE.search(pieza)
+            if variable and RE_SECRETO.search(variable[1] or variable[2] or ''):
+                return 'usa una variable secreta (' + (variable[1] or variable[2]) + ')'
+            if ' ' not in pieza and _ruta_ajena(pieza, raiz):
+                return 'usa una ruta de fuera de la carpeta (' + pieza[:120] + ')'
+        return None
+    return None
+
+
+def clave_de_sesion(nombre, args):
+    """Lo que recuerda «Aprobar para esta sesión»: la orden exacta, los archivos o la herramienta."""
+    args = args if isinstance(args, dict) else {}
+    if nombre in ('run_command', 'run_checks'):
+        detalle = [list(map(str, args.get('argv') or [])), args.get('cwd') or '.']
+    elif nombre in EDITORAS:
+        detalle = sorted(rutas_de_edicion(nombre, args))
+    elif nombre == 'app_action':
+        detalle = str(args.get('app') or args.get('bundle_id') or '')
+    else:
+        detalle = ''
+    return json.dumps(['externo', str(nombre), detalle], ensure_ascii=False, separators=(',', ':'))
+
+
+def clave_de_orden(clave):
+    """La clave de sesión de una orden aprobada tras leer contenido externo (bajo_demanda)."""
+    return 'externo:' + clave
+
+
+def _hay_sandbox(runtime):
+    return (getattr(runtime, 'command_policy', None) is not None
+            and getattr(runtime, 'process_sandbox', None) is not None)
 
 
 async def autorizar(runtime, nombre, args):
-    """No usa las aprobaciones por sesión: cada acción requiere su propio sí."""
-    origenes = getattr(runtime, 'state', {}).get(MOTIVO)
-    if not origenes or not _accion(nombre, args):
+    """El sí extra tras leer contenido externo, sólo para lo arriesgado (ver `riesgo`)."""
+    origenes = contaminada(runtime)
+    if not origenes:
+        return
+    raiz = Path(runtime.task['cwd']).resolve() if isinstance(getattr(runtime, 'task', None), dict) \
+        and runtime.task.get('cwd') else Path.cwd().resolve()
+    motivo = riesgo(nombre, args, raiz, sandbox=_hay_sandbox(runtime))
+    if motivo is None:
+        return
+    from .permisos import sesion
+    clave = clave_de_sesion(nombre, args)
+    task = getattr(runtime, 'task', None)
+    if isinstance(task, dict) and sesion.aprobadas(task, [clave]):
+        runtime.manager.event(task, 'system', 'Aprobado en esta sesión tras leer contenido externo: ' + nombre)
         return
     origen = ', '.join(origenes[-6:])
-    explicacion = ('El agente ha leído contenido externo (' + origen + '). Puede contener órdenes ajenas al '
-                   'encargo. Esta acción requiere tu aprobación adicional; sólo autoriza esta llamada y '
-                   'conserva los demás permisos y restricciones.')
-    argv = args.get('argv') if nombre in ('run_command', 'run_checks') else None
-    if not argv:
+    explicacion = ('El agente ha leído contenido externo (' + origen + ') y esta acción ' + motivo
+                   + '. Puede contener órdenes ajenas al encargo: apruébala sólo si es lo que pediste.')
+    if nombre in ('run_command', 'run_checks') and args.get('argv'):
+        argv = list(args['argv'])
+    elif nombre in EDITORAS:
+        argv = [nombre] + rutas_de_edicion(nombre, args)
+    else:
         argv = [nombre, json.dumps(args, ensure_ascii=False, sort_keys=True)]
     solicitud = {'argv': argv, 'purpose': args.get('purpose') or 'Autorizar ' + nombre,
                  'motivo': MOTIVO, 'motivos': [MOTIVO], 'justificacion': explicacion,
-                 'origen_externo': origen, 'herramienta': nombre}
+                 'origen_externo': origen, 'herramienta': nombre, 'para_sesion': True}
+    if nombre in EDITORAS:
+        texto = diff_de_edicion(runtime, nombre, args)
+        if texto:
+            solicitud['diff'] = texto
     if args.get('cwd'):
         solicitud['cwd'] = args['cwd']
     valores = secretos(runtime)
@@ -282,6 +446,61 @@ async def autorizar(runtime, nombre, args):
     respuesta = await runtime.approve(solicitud)
     if respuesta is False:
         raise ValueError('Acción rechazada tras leer contenido externo. No se ejecutó; no la reformules.')
+    if respuesta == sesion.SESION and isinstance(task, dict):
+        sesion.recordar(task, [clave])
+
+
+MAX_DIFF = 60_000
+
+
+def diff_de_parche(texto):
+    """El formato de apply_patch como diff unificado: cabeceras ---/+++ por archivo."""
+    salida = []
+    for linea in str(texto).splitlines():
+        if linea.startswith(('*** Begin Patch', '*** End Patch', '*** End of File')):
+            continue
+        if linea.startswith('*** Update File: '):
+            ruta = linea[len('*** Update File: '):].strip()
+            salida += ['--- a/' + ruta, '+++ b/' + ruta]
+        elif linea.startswith('*** Add File: '):
+            salida += ['--- /dev/null', '+++ b/' + linea[len('*** Add File: '):].strip()]
+        elif linea.startswith('*** Delete File: '):
+            salida += ['--- a/' + linea[len('*** Delete File: '):].strip(), '+++ /dev/null']
+        elif linea.startswith('*** Move to: ') and salida and salida[-1].startswith('+++ '):
+            salida[-1] = '+++ b/' + linea[len('*** Move to: '):].strip()
+        else:
+            salida.append(linea)
+    return '\n'.join(salida)
+
+
+def diff_de_edicion(runtime, nombre, args):
+    """Diff legible de write_file, edit_file o apply_patch para la tarjeta de permiso."""
+    import difflib
+    args = args if isinstance(args, dict) else {}
+    if nombre == 'apply_patch':
+        texto = diff_de_parche(args.get('input') or '')
+    else:
+        ruta = args.get('path')
+        if not isinstance(ruta, str):
+            return None
+        if nombre == 'edit_file':
+            antes, despues = str(args.get('old') or ''), str(args.get('new') or '')
+        else:
+            antes, despues = '', str(args.get('content') or '')
+            try:
+                raiz = Path(runtime.task['cwd']).resolve()
+                destino = (raiz / ruta).resolve()
+                if destino.is_relative_to(raiz) and not _secreta(ruta) and destino.is_file() \
+                        and destino.stat().st_size <= MAX_DIFF:
+                    antes = destino.read_text(encoding='utf-8', errors='replace')
+            except (OSError, KeyError, TypeError, ValueError):
+                pass
+        nuevo = nombre == 'write_file' and not antes
+        texto = '\n'.join(difflib.unified_diff(antes.splitlines(), despues.splitlines(),
+                                                '/dev/null' if nuevo else 'a/' + ruta, 'b/' + ruta, lineterm=''))
+    if len(texto) > MAX_DIFF:
+        texto = texto[:MAX_DIFF] + '\n… (diff recortado)'
+    return texto or None
 
 
 def _texto_limpio(valor, valores):
