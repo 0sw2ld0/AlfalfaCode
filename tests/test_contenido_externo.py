@@ -3,6 +3,8 @@ import asyncio
 import copy
 import io
 import json
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -791,3 +793,62 @@ async def test_manual_ensena_el_diff_de_la_edicion(rt):
     edicion = next(p for p in permisos if p.get('motivo') == modos.MOTIVO_EDICION)
     assert edicion['argv'] == ['apply_patch', 'docs/n.md']
     assert edicion['diff'].splitlines() == ['--- /dev/null', '+++ b/docs/n.md', '+hola']
+
+
+# --- Carpetas temporales del sandbox ------------------------------------------------
+
+
+@pytest.fixture
+def temporales(tmp_path, monkeypatch):
+    """Un $TMPDIR propio (como el /var/folders/… del Mac) y el /private/tmp de verdad."""
+    import tempfile
+    tmpdir = tmp_path / 'tmpdir'
+    tmpdir.mkdir()
+    monkeypatch.setenv('TMPDIR', str(tmpdir))
+    monkeypatch.setattr(tempfile, 'tempdir', None)
+    raiz = tmp_path / 'proyecto-tmp'
+    raiz.mkdir()
+    return raiz.resolve(), tmpdir.resolve()
+
+
+def test_las_temporales_del_sandbox_cuentan_como_la_carpeta(temporales):
+    raiz, tmpdir = temporales
+    assert seguridad.raices_temporales(raiz) == [str(tmpdir), os.path.realpath('/private/tmp')]
+    for ruta in ('/private/tmp/pacai_readme_check.py', '/tmp/x.py', str(tmpdir / 'x.py')):
+        assert seguridad.riesgo('write_file', {'path': ruta, 'content': 'x'}, raiz) is None, ruta
+
+
+@pytest.mark.parametrize(('ruta', 'motivo'), [
+    ('~/x.py', 'fuera de la carpeta'),
+    (str(Path.home() / 'x.py'), 'fuera de la carpeta'),
+    ('/etc/hosts', 'fuera de la carpeta'),
+    ('/private/tmp/.env', 'secretos'),
+    ('/private/tmp/proyecto/.git/hooks/pre-commit', 'secretos'),
+])
+def test_lo_demas_de_fuera_sigue_preguntando(temporales, ruta, motivo):
+    raiz, _ = temporales
+    explicacion = seguridad.riesgo('write_file', {'path': ruta, 'content': 'x'}, raiz)
+    assert explicacion and motivo in explicacion
+
+
+def test_un_enlace_en_tmp_que_apunta_al_hogar_sigue_preguntando(temporales):
+    raiz, tmpdir = temporales
+    enlace = tmpdir / 'al-hogar'
+    enlace.symlink_to(Path.home())
+    explicacion = seguridad.riesgo('write_file', {'path': str(enlace / 'x.py'), 'content': 'x'}, raiz)
+    assert explicacion and 'fuera de la carpeta' in explicacion
+
+
+async def test_tras_la_web_un_temporal_no_saca_tarjeta(rt, temporales):
+    """La tarjeta no protegía de nada: write_file tampoco escribe fuera de la carpeta, y lo dice."""
+    seguridad.registrar(rt, 'read_web')
+    permisos = []
+
+    async def aprobar(args):
+        permisos.append(args)
+
+    rt.approval_policy = aprobar
+    with pytest.raises(ValueError, match='sale del workspace'):
+        await rt.tools.call('write_file', {'path': '/private/tmp/pacai_readme_check.py', 'content': 'x',
+                                           'expected_sha256': 'NEW'})
+    assert not [p for p in permisos if p.get('motivo') == seguridad.MOTIVO]
