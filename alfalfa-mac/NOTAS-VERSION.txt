@@ -1,3 +1,1 @@
-Los diagnósticos de Swift (sourcekit-lsp) vienen apagados, como en OpenCode: son los únicos que necesitan salir del sandbox. Se encienden en Ajustes ▸ General. Si los enciendes, su tarjeta dice que es una función de AlfalfaCode y no del agente, y negarla solo los desactiva.
-Tras leer una web, editar en las carpetas temporales del sandbox ($TMPDIR y /private/tmp) ya no pide permiso; fuera de ellas sigue preguntando.
-El agente deja sus archivos de prueba en .tmp-alfalfa/ dentro del proyecto.
+El selector de «Revisión con otros ojos» agrupa los modelos por proveedor y dice el proveedor del elegido («minimax-m3.1-flash:cloud · Ollama»).
