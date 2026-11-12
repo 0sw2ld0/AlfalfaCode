@@ -40,6 +40,10 @@ detecta: el bucle nunca lo hace; para eso, sustituye el mensaje en la lista.
 Con las listas de evidencia pasa lo mismo (son `Lista`). Las incidencias sí
 pueden cambiarse por dentro: se comparan con una copia de lo último escrito.
 
+Todo lo que se escribe pasa antes por `tachado.tachar_ordenes`: las claves de
+las órdenes (`PGPASSWORD=…`, `sshpass -p …`, `--token …`) no llegan a disco. En
+memoria la orden sigue entera; al reanudar, las de antes llegan tachadas.
+
 Las versiones 1 a 3 llevaban dentro de session.json lo que ahora va aparte: se
 convierten la primera vez que se cargan, escribiendo antes los JSONL y luego
 session.json.
@@ -55,6 +59,7 @@ import json
 import os
 from pathlib import Path
 
+from ...tachado import tachar_ordenes
 from .herramientas import atomic_json, atomic_write
 
 VERSION = 4
@@ -152,8 +157,9 @@ SOLO_EN_MEMORIA = ('thinking', 'alfalfa_bloques')
 
 
 def _sin_razonamiento(mensaje):
-    return ({k: v for k, v in mensaje.items() if k not in SOLO_EN_MEMORIA}
-            if isinstance(mensaje, dict) else mensaje)
+    """El mensaje como va a disco: sin razonamiento y con las claves de sus órdenes tachadas."""
+    return tachar_ordenes({k: v for k, v in mensaje.items() if k not in SOLO_EN_MEMORIA}
+                          if isinstance(mensaje, dict) else mensaje)
 
 
 def _linea(valor):
@@ -297,6 +303,10 @@ class _Registro:
             return None
         if self.campo not in CON_FOTO:
             con_referencia = _igual
+        a_disco = con_referencia
+
+        def con_referencia(fila):
+            return tachar_ordenes(a_disco(fila))
         if not isinstance(filas, Lista):
             # Una lista nueva (`setdefault('checks', [])`, una sesión vieja, la que deja
             # `_archive_not_relevant`): se adopta.
@@ -378,9 +388,9 @@ class _Incidencias:
             if anterior is not _FALTA and anterior == valor:
                 continue
             if isinstance(anterior, dict) and isinstance(valor, dict):
-                lineas.append(_linea({'id': clave, '~': diferencia(anterior, valor)}))
+                lineas.append(_linea({'id': clave, '~': diferencia(tachar_ordenes(anterior), tachar_ordenes(valor))}))
             else:
-                lineas.append(_linea({'id': clave, '=': valor}))
+                lineas.append(_linea({'id': clave, '=': tachar_ordenes(valor)}))
             copias[clave] = copy.deepcopy(valor)
         for clave in self.escritas:
             if clave not in registros:
@@ -523,7 +533,7 @@ class Historial:
         if incidencias is not None:
             self.incidencias.escrito(*incidencias)
             aparte.add(INCIDENCIAS)
-        salida = {k: v for k, v in estado.items() if k not in aparte}
+        salida = tachar_ordenes({k: v for k, v in estado.items() if k not in aparte})
         salida['version'] = VERSION
         if mensajes:
             salida['primer_mensaje'] = _sin_razonamiento(mensajes[0])
