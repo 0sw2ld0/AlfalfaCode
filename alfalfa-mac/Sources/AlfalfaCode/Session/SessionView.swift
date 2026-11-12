@@ -30,7 +30,9 @@ struct SessionView: View {
                               timeline: session.timeline, providerID: provider, providerName: app.providerName(provider),
                               canCompact: session.canCompact,
                               onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) },
-                              onContextMode: { session.setContextMode($0) })
+                              onContextMode: { session.setContextMode($0) },
+                              sessionCap: session.sessionCap,
+                              onSessionCap: session.sessionID == nil ? nil : { session.setSessionCap($0) })
                 }
             }
         }

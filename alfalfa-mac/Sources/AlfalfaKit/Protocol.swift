@@ -12,6 +12,10 @@ public struct SessionInfo: Equatable, Sendable {
     public var mode: String = ""
     /// Ahorro o contexto completo (`contexto`); nil en motores anteriores.
     public var contextMode: ContextMode?
+    /// Tokens y coste estimado acumulados de la sesión (`tokens`, `coste`): al reanudar, el panel
+    /// los enseña ya, sin esperar a que acabe el primer turno. nil en motores anteriores.
+    public var tokens: Int? = nil
+    public var cost: Double? = nil
 }
 
 public struct AgentEvent: Equatable, Sendable {
@@ -940,7 +944,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         guard let id = object["id"] as? String, let cwd = object["cwd"] as? String else { return nil }
         return SessionInfo(id: id, cwd: cwd, model: object["modelo"] as? String ?? "",
                            effort: object["esfuerzo"] as? String ?? "", mode: object["modo"] as? String ?? "",
-                           contextMode: (object["contexto"] as? String).flatMap(ContextMode.init(rawValue:)))
+                           contextMode: (object["contexto"] as? String).flatMap(ContextMode.init(rawValue:)),
+                           tokens: integer(object["tokens"]), cost: amount(object["coste"]))
     }
 
     /// Un `evento` en vivo o una fila de `historial`, con su compactación o su aviso de tarifa.

@@ -190,6 +190,7 @@ args = ['--stdio', 'test']
 if sys.argv[1] == 'True':
     m = TerminalManager('test')
     m.task['status'] = 'interrupted'
+    m.task.update(total_tokens=1234, coste_usd=0.5)
     m.save()
     args = ['--stdio', '--reanudar', m.task['id']]
     m.close()
@@ -213,6 +214,9 @@ with patch.object(NativeRuntime, 'run', work):
                                              + (['error'] if failure else []) + ['fin'])
         assert rows[-1]['codigo_salida'] == rows[-2 - failure]['codigo_salida'] == p.returncode == int(failure)
         assert rows[-1]['estado'] == ('failed' if failure else 'completed')
+        # Al reanudar, `sesion` ya trae lo gastado: el panel no enseña 0 hasta el primer turno.
+        assert rows[0]['tokens'] == (1234 if failure else 0)
+        assert rows[0].get('coste') == (0.5 if failure else None)
     finally:
         if p.poll() is None:
             p.kill()

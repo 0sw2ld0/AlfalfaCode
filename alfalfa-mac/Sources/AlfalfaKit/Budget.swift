@@ -121,6 +121,29 @@ public struct BudgetStatus: Equatable, Sendable {
     }
 }
 
+/// El tope propio de una sesión, puesto desde el panel derecho. Vale sólo para esa sesión:
+/// el de Ajustes ▸ General ▸ Presupuesto sigue igual para las demás y para las nuevas.
+public enum SessionCap: Equatable, Sendable {
+    /// Esta sesión no tiene tope, aunque Ajustes ponga uno.
+    case noCap
+    case amount(Double)
+
+    /// Dólares; nil sin tope.
+    public var value: Double? {
+        if case let .amount(value) = self, value > 0 { return value }
+        return nil
+    }
+
+    /// Lo escrito en el campo del panel: vacío o 0, sin tope; nil si no es un importe.
+    public init?(entry text: String) {
+        switch BudgetFormat.entry(text) {
+        case .noCap: self = .noCap
+        case let .amount(value): self = .amount(value)
+        case .invalid: return nil
+        }
+    }
+}
+
 /// Topes en dólares de Ajustes ▸ General ▸ Presupuesto.
 public enum BudgetFormat {
     /// Lo escrito en el campo de un tope.
