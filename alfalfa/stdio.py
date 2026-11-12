@@ -522,6 +522,9 @@ class Transport:
 # Segundos para cerrar bien tras el fin de stdin, una señal o perder al padre; después se
 # sale a la fuerza (la sesión queda «interrumpida», reanudable).
 GRACIA_CIERRE = 3.0
+# Ya fuera del turno, lo que puede tardar cerrar bien (procesos en segundo plano, MCP,
+# diagnósticos) antes de salir a la fuerza.
+GRACIA_LIMPIEZA = 15.0
 
 
 class CierreSeguro:
@@ -539,10 +542,11 @@ class CierreSeguro:
       el proceso aunque algo se haya quedado colgado.
     """
 
-    def __init__(self, transport, sesion, gracia=GRACIA_CIERRE, padre=None):
+    def __init__(self, transport, sesion, gracia=GRACIA_CIERRE, padre=None, limpieza=GRACIA_LIMPIEZA):
         self.transport = transport
         self.sesion = sesion  # función: el TerminalManager o None
         self.gracia = gracia
+        self.limpieza = limpieza
         self.padre = os.getppid() if padre is None else padre
         self.parando = False
         self.forzado = False
@@ -554,17 +558,26 @@ class CierreSeguro:
             self.transport.stop()
             return
         self.parando = True
-        import threading
-        try:
-            self._plazo = asyncio.get_running_loop().call_later(self.gracia, self.forzar)
-        except RuntimeError:
-            pass
-        # Por si el bucle se queda bloqueado: un hilo aparte, un poco más tarde.
-        self._hilo = threading.Timer(self.gracia * 2, self.forzar)
-        self._hilo.daemon = True
-        self._hilo.start()
+        self._programar(self.gracia)
         # Después de programar la salida forzada: si parar falla a medias, se sale igual.
         self.transport.stop()
+
+    def _programar(self, segundos):
+        import threading
+        self.terminado()
+        try:
+            self._plazo = asyncio.get_running_loop().call_later(segundos, self.forzar)
+        except RuntimeError:
+            self._plazo = None
+        # Por si el bucle se queda bloqueado: un hilo aparte, un poco más tarde.
+        self._hilo = threading.Timer(segundos * 2, self.forzar)
+        self._hilo.daemon = True
+        self._hilo.start()
+
+    def limpiando(self):
+        """El turno ya cedió: cerrar bien puede tardar algo más (procesos, MCP) sin forzar nada."""
+        if self.parando and not self.forzado:
+            self._programar(self.limpieza)
 
     def senal(self):
         if self.parando:
@@ -888,6 +901,7 @@ async def run(args, transport):
         if manager:
             manager.task.update(status='failed', summary='Fallo de ejecución')
     finally:
+        cierre.limpiando()
         await _cancelar_revision(transport)
         await transport.cancelar_exportacion()
         if transport.repaso is not None and not transport.repaso.done():
