@@ -120,8 +120,15 @@ class Transport:
         return value
 
     def emit(self, tipo, **fields):
-        print(json.dumps(self.clean(dict(version=VERSION, tipo=tipo, **fields)), ensure_ascii=False),
-              file=self.output, flush=True)
+        if getattr(self, 'salida_rota', False):
+            return
+        try:
+            print(json.dumps(self.clean(dict(version=VERSION, tipo=tipo, **fields)), ensure_ascii=False),
+                  file=self.output, flush=True)
+        except (BrokenPipeError, ValueError, OSError):
+            # La app ya no lee (murió o cerró el pipe): no hay a quién contarlo. Antes la excepción
+            # cortaba el cierre a medias y el motor quedaba huérfano.
+            self.salida_rota = True
 
     def resolve(self, ident, approved, reason, session=False, site=None):
         """`session`: el usuario aprobó para el resto de la sesión (sólo si la petición lo ofrecía)."""
@@ -512,13 +519,104 @@ class Transport:
         return Approval()
 
 
+# Segundos para cerrar bien tras el fin de stdin, una señal o perder al padre; después se
+# sale a la fuerza (la sesión queda «interrumpida», reanudable).
+GRACIA_CIERRE = 3.0
+
+
+class CierreSeguro:
+    """Que el motor nunca quede huérfano.
+
+    Pasó con la app cerrada: el motor esperaba un permiso, no le llegó el fin de stdin (otro
+    proceso conservaba el pipe abierto) e ignoró SIGINT y SIGTERM porque `stop()` ya se había
+    llamado y la cancelación del turno no acababa. Sólo murió con SIGKILL, con la sesión en
+    `running`. Ahora:
+
+    - el fin de stdin, la primera señal o perder al padre paran la sesión como siempre (los
+      permisos pendientes se niegan) y programan una salida forzada a los `gracia` segundos;
+    - una segunda señal sale ya;
+    - la salida forzada guarda la sesión como `interrupted` si seguía en marcha y termina
+      el proceso aunque algo se haya quedado colgado.
+    """
+
+    def __init__(self, transport, sesion, gracia=GRACIA_CIERRE, padre=None):
+        self.transport = transport
+        self.sesion = sesion  # función: el TerminalManager o None
+        self.gracia = gracia
+        self.padre = os.getppid() if padre is None else padre
+        self.parando = False
+        self.forzado = False
+        self._plazo = None
+        self._hilo = None
+
+    def parar(self):
+        if self.parando:
+            self.transport.stop()
+            return
+        self.parando = True
+        import threading
+        try:
+            self._plazo = asyncio.get_running_loop().call_later(self.gracia, self.forzar)
+        except RuntimeError:
+            pass
+        # Por si el bucle se queda bloqueado: un hilo aparte, un poco más tarde.
+        self._hilo = threading.Timer(self.gracia * 2, self.forzar)
+        self._hilo.daemon = True
+        self._hilo.start()
+        # Después de programar la salida forzada: si parar falla a medias, se sale igual.
+        self.transport.stop()
+
+    def senal(self):
+        if self.parando:
+            self.forzar()
+        else:
+            self.parar()
+
+    async def vigilar_padre(self, cada=1.0):
+        """Si la app muere sin cerrar stdin, el padre pasa a ser launchd: se para igual."""
+        while True:
+            await asyncio.sleep(cada)
+            if os.getppid() != self.padre:
+                self.parar()
+                return
+
+    def terminado(self):
+        """El cierre normal acabó a tiempo: nada que forzar."""
+        if self._plazo is not None:
+            self._plazo.cancel()
+        if self._hilo is not None:
+            self._hilo.cancel()
+
+    def forzar(self):
+        if self.forzado:
+            return
+        self.forzado = True
+        manager = self.sesion()
+        try:
+            if manager is not None:
+                if manager.task.get('status') in (None, 'created', 'running'):
+                    manager.task.update(status='interrupted',
+                                        summary='Sesión interrumpida al cerrarse la app; puedes reanudarla.')
+                manager.save()
+                manager.close()
+        except Exception:  # noqa: BLE001 - se sale igual: lo importante es no quedar huérfano
+            pass
+        try:
+            self.transport.emit('fin', estado='interrupted', resumen='Cierre forzado del motor.', codigo_salida=130)
+        except Exception:  # noqa: BLE001 - stdout puede estar cerrado
+            pass
+        os._exit(130)
+
+
 async def run(args, transport):
     from .terminal import TerminalManager, diagnostics, keep_awake, signature
     manager = None
     reader_task = None
     pipe = None
+    vigia = None
     code = 1
     loop = asyncio.get_running_loop()
+    cierre = CierreSeguro(transport, lambda: manager)
     try:
         from .terminal import resolve_fork
         resolve_fork(args)
@@ -579,7 +677,7 @@ async def run(args, transport):
                     transport.emit('error', texto='Línea demasiado larga.')
                     continue
                 if not line:
-                    transport.stop()
+                    cierre.parar()
                     return
                 try:
                     transport.receive(line.decode('utf-8'))
@@ -670,7 +768,8 @@ async def run(args, transport):
         manager.aprendizaje.reabrir()
         reader_task = asyncio.create_task(consume())
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, transport.stop)
+            loop.add_signal_handler(sig, cierre.senal)
+        vigia = asyncio.create_task(cierre.vigilar_padre())
         # Con --esperar la sesión se abre sin turno: el primero lo trae un mensaje.
         prompt = await transport.next_message() if esperar else (args.encargo or 'Continúa el encargo original.')
         # El encargo inicial ya lo pinta la app; lo que llega después se le devuelve.
@@ -795,6 +894,9 @@ async def run(args, transport):
             # La sesión se cierra: el repaso se deja (el turno ya estaba cerrado).
             transport.repaso.cancel()
             await asyncio.gather(transport.repaso, return_exceptions=True)
+        if vigia is not None:
+            vigia.cancel()
+            await asyncio.gather(vigia, return_exceptions=True)
         if reader_task:
             reader_task.cancel()
             await asyncio.gather(reader_task, return_exceptions=True)
@@ -816,6 +918,7 @@ async def run(args, transport):
             transport.emit('error', texto='La sesión no terminó correctamente.')
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
+    cierre.terminado()
     return code
 
 
