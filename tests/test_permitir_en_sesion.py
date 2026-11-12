@@ -91,7 +91,7 @@ def test_claves_de_sesion():
     task = {}
     assert not sesion.aprobadas(task, []) and not sesion.aprobadas(task, ['x'])
     sesion.recordar(task, ['x', 'y', 'x'])
-    assert task[sesion.CAMPO] == ['x', 'y'] and sesion.aprobadas(task, ['y', 'x'])
+    assert task[sesion.CAMPO] == [sesion.huella('x'), sesion.huella('y')] and sesion.aprobadas(task, ['y', 'x'])
 
 
 class Respuesta:
@@ -155,7 +155,7 @@ def test_reintento_aprobado_para_la_sesion_sale_del_sandbox_sin_preguntar(motor)
     peticion, = aprobacion.peticiones
     assert peticion['motivo'] == 'reintento' and peticion['para_sesion'] is True
     assert len(ordenes(lanzadas)) == 2  # en el sandbox y el reintento
-    assert sesion.clave_de_orden(argv, None, sin_sandbox=True) in rt.task[sesion.CAMPO]
+    assert sesion.huella(sesion.clave_de_orden(argv, None, sin_sandbox=True)) in rt.task[sesion.CAMPO]
     # La segunda vez: directamente sin sandbox, sin preguntar ni intentar dentro.
     otra = Respuesta()
     resultado = llamar(otra, argv=argv)
