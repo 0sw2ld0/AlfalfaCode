@@ -24,7 +24,8 @@ struct PermissionCard: View {
                 // Una edición: archivo, líneas +/− y su diff, no la llamada en JSON.
                 EditDiffView(diff: edit)
             } else {
-                Text(request.command).font(Theme.mono).textSelection(.enabled)
+                // Acotada: una llamada enorme (un parche crudo) hacía la tarjeta altísima y colgaba la app.
+                BoundedCommand(text: request.command)
             }
             if !request.purpose.isEmpty, request.mcp == nil {
                 Text(request.purpose).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
@@ -166,5 +167,26 @@ struct PermissionCard: View {
             Text(value).textSelection(.enabled)
         }
         .font(.system(size: 12.5)).foregroundStyle(Theme.secondary)
+    }
+}
+
+
+/// La orden o la llamada de un permiso, como mucho 30 líneas; lo entero, con «Ver todo».
+struct BoundedCommand: View {
+    let text: String
+    @State private var showingAll = false
+
+    var body: some View {
+        let preview = TextPreview(text, maxLines: 30)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(preview.shown).font(Theme.mono).textSelection(.enabled).lineLimit(preview.shownLines)
+            if preview.truncated {
+                Button(preview.hiddenLines > 0 ? "Ver todo (\(preview.totalLines) líneas)" : "Ver todo") {
+                    showingAll = true
+                }
+                .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.link)
+                .sheet(isPresented: $showingAll) { LargeTextSheet(title: "Lo que se aprobaría", text: text) }
+            }
+        }
     }
 }
