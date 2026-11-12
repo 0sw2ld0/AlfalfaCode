@@ -13,6 +13,24 @@ struct CodeReviewCard: View {
     }
     private var model: String { models.contains(chosenModel) ? chosenModel : models.first ?? "" }
 
+    /// Los candidatos agrupados por proveedor, en su orden: con modelos de Ollama, Anthropic u
+    /// OpenAI a la vez, el nombre solo («minimax-m3.1-flash:cloud») no dice de dónde sale.
+    private var groups: [(provider: String, names: [String])] {
+        var order: [String] = []
+        var grouped: [String: [String]] = [:]
+        for name in models {
+            let provider = ModelProvider.id(of: name, in: app.models)
+            if grouped[provider] == nil { order.append(provider) }
+            grouped[provider, default: []].append(name)
+        }
+        return order.map { ($0, grouped[$0] ?? []) }
+    }
+
+    /// «minimax-m3.1-flash:cloud · Ollama»: el elegido, con su proveedor.
+    private func title(_ name: String) -> String {
+        app.label(for: name) + " · " + app.providerName(ModelProvider.id(of: name, in: app.models))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Revisión con otros ojos", systemImage: "eye").font(.system(size: 13, weight: .semibold))
@@ -21,11 +39,15 @@ struct CodeReviewCard: View {
                     .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 HStack(spacing: 10) {
                     Menu {
-                        ForEach(models, id: \.self) { name in
-                            Button(app.label(for: name)) { chosenModel = name }
+                        ForEach(groups, id: \.provider) { group in
+                            Section(app.providerName(group.provider)) {
+                                ForEach(group.names, id: \.self) { name in
+                                    Button(app.label(for: name)) { chosenModel = name }
+                                }
+                            }
                         }
                     } label: {
-                        Text(model.isEmpty ? "Elige otro modelo" : app.label(for: model))
+                        Text(model.isEmpty ? "Elige otro modelo" : title(model))
                     }
                     Button("Revisar cambios") { session.reviewCode(review, model: model) }
                         .disabled(!canReply || session.reviewingCode || model.isEmpty)
@@ -40,7 +62,7 @@ struct CodeReviewCard: View {
             } else if review.state == "revisando" {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Revisando con \(review.model.map { app.label(for: $0) } ?? "otro modelo")…")
+                    Text("Revisando con \(review.model.map(title) ?? "otro modelo")…")
                     Button("Cancelar revisión") { session.cancelCodeReview() }
                 }.font(.system(size: 12))
             }
