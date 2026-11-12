@@ -94,6 +94,17 @@ extension AppModel {
         }
     }
 
+    /// Diagnósticos de Swift (sourcekit-lsp, fuera del sandbox), apagados por defecto. Las sesiones abiertas
+    /// lo aplican desde su siguiente edición; las nuevas lo reciben al arrancar (`--diagnosticos-swift`).
+    var swiftDiagnostics: Bool {
+        get { preferences.swiftDiagnostics }
+        set {
+            objectWillChange.send()
+            preferences.swiftDiagnostics = newValue
+            for session in live { session.setSwiftDiagnostics(newValue) }
+        }
+    }
+
     /// Firmar los commits. Las sesiones abiertas lo aplican desde su siguiente `git commit`;
     /// las nuevas lo reciben al arrancar (`--sin-firma`).
     var commitSignature: Bool {

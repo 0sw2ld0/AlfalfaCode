@@ -112,7 +112,8 @@ final class LiveSession: ObservableObject, Identifiable {
             parent: parentSessionID, title: parentSessionID == nil ? nil : title,
             keepAwake: Preferences().keepAwake, browser: true,
             budget: Preferences().sessionBudget(for: sessionID), monthlyBudget: Preferences().monthlyBudget,
-            diagnostics: Preferences().diagnostics, commitSignature: Preferences().commitSignature, queue: queue,
+            diagnostics: Preferences().diagnostics, swiftDiagnostics: Preferences().swiftDiagnostics,
+            commitSignature: Preferences().commitSignature, queue: queue,
             browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
             cuyBrowserFromPath: browserPreferences.fromPath)
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
@@ -545,6 +546,11 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Ver los errores al editar: vale desde la siguiente edición.
     func setDiagnostics(_ on: Bool) {
         process?.send(.diagnostics(on))
+    }
+
+    /// Ajustes ▸ General ▸ Diagnósticos de Swift: vale desde la siguiente edición de un .swift.
+    func setSwiftDiagnostics(_ on: Bool) {
+        process?.send(.swiftDiagnostics(on))
     }
 
     /// Ajustes ▸ General ▸ Firmar los commits: vale desde el siguiente `git commit`.

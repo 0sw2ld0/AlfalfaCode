@@ -30,8 +30,12 @@ Permisos y aislamiento, porque estos programas cargan código del proyecto:
   Un programa de `node_modules/.bin` lo pide en cualquier modo; se prefiere el
   del PATH. ruff y SwiftLint sólo leen y no lo piden.
 - `sourcekit-lsp` no puede ir en Seatbelt (su sourcekitd es un servicio XPC que
-  el sandbox bloquea), así que pide el permiso de «fuera del sandbox» una vez
-  por raíz y sesión (Omitir permisos lo concede) y NUNCA evalúa un
+  el sandbox bloquea), así que viene APAGADO, como el LSP de OpenCode: los .swift
+  se comprueban con `swift build` o `swift test`, y SwiftLint sigue en el sandbox.
+  Se enciende aparte (ver abajo). Encendido, pide su propio permiso («Diagnósticos
+  de Swift», no el «Salir del sandbox» de las órdenes: no es una acción del
+  agente) una vez por raíz y sesión, y un «no» lo apaga el resto de la sesión
+  (Omitir permisos lo concede). NUNCA evalúa un
   `Package.swift`: los ajustes del paquete se sacan dentro del sandbox y se le
   da una base de datos de compilación con opciones fijas (`paquete.py`). No se
   lanza si el proyecto trae algo que le haría ejecutar órdenes
@@ -46,6 +50,11 @@ Se apaga con `ALFALFA_DIAGNOSTICOS=0`, `alfalfa --sin-diagnosticos`, en la app
 (Ajustes ▸ General) o con `{"diagnosticos": false}` en el `ajustes.json` del
 usuario o en `.alfalfa/ajustes.json` del proyecto. El proyecto sólo puede
 apagarlo: nunca enciende lo que el usuario apagó.
+
+Los de Swift (sourcekit-lsp) se encienden con `ALFALFA_DIAGNOSTICOS_SWIFT=1`,
+`alfalfa --diagnosticos-swift`, en la app (Ajustes ▸ General) o con
+`{"diagnosticos_swift": true}` en el `ajustes.json` del usuario. El proyecto
+sólo puede apagarlos (`{"diagnosticos_swift": false}`).
 """
 from __future__ import annotations
 
@@ -63,6 +72,7 @@ from . import linters
 from .lsp import ClienteLSP, ServidorCaido
 
 VARIABLE = 'ALFALFA_DIAGNOSTICOS'
+VARIABLE_SWIFT = 'ALFALFA_DIAGNOSTICOS_SWIFT'
 VARIABLE_ESPERA = 'ALFALFA_DIAGNOSTICOS_ESPERA'
 ARCHIVO_AJUSTES = 'ajustes.json'
 ESPERA = 3.0
@@ -96,6 +106,11 @@ TRAMPAS_SOURCEKIT = ('buildServer.json', '.bsp', '.sourcekit-lsp', 'compile_comm
 # Permisos que puede necesitar un servidor o linter.
 FUERA = 'fuera'   # «orden fuera del sandbox»
 MODO = 'modo'     # el modo pide aprobar cada orden
+SWIFT_FUERA = 'swift'   # sourcekit-lsp: fuera del sandbox, opcional y de AlfalfaCode, no del agente
+SIN_SWIFT = ('Diagnósticos de Swift apagados (sourcekit-lsp corre fuera del sandbox): comprueba los .swift con '
+             'swift build o swift test.')
+SWIFT_NEGADO = ('Diagnósticos de Swift desactivados en esta sesión porque no se dio el permiso: comprueba los '
+                '.swift con swift build o swift test.')
 
 
 def _leer_ajustes(ruta):
@@ -124,6 +139,26 @@ def activos(raiz, hogar, forzado=None):
     if not del_usuario:
         return False
     return _leer_ajustes(Path(raiz) / '.alfalfa' / ARCHIVO_AJUSTES).get('diagnosticos') is not False
+
+
+def swift_activos(raiz, hogar, forzado=None):
+    """¿Se lanza sourcekit-lsp? Apagado por defecto: es el único que sale del sandbox.
+
+    Decide el usuario: `forzado` (--diagnosticos-swift o la app), luego
+    `ALFALFA_DIAGNOSTICOS_SWIFT` y luego su `ajustes.json` (`diagnosticos_swift`);
+    por defecto, no. El proyecto (`.alfalfa/ajustes.json`) sólo puede apagarlo.
+    """
+    if forzado is not None:
+        del_usuario = bool(forzado)
+    else:
+        variable = os.environ.get(VARIABLE_SWIFT, '').strip().lower()
+        if variable:
+            del_usuario = variable not in APAGADO
+        else:
+            del_usuario = _leer_ajustes(Path(hogar) / ARCHIVO_AJUSTES).get('diagnosticos_swift') is True
+    if not del_usuario:
+        return False
+    return _leer_ajustes(Path(raiz) / '.alfalfa' / ARCHIVO_AJUSTES).get('diagnosticos_swift') is not False
 
 
 def espera():
@@ -355,10 +390,12 @@ class Sandbox:
 class Diagnosticos:
     """Los servidores de lenguaje y linters de una sesión."""
 
-    def __init__(self, raiz, hogar, *, forzado=None, env=None, sandbox=None):
+    def __init__(self, raiz, hogar, *, forzado=None, env=None, sandbox=None, forzado_swift=None):
         self.raiz = Path(raiz).resolve()
         self.hogar = Path(hogar)
         self.forzado = forzado
+        self.forzado_swift = forzado_swift
+        self._swift_negado = False   # se negó el permiso de sourcekit-lsp: no se pregunta más en la sesión
         self._env = env
         self.sandbox = sandbox if sandbox is not None else Sandbox(self.raiz, protegidas=(self.hogar,))
         self.servidores = {}       # (lenguaje, raíz) -> ClienteLSP
@@ -398,6 +435,10 @@ class Diagnosticos:
     def activos(self):
         return not self._cerrado and activos(self.raiz, self.hogar, self.forzado)
 
+    def cambiar_swift(self, activo):
+        """El interruptor «Diagnósticos de Swift» de la app: manda el usuario; el proyecto aún puede apagarlo."""
+        self.forzado_swift = bool(activo)
+
     # --- qué hay para cada archivo ----------------------------------------
 
     def _etiqueta(self, nombre, raiz):
@@ -414,6 +455,10 @@ class Diagnosticos:
         sufijo = ruta.suffix.lower()
         pide = modos.pide_ordenes(modo)
         if sufijo in SWIFT:
+            if self._swift_negado:
+                return {'clave': ('swift', '*'), 'motivo': SWIFT_NEGADO}
+            if not swift_activos(self.raiz, self.hogar, self.forzado_swift):
+                return {'clave': ('swift', '*'), 'motivo': SIN_SWIFT}
             argv = _sourcekit(self.env)
             if not argv:
                 return None
@@ -438,9 +483,11 @@ class Diagnosticos:
                         'defaultWorkspaceType': 'compilationDatabase'}
             return {'clave': clave, 'nombre': 'sourcekit-lsp', 'etiqueta': etiqueta,
                     'argv': [argv, '--default-workspace-type', 'compilationDatabase'], 'raiz': cache / 'db',
-                    'opciones': opciones, 'aislado': False, 'carga': False, 'permiso': FUERA, 'paquete': paquete,
+                    'opciones': opciones, 'aislado': False, 'carga': False, 'permiso': SWIFT_FUERA, 'paquete': paquete,
                     'cache': cache, 'env': self.entorno_de_sourcekit(cache),
-                    'proposito': ('Lanzar sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que se '
+                    'proposito': ('Diagnósticos de Swift de AlfalfaCode (opcionales), no una acción del agente: '
+                                  'negarlo sólo los desactiva en esta sesión y el trabajo sigue igual. Lanza '
+                                  'sourcekit-lsp FUERA del sandbox para ver los errores de los .swift que se '
                                   'editen en ' + str(raiz) + ' durante esta sesión: ejecuta el compilador de Swift '
                                   'sobre esos archivos con los permisos del usuario. No lee Package.swift: '
                                   + ('los ajustes del paquete se sacan dentro del sandbox y ' if paquete is not None
@@ -509,12 +556,20 @@ class Diagnosticos:
                         etiqueta + ': necesita permiso y esta sesión no puede pedirlo; sin sus diagnósticos.')
             return False
         try:
-            await pedir(list(argv), proposito, tipo == FUERA)
+            if tipo == SWIFT_FUERA:
+                await pedir(list(argv), proposito, True, swift=True)
+            else:
+                await pedir(list(argv), proposito, tipo == FUERA)
         except (ValueError, asyncio.TimeoutError):
             self._permisos[clave] = False
-            self._decir(avisos, ('permiso',) + tuple(clave),
-                        etiqueta + ': no se lanzó porque no se dio permiso; en esta sesión no se vuelve a '
-                        'preguntar.')
+            if tipo == SWIFT_FUERA:
+                # Un «no» apaga los de Swift el resto de la sesión, en todas sus raíces: no se vuelve a preguntar.
+                self._swift_negado = True
+                self._decir(avisos, ('omitido', SWIFT_NEGADO), SWIFT_NEGADO)
+            else:
+                self._decir(avisos, ('permiso',) + tuple(clave),
+                            etiqueta + ': no se lanzó porque no se dio permiso; en esta sesión no se vuelve a '
+                            'preguntar.')
             return False
         self._permisos[clave] = True
         return True
@@ -557,10 +612,14 @@ class Diagnosticos:
             plan = self._servidor(archivo['ruta'], modo)
             if plan is not None and plan.get('motivo'):
                 self._decir(avisos, ('omitido', plan['motivo']), plan['motivo'])
-                # Si ya estaba en marcha (el archivo apareció después), se cierra: no se usa más.
-                abierto = self.servidores.pop(plan['clave'], None)
-                if abierto is not None:
-                    await abierto.cerrar()
+                # Si ya estaba en marcha (el archivo apareció después), se cierra: no se usa más. Con los de
+                # Swift apagados a mitad de sesión se cierran todos los sourcekit-lsp, de cualquier raíz.
+                claves = ([c for c in self.servidores if c[0] == 'swift'] if plan['clave'] == ('swift', '*')
+                          else [plan['clave']])
+                for clave in claves:
+                    abierto = self.servidores.pop(clave, None)
+                    if abierto is not None:
+                        await abierto.cerrar()
                 sin_servidor.append(archivo)
                 continue
             if plan is None:

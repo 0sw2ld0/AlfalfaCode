@@ -67,6 +67,8 @@ class Transport:
         self.keep_awake = None
         # {"tipo":"diagnosticos","activo":bool}: el de «Ver los errores al editar», desde la siguiente edición.
         self.diagnostics = None
+        # {"tipo":"diagnosticos_swift","activo":bool}: el de «Diagnósticos de Swift», desde la siguiente edición.
+        self.swift_diagnostics = None
         # {"tipo":"firma","activo":bool}: el de «Firmar los commits», desde el siguiente git commit.
         self.signature = None
         # Permisos que admiten «en esta sesión» (`para_sesion`).
@@ -422,6 +424,11 @@ class Transport:
                 if not isinstance(activo, bool) or self.diagnostics is None:
                     raise ValueError()
                 self.diagnostics(activo)
+            elif value.get('tipo') == 'diagnosticos_swift':
+                activo = value.get('activo')
+                if not isinstance(activo, bool) or self.swift_diagnostics is None:
+                    raise ValueError()
+                self.swift_diagnostics(activo)
             elif value.get('tipo') == 'firma':
                 activo = value.get('activo')
                 if not isinstance(activo, bool) or self.signature is None:
@@ -622,7 +629,7 @@ class CierreSeguro:
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager, diagnostics, keep_awake, signature
+    from .terminal import TerminalManager, diagnostics, keep_awake, signature, swift_diagnostics
     manager = None
     reader_task = None
     pipe = None
@@ -648,7 +655,8 @@ async def run(args, transport):
                                   origen_cuybrowser=getattr(args, 'origen_cuybrowser', None),
                                   budget=getattr(args, 'presupuesto', None),
                                   monthly_budget=getattr(args, 'presupuesto_mes', None),
-                                  diagnosticos=diagnostics(args), firma=signature(args))
+                                  diagnosticos=diagnostics(args), firma=signature(args),
+                                  diagnosticos_swift=swift_diagnostics(args))
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -713,6 +721,8 @@ async def run(args, transport):
         transport.signature = lambda activo: manager.cola_encargos.cambiar('firma', activo)
         # En solo lectura no hay diagnósticos, pero el interruptor de la app se acepta igual.
         transport.diagnostics = lambda activo: manager.cola_encargos.cambiar('diagnosticos', activo)
+        transport.swift_diagnostics = lambda activo: manager.cola_encargos.cambiar('diagnosticos', activo,
+                                                                                    metodo='cambiar_swift')
 
         def cambiar_contexto(modo):
             try:

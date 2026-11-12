@@ -48,6 +48,12 @@ def guion(carpeta, nombre, codigo):
     return ruta
 
 
+@pytest.fixture(autouse=True)
+def _swift_encendido(monkeypatch):
+    """Estas pruebas miran sourcekit-lsp: lo encienden (viene apagado). Las del apagado lo quitan."""
+    monkeypatch.setenv(modulo.VARIABLE_SWIFT, '1')
+
+
 @pytest.fixture
 def simulados(tmp_path, monkeypatch):
     """Qué servidor simulado responde a cada nombre: {nombre: ruta}. Ningún linter del PATH entra."""
@@ -673,14 +679,20 @@ def test_sourcekit_pide_salir_del_sandbox_una_vez_por_raiz(sourcekit, sesion, pe
         (raiz / nombre / 'Package.swift').write_text('// swift-tools-version:5.9\n')
     editar(rt, 'A/Sources/a.swift', 'let a = 1\n')
     editar(rt, 'A/Sources/a.swift', 'let a = 2\n')
-    assert len(pedidas) == 1 and pedidas[0]['motivo'] == 'salir_sandbox' and pedidas[0]['sin_sandbox']
+    # Su propio motivo: no es el «Salir del sandbox» de las órdenes del agente.
+    assert len(pedidas) == 1 and pedidas[0]['motivo'] == 'diagnosticos_swift' and pedidas[0]['sin_sandbox']
+    assert 'no una acción del agente' in pedidas[0]['purpose']
     assert str(raiz / 'A') in pedidas[0]['purpose']
     respuesta['si'] = False
     tercero = editar(rt, 'B/Sources/b.swift', 'let b = ERROR\n')
     cuarto = editar(rt, 'B/Sources/b.swift', 'let b = 2\n')
     assert len(pedidas) == 2, 'otra raíz, otra pregunta; el «no» no se repite'
-    assert 'no se dio permiso' in tercero['diagnosticos']['sin_respuesta'][0]
+    assert 'no se dio el permiso' in tercero['diagnosticos']['sin_respuesta'][0]
     assert 'diagnosticos' not in cuarto
+    # Negado, los de Swift quedan apagados toda la sesión: tampoco se pregunta por la primera raíz.
+    quinto = editar(rt, 'A/Sources/a.swift', 'let a = 3\n')
+    assert len(pedidas) == 2 and 'diagnosticos' not in quinto
+    assert not rt.manager.diagnosticos.servidores
 
 
 def test_sourcekit_en_omitir_permisos_no_pregunta(sourcekit, sesion, monkeypatch):
@@ -1118,3 +1130,114 @@ def test_control_los_manifiestos_atacan_si_sourcekit_los_evaluara(tmp_path, mani
             await cliente.cerrar()
     asyncio.run(con_el_diseno_viejo())
     assert marca.exists(), 'con el diseño viejo evil debería ejecutarse: el manifiesto de prueba ya no ataca'
+
+
+
+# --- Diagnósticos de Swift apagados por defecto -------------------------------------
+
+
+def test_swift_viene_apagado_y_sin_tarjeta(sourcekit, sesion, permisos, monkeypatch):
+    """Como OpenCode: editar un .swift con el ajuste por defecto no pide nada ni lanza sourcekit-lsp."""
+    monkeypatch.delenv(modulo.VARIABLE_SWIFT, raising=False)
+    raiz, rt = sesion
+    pedidas, _ = permisos
+    (raiz / 'Sources').mkdir()
+    (raiz / 'Package.swift').write_text('// swift-tools-version:5.9\n')
+    primero = editar(rt, 'Sources/a.swift', 'let a = ERROR\n')
+    segundo = editar(rt, 'Sources/a.swift', 'let a = 1\n')
+    assert pedidas == [] and not sourcekit.exists(), 'ni tarjeta ni servidor'
+    (aviso,) = primero['diagnosticos']['sin_respuesta']
+    assert aviso == modulo.SIN_SWIFT and 'swift build' in aviso and 'swift test' in aviso
+    assert 'diagnosticos' not in segundo, 'el recordatorio sale una vez por sesión'
+
+
+@pytest.mark.parametrize(('variable', 'usuario', 'proyecto', 'forzado', 'esperado'), [
+    (None, None, None, None, False),        # por defecto, apagado
+    ('1', None, None, None, True),
+    ('0', {'diagnosticos_swift': True}, None, None, False),   # la variable manda sobre el archivo
+    (None, {'diagnosticos_swift': True}, None, None, True),
+    (None, {'diagnosticos_swift': 'sí'}, None, None, False),  # sólo true de verdad
+    (None, None, None, True, True),          # --diagnosticos-swift o la app
+    (None, {'diagnosticos_swift': True}, None, False, False),  # la app lo apaga
+    ('1', None, {'diagnosticos_swift': False}, None, False),   # el proyecto apaga
+    (None, None, {'diagnosticos_swift': True}, None, False),   # pero nunca enciende
+    (None, None, {'diagnosticos_swift': False}, True, False),  # ni siquiera contra la app
+])
+def test_quien_enciende_los_de_swift(tmp_path, monkeypatch, variable, usuario, proyecto, forzado, esperado):
+    hogar, raiz = tmp_path / 'hogar', tmp_path / 'proyecto'
+    (raiz / '.alfalfa').mkdir(parents=True)
+    hogar.mkdir()
+    if variable is None:
+        monkeypatch.delenv(modulo.VARIABLE_SWIFT, raising=False)
+    else:
+        monkeypatch.setenv(modulo.VARIABLE_SWIFT, variable)
+    if usuario is not None:
+        (hogar / 'ajustes.json').write_text(json.dumps(usuario))
+    if proyecto is not None:
+        (raiz / '.alfalfa' / 'ajustes.json').write_text(json.dumps(proyecto))
+    assert modulo.swift_activos(raiz, hogar, forzado) is esperado
+
+
+def test_el_interruptor_de_la_app_enciende_y_apaga_swift(sourcekit, sesion, permisos, monkeypatch):
+    monkeypatch.delenv(modulo.VARIABLE_SWIFT, raising=False)
+    raiz, rt = sesion
+    pedidas, _ = permisos
+    diagnosticos = rt.manager.diagnosticos
+    diagnosticos.cambiar_swift(True)
+    editar(rt, 'a.swift', 'let a = 1\n')
+    assert len(pedidas) == 1 and pedidas[0]['motivo'] == 'diagnosticos_swift'
+    diagnosticos.cambiar_swift(False)
+    resultado = editar(rt, 'a.swift', 'let a = 2\n')
+    assert resultado['diagnosticos']['sin_respuesta'] == [modulo.SIN_SWIFT]
+    assert not diagnosticos.servidores
+
+
+def test_la_tarjeta_de_swift_tiene_su_motivo(sesion):
+    """El permiso que llega a la app: motivo propio, fuera del sandbox y el aviso de que es opcional."""
+    raiz, rt = sesion
+    pedidas = []
+
+    async def approve(peticion):
+        pedidas.append(peticion)
+    rt.approve = approve
+    asyncio.run(rt.tools._permiso_de_diagnosticos(['sourcekit-lsp'], 'Diagnósticos de Swift…', True, swift=True))
+    asyncio.run(rt.tools._permiso_de_diagnosticos(['swiftlint'], 'Pasar…', True))
+    assert pedidas[0]['motivo'] == 'diagnosticos_swift' and pedidas[0]['motivos'] == ['diagnosticos_swift']
+    assert pedidas[0]['sin_sandbox']
+    assert pedidas[1]['motivo'] == 'salir_sandbox', 'los demás siguen igual'
+
+
+def test_la_orden_lleva_el_flag(tmp_path):
+    from alfalfa.terminal import swift_diagnostics
+    from types import SimpleNamespace
+    assert swift_diagnostics(SimpleNamespace(diagnosticos_swift=True)) is True
+    assert swift_diagnostics(SimpleNamespace(diagnosticos_swift=False)) is None
+    assert swift_diagnostics(SimpleNamespace()) is None
+
+
+def test_la_app_cambia_los_de_swift_en_vivo():
+    from alfalfa.stdio import Transport
+    recibidos = []
+    t = Transport(io.StringIO())
+    t.swift_diagnostics = recibidos.append
+    t.receive(json.dumps({'tipo': 'diagnosticos_swift', 'activo': True}))
+    t.receive(json.dumps({'tipo': 'diagnosticos_swift', 'activo': False}))
+    t.receive(json.dumps({'tipo': 'diagnosticos_swift', 'activo': 'sí'}))  # no es un booleano: error, no cambia
+    assert recibidos == [True, False]
+
+
+def test_negar_los_diagnosticos_no_bloquea_el_turno(sesion):
+    """Un «no» a los diagnósticos de Swift no cuenta como permiso negado al agente."""
+    raiz, rt = sesion
+
+    class Politica:
+        denied = 0
+
+        async def __call__(self, peticion):
+            self.denied += 1
+            raise ValueError('Comando rechazado; no se ejecutó.')
+
+    rt.approval_policy = politica = Politica()
+    with pytest.raises(ValueError):
+        asyncio.run(rt.tools._permiso_de_diagnosticos(['sourcekit-lsp'], 'Diagnósticos de Swift…', True, swift=True))
+    assert politica.denied == 0
