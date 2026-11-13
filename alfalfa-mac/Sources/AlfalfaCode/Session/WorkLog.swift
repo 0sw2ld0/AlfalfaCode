@@ -84,7 +84,8 @@ struct WorkLog: View, Equatable {
         if !calls.isEmpty { return ToolCalls.summary(calls) }
         // Sólo avisos del sistema (un proceso en segundo plano terminó, un reintento).
         if case let .note(event)? = entries.first {
-            return entries.count == 1 ? event.title : event.title + " · y \(entries.count - 1) más"
+            let title = TextPreview.line(event.title)
+            return entries.count == 1 ? title : title + " · y \(entries.count - 1) más"
         }
         return "Sin acciones"
     }
@@ -261,7 +262,8 @@ private struct NoteRow: View {
             Button { open.toggle() } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.muted).frame(width: 14)
-                    Text(event.title).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    Text(TextPreview.line(event.title)).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                        .lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 4).contentShape(Rectangle())
