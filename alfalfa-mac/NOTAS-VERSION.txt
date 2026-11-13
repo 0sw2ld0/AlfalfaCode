@@ -1,1 +1,1 @@
-Crear una rama o hacer un commit ya no pregunta cada vez: la tarjeta ofrece «No volver a preguntar por git commit …», como Codex. Queda una regla en ~/.alfalfa/reglas.toml y esas órdenes corren fuera del sandbox sin preguntar. No se ofrece tras leer contenido externo ni para órdenes peligrosas.
+Crear ramas, hacer commits, stash, merge o tags ya no pide permiso: el sandbox sólo protege los hooks y la config de .git, como Claude Code. git config, git init, push y pull siguen preguntando, y en ellos sirve «No volver a preguntar».
