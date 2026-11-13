@@ -7,15 +7,21 @@ struct RunningLine: View {
     // MARK: - Propiedades
 
     let since: Double
+    /// Segundos a partir de los que se explica que la orden puede tardar.
+    static let slowAfter: Double = 20
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
+            let elapsed = context.date.timeIntervalSince1970 - since
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Ejecutándose · " + ToolEvent.durationText(context.date.timeIntervalSince1970 - since))
+                Text("Ejecutándose · " + ToolEvent.durationText(elapsed))
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.secondary).monospacedDigit()
-                Text("Compilar o abrir una app puede tardar varios minutos.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                // Sólo si de verdad tarda: salía en un `git push` de 2 segundos.
+                if elapsed >= Self.slowAfter {
+                    Text("Algunas órdenes, como compilar o abrir una app, tardan varios minutos.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                }
             }
         }
         .accessibilityElement(children: .combine)

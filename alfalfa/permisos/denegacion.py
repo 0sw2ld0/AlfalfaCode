@@ -25,6 +25,11 @@ Diferencias intencionales con Codex:
   '…' failed: No such file or directory», código 71), el texto dice «sandbox»
   sólo porque es quien lanza la orden. No es un bloqueo: sin sandbox fallaría
   igual, así que no se ofrece el reintento.
+- La palabra «sandbox» sola no cuenta: aparecía en salidas normales (ruff o
+  un grep que citan código sobre el sandbox) y ofrecía repetir sin sandbox una
+  orden que sólo había fallado por sí misma. Cuentan los avisos propios de
+  Seatbelt: una línea «Sandbox: proceso(pid) deny(1) …», «deny(1)» y
+  «sandbox_apply» (`_SEATBELT`).
 """
 from __future__ import annotations
 
@@ -35,7 +40,6 @@ SANDBOX_DENIED_KEYWORDS = (
     'permission denied',
     'read-only file system',
     'seccomp',
-    'sandbox',
     'landlock',
     'failed to write file',
     # Launch Services bloqueado por Seatbelt (open, open -a).
@@ -47,6 +51,8 @@ SANDBOX_DENIED_KEYWORDS = (
     'cannot be opened for an unexpected reason',
 )
 QUICK_REJECT_EXIT_CODES = (2, 126, 127)
+# Lo que escribe Seatbelt cuando deniega: «Sandbox: swift-build(123) deny(1) file-write-create /x».
+_SEATBELT = re.compile(r'(?:^|\n)\s*sandbox: |deny\(1\)|sandbox_apply', re.IGNORECASE)
 # sandbox-exec no pudo lanzar el programa por algo ajeno al sandbox.
 _LANZAMIENTO_FALLIDO = re.compile(
     r"sandbox-exec: execvp\(\) of '.*?' failed: (?:no such file or directory|not a directory|exec format error)",
@@ -62,8 +68,9 @@ def is_likely_executor_managed_sandbox_denied(exit_code, stdout='', stderr='', a
     if exit_code == 0:
         return False
     for section in (stderr, stdout, aggregated):
-        lower = sin_fallos_de_lanzamiento(section).lower()
-        if any(needle in lower for needle in SANDBOX_DENIED_KEYWORDS):
+        text = sin_fallos_de_lanzamiento(section)
+        lower = text.lower()
+        if any(needle in lower for needle in SANDBOX_DENIED_KEYWORDS) or _SEATBELT.search(text):
             return True
     return False
 
