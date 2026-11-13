@@ -9,9 +9,11 @@ política, salvo la expresión regular que protege `.git`, que se escapa.
 Adaptaciones respecto a Codex, todas en este módulo (los .sbpl son copia exacta):
 - Lectura de todo el disco y escritura sólo en tres raíces fijas: la carpeta de
   trabajo resuelta, $TMPDIR resuelto y /private/tmp.
-- `.git` queda de solo lectura en la raíz y en cualquier subcarpeta de la
-  carpeta de trabajo (Codex lo protege sólo en la raíz), y además con una
-  denegación final para que $TMPDIR o /private/tmp no la reabran cuando la
+- De cada `.git`, en la raíz y en cualquier subcarpeta de la carpeta de trabajo,
+  quedan de solo lectura el propio `.git`, sus `hooks` y sus `config*`
+  (`git_regexes`), como el sandbox de Claude Code; Codex protege `.git` entera y
+  por eso crear una rama o un commit le pide salir del sandbox. Además hay una
+  denegación final para que $TMPDIR o /private/tmp no las reabran cuando la
   carpeta de trabajo vive dentro de ellos.
 - La expresión depende de la ruta, así que no se puede renombrar ningún
   directorio que la cambie: los antecesores de cada `.git` anidado (hallados al
@@ -94,6 +96,28 @@ def protected_metadata_name_regex(root, name, nested=True):
     prefix = '' if root == '/' else regex_escape(root)
     depth = '(.*/)?' if nested else ''
     return '^' + prefix + '/' + depth + _sin_mayusculas(name) + '(/.*)?$'
+
+
+def git_regexes(root, nested=True):
+    """Lo que se protege de cada `.git`, como el sandbox de Claude Code: no toda la carpeta, sólo
+    lo que hace que git ejecute código fuera del sandbox o que la apunta a otro sitio.
+
+    - el propio `.git` (directorio o archivo puntero de un worktree): no se crea, renombra,
+      borra ni reescribe, así nada lo saca de la protección ni lo redirige a otro gitdir;
+    - cualquier `hooks` dentro de él (también `modules/*/hooks` de los submódulos);
+    - cualquier `config*` (config, config.lock, config.worktree, modules/*/config), que puede
+      fijar core.hooksPath, core.fsmonitor, core.sshCommand o filtros.
+
+    El resto (HEAD, refs, objects, index, logs, ORIG_HEAD…) son datos: crear ramas, commits,
+    stash, merge o rebase funcionan dentro del sandbox sin pedir permiso."""
+    root = str(root)
+    while len(root) > 1 and root.endswith('/'):
+        root = root[:-1]
+    prefix = '' if root == '/' else regex_escape(root)
+    base = '^' + prefix + '/' + ('(.*/)?' if nested else '') + _sin_mayusculas('.git')
+    return [base + '$',
+            base + '/(.*/)?' + _sin_mayusculas('hooks') + '(/.*)?$',
+            base + '/(.*/)?' + _sin_mayusculas('config') + '[^/]*$']
 
 
 def _policy_regex(regex):
@@ -286,7 +310,9 @@ class SeatbeltSandbox:
         protegidas = hogares_protegidos((*self.protegidas, *habilidades))
         comprobar_enlaces_del_hogar(protegidas)
         workspace = roots[0]
-        protected = [_policy_regex(protected_metadata_name_regex(workspace, name)) for name in PROTECTED_METADATA]
+        protected = [_policy_regex(rx) for name in PROTECTED_METADATA
+                     for rx in (git_regexes(workspace) if name == '.git'
+                                else [protected_metadata_name_regex(workspace, name)])]
         protected.extend(_policy_regex(protected_metadata_name_regex(root, name))
                          for root in roots[1:] for name in PROTECTED_METADATA if name != '.git')
         params, components, anchors = [], [], []
