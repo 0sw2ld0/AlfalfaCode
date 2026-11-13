@@ -5,9 +5,13 @@ Como la revisión en segundo plano de Hermes Agent (Nous Research, MIT), pero:
 - sólo después de un turno que cerró con `wrap_up` y que tuvo señales de aprendizaje
   (muchos pasos, un fallo superado o una corrección del usuario), y una vez cerrado el
   turno: `turno_terminado` sale antes y Detener no lo toca (TerminalManager.repasar);
+- como mucho `MAX_REVISIONES` (3) por sesión, contando sólo las que llegan a llamar al
+  modelo;
 - con el mismo proveedor y, si lo hay, el modelo más barato de su familia en el
   catálogo (o el de `modelo_revision` en los ajustes, del mismo proveedor). Con un
-  proveedor de plan o local (sin coste por token) sólo corre con `modelo_revision`;
+  proveedor de plan o local (sin coste por token), el de la sesión: es una sola llamada
+  corta y entra en el plan. Antes no corría sin `modelo_revision`, y con Ollama Cloud
+  (casi todas las sesiones) no se aprendía nunca nada;
 - sin razonamiento (`think: false`) y con la salida acotada;
 - pasa por el presupuesto de la sesión contando la entrada y la salida máxima: si no
   alcanza no corre;
@@ -32,13 +36,18 @@ from .rutas import RutaInvalida
 # Corto: si llega otro mensaje se cancela, y en la terminal no retiene la salida mucho rato.
 TIEMPO = 20
 SALIDA = 2000
+# Como mucho tantas pasadas por sesión: en encargos largos casi todos los turnos tienen
+# señales, y con tres basta para recoger lo que haya. Las lecciones que pide el usuario
+# («desde ahora…») las propone el agente en el mismo turno y no dependen de esto.
+MAX_REVISIONES = 3
 MAX_PASOS = 40
 MAX_MEMORIA = 3
 # Correcciones del usuario: el turno vale la pena aunque fuera corto.
 CORRECCION = re.compile(
     r'(?i)\b(?:no,|eso no|así no|te equivocaste|está mal|mal hecho|en realidad|prefiero|no uses|no hagas|'
     r'siempre usa|nunca uses|recuerda que|that\'?s wrong|not like that|actually|i prefer|don\'?t use|'
-    r'always use|never use|remember that)')
+    r'always use|never use|remember that|desde ahora|de ahora en adelante|a partir de ahora|no vuelvas a|'
+    r'la próxima vez|recuérdalo|from now on|next time|don\'?t do that again)')
 # Lo que no cuenta como paso de trabajo.
 NO_CUENTAN = {'wrap_up', 'propose_session', 'update_plan', 'memoria', 'habilidad'}
 
@@ -49,7 +58,10 @@ respuesta correcta es no guardar nada: devuelve listas vacías.
 Memoria (almacenes usuario, entorno y proyecto, con tope de caracteres): sólo preferencias
 que el usuario expresó o corrigió, o hechos estables del Mac o del proyecto que costó
 descubrir. Nada del progreso de la tarea, nada que ya esté en la memoria actual, nada de
-claves. Entradas de una o dos frases. accion add (contenido), patch (buscar y contenido) o
+claves. Cada entrada es una lección en una o dos frases: la regla, por qué (lo que pasó o lo
+que dijo el usuario) y cómo aplicarla. Por ejemplo: «Sube las ramas con git push origin
+<rama>, sin -u. Por qué: el upstream escribe .git/config y el sandbox lo protege. Cómo:
+en cada push de una rama nueva.» accion add (contenido), patch (buscar y contenido) o
 remove (buscar).
 
 Habilidades: sólo si "comprobacion_en_verde" es true y el turno fue un procedimiento de
@@ -121,8 +133,8 @@ def _total(precio):
 
 def modelo_de_revision(proveedor, nombre, elegido=None):
     """El modelo (sin prefijo) de la revisión: el elegido si es del mismo proveedor; si no, el más
-    barato de la familia del de la sesión en el catálogo; si no hay otro más barato, el mismo.
-    None si el proveedor no cobra por token (plan, local) y no se eligió uno: no se gasta cuota."""
+    barato de la familia del de la sesión en el catálogo; si no hay otro más barato, o el
+    proveedor no cobra por token (plan, local), el mismo de la sesión."""
     from .. import proveedores
     if elegido:
         ident, propio = proveedores.separar(elegido)
@@ -133,7 +145,7 @@ def modelo_de_revision(proveedor, nombre, elegido=None):
     except Exception:
         actual = None
     if actual is None:
-        return None  # plan o local: la cuota del usuario sólo se gasta con un modelo elegido a propósito
+        return nombre or None  # plan o local: el de la sesión, que ya entra en el plan
     from .. import catalogo
     try:
         datos = catalogo.proveedor(proveedor.id) or {}
@@ -226,6 +238,9 @@ async def _revisar(aprendizaje, rt):
     senal = senales(rt, desde)
     if not merece(senal):
         return {'estado': 'sin_senales', **senal}
+    hechas = int(task.get('revisiones_hechas') or 0)
+    if hechas >= MAX_REVISIONES:
+        return {'estado': 'tope_de_sesion', 'hechas': hechas}
     verde = aprendizaje.verde(rt)
     proveedor, nombre = proveedores.para_modelo(task.get('model'))
     modelo = modelo_de_revision(proveedor, nombre, ajustes.get('modelo_revision'))
@@ -247,6 +262,7 @@ async def _revisar(aprendizaje, rt):
             salida = catalogo.coste(rt._precio, 0, SALIDA) or 0.0
             if cuenta.agotado(rt._entrada_estimada(payload) + salida):
                 return {'estado': 'sin_presupuesto'}
+        task['revisiones_hechas'] = hechas + 1
         task['activity'] = 'Repasando lo aprendido'
         aprendizaje.manager.save()
         if getattr(aprendizaje.manager, 'transport', None) is None:
