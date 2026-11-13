@@ -44,6 +44,24 @@ public enum DiffParser {
         return files
     }
 
+    /// La lista completa de `git diff --numstat` con las líneas del diff (recortado) que haya de
+    /// cada archivo: así los totales y el número de archivos son los de verdad aunque el diff no
+    /// se haya leído entero. Sin filas válidas, `detailed` tal cual.
+    public static func merge(numstat: String, detailed: [DiffFile]) -> [DiffFile] {
+        let byPath = Dictionary(detailed.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        var files: [DiffFile] = []
+        for row in numstat.split(separator: "\n") {
+            let parts = row.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3 else { continue }
+            let path = String(parts[2])
+            var file = byPath[path] ?? DiffFile(path: path)
+            file.added = Int(parts[0]) ?? 0  // «-» en los binarios
+            file.removed = Int(parts[1]) ?? 0
+            files.append(file)
+        }
+        return files.isEmpty ? detailed : files
+    }
+
     private static func append(_ files: inout [DiffFile], _ kind: DiffLine.Kind, _ text: String, _ maxLines: Int) {
         let index = files.count - 1
         guard files[index].lines.count < maxLines else { return }
@@ -61,8 +79,19 @@ public struct GitSnapshot: Equatable, Sendable {
 }
 
 public enum Workspace {
+    /// Lo que se lee de `git diff` para el panel. Un repositorio con miles de archivos cambiados
+    /// daba más de 100 MB: leerlo y convertirlo a texto en cada refresco dejaba la app al 30 % de CPU.
+    public static let diffLimit = 1_000_000
+
     /// Ejecuta una orden de solo lectura y devuelve stdout, o nil si falla.
     static func capture(_ executable: String, _ arguments: [String], in directory: URL) async -> String? {
+        await capture(executable, arguments, in: directory, limit: nil)?.text
+    }
+
+    /// Como `capture`, pero deja de leer y termina la orden al pasar de `limit` bytes; entonces
+    /// el texto llega hasta el último salto de línea leído y `truncated` es true.
+    static func capture(_ executable: String, _ arguments: [String], in directory: URL,
+                        limit: Int?) async -> (text: String, truncated: Bool)? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 let process = Process()
@@ -80,9 +109,29 @@ public enum Workspace {
                 process.standardError = FileHandle.nullDevice
                 process.standardInput = FileHandle.nullDevice
                 do { try process.run() } catch { continuation.resume(returning: nil); return }
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let handle = pipe.fileHandleForReading
+                var data = Data()
+                var truncated = false
+                while true {
+                    let chunk = handle.availableData
+                    if chunk.isEmpty { break }
+                    data.append(chunk)
+                    if let limit, data.count > limit {
+                        truncated = true
+                        process.terminate()
+                        break
+                    }
+                }
+                try? handle.close()
                 process.waitUntilExit()
-                continuation.resume(returning: process.terminationStatus == 0 ? String(decoding: data, as: UTF8.self) : nil)
+                if truncated {
+                    // Hasta la última línea completa: nunca media línea ni medio carácter.
+                    if let end = data.lastIndex(of: UInt8(ascii: "\n")) { data = data[..<end] }
+                    continuation.resume(returning: (String(decoding: data, as: UTF8.self), true))
+                } else {
+                    continuation.resume(returning: process.terminationStatus == 0
+                                        ? (String(decoding: data, as: UTF8.self), false) : nil)
+                }
             }
         }
     }
@@ -122,10 +171,17 @@ public enum Workspace {
         }
         let branch = await capture(git, ["rev-parse", "--abbrev-ref", "HEAD"], in: directory)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let diff = await capture(git, ["diff", "--no-ext-diff", "--no-textconv", "--no-color"], in: directory)
+        let diff = await capture(git, ["diff", "--no-ext-diff", "--no-textconv", "--no-color"], in: directory,
+                                 limit: diffLimit)
         // La redacción va antes de interpretar el diff: ninguna línea expuesta contiene la clave.
-        let clean = Redactor.clean(diff ?? "", environment: environment)
-        return GitSnapshot(branch: branch?.isEmpty == false ? branch : nil, files: DiffParser.parse(clean))
+        let clean = Redactor.clean(diff?.text ?? "", environment: environment)
+        var files = DiffParser.parse(clean)
+        if diff?.truncated == true,
+           let numstat = await capture(git, ["diff", "--numstat", "--no-ext-diff", "--no-textconv", "--no-color"],
+                                       in: directory) {
+            files = DiffParser.merge(numstat: Redactor.clean(numstat, environment: environment), detailed: files)
+        }
+        return GitSnapshot(branch: branch?.isEmpty == false ? branch : nil, files: files)
     }
 
     public static func ollamaURL(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {

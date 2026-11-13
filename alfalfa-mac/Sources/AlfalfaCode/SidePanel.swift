@@ -4,6 +4,8 @@ import SwiftUI
 /// Panel derecho: Contexto, Entorno y Cambios, cada uno plegable como en Claude Code.
 /// Lo plegado se recuerda entre sesiones.
 struct SidePanel: View {
+    /// Archivos cambiados que se pintan en «Cambios»; el resto se cuenta.
+    static let shownFiles = 60
     let folder: String?
     let snapshot: GitSnapshot?
     let ollama: Bool?
@@ -395,8 +397,14 @@ struct SidePanel: View {
     @ViewBuilder private var changes: some View {
         if let snapshot, !snapshot.files.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(snapshot.files) { file in
+                // Miles de archivos cambiados (un borrado masivo) colgaban el panel: se enseñan los
+                // primeros y cuántos faltan; los totales siguen siendo los de todos.
+                ForEach(snapshot.files.prefix(Self.shownFiles)) { file in
                     FileDiff(file: file)
+                }
+                if snapshot.files.count > Self.shownFiles {
+                    Text("y \(snapshot.files.count - Self.shownFiles) archivos más")
+                        .font(.system(size: 12)).foregroundStyle(Theme.muted)
                 }
                 Text("Sin commit: tú decides en git.").font(.system(size: 12)).foregroundStyle(Theme.muted)
                     .padding(.top, 4)
