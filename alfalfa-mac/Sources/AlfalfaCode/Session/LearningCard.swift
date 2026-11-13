@@ -58,19 +58,39 @@ struct LearningCard: View {
     }
 }
 
-/// Un diff unificado entero (el motor rechaza antes lo que no cabe: nunca se enseña recortado),
-/// con las líneas añadidas y quitadas en color.
+/// Un diff unificado con las líneas añadidas y quitadas en color. Se pintan como mucho
+/// `maxLines` líneas de `maxLineLength` caracteres (TextPreview): un diff de miles de líneas o una
+/// línea de 50 KB dejaban a SwiftUI midiendo sin fin. Lo entero, siempre a mano con «Ver todo».
 struct DiffBlock: View {
 
     // MARK: - Propiedades
+
+    static let maxLines = 400
+    /// Más que el recorte de la línea de tiempo (300 + «…»): lo ya acotado no lleva otro «Ver todo».
+    static let maxLineLength = 1000
 
     let diff: String
     var maxHeight: CGFloat = 220
 
     var body: some View {
+        let preview = TextPreview(diff, maxLines: Self.maxLines, maxLineLength: Self.maxLineLength)
+        VStack(alignment: .leading, spacing: 4) {
+            lines(preview.shown)
+            if preview.truncated {
+                SeeAllButton(label: preview.hiddenLines > 0 ? "Ver todo (\(preview.totalLines) líneas)" : "Ver todo",
+                             title: "Cambios", text: diff)
+            }
+        }
+    }
+
+    // MARK: - Métodos privados
+
+    private func lines(_ shown: String) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                ForEach(Array(shown.split(separator: "\n", omittingEmptySubsequences: false).enumerated()),
+                        id: \.offset) { _, part in
+                    let line = String(part)
                     Text(line.isEmpty ? " " : line).font(.system(size: 11.5, design: .monospaced))
                         .foregroundStyle(color(line)).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -81,14 +101,6 @@ struct DiffBlock: View {
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
         .accessibilityLabel("Cambios")
     }
-
-    // MARK: - Propiedades privadas
-
-    private var lines: [String] {
-        diff.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    }
-
-    // MARK: - Métodos privados
 
     private func color(_ line: String) -> Color {
         if line.hasPrefix("+++") || line.hasPrefix("---") { return Theme.muted }

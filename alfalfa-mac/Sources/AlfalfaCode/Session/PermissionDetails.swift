@@ -83,9 +83,14 @@ struct McpCallDetail: View {
             ForEach(call.arguments, id: \.key) { argument in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(argument.key + ":").fontWeight(.semibold).foregroundStyle(Theme.secondary)
-                    Text(argument.value).lineLimit(4).truncationMode(.tail)
+                    // Acotado: un argumento puede ser un documento entero.
+                    Text(TextPreview(argument.value, maxLines: 4).shown).lineLimit(4).truncationMode(.tail)
                 }
                 .font(Theme.mono)
+            }
+            if call.arguments.contains(where: { TextPreview($0.value, maxLines: 4).truncated }) {
+                SeeAllButton(label: "Ver todos los argumentos", title: call.server + " · " + call.tool,
+                             text: call.arguments.map { $0.key + ": " + $0.value }.joined(separator: "\n\n"))
             }
         }
         .textSelection(.enabled)

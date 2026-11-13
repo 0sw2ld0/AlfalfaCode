@@ -278,12 +278,8 @@ struct SidePanel: View {
     }
 
     static func stepText(_ step: AgentEvent) -> String {
-        let first = step.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? ""
-        switch step.role {
-        case "agent", "assistant": return "› " + first
-        case "tool": return first.hasPrefix("Inicio ") ? "· " + String(first.dropFirst(7)) : "  " + first
-        default: return "  " + first
-        }
+        // Acotado: el primer paso es el encargo entero (hasta 20 000 caracteres en una línea).
+        TextPreview.subagentStep(step)
     }
 
     // MARK: - Procesos
