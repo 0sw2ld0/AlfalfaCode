@@ -6,6 +6,8 @@ import SwiftUI
 struct SidePanel: View {
     /// Archivos cambiados que se pintan en «Cambios»; el resto se cuenta.
     static let shownFiles = 60
+    /// Hasta cuántos archivos cambiados se enseñan abiertos.
+    static let openFiles = 8
     let folder: String?
     let snapshot: GitSnapshot?
     let ollama: Bool?
@@ -395,8 +397,9 @@ struct SidePanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 // Miles de archivos cambiados (un borrado masivo) colgaban el panel: se enseñan los
                 // primeros y cuántos faltan; los totales siguen siendo los de todos.
+                // Con muchos archivos, plegados: se abre el que interese.
                 ForEach(snapshot.files.prefix(Self.shownFiles)) { file in
-                    FileDiff(file: file)
+                    FileDiff(file: file, startsOpen: snapshot.files.count <= Self.openFiles)
                 }
                 if snapshot.files.count > Self.shownFiles {
                     Text("y \(snapshot.files.count - Self.shownFiles) archivos más")
@@ -572,9 +575,22 @@ struct ContextBar: View {
 }
 
 /// Diferencias de un archivo; se pliega pulsando su nombre.
+/// Un archivo cambiado del panel. El diff se pinta como **un solo** texto con color por línea, y no
+/// como un texto seleccionable por línea: con miles de líneas (6.692 archivos en CuyWorld) el
+/// sistema de foco de SwiftUI recorría todas esas vistas con cada tecla y la app se colgaba.
 struct FileDiff: View {
+    /// Líneas que se pintan; el resto se cuenta.
+    static let shownLines = 80
+    /// Caracteres de cada línea: antes se cortaba a una línea de pantalla.
+    static let lineLength = 240
+
     let file: DiffFile
-    @State private var open = true
+    @State private var open: Bool
+
+    init(file: DiffFile, startsOpen: Bool = true) {
+        self.file = file
+        _open = State(initialValue: startsOpen)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -588,19 +604,30 @@ struct FileDiff: View {
             }
             .buttonStyle(.plain)
             if open {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(file.lines) { line in
-                        Text(line.text.isEmpty ? " " : line.text)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .foregroundStyle(color(line.kind))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(background(line.kind))
-                            .lineLimit(1).truncationMode(.tail)
-                    }
+                Text(lines)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                if file.lines.count > Self.shownLines {
+                    Text("… y \(file.lines.count - Self.shownLines) líneas más")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 }
-                .textSelection(.enabled)
             }
         }
+    }
+
+    // MARK: - Propiedades privadas
+
+    private var lines: AttributedString {
+        var text = AttributedString()
+        for (index, line) in file.lines.prefix(Self.shownLines).enumerated() {
+            let raw = line.text.isEmpty ? " " : String(line.text.prefix(Self.lineLength))
+            var part = AttributedString(raw + (index + 1 < min(file.lines.count, Self.shownLines) ? "\n" : ""))
+            part.foregroundColor = color(line.kind)
+            if line.kind == .added || line.kind == .removed { part.backgroundColor = background(line.kind) }
+            text.append(part)
+        }
+        return text
     }
 
     private func color(_ kind: DiffLine.Kind) -> Color {

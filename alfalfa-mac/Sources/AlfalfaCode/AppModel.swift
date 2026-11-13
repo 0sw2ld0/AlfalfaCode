@@ -34,6 +34,12 @@ struct SidebarGroup: Identifiable {
     var name: String { title ?? URL(fileURLWithPath: folder).lastPathComponent }
 }
 
+/// El texto de Nuevo encargo; lo observa sólo el cuadro (ver `AppModel.newDraft`).
+@MainActor
+final class DraftText: ObservableObject {
+    @Published var text = ""
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var route: Route = .new {
@@ -73,7 +79,24 @@ final class AppModel: ObservableObject {
     @Published var readOnly = false
     /// Modo de permisos para los encargos nuevos.
     @Published var mode = PermissionMode.auto.rawValue
-    @Published var draft = ""
+    /// Lo que se escribe en Nuevo encargo, aparte del modelo: con cada tecla sólo se redibuja el
+    /// cuadro. Cuando vivía aquí como @Published, cada letra recalculaba la app entera (el menú de
+    /// modelos, la barra lateral, el panel) y se escribía con 50-170 ms de retraso.
+    let newDraft = DraftText()
+    var draft: String {
+        get { newDraft.text }
+        set {
+            newDraft.text = newValue
+            noteDraft(newValue)
+        }
+    }
+    /// Si el encargo tiene texto: lo único del cuadro que necesita el resto de la vista (el botón).
+    @Published private(set) var draftHasText = false
+
+    func noteDraft(_ text: String) {
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasText != draftHasText { draftHasText = hasText }
+    }
     @Published private(set) var recents: [String]
     @Published var folder: String?
     @Published private(set) var newSnapshot: GitSnapshot?
