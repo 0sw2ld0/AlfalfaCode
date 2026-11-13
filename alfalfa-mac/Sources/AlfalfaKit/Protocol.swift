@@ -681,6 +681,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case context(tokens: Int, limit: Int, mcp: McpContextUsage? = nil, breakdown: ContextBreakdown? = nil,
                  details: ContextDetails? = nil)
     case error(String)
+    /// `uso_sesion`: tokens y coste gastados en la sesión, también a mitad de un turno.
+    case sessionUsage(tokens: Int, cost: Double?)
     /// `error` con `rechazado`: el mensaje no abrió turno (imágenes para un modelo que no las ve)
     /// y vuelve al cuadro de texto.
     case messageRejected(MessageRejection)
@@ -797,6 +799,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             guard let tokens = object["tokens"] as? Int, let limit = object["limite"] as? Int else { return nil }
             return .context(tokens: tokens, limit: limit, mcp: mcpUsage(object), breakdown: breakdown(object["desglose"]),
                             details: details(object))
+        case "uso_sesion":
+            guard let tokens = integer(object["tokens"]) else { return nil }
+            return .sessionUsage(tokens: max(0, tokens), cost: amount(object["coste"]))
         case "error":
             return error(object)
         case "turno_terminado":

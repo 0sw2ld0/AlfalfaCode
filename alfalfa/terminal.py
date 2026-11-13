@@ -245,7 +245,8 @@ class TerminalManager:
     def __init__(self, objective=None, *, resume=None, model=None, effort=None, auto=False, home=None, transport=None,
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
-                 diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa', origen_cuybrowser=None,
+                 diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa',
+                 origen_cuybrowser=None,
                  reglas_equipo=_CARGAR_EQUIPO):
         cwd = Path(cwd or Path.cwd()).resolve()
         self.equipo = equipo.cargar(cwd) if reglas_equipo is _CARGAR_EQUIPO else reglas_equipo
@@ -665,6 +666,17 @@ class TerminalManager:
             if campos != getattr(self, '_ultimo_contexto', None):
                 self._ultimo_contexto = campos
                 self.transport.emit('contexto', **campos)
+        if self.transport:
+            # Lo gastado en la sesión, también a mitad de turno: el panel sólo lo recibía al
+            # empezar y al cerrar cada turno, y un turno largo enseñaba «Tokens gastados: 0».
+            total = task.get('total_tokens')
+            coste = task.get('coste_usd')
+            uso = dict(tokens=total if isinstance(total, int) and not isinstance(total, bool) else 0,
+                       **({'coste': round(coste, 6)} if isinstance(coste, (int, float))
+                          and not isinstance(coste, bool) else {}))
+            if uso != getattr(self, '_ultimo_uso', None):
+                self._ultimo_uso = uso
+                self.transport.emit('uso_sesion', **uso)
 
     def cuota(self, task, proveedor, filas):
         """La cuota mensual de un proveedor con límite, para la barra de la app."""

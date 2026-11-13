@@ -523,7 +523,10 @@ ON_REQUEST_DESCRIPTION = ('Run exact argv in the workspace inside the Seatbelt s
                           'sudo), needs_network and require_escalated ask the user first. A failure that '
                           'looks like a sandbox denial asks the user to retry the same argv without sandbox; '
                           'do not retry it yourself. With require_escalated, add prefix_rule (e.g. '
-                          '["git", "push"]) so the user can say «No volver a preguntar».')
+                          '["git", "push"]) so the user can say «No volver a preguntar». Read-only network '
+                          'queries (gh pr view/list/checks, gh run view, git fetch <remote>) run with needs_network '
+                          'and no prompt. Push with `git push origin <branch>`, without -u: setting the upstream '
+                          'writes .git/config, which the sandbox protects.')
 _ON_REQUEST_REPLACED = 'Request user approval for exact argv in workspace.'
 
 

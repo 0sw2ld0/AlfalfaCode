@@ -8,8 +8,6 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
-
 RAIZ = Path(__file__).resolve().parents[1]
 
 # Un turno que pide un permiso de red y lo espera. Con `terco`, además ignora la cancelación

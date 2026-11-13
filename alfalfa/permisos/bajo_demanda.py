@@ -41,6 +41,44 @@ REINTENTO = 'reintento'
 REGLA_USUARIO = 'regla'
 MOTIVOS = (PELIGROSO, RED, SALIR, REINTENTO, REGLA_USUARIO, 'modo')
 
+# Consultas con red que sólo leen: corren en el sandbox con red sin tarjeta (como un `git status`
+# local). `gh` sólo habla con GitHub; `git fetch`/`ls-remote` sólo con un remoto ya configurado,
+# nunca con una URL que el modelo escriba (podría llevar datos en ella).
+LECTURAS_DE_RED = {
+    'gh': {('pr', 'view'), ('pr', 'list'), ('pr', 'status'), ('pr', 'checks'), ('pr', 'diff'),
+           ('issue', 'view'), ('issue', 'list'), ('run', 'view'), ('run', 'list'), ('repo', 'view'),
+           ('release', 'view'), ('release', 'list')},
+    'git': {('fetch',), ('ls-remote',)},
+}
+_OPCIONES_QUE_ESCRIBEN = ('--web', '-w', '--log-failed', '--exit-status', '--upload-pack', '--exec')
+
+
+def lectura_de_red(argv, runtime=None):
+    """¿Es `argv` una consulta con red que sólo lee y se puede lanzar sin preguntar?
+
+    No tras leer contenido externo: ahí la red vuelve a pedir permiso como antes."""
+    if runtime is not None:
+        from ..contenido_externo import contaminada
+        if contaminada(runtime):
+            return False
+    if not argv:
+        return False
+    programa = str(argv[0]).rsplit('/', 1)[-1]
+    reglas = LECTURAS_DE_RED.get(programa)
+    if not reglas:
+        return False
+    resto = [str(a) for a in argv[1:]]
+    if programa == 'git' and resto[:1] and resto[0].startswith('-'):
+        return False  # git -C otra/carpeta, -c clave=valor…: no
+    if not any(tuple(resto[:len(r)]) == r for r in reglas):
+        return False
+    if any(a.split('=', 1)[0] in _OPCIONES_QUE_ESCRIBEN for a in resto):
+        return False
+    if programa == 'git' and any('://' in a or '@' in a or (':' in a and not a.startswith('-')) for a in resto):
+        return False  # sólo remotos por su nombre, nunca una URL
+    return True
+
+
 USE_DEFAULT = 'use_default'
 # Lo que devuelve la aprobación con «No volver a preguntar por órdenes que empiecen por …».
 SIEMPRE = 'siempre'
@@ -157,7 +195,7 @@ class OnRequestPolicy:
                 failure = str(exc)
                 reasons.append(SALIR)
                 runtime.manager.event(runtime.task, 'system', 'Sandbox Seatbelt no disponible: ' + failure)
-            if network:
+            if network and not lectura_de_red(argv, runtime):
                 reasons.append(RED)
         if danger:
             reasons.append(PELIGROSO)
@@ -245,7 +283,8 @@ class OnRequestPolicy:
         clave = sesion.clave_de_orden(argv, args.get('cwd'), sin_sandbox=unsandboxed, red=RED in reasons)
         # Tras leer contenido externo, la red y la salida del sandbox llevan también ese motivo
         # (una sola tarjeta) y su propia clave: lo aprobado para la sesión antes no vale.
-        from ..contenido_externo import MOTIVO as EXTERNO, clave_de_orden, contaminada
+        from ..contenido_externo import MOTIVO as EXTERNO
+        from ..contenido_externo import clave_de_orden, contaminada
         origenes = contaminada(runtime) if (unsandboxed or RED in reasons) else []
         if origenes:
             reasons = list(reasons) + [EXTERNO]
