@@ -171,9 +171,10 @@ def test_git_is_denied_last_so_tmpdir_cannot_reopen_it(tmp_path):
     assert [k for k, _ in params if k.startswith('WRITABLE_ROOT_')] == [
         'WRITABLE_ROOT_0', 'WRITABLE_ROOT_1', 'WRITABLE_ROOT_2']
     assert {v for k, v in params if k.startswith('PROTECTED_ANCESTOR_')} == outer_ancestors(sandbox)
-    deny = '(deny file-write* (regex #"' + protected_metadata_name_regex(os.path.realpath(workspace), '.git') + '"))'
-    assert deny in policy
-    assert policy.index(deny) > policy.index('(allow file-write*')
+    for rx in seatbelt.git_regexes(os.path.realpath(workspace)):
+        deny = '(deny file-write* (regex #"' + rx + '"))'
+        assert deny in policy
+        assert policy.index(deny) > policy.index('(allow file-write*')
     for index in range(3):
         assert ('(deny file-write-unlink (require-all (literal (param "WRITABLE_ROOT_' + str(index)
                 + '")) (vnode-type DIRECTORY)))') in policy
@@ -491,6 +492,47 @@ def test_real_git_metadata_stays_read_only(tmp_path, request, where):
     # Los directorios sin .git se siguen moviendo y borrando.
     code, output = sandboxed(sandbox, ['/bin/sh', '-c', 'mv a z && rm -rf z'], root)
     assert code == 0, output
+
+
+def test_git_regexes_protegen_hooks_config_y_el_propio_git():
+    root = '/p/ws'
+    rxs = [re.compile(rx) for rx in seatbelt.git_regexes(root)]
+
+    def protegido(path):
+        return any(rx.match(root + path) for rx in rxs)
+
+    for path in ('/.git', '/.GIT', '/sub/.git', '/.git/hooks', '/.git/hooks/pre-commit', '/.git/HOOKS/x',
+                 '/.git/config', '/.git/config.lock', '/.git/config.worktree', '/.git/modules/s/hooks/x',
+                 '/.git/modules/s/config', '/.git/worktrees/w/config.worktree', '/sub/.git/config'):
+        assert protegido(path), path
+    for path in ('/.git/HEAD', '/.git/index', '/.git/index.lock', '/.git/refs/heads/rama', '/.git/objects/ab/cd',
+                 '/.git/logs/HEAD', '/.git/ORIG_HEAD', '/.git/COMMIT_EDITMSG', '/.git/refs/stash',
+                 '/.gitignore', '/config', '/hooks/x', '/src/config.py'):
+        assert not protegido(path), path
+
+
+@real
+@pytest.mark.parametrize('where', ['tmpdir', 'home'])
+def test_real_git_local_funciona_sin_salir_del_sandbox(tmp_path, request, where):
+    """Como el sandbox de Claude Code: ramas, commits, stash y merge escriben en .git sin permiso."""
+    base = tmp_path if where == 'tmpdir' else request.getfixturevalue('outside_home')
+    root = base / RARO
+    root.mkdir(parents=True)
+    env = {**os.environ, 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_CONFIG_NOSYSTEM': '1'}
+    for argv in (['git', 'init', '-q', '-b', 'main'], ['git', 'config', 'user.email', 'p@example.com'],
+                 ['git', 'config', 'user.name', 'Prueba'], ['git', 'commit', '-q', '--allow-empty', '-m', 'uno']):
+        subprocess.run(argv, cwd=root, check=True, timeout=30, env=env, capture_output=True)
+    config = (root / '.git' / 'config').read_bytes()
+    sandbox = SeatbeltSandbox(str(root))
+    for argv in (['git', 'switch', '-q', '-c', 'rama'], ['/bin/sh', '-c', 'echo b > b && git add b'],
+                 ['git', 'commit', '-q', '-m', 'dos'], ['/bin/sh', '-c', 'echo c > b && git stash -q'],
+                 ['git', 'stash', 'pop', '-q'], ['git', 'checkout', '-q', '--', 'b'], ['git', 'switch', '-q', 'main'],
+                 ['git', 'merge', '-q', 'rama'], ['git', 'branch', '-q', '-D', 'rama'], ['git', 'tag', 'v1']):
+        code, output = sandboxed(sandbox, argv, root)
+        assert code == 0, (argv, output)
+    log = subprocess.run(['git', 'log', '--format=%s'], cwd=root, capture_output=True, text=True, env=env).stdout
+    assert log.split() == ['dos', 'uno']
+    assert (root / '.git' / 'config').read_bytes() == config
 
 
 @real

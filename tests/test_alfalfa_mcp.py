@@ -976,7 +976,7 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
                 await s.cargar('mcp__cerrado__escribir', 'mcp__cerrado__conectar', 'mcp__abierto__conectar')
                 # Aprobada por el usuario, pero el sandbox sigue igual.
                 assert (await s.llamar('mcp__cerrado__escribir',
-                                       {'ruta': '.git/hooks-x'}))['texto'].startswith('denegado')
+                                       {'ruta': '.git/config'}))['texto'].startswith('denegado')
                 assert (await s.llamar('mcp__cerrado__escribir', {'ruta': 'permitido.txt'}))['texto'] == 'escrito'
                 # Confiable tampoco abre la red; sólo red: true en la configuración lo hace.
                 assert (await s.llamar('mcp__cerrado__conectar', {'puerto': puerto}))['texto'].startswith('denegado')
@@ -987,7 +987,7 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
         correr(run())
     finally:
         escucha.close()
-    assert not (tmp_path / 'project' / '.git' / 'hooks-x').exists()
+    assert not (tmp_path / 'project' / '.git' / 'config').exists()
     assert (tmp_path / 'project' / 'permitido.txt').exists()
     assert len(s.eventos('permiso')) == 2
 

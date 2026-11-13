@@ -1,8 +1,7 @@
 """«No volver a preguntar por órdenes que empiecen por …», como el prefix_rule de Codex.
 
-Codex deja `.git` de solo lectura en el sandbox (protocol/src/permissions.rs), así que
-crear una rama o hacer un commit pide salir del sandbox; para no preguntar cada vez, la
-tarjeta ofrece guardar un prefijo (`ApprovedExecpolicyAmendment`) como regla `allow`, que
+Para una orden que necesita salir del sandbox (p. ej. `git config`, que escribe
+.git/config), la tarjeta ofrece guardar un prefijo (`ApprovedExecpolicyAmendment`) como regla `allow`, que
 desde entonces ejecuta esas órdenes fuera del sandbox (core/src/exec_policy.rs).
 """
 import asyncio
@@ -180,36 +179,51 @@ def ramas(raiz):
                           text=True).stdout.split()
 
 
+def config(raiz, clave):
+    return subprocess.run(['git', 'config', '--get', clave], cwd=raiz, capture_output=True, text=True).stdout.strip()
+
+
 @real
-def test_crear_rama_con_no_volver_a_preguntar_y_la_siguiente_no_pregunta(motor):
+def test_crear_rama_no_pide_permiso(motor):
+    """Desde que el sandbox sólo protege hooks y config de .git, como Claude Code."""
     rt, llamar, lanzadas, eventos, raiz, hogar = motor
-    primera = Respuesta(SIEMPRE)
-    resultado = llamar(primera, argv=['git', 'switch', '-c', 'uno'])
-    peticion, = primera.peticiones
-    assert peticion['prefijo'] == ['git', 'switch'] and resultado['exit_code'] == 0
+    aprobacion = Respuesta(None)
+    resultado = llamar(aprobacion, argv=['git', 'switch', '-c', 'uno'])
+    assert aprobacion.peticiones == [] and resultado['exit_code'] == 0 and resultado['sandbox'] == 'seatbelt'
     assert 'uno' in ramas(raiz)
+
+
+@real
+def test_no_volver_a_preguntar_y_la_siguiente_no_pregunta(motor):
+    rt, llamar, lanzadas, eventos, raiz, hogar = motor
+    # git config escribe .git/config, que sigue protegido: pide salir del sandbox.
+    primera = Respuesta(SIEMPRE)
+    resultado = llamar(primera, argv=['git', 'config', 'alfalfa.uno', 'x'])
+    peticion, = primera.peticiones
+    assert peticion['prefijo'] == ['git', 'config'] and resultado['exit_code'] == 0
+    assert config(raiz, 'alfalfa.uno') == 'x'
     guardada = reglas.desde_hogar(hogar).reglas[-1]
-    assert guardada.texto() == 'git switch' and guardada.sin_sandbox
+    assert guardada.texto() == 'git config' and guardada.sin_sandbox
     # La siguiente: sin tarjeta, directamente fuera del sandbox.
     otra = Respuesta(None)
-    resultado = llamar(otra, argv=['git', 'switch', '-c', 'dos'])
+    resultado = llamar(otra, argv=['git', 'config', 'alfalfa.dos', 'y'])
     assert otra.peticiones == [] and resultado['sandbox'] == 'none' and resultado['exit_code'] == 0
-    assert 'dos' in ramas(raiz)
+    assert config(raiz, 'alfalfa.dos') == 'y'
     assert any(t.startswith('Permitida siempre por') for t in eventos)
-    # Otra suborden de git sigue preguntando, y ofrece la suya.
+    # Otra orden que también necesita salir sigue preguntando, y ofrece la suya.
     tercera = Respuesta(None)
-    llamar(tercera, argv=['git', 'commit', '-q', '--allow-empty', '-m', 'y'])
-    assert [p.get('prefijo') for p in tercera.peticiones] == [['git', 'commit']]
+    llamar(tercera, argv=['git', 'init', '-q', 'sub'])
+    assert [p.get('prefijo') for p in tercera.peticiones] == [['git', 'init']]
 
 
 @real
 def test_tras_leer_contenido_externo_vuelve_a_preguntar_y_no_ofrece_siempre(motor):
     rt, llamar, lanzadas, eventos, raiz, hogar = motor
-    reglas.guardar_para_siempre(hogar, ['git', 'switch'], 'prueba')
+    reglas.guardar_para_siempre(hogar, ['git', 'config'], 'prueba')
     rt.command_policy.reglas.reglas.append(reglas.desde_hogar(hogar).reglas[-1])
     rt.state[EXTERNO] = ['read_web']
     aprobacion = Respuesta(None)
-    resultado = llamar(aprobacion, argv=['git', 'switch', '-c', 'tres'])
+    resultado = llamar(aprobacion, argv=['git', 'config', 'alfalfa.tres', 'z'])
     peticion, = aprobacion.peticiones
     assert 'contenido_externo' in peticion['motivos'] and 'prefijo' not in peticion
     assert resultado['exit_code'] == 0
@@ -218,5 +232,5 @@ def test_tras_leer_contenido_externo_vuelve_a_preguntar_y_no_ofrece_siempre(moto
 @real
 def test_permitir_en_esta_sesion_no_guarda_regla(motor):
     rt, llamar, lanzadas, eventos, raiz, hogar = motor
-    llamar(Respuesta(sesion.SESION), argv=['git', 'switch', '-c', 'cuatro'])
+    llamar(Respuesta(sesion.SESION), argv=['git', 'config', 'alfalfa.cuatro', 'w'])
     assert not (hogar / reglas.ARCHIVO).exists()
