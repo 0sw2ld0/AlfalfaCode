@@ -63,7 +63,8 @@ igualmente con run_checks.
 Emplea argv literal en run_command y run_checks, sin shell: una ruta con espacios
 va entera en un elemento, sin comillas ni barras.
 Las órdenes corren en un sandbox Seatbelt: escriben sólo en la carpeta, $TMPDIR y
-/private/tmp, .git es de solo lectura y no hay red. write_file, edit_file y
+/private/tmp, de .git sólo sus hooks y config son de solo lectura (ramas, commits
+y stash funcionan sin permiso) y no hay red. write_file, edit_file y
 apply_patch sólo escriben dentro de la carpeta: deja tus archivos de prueba y
 temporales en .tmp-alfalfa/ (el arnés lo trata como temporal) y no los incluyas en
 los commits. Una orden normal no pide
