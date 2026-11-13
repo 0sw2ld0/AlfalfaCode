@@ -83,7 +83,7 @@ public struct ToolInfo: Equatable, Sendable {
         guard var info = parseFields(value) else { return nil }
         if let ongoing = ((value as? [String: Any])?["en_curso"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines), !ongoing.isEmpty {
-            info.ongoing = ongoing
+            info.ongoing = TextPreview.line(ongoing)
         }
         return info
     }
@@ -285,8 +285,8 @@ public enum ToolCalls {
         let request = event.title
         let path = info.target ?? pythonField("path", in: request)
         let command = info.command
-        let description = info.description ?? pythonField("description", in: request)
-            ?? pythonField("purpose", in: request) ?? fallbackDescription(info.name, path)
+        let description = TextPreview.line(info.description ?? pythonField("description", in: request)
+            ?? pythonField("purpose", in: request) ?? fallbackDescription(info.name, path))
         let kind = ToolKind(tool: info.name)
         let targets = info.targets.isEmpty && info.name == "apply_patch" ? patchFiles(in: request) : info.targets
         return ToolCall(id: event.id, name: info.name, kind: kind, description: description, command: command,
@@ -320,7 +320,7 @@ public enum ToolCalls {
             if call.description == fallbackDescription(call.name, call.target),
                let purpose = (object["purpose"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !purpose.isEmpty {
-                call.description = purpose
+                call.description = TextPreview.line(purpose)
             }
             if call.target == nil, let path = object["path"] as? String { call.target = path }
             call.exitCode = info.exitCode ?? object["exit_code"] as? Int

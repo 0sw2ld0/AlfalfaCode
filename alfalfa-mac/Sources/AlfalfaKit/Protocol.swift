@@ -111,16 +111,17 @@ public struct Subagent: Equatable, Sendable, Identifiable {
                 since: Double = 0, until: Double? = nil, activity: String = "", steps: Int = 0, report: String = "",
                 error: String = "") {
         self.id = id
-        self.name = name
+        // Acotados: el panel los pinta en filas cortas y no debe medir un encargo entero.
+        self.name = TextPreview.line(name, limit: 200)
         self.type = type
         self.state = state
         self.model = model
         self.since = since
         self.until = until
-        self.activity = activity
+        self.activity = TextPreview.line(activity)
         self.steps = steps
-        self.report = report
-        self.error = error
+        self.report = TextPreview(report, maxLines: 6).shown
+        self.error = TextPreview(error, maxLines: 6).shown
     }
 
     public var working: Bool { state == "iniciando" || state == "trabajando" }

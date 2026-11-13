@@ -48,6 +48,43 @@ public struct TextPreview: Equatable, Sendable {
         shownLines = lines.count
         truncated = cut || total > lines.count
     }
+
+    /// Una sola línea corta para una fila, un título o un distintivo: los espacios y saltos se juntan
+    /// y lo que pasa de `limit` caracteres se corta con «…». Sólo recorre lo que va a enseñar, así que
+    /// sirve igual con un texto de 50 KB.
+    public static func line(_ text: String, limit: Int = 300) -> String {
+        var result = ""
+        var count = 0
+        var pendingSpace = false
+        for character in text {
+            if character.isWhitespace || character.isNewline {
+                pendingSpace = !result.isEmpty
+                continue
+            }
+            if count >= limit { return result + "…" }
+            if pendingSpace {
+                result.append(" ")
+                count += 1
+                pendingSpace = false
+                if count >= limit { return result.trimmingCharacters(in: .whitespaces) + "…" }
+            }
+            result.append(character)
+            count += 1
+        }
+        return result
+    }
+
+    /// Un paso de un subagente en el panel: su primera línea, acotada. El motor manda hasta 20 000
+    /// caracteres por paso (el encargo entero llega como primer paso) y el panel pinta los 40 últimos.
+    public static func subagentStep(_ step: AgentEvent) -> String {
+        let firstLine = step.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first ?? ""
+        let first = line(String(firstLine.prefix(maxLineLength * 4)))
+        switch step.role {
+        case "agent", "assistant": return "› " + first
+        case "tool": return first.hasPrefix("Inicio ") ? "· " + String(first.dropFirst(7)) : "  " + first
+        default: return "  " + first
+        }
+    }
 }
 
 /// Lo legible de una edición en la línea de tiempo: el parche o el contenido, con saltos de línea
