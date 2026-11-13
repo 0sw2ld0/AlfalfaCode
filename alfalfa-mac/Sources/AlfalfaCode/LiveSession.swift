@@ -44,6 +44,11 @@ final class LiveSession: ObservableObject, Identifiable {
     /// El usuario se fue de la sesión: al quedar libre se cierra stdin del proceso.
     private(set) var releaseWhenParked = false
     private var lastRefresh = Date.distantPast
+    /// Un refresco a la vez: cada evento lanzaba otro `git diff` antes de que acabara el anterior.
+    private var refreshing = false
+    private var refreshAgain = false
+    /// Lo que tardó el último refresco: en un repositorio enorme se espacian solos.
+    private var refreshCost: TimeInterval = 0
 
     /// Sesión guardada abierta sin proceso: el primer mensaje la reanuda con `--reanudar`.
     private var dormantLauncher: URL?
@@ -173,7 +178,10 @@ final class LiveSession: ObservableObject, Identifiable {
         case .permissionResolved, .turnFinished, .finished:
             Task { await refreshPanel() }
         case let .event(event) where event.role == "tool":
-            if Date().timeIntervalSince(lastRefresh) > 2 { Task { await refreshPanel() } }
+            if Date().timeIntervalSince(lastRefresh) > max(2, refreshCost * 3) {
+                lastRefresh = Date()
+                Task { await refreshPanel() }
+            }
         case let .continued(newID, _):
             onContinued?(newID)
         default:
@@ -203,10 +211,23 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func refreshPanel() async {
         lastRefresh = Date()
-        async let git = Workspace.snapshot(of: cwd)
-        async let reachable = Workspace.ollamaReachable()
-        snapshot = await git
-        ollama = await reachable
+        if refreshing {
+            refreshAgain = true
+            return
+        }
+        refreshing = true
+        defer { refreshing = false }
+        repeat {
+            refreshAgain = false
+            let start = Date()
+            async let git = Workspace.snapshot(of: cwd)
+            async let reachable = Workspace.ollamaReachable()
+            let fresh = await git
+            if fresh != snapshot { snapshot = fresh }
+            let up = await reachable
+            if up != ollama { ollama = up }
+            refreshCost = Date().timeIntervalSince(start)
+        } while refreshAgain
     }
 
     /// Sólo se llama desde un botón: la app nunca aprueba por su cuenta.

@@ -91,7 +91,9 @@ struct SessionView: View {
                 let status = session.timeline.status
                 let liveWork = status.isRunning && (lastEvents ?? -1) > max(lastUser ?? -1, lastAgent ?? -1)
                     ? lastEvents : nil
-                LazyVStack(alignment: .leading, spacing: 22) {
+                // VStack y no LazyVStack: la lista perezosa, con filas de alto variable, el seguimiento
+                // del final y algo animado, entraba en un bucle de layout que colgaba la app al 100 %.
+                VStack(alignment: .leading, spacing: 22) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         ItemView(item: item, session: session,
                                  isFirstPending: firstPending.map { isPermission(item, $0) } ?? false,
