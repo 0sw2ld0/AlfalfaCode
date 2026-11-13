@@ -517,13 +517,13 @@ LIST_AGENTS_TOOL = schema(
     {})
 AGENT_TOOLS = [SPAWN_AGENT_TOOL, WAIT_AGENT_TOOL, SEND_INPUT_TOOL, CLOSE_AGENT_TOOL, LIST_AGENTS_TOOL]
 ON_REQUEST_DESCRIPTION = ('Run exact argv in the workspace inside the Seatbelt sandbox: it writes only '
-                          'to the workspace, $TMPDIR and /private/tmp, .git is read-only and there is no '
+                          'to the workspace, $TMPDIR and /private/tmp; in .git only hooks and config are '
+                          'read-only, so local git (switch -c, add, commit, stash, merge) just works; there is no '
                           'network. Normal commands run without asking; dangerous commands (rm with force, '
                           'sudo), needs_network and require_escalated ask the user first. A failure that '
                           'looks like a sandbox denial asks the user to retry the same argv without sandbox; '
-                          'do not retry it yourself. Writing to .git (git switch -c, add, commit, stash) '
-                          'needs require_escalated; add prefix_rule (e.g. ["git", "commit"]) so the user can '
-                          'say «No volver a preguntar».')
+                          'do not retry it yourself. With require_escalated, add prefix_rule (e.g. '
+                          '["git", "push"]) so the user can say «No volver a preguntar».')
 _ON_REQUEST_REPLACED = 'Request user approval for exact argv in workspace.'
 
 
