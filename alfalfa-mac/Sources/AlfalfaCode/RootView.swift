@@ -270,17 +270,14 @@ struct StatusDot: View {
     let color: Color
     let pulsing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dim = false
-
     var body: some View {
-        let animate = pulsing && !reduceMotion
-        Circle().fill(color)
+        // El pulso lo anima el sistema (Core Animation) y no SwiftUI fotograma a fotograma: con
+        // `repeatForever` este punto de 8 pt tenía la app al 22 % de CPU mientras esperaba.
+        Image(systemName: "circle.fill")
+            .font(.system(size: 8))
+            .foregroundStyle(color)
             .frame(width: 8, height: 8)
-            .opacity(animate && dim ? 0.3 : 1)
-            .scaleEffect(animate && dim ? 0.8 : 1)
-            .animation(animate ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default, value: dim)
-            .onAppear { dim = animate }
-            .onChange(of: animate) { _, now in dim = now }
+            .symbolEffect(.pulse, options: .repeating, isActive: pulsing && !reduceMotion)
             .accessibilityHidden(true)
     }
 }
