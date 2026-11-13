@@ -1,1 +1,1 @@
-La app ya no se cuelga mientras espera un permiso ni gasta CPU en reposo: el punto de estado de la barra lateral lo anima el sistema, la conversación ya no entra en bucles de layout y el panel de cambios lee como mucho 1 MB del git diff, un refresco a la vez.
+Las tarjetas de permiso con textos enormes (el encargo de un subagente, una justificación larga) se ven en pocas líneas, con «Ver el encargo entero» o «Ver todo» para abrirlo aparte. El panel de subagentes y los títulos de las acciones también quedan acotados.
