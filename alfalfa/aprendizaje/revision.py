@@ -7,7 +7,9 @@ Como la revisión en segundo plano de Hermes Agent (Nous Research, MIT), pero:
   turno: `turno_terminado` sale antes y Detener no lo toca (TerminalManager.repasar);
 - con el mismo proveedor y, si lo hay, el modelo más barato de su familia en el
   catálogo (o el de `modelo_revision` en los ajustes, del mismo proveedor). Con un
-  proveedor de plan o local (sin coste por token) sólo corre con `modelo_revision`;
+  proveedor de plan o local (sin coste por token), el de la sesión: es una sola llamada
+  corta y entra en el plan. Antes no corría sin `modelo_revision`, y con Ollama Cloud
+  (casi todas las sesiones) no se aprendía nunca nada;
 - sin razonamiento (`think: false`) y con la salida acotada;
 - pasa por el presupuesto de la sesión contando la entrada y la salida máxima: si no
   alcanza no corre;
@@ -38,7 +40,8 @@ MAX_MEMORIA = 3
 CORRECCION = re.compile(
     r'(?i)\b(?:no,|eso no|así no|te equivocaste|está mal|mal hecho|en realidad|prefiero|no uses|no hagas|'
     r'siempre usa|nunca uses|recuerda que|that\'?s wrong|not like that|actually|i prefer|don\'?t use|'
-    r'always use|never use|remember that)')
+    r'always use|never use|remember that|desde ahora|de ahora en adelante|a partir de ahora|no vuelvas a|'
+    r'la próxima vez|recuérdalo|from now on|next time|don\'?t do that again)')
 # Lo que no cuenta como paso de trabajo.
 NO_CUENTAN = {'wrap_up', 'propose_session', 'update_plan', 'memoria', 'habilidad'}
 
@@ -49,7 +52,10 @@ respuesta correcta es no guardar nada: devuelve listas vacías.
 Memoria (almacenes usuario, entorno y proyecto, con tope de caracteres): sólo preferencias
 que el usuario expresó o corrigió, o hechos estables del Mac o del proyecto que costó
 descubrir. Nada del progreso de la tarea, nada que ya esté en la memoria actual, nada de
-claves. Entradas de una o dos frases. accion add (contenido), patch (buscar y contenido) o
+claves. Cada entrada es una lección en una o dos frases: la regla, por qué (lo que pasó o lo
+que dijo el usuario) y cómo aplicarla. Por ejemplo: «Sube las ramas con git push origin
+<rama>, sin -u. Por qué: el upstream escribe .git/config y el sandbox lo protege. Cómo:
+en cada push de una rama nueva.» accion add (contenido), patch (buscar y contenido) o
 remove (buscar).
 
 Habilidades: sólo si "comprobacion_en_verde" es true y el turno fue un procedimiento de
@@ -121,8 +127,8 @@ def _total(precio):
 
 def modelo_de_revision(proveedor, nombre, elegido=None):
     """El modelo (sin prefijo) de la revisión: el elegido si es del mismo proveedor; si no, el más
-    barato de la familia del de la sesión en el catálogo; si no hay otro más barato, el mismo.
-    None si el proveedor no cobra por token (plan, local) y no se eligió uno: no se gasta cuota."""
+    barato de la familia del de la sesión en el catálogo; si no hay otro más barato, o el
+    proveedor no cobra por token (plan, local), el mismo de la sesión."""
     from .. import proveedores
     if elegido:
         ident, propio = proveedores.separar(elegido)
@@ -133,7 +139,7 @@ def modelo_de_revision(proveedor, nombre, elegido=None):
     except Exception:
         actual = None
     if actual is None:
-        return None  # plan o local: la cuota del usuario sólo se gasta con un modelo elegido a propósito
+        return nombre or None  # plan o local: el de la sesión, que ya entra en el plan
     from .. import catalogo
     try:
         datos = catalogo.proveedor(proveedor.id) or {}

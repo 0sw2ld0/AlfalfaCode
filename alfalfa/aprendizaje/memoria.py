@@ -21,7 +21,8 @@ from .rutas import escribir, leer, preparar_carpeta
 
 SEPARADOR = '§'
 ALMACENES = ('usuario', 'entorno', 'proyecto')
-LIMITES = {'usuario': 1375, 'entorno': 1375, 'proyecto': 2200}
+# Más que los de Hermes (1375/1375/2200): con lecciones de regla, motivo y cómo, no cabían ni diez.
+LIMITES = {'usuario': 2500, 'entorno': 1500, 'proyecto': 3500}
 TITULOS = {'usuario': 'Usuario', 'entorno': 'Entorno del Mac', 'proyecto': 'Proyecto'}
 ARCHIVOS = {'usuario': 'USUARIO.md', 'entorno': 'ENTORNO.md', 'proyecto': 'PROYECTO.md'}
 ACCIONES = ('add', 'patch', 'remove')

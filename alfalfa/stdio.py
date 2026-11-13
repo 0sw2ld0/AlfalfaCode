@@ -814,8 +814,9 @@ async def run(args, transport):
         # mensaje abre el siguiente. Cancelar o EOF sin turno en curso cierran
         # con el estado del último turno; con turno en curso lo interrumpen.
         while prompt is not None and not transport.stopped:
-            # Llegó otro mensaje (o una compactación): el repaso del turno anterior se deja, no se espera.
-            await _cancelar_repaso(transport)
+            # Llegó otro mensaje (o una compactación): el repaso del turno anterior termina si le
+            # falta poco. Cancelarlo en el acto perdía casi todos los repasos de quien escribe rápido.
+            await _esperar_repaso(transport)
             await _cancelar_revision(transport)
             await transport.cancelar_exportacion()
             await manager.cola_encargos.detener()
@@ -964,6 +965,25 @@ async def _cancelar_revision(transport):
     if revision is not None and not revision.done():
         revision.cancel()
         await asyncio.gather(revision, return_exceptions=True)
+
+
+# Lo que se espera al repaso del turno anterior antes de empezar el siguiente.
+ESPERA_REPASO = 10
+
+
+async def _esperar_repaso(transport, segundos=None):
+    """Deja terminar el repaso en marcha hasta `segundos`; si no le da tiempo, se cancela."""
+    repaso = transport.repaso
+    if repaso is None or repaso.done():
+        transport.repaso = None
+        return
+    try:
+        await asyncio.wait_for(asyncio.shield(repaso), ESPERA_REPASO if segundos is None else segundos)
+    except asyncio.TimeoutError:
+        pass
+    except Exception:
+        pass
+    await _cancelar_repaso(transport)
 
 
 async def _cancelar_repaso(transport):

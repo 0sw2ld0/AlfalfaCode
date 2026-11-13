@@ -508,10 +508,10 @@ def test_el_repaso_rechaza_inyecciones(escena, monkeypatch):
     assert 'inyección' in s.m.task['aprendizaje_revision']['rechazadas'][0]
 
 
-@pytest.mark.parametrize('caso', ['apagada', 'pocos_pasos', 'sin_wrap_up', 'plan', 'sin_modelo_barato'])
+@pytest.mark.parametrize('caso', ['apagada', 'pocos_pasos', 'sin_wrap_up', 'plan'])
 def test_cuando_no_corre_el_repaso(escena, monkeypatch, caso):
     monkeypatch.delenv('ALFALFA_APRENDER_REVISION', raising=False)
-    ajustes = {'apagada': dict(REVISION, revision=False), 'sin_modelo_barato': None}.get(caso, REVISION)
+    ajustes = {'apagada': dict(REVISION, revision=False)}.get(caso, REVISION)
     s = escena(ajustes=ajustes, modo='plan' if caso == 'plan' else None)
     pasos = seis_pasos()[:5] + [llamada('search', {'query': 'v'})]
     pasos = pasos[:3] if caso == 'pocos_pasos' else pasos
@@ -520,7 +520,7 @@ def test_cuando_no_corre_el_repaso(escena, monkeypatch, caso):
     _, modelo = s.correr(pasos + [{'role': 'assistant', 'content': 'Hecho.'}], repasar=True)
     assert not any(p.get('format') == revision.ESQUEMA for p in modelo.payloads)
     esperado = {'apagada': 'apagada', 'pocos_pasos': 'sin_senales', 'sin_wrap_up': 'sin_cierre',
-                'plan': 'no_escribe', 'sin_modelo_barato': 'sin_modelo_barato'}[caso]
+                'plan': 'no_escribe'}[caso]
     assert s.m.task['aprendizaje_revision']['estado'] == esperado
 
 
@@ -601,8 +601,8 @@ def test_modelo_mas_barato_de_la_familia(monkeypatch):
     assert revision.modelo_de_revision(p, 'claude-opus-5-5', 'anthropic/claude-sonnet-5-5') == 'claude-sonnet-5-5'
     # El elegido de otro proveedor no vale: la revisión usa el de la sesión.
     assert revision.modelo_de_revision(p, 'claude-opus-5-5', 'openai/gpt-6') == 'claude-haiku-5-5'
-    # Sin coste por token (plan, local): sólo con uno elegido; si no, no gasta la cuota.
-    assert revision.modelo_de_revision(p, 'llama-local') is None
+    # Sin coste por token (plan, local): el de la sesión, que ya entra en el plan; o el elegido.
+    assert revision.modelo_de_revision(p, 'llama-local') == 'llama-local'
     assert revision.modelo_de_revision(p, 'llama-local', 'anthropic/llama-mini') == 'llama-mini'
 
 
@@ -927,3 +927,30 @@ def test_al_borrar_solo_deja_de_vigilar_lo_de_la_habilidad(tmp_path):
     assert espacio.matches(espacio.con_escrituras_del_arnes(foto, tocados, skill_dir))
     shutil.rmtree(raiz / 'otra')
     assert not espacio.matches(espacio.con_escrituras_del_arnes(foto, tocados, skill_dir))
+
+
+def test_con_un_plan_el_repaso_usa_el_modelo_de_la_sesion(escena, monkeypatch):
+    # Con Ollama Cloud (sin coste por token) y sin modelo_revision no corría nunca: «sin_modelo_barato».
+    monkeypatch.delenv('ALFALFA_APRENDER_REVISION', raising=False)
+    s = escena(ajustes=None)
+    vistos = []
+    s.correr([llamada('wrap_up', {'recap': 'Entendido.'}), {'role': 'assistant', 'content': 'Vale.'},
+              respuesta_de_revision({'memoria': [], 'habilidades': []}, vistos)],
+             prompt='Desde ahora sube las ramas sin -u.', repasar=True)
+    assert len(vistos) == 1, s.m.task.get('aprendizaje_revision')
+    assert s.m.task['aprendizaje_revision']['estado'] == 'hecha'
+    assert s.m.task['aprendizaje_revision']['modelo'] in s.m.task['model']
+
+
+@pytest.mark.parametrize('texto', ['Desde ahora usa ruff.', 'De ahora en adelante en español.',
+                                   'No vuelvas a fusionar con gh.', 'La próxima vez avísame antes.',
+                                   'From now on, use pytest -q.'])
+def test_frases_de_correccion(texto):
+    assert revision.CORRECCION.search(texto)
+
+
+def test_la_herramienta_pide_lecciones_con_motivo():
+    from alfalfa.aprendizaje.sesion import MANUAL_MEMORIA, MEMORIA_TOOL
+    descripcion = json.dumps(MEMORIA_TOOL, ensure_ascii=False)
+    assert 'desde ahora' in descripcion and 'why' in descripcion and 'same' in descripcion
+    assert 'por\nqué' in MANUAL_MEMORIA or 'por qué' in MANUAL_MEMORIA

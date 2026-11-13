@@ -21,8 +21,12 @@ con su diff, y se corrige en Ajustes ▸ Memoria o con `alfalfa --memoria` y
 `alfalfa --aprendido`.
 
 **Memoria.** Tres almacenes de notas cortas, separadas por una línea `§`, con un tope
-duro: *usuario* (quién eres y cómo te gusta trabajar, 1375 caracteres), *entorno* (hechos
-de este Mac, 1375) y *proyecto* (convenciones y trampas, 2200). Todos viven en
+duro: *usuario* (quién eres y cómo te gusta trabajar, 2500 caracteres), *entorno* (hechos
+de este Mac, 1500) y *proyecto* (convenciones y trampas, 3500). Cada entrada es una
+lección: la regla, por qué y cómo aplicarla. Cuando corriges al agente o le dices «desde
+ahora», «recuerda» o «no vuelvas a», la propone en ese mismo turno; si no, la revisión del
+cierre (con el modelo más barato de la familia o, en un plan como Ollama Cloud, el de la
+sesión) propone lo que vea. Todos viven en
 `$ALFALFA_HOME/memoria`; el del proyecto, por la ruta de su raíz, nunca dentro del
 repositorio, así que un repo no puede plantarlo. El agente los cambia con la herramienta
 `memoria` (`add`, `patch` y `remove` por un trozo único de la entrada; no hay «leer»).
