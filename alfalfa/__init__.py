@@ -6,4 +6,4 @@ No importa nada de quien lo integra: lo que esa aplicación cambia está en
 """
 
 # Se sube a la vez que se publica la etiqueta `vX.Y.Z` del repositorio.
-__version__ = '0.99.16'
+__version__ = '0.99.17'
