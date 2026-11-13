@@ -5,6 +5,8 @@ Como la revisión en segundo plano de Hermes Agent (Nous Research, MIT), pero:
 - sólo después de un turno que cerró con `wrap_up` y que tuvo señales de aprendizaje
   (muchos pasos, un fallo superado o una corrección del usuario), y una vez cerrado el
   turno: `turno_terminado` sale antes y Detener no lo toca (TerminalManager.repasar);
+- como mucho `MAX_REVISIONES` (3) por sesión, contando sólo las que llegan a llamar al
+  modelo;
 - con el mismo proveedor y, si lo hay, el modelo más barato de su familia en el
   catálogo (o el de `modelo_revision` en los ajustes, del mismo proveedor). Con un
   proveedor de plan o local (sin coste por token), el de la sesión: es una sola llamada
@@ -34,6 +36,10 @@ from .rutas import RutaInvalida
 # Corto: si llega otro mensaje se cancela, y en la terminal no retiene la salida mucho rato.
 TIEMPO = 20
 SALIDA = 2000
+# Como mucho tantas pasadas por sesión: en encargos largos casi todos los turnos tienen
+# señales, y con tres basta para recoger lo que haya. Las lecciones que pide el usuario
+# («desde ahora…») las propone el agente en el mismo turno y no dependen de esto.
+MAX_REVISIONES = 3
 MAX_PASOS = 40
 MAX_MEMORIA = 3
 # Correcciones del usuario: el turno vale la pena aunque fuera corto.
@@ -232,6 +238,9 @@ async def _revisar(aprendizaje, rt):
     senal = senales(rt, desde)
     if not merece(senal):
         return {'estado': 'sin_senales', **senal}
+    hechas = int(task.get('revisiones_hechas') or 0)
+    if hechas >= MAX_REVISIONES:
+        return {'estado': 'tope_de_sesion', 'hechas': hechas}
     verde = aprendizaje.verde(rt)
     proveedor, nombre = proveedores.para_modelo(task.get('model'))
     modelo = modelo_de_revision(proveedor, nombre, ajustes.get('modelo_revision'))
@@ -253,6 +262,7 @@ async def _revisar(aprendizaje, rt):
             salida = catalogo.coste(rt._precio, 0, SALIDA) or 0.0
             if cuenta.agotado(rt._entrada_estimada(payload) + salida):
                 return {'estado': 'sin_presupuesto'}
+        task['revisiones_hechas'] = hechas + 1
         task['activity'] = 'Repasando lo aprendido'
         aprendizaje.manager.save()
         if getattr(aprendizaje.manager, 'transport', None) is None:

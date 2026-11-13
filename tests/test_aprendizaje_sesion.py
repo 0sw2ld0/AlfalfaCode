@@ -546,6 +546,27 @@ def test_el_repaso_con_correccion_del_usuario_aunque_sea_corta(escena, monkeypat
     assert len(vistos) == 1 and s.m.task['aprendizaje_revision']['estado'] == 'hecha'
 
 
+def test_como_mucho_tres_repasos_por_sesion(escena, monkeypatch):
+    monkeypatch.delenv('ALFALFA_APRENDER_REVISION', raising=False)
+    s = escena(ajustes=REVISION)
+    vistos, estados = [], []
+    for _ in range(revision.MAX_REVISIONES + 1):
+        s.correr([llamada('wrap_up', {'recap': 'Entendido.'}), {'role': 'assistant', 'content': 'Vale.'},
+                  respuesta_de_revision({'memoria': [], 'habilidades': []}, vistos)],
+                 prompt='No, así no: prefiero que uses pytest -q siempre.', repasar=True)
+        estados.append(s.m.task['aprendizaje_revision']['estado'])
+    assert estados == ['hecha'] * revision.MAX_REVISIONES + ['tope_de_sesion']
+    assert len(vistos) == revision.MAX_REVISIONES and s.m.task['revisiones_hechas'] == revision.MAX_REVISIONES
+
+
+def test_un_turno_sin_senales_no_gasta_el_tope(escena, monkeypatch):
+    monkeypatch.delenv('ALFALFA_APRENDER_REVISION', raising=False)
+    s = escena(ajustes=REVISION)
+    s.correr([llamada('wrap_up', {'recap': 'Listo.'}), {'role': 'assistant', 'content': 'Hecho.'}], repasar=True)
+    assert s.m.task['aprendizaje_revision']['estado'] == 'sin_senales'
+    assert not s.m.task.get('revisiones_hechas')
+
+
 def test_cancelar_el_repaso_no_toca_el_turno(escena, monkeypatch):
     monkeypatch.delenv('ALFALFA_APRENDER_REVISION', raising=False)
     s = escena(ajustes=REVISION)

@@ -81,11 +81,11 @@ duros. Si no se puede completar la comprobación, no se abre para escribir.
 **Repaso al cerrar el turno.** Si el turno tuvo muchos pasos, un fallo superado o una
 corrección tuya y cerró con `wrap_up`, una pasada breve sin razonamiento decide si hay algo
 que recordar o un procedimiento que guardar. Corre con el turno ya cerrado (en `--stdio`,
-después de `turno_terminado`) y como mucho 20 s; si llega otro mensaje o pulsas «Detener»,
-se deja (en la terminal, Ctrl-C). Usa el mismo proveedor y su modelo más barato
-de la familia, o el de `modelo_revision`; con un proveedor de plan o local sólo corre si lo
-eliges. Cuenta la entrada y la salida máxima contra el presupuesto y no corre si no
-alcanza. **Nunca aplica nada**: lo que propone queda pendiente y sale como tarjeta con el
+después de `turno_terminado`), como mucho 20 s y **como mucho 3 veces por sesión**. Si
+escribes otro mensaje mientras corre, espera hasta 10 s a que termine; «Detener» la deja
+(en la terminal, Ctrl-C). Usa el mismo proveedor y su modelo más barato de la familia, o
+el de `modelo_revision`; con un proveedor de plan o local, el de la sesión. Cuenta la
+entrada y la salida máxima contra el presupuesto y no corre si no alcanza. **Nunca aplica nada**: lo que propone queda pendiente y sale como tarjeta con el
 diff («Guardar» o «Descartar»; en la terminal, con la orden para aplicarlo), sin repetir lo
 que ya estaba propuesto. Al reabrir la sesión en la app, sus tarjetas pendientes vuelven.
 
