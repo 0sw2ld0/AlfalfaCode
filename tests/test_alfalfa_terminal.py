@@ -384,6 +384,8 @@ def test_context_is_emitted_to_transport_only_with_integers(tmp_path, monkeypatc
     try:
         m.context(m.task, 1200, 32768)
         m.context(m.task, None, 32768)
-        assert rows == [('contexto', dict(tokens=1200, limite=32768))]
+        assert [r for r in rows if r[0] == 'contexto'] == [('contexto', dict(tokens=1200, limite=32768))]
+        # Lo gastado en la sesión viaja aparte, una vez mientras no cambie.
+        assert [r for r in rows if r[0] == 'uso_sesion'] == [('uso_sesion', dict(tokens=0))]
     finally:
         m.close()
