@@ -157,18 +157,15 @@ struct NewTaskView: View {
                 .buttonStyle(.plain)
                 .help(ImageSupport.attachHelp(allowsImages: allowsImages))
                 .accessibilityLabel(allowsImages ? "Adjuntar imágenes o archivos" : "Adjuntar archivos")
-                TextField("Describe una tarea o haz una pregunta", text: $model.draft, axis: .vertical)
-                    .textFieldStyle(.plain).lineLimit(1...5).focused($focused)
-                    .accessibilityLabel("Encargo")
-                    .onChange(of: model.draft) { old, new in
-                        guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
-                        model.draft = dropped.text
-                        if !allowsImages, dropped.images.contains(where: Attachments.isImage) {
-                            model.newImageNotice.show()
-                        }
-                        ImagePicker.add(dropped.images, to: &model.draftImages, withImages: allowsImages)
+                NewTaskTextField(draft: model.newDraft, focused: $focused, onSubmit: start) { old, new in
+                    model.noteDraft(new)
+                    guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
+                    model.draft = dropped.text
+                    if !allowsImages, dropped.images.contains(where: Attachments.isImage) {
+                        model.newImageNotice.show()
                     }
-                    .onSubmit(start)
+                    ImagePicker.add(dropped.images, to: &model.draftImages, withImages: allowsImages)
+                }
                 Button(action: start) {
                     Image(systemName: "arrow.up").fontWeight(.bold).foregroundStyle(Theme.dark)
                         .frame(width: 30, height: 30)
@@ -229,7 +226,7 @@ struct NewTaskView: View {
 
     private var canStart: Bool {
         model.launcher != nil && model.folder != nil
-            && (!model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.draftImages.isEmpty)
+            && (model.draftHasText || !model.draftImages.isEmpty)
     }
 
     private var modelMenu: some View {
@@ -284,5 +281,22 @@ struct ReadOnlyToggleStyle: ToggleStyle {
         .buttonStyle(.plain)
         .accessibilityValue(configuration.isOn ? "activado" : "desactivado")
         .help("En solo lectura el agente no puede editar archivos ni ejecutar órdenes")
+    }
+}
+
+
+/// El cuadro de Nuevo encargo. Observa sólo el texto (`DraftText`): escribir no redibuja el resto.
+private struct NewTaskTextField: View {
+    @ObservedObject var draft: DraftText
+    var focused: FocusState<Bool>.Binding
+    let onSubmit: () -> Void
+    let onChange: (String, String) -> Void
+
+    var body: some View {
+        TextField("Describe una tarea o haz una pregunta", text: $draft.text, axis: .vertical)
+            .textFieldStyle(.plain).lineLimit(1...5).focused(focused)
+            .accessibilityLabel("Encargo")
+            .onChange(of: draft.text) { old, new in onChange(old, new) }
+            .onSubmit(onSubmit)
     }
 }
