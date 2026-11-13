@@ -1,1 +1,1 @@
-Crear ramas, hacer commits, stash, merge o tags ya no pide permiso: el sandbox sólo protege los hooks y la config de .git, como Claude Code. git config, git init, push y pull siguen preguntando, y en ellos sirve «No volver a preguntar».
+La app ya no se cuelga mientras espera un permiso ni gasta CPU en reposo: el punto de estado de la barra lateral lo anima el sistema, la conversación ya no entra en bucles de layout y el panel de cambios lee como mucho 1 MB del git diff, un refresco a la vez.
