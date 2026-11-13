@@ -1208,8 +1208,9 @@ def test_la_tarjeta_de_swift_tiene_su_motivo(sesion):
 
 
 def test_la_orden_lleva_el_flag(tmp_path):
-    from alfalfa.terminal import swift_diagnostics
     from types import SimpleNamespace
+
+    from alfalfa.terminal import swift_diagnostics
     assert swift_diagnostics(SimpleNamespace(diagnosticos_swift=True)) is True
     assert swift_diagnostics(SimpleNamespace(diagnosticos_swift=False)) is None
     assert swift_diagnostics(SimpleNamespace()) is None

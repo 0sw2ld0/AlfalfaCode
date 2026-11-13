@@ -24,6 +24,9 @@ struct NewTaskView: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 header
+                    // Cada vez que se abre, la rama y los cambios de la carpeta de ahora: sin esto el
+                    // panel enseñaba los del arranque de la app (una rama que ya no existía).
+                    .task { await model.refreshNewPanel() }
                 Spacer(minLength: 0)
                 VStack(spacing: 22) {
                     LeafIcon(size: 34)

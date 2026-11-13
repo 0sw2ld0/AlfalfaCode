@@ -14,10 +14,11 @@ from alfalfa.permisos.denegacion import (
 
 
 def test_keywords_and_quick_reject_codes_match_codex():
-    # Las de Codex, en su orden, más las de Launch Services de macOS (diferencia documentada).
-    assert SANDBOX_DENIED_KEYWORDS[:7] == ('operation not permitted', 'permission denied', 'read-only file system',
-                                           'seccomp', 'sandbox', 'landlock', 'failed to write file')
-    assert SANDBOX_DENIED_KEYWORDS[7:] == ('unable to find application named', 'no application knows how to open',
+    # Las de Codex, en su orden y sin «sandbox» suelta, más las de Launch Services de macOS
+    # (diferencias documentadas).
+    assert SANDBOX_DENIED_KEYWORDS[:6] == ('operation not permitted', 'permission denied', 'read-only file system',
+                                           'seccomp', 'landlock', 'failed to write file')
+    assert SANDBOX_DENIED_KEYWORDS[6:] == ('unable to find application named', 'no application knows how to open',
                                            'lsopenurlswithrole', 'klsnoexecutableerr',
                                            'cannot be opened for an unexpected reason')
     assert QUICK_REJECT_EXIT_CODES == (2, 126, 127)
@@ -38,6 +39,25 @@ def test_unsandboxed_execution_is_never_a_denial(sandbox):
 def test_each_keyword_in_each_section_is_a_denial(section, keyword):
     text = 'error: ' + keyword.upper() + ' at /x'
     assert is_likely_sandbox_denied('seatbelt', 1, **{section: text})
+
+
+def test_the_word_sandbox_in_ordinary_output_is_not_a_denial():
+    # ruff citaba código de bajo_demanda.py y la tarjeta ofrecía repetir `ruff check .` sin sandbox.
+    ruff = ('alfalfa/permisos/bajo_demanda.py:3:1: I001 Import block is un-sorted\n'
+            '  | from ..seatbelt import SandboxUnavailable\n  | reasons = [REINTENTO]  # sin sandbox\n'
+            'Found 4 errors.\n[*] 3 fixable with the `--fix` option.')
+    assert not is_likely_sandbox_denied('seatbelt', 1, aggregated=ruff)
+    assert not is_likely_sandbox_denied('seatbelt', 1, stdout="grep: 'sandbox': 12 coincidencias")
+
+
+@pytest.mark.parametrize('text', [
+    'Sandbox: swift-build(4711) deny(1) file-write-create /Users/x/.cache',
+    'build\nsandbox: git(12) deny(1) file-write-data /repo/.git/config',
+    'error: sandbox_apply: Operation not permitted',
+    'kernel: deny(1) mach-lookup com.apple.coreservices',
+])
+def test_seatbelt_own_messages_are_denials(text):
+    assert is_likely_sandbox_denied('seatbelt', 1, aggregated=text)
 
 
 def test_ordinary_failure_is_not_a_denial():

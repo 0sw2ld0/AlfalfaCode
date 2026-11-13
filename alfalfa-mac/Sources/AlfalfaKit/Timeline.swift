@@ -521,6 +521,9 @@ public struct Timeline: Equatable, Sendable {
             if let breakdown { contextBreakdown = breakdown }
             if let details { contextDetails = details }
             if let mode = details?.priceTier?.mode { contextMode = mode }
+        case let .sessionUsage(tokens, cost):
+            totalTokens = tokens
+            if let cost { totalCost = cost }
         case let .error(text):
             items.append(.notice(id: nextID(), text: text))
         case let .messageRejected(rejection):
