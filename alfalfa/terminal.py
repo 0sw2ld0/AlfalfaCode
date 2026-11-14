@@ -497,7 +497,9 @@ class TerminalManager:
 
     def save(self):
         self.task['updated_at'] = time.time()
-        atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
+        from .tachado import tachar_ordenes
+        task = tachar_ordenes(self.task)
+        atomic_json(self.directory / 'task.json', self.transport.clean(task) if self.transport else task)
 
     def event(self, task, role, text, emitir=True, herramienta=None):
         """`emitir=False` sólo lo apunta en la transcripción: la app ya lo pintó.
@@ -517,10 +519,14 @@ class TerminalManager:
             return
         if role != 'system':
             self._ultima_respuesta = text if role == 'agent' else None
-        row = dict(role=role, text=text, time=time.time())
+        from .tachado import tachar_textos
+        # A disco, sin las claves de las órdenes (las herramientas y los avisos del sistema, como
+        # el de aprobar una orden, las llevan); a la app (abajo), entera. Lo que escriben el
+        # usuario y el modelo se guarda como es.
+        row = dict(role=role, text=tachar_textos(text) if role in ('tool', 'system') else text, time=time.time())
         row.update(cola)
         if herramienta:
-            row['herramienta'] = herramienta
+            row['herramienta'] = tachar_textos(herramienta)
         if task.get('turno_actual'):
             row['turno'] = task['turno_actual']
         path = self.directory / (task['id'] + '.jsonl')
