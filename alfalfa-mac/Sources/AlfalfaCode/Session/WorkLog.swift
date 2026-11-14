@@ -63,7 +63,8 @@ struct WorkLog: View, Equatable {
                     Image(systemName: "info.circle").font(.system(size: 12)).foregroundStyle(Theme.muted)
                         .frame(width: 16, height: 16)
                 } else {
-                    AlfalfaActivityIcon(phase: .done, size: 16)
+                    // Un grupo ya terminado lleva la hoja suelta, no la planta de ahora.
+                    AlfalfaActivityIcon(phase: .done, size: 16).environment(\.alfalfaGrowth, nil)
                 }
                 Text(title).font(.system(size: 14)).foregroundStyle(Theme.muted).lineLimit(1)
                 if let total {

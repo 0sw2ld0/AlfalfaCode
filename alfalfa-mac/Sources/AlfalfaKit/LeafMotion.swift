@@ -43,6 +43,37 @@ public enum LeafMotion {
         return Pose(opacity: 0.35 + 0.65 * wave, scale: 0.82 + 0.18 * wave)
     }
 
+    // MARK: - La planta que crece con el contexto
+
+    /// Vaivén de la planta entera, en grados (positivo a la derecha). Suman dos senos de periodos
+    /// que no encajan, así que no se repite como un metrónomo. Pensando, suave y lento;
+    /// trabajando, más marcado. Quieta en las demás fases y con «Reducir movimiento».
+    public static func plantSway(_ phase: LiveActivity.Phase, time: Double, reduceMotion: Bool) -> Double {
+        guard isAnimated(phase), !reduceMotion else { return 0 }
+        if phase == .working {
+            return 5.5 * (sin(2 * .pi * time / swayPeriod) + 0.3 * sin(2 * .pi * time / 0.83 + 0.7)) / 1.3
+        }
+        return 2.4 * (sin(2 * .pi * time / 3.4) + 0.35 * sin(2 * .pi * time / 1.45 + 1.1)) / 1.35
+    }
+
+    /// Aleteo de la hoja del nudo `node`, en grados. Cada nudo va un poco detrás del de abajo:
+    /// la brisa sube por la planta.
+    public static func flutter(_ phase: LiveActivity.Phase, node: Int, time: Double, reduceMotion: Bool) -> Double {
+        guard isAnimated(phase), !reduceMotion else { return 0 }
+        let lag = Double(node) * 0.17
+        if phase == .working {
+            return 8 * sin(2 * .pi * (time / 1.1 - lag))
+        }
+        return 4 * sin(2 * .pi * (time / 2.6 - lag))
+    }
+
+    /// Opacidad de la planta entera: 1 salvo con «Reducir movimiento», donde en vez de moverse
+    /// se desvanece suave (como la hoja sola).
+    public static func plantOpacity(_ phase: LiveActivity.Phase, time: Double, reduceMotion: Bool) -> Double {
+        guard isAnimated(phase), reduceMotion else { return 1 }
+        return pose(phase, leaflet: 0, time: time, reduceMotion: true).opacity
+    }
+
     /// Giro de la hoja entera, en grados: sólo trabajando y sin «Reducir movimiento».
     public static func sway(_ phase: LiveActivity.Phase, time: Double, reduceMotion: Bool) -> Double {
         guard phase == .working, !reduceMotion else { return 0 }
