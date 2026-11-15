@@ -1070,6 +1070,9 @@ def sessions():
                 if task['id'] != directory.name or not isinstance(row['fecha'], (int, float)):
                     raise ValueError()
                 row.update(_marcas(directory))
+                if row['estado'] in ('running', 'waiting', 'starting') and not _en_ejecucion(directory):
+                    # Nadie tiene su cerrojo: el proceso que la dejó así ya no existe.
+                    row['estado'] = 'interrupted'
             except (OSError, ValueError, KeyError, TypeError):
                 row = dict(id=directory.name, encargo=None, cwd=None, estado='corrupta',
                            modelo=None, esfuerzo=None, fecha=0, tokens=0)
