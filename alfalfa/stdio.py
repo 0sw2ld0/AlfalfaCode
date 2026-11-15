@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from .equipo import ErrorDeEquipo
 from .permisos.terminal import solo_lectura
+from .reintentos.fallos import es_aviso_de_transporte
 
 VERSION = 2
 MAX_MENSAJE = 20000
@@ -1185,7 +1186,6 @@ def turns(ident):
 
 
 MAX_HISTORIAL = 600
-_RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Anthropic', 'Alfalfa'))
 
 
 def history(ident):
@@ -1204,7 +1204,7 @@ def history(ident):
                 continue
             if not isinstance(row, dict) or not isinstance(row.get('text'), str):
                 continue
-            if row.get('role') == 'system' and row['text'].startswith(_RUIDO):
+            if row.get('role') == 'system' and es_aviso_de_transporte(row['text']):
                 continue
             evento = dict(rol=row.get('role', 'system'), texto=row['text'][:20000], hora=row.get('time', 0))
             if isinstance(row.get('compactacion'), dict):

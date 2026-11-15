@@ -70,6 +70,9 @@ OUTPUT_BYTES_PER_TOKEN = 8
 MAX_TRANSPORT_ATTEMPTS = 3
 RETRY_BACKOFF_BASE_SECONDS = 1.0
 RETRY_BACKOFF_MAX_SECONDS = 2.0
+# Saturado (429) o 503 sin Retry-After: un segundo no basta para que se vacíe la cola o la
+# cuota; tres intentos en tres segundos fallaban igual.
+RETRY_BACKOFF_SATURADO_SECONDS = (5.0, 10.0)
 # Con stream=False no llega ningún byte hasta el final: revisiones y correcciones
 # grandes en Ollama Cloud pasaban de 180 s y se perdía la sesión (2026-11-03).
 TRANSPORT_SESSION_TIMEOUT_SECONDS = 600.0
@@ -168,6 +171,7 @@ from ...reintentos.fallos import (  # noqa: E402, F401
     _SENALES_SOLICITUD_INVALIDA,
     DEFINITIVO,
     DESCONOCIDO,
+    MOTIVO_DE_REINTENTO,
     TRANSITORIO,
     OllamaError,
     _es_modelo_inexistente,
@@ -211,10 +215,17 @@ def _texto_de_fallo(exc):
     return ''
 
 
+# Cierres del servidor que httpx informa como error de protocolo y que son cortes de la
+# conexión, no respuestas mal formadas: antes de responder, o a mitad del cuerpo (con
+# Content-Length o por trozos). El mismo corte con RST llega como ReadError y ya se reintentaba.
+_CORTES_DE_CONEXION = ('server disconnected without sending a response',
+                       'peer closed connection without sending complete message body')
+
+
 def _es_desconexion_sin_respuesta(exc):
     """Reconoce el cierre remoto explícito que se puede reintentar con seguridad."""
-    return (isinstance(exc, httpx.RemoteProtocolError)
-            and 'server disconnected without sending a response' in str(exc).casefold())
+    texto = str(exc).casefold()
+    return isinstance(exc, httpx.RemoteProtocolError) and any(c in texto for c in _CORTES_DE_CONEXION)
 
 
 
@@ -869,6 +880,13 @@ class NativeRuntime:
         if value.isdigit():
             return float(int(value))
         try:
+            segundos = float(value)
+        except ValueError:
+            segundos = None
+        if segundos is not None:
+            # «1.5» también son segundos; un número negativo o infinito no vale.
+            return segundos if math.isfinite(segundos) and segundos >= 0 else None
+        try:
             when = parsedate_to_datetime(value)
             if when.tzinfo is None:
                 when = when.replace(tzinfo=timezone.utc)
@@ -884,9 +902,18 @@ class NativeRuntime:
         log = self.task.setdefault('runtime_transport_attempt_log', [])
         log.append(entry)
         del log[:-MAX_TRANSPORT_ATTEMPTS]
+
+    def _avisar_reintento(self, clas, attempt, espera):
+        """Un aviso por reintento, antes de esperar: qué falló y cuánto se espera. Una petición
+        que va bien a la primera no avisa de nada."""
+        motivo = MOTIVO_DE_REINTENTO.get(clas.get('cause'), 'fallo transitorio')
+        if clas.get('status_code'):
+            motivo += ', HTTP ' + str(clas['status_code'])
+        segundos = ('%.1f' % espera).rstrip('0').rstrip('.')
         self.manager.event(self.task, 'system',
                            self._proveedor_actual().nombre + ' transporte: intento ' + str(attempt) + '/'
-                           + str(MAX_TRANSPORT_ATTEMPTS) + '.')
+                           + str(MAX_TRANSPORT_ATTEMPTS) + ' falló (' + motivo + '); reintento en '
+                           + segundos + ' s.')
 
     def _log_transport_exhausted(self, attempts, reason):
         self.task['runtime_transport_retry_exhausted'] = True
@@ -894,6 +921,9 @@ class NativeRuntime:
         if reason == 'attempt_limit':
             texto = (self._proveedor_actual().nombre + ' transporte: agotados ' + str(attempts)
                      + ' intentos; sesión no completada.')
+        elif reason == 'retry_after':
+            texto = (self._proveedor_actual().nombre + ' transporte: el proveedor pide esperar más que el plazo '
+                     'de la petición; no se reintenta.')
         else:
             texto = (self._proveedor_actual().nombre + ' transporte: plazo de sesión agotado tras ' + str(attempts)
                      + ' intentos; no se completó la sesión.')
@@ -913,6 +943,8 @@ class NativeRuntime:
         remaining = deadline - self._retry_clock()
         backoff = min(RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)),
                       RETRY_BACKOFF_MAX_SECONDS)
+        if retry_after is None and (clas.get('cause') == 'saturation' or clas.get('status_code') == 503):
+            backoff = RETRY_BACKOFF_SATURADO_SECONDS[min(attempt, len(RETRY_BACKOFF_SATURADO_SECONDS)) - 1]
         delay = max(backoff, retry_after or 0.0)
         if remaining <= 0:
             self._log_transport_exhausted(attempt, 'session_deadline')
@@ -920,7 +952,19 @@ class NativeRuntime:
             if cause is not None:
                 raise error from cause
             raise error
+        if retry_after is not None and retry_after > remaining:
+            # El proveedor pide esperar más de lo que le queda a la petición: esperar hasta el
+            # plazo para fallar igual solo hacía perder minutos. Se falla ya y se dice cuánto pide.
+            self._log_transport_exhausted(attempt, 'retry_after')
+            pide = ('%.0f' % retry_after) if retry_after >= 10 else ('%.1f' % retry_after).rstrip('0').rstrip('.')
+            clas = dict(clas, action=clas['action'].rstrip('.') + '; el proveedor pide esperar ' + pide
+                        + ' s antes de reintentar, más de lo que queda a esta petición.')
+            error = self._provider_failure(clas, error_text, intentos=attempt)
+            if cause is not None:
+                raise error from cause
+            raise error
         espera = min(delay, remaining)
+        self._avisar_reintento(clas, attempt, espera)
         await self._retry_sleep(espera)
         if espera < delay or self._retry_clock() >= deadline:
             self._log_transport_exhausted(attempt, 'session_deadline')
