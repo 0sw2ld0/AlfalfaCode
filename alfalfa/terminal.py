@@ -175,25 +175,37 @@ def engine_text(effort):
 MODELO_POR_DEFECTO = 'deepseek-v4.1-flash:cloud'
 
 
+class SinProveedorPorDefecto(ValueError):
+    """El proveedor por defecto que elegiste no se puede usar: la sesión no se abre con otro."""
+
+
 def modelo_por_defecto():
     """El modelo de una sesión nueva sin `--modelo`: el del proveedor por defecto."""
     from .proveedores import configuracion
     ident = configuracion.por_defecto()
     if ident != 'ollama':
+        # Elegiste ese proveedor: si ya no se puede usar, la sesión no se abre con otro por su
+        # cuenta. Antes se iba en silencio a Ollama Cloud y el encargo salía hacia un proveedor
+        # que no habías elegido.
         try:
             proveedor = proveedores.obtener(ident)
-        except proveedores.ErrorDeProveedor:
-            return MODELO_POR_DEFECTO
+        except proveedores.ErrorDeProveedor as exc:
+            raise SinProveedorPorDefecto(
+                f'El proveedor por defecto ({ident}) no está disponible: {exc} Elige otro con '
+                '--proveedor-por-defecto o indica el modelo con --modelo.') from None
         if not proveedor.configurado():
-            return MODELO_POR_DEFECTO
+            raise SinProveedorPorDefecto(
+                f'Elegiste {proveedor.nombre} como proveedor por defecto y no se puede usar. {proveedor.falta()} '
+                'O elige otro con --proveedor-por-defecto, o indica el modelo con --modelo.')
         # El que eligió el usuario (al conectarlo con `--conectar` desde la bienvenida) o el
         # propio del proveedor. Nunca un gratis por su cuenta: puede usar los datos para entrenar.
         elegido = configuracion.de(ident).get('modelo') or getattr(proveedor, 'modelo_por_defecto', None)
         if isinstance(elegido, str) and elegido:
             return proveedores.con_prefijo(ident, elegido)
-        raise ValueError(f'{proveedor.nombre} es el proveedor por defecto pero no tiene un modelo elegido. '
-                         f'Indica uno con --modelo {ident}/<modelo> (alfalfa --modelos los lista; los '
-                         'gratis pueden usar tus datos para entrenar).')
+        raise SinProveedorPorDefecto(
+            f'{proveedor.nombre} es el proveedor por defecto pero no tiene un modelo elegido. '
+            f'Indica uno con --modelo {ident}/<modelo> (alfalfa --modelos los lista; los '
+            'gratis pueden usar tus datos para entrenar).')
     return MODELO_POR_DEFECTO
 
 
@@ -1486,7 +1498,7 @@ def main(argv=None):
             if politica and politica.modelos:
                 args.modelo = modelo_por_defecto()
                 politica.comprobar_modelo(args.modelo)
-        except equipo.ErrorDeEquipo as exc:
+        except (equipo.ErrorDeEquipo, SinProveedorPorDefecto) as exc:
             print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
             return 1
     if nueva and not args.modelo:

@@ -642,7 +642,7 @@ class CierreSeguro:
 
 
 async def run(args, transport):
-    from .terminal import TerminalManager, diagnostics, keep_awake, signature, swift_diagnostics
+    from .terminal import SinProveedorPorDefecto, TerminalManager, diagnostics, keep_awake, signature, swift_diagnostics
     manager = None
     reader_task = None
     pipe = None
@@ -919,6 +919,10 @@ async def run(args, transport):
         transport.emit('error', texto=str(exc))
         if manager:
             manager.task.update(status='failed', summary=str(exc))
+    except SinProveedorPorDefecto as exc:
+        # La sesión no llegó a abrirse: qué falta configurar, no un «no se pudo iniciar».
+        code = 1
+        transport.emit('error', texto=str(exc))
     except Exception:
         code = 1
         transport.emit('error', texto='No se pudo iniciar o ejecutar la sesión.')

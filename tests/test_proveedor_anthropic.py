@@ -428,7 +428,8 @@ def test_el_proveedor_por_defecto_elige_su_modelo(tmp_path, monkeypatch):
     from alfalfa.terminal import modelo_por_defecto
     monkeypatch.chdir(tmp_path)
     configuracion.cambiar(None, 'por_defecto', 'anthropic')
-    assert modelo_por_defecto() == 'deepseek-v4.1-flash:cloud'
+    with pytest.raises(ValueError, match='Elegiste Anthropic como proveedor por defecto'):
+        modelo_por_defecto()
     llavero.guardar('anthropic', CLAVE)
     assert modelo_por_defecto() == 'anthropic/claude-sonnet-5-5'
 
