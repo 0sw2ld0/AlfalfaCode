@@ -35,6 +35,7 @@ include = ["alfalfa", "alfalfa.*"]  # sin «alfalfa-mac/», que no es parte del 
 "*" = ["*.md", "*.sbpl", "*.swift", "LICENSE", "NOTICE"]
 "alfalfa" = ["instalar.sh"]
 "alfalfa.catalogo" = ["minimo.json"]
+"alfalfa.pacai" = ["*.json"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

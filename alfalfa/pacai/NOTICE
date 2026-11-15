@@ -1,0 +1,12 @@
+PACAI (Protocol for Agent Communication And Interfaces)
+Copyright 2026 Oswaldo Leon
+
+Esta carpeta incluye material de PACAI 0.2, publicado bajo la Apache License 2.0
+(ver LICENSE en esta carpeta):
+
+- pacai-0.2.schema.json: el esquema JSON de los mensajes.
+- jcs.py y verificador.py: derivados del SDK de Python de PACAI (canonización JCS,
+  digest de las aprobaciones y reglas de sesión), adaptados y traducidos.
+- tipos.py: las tablas del catálogo de mensajes de la especificación.
+
+El resto del código de esta carpeta es de AlfalfaCode (MIT).
