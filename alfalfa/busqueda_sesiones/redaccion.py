@@ -186,8 +186,9 @@ def _hojas(valor, clave='', profundidad=0):
 
 
 # Campos de la salida de una herramienta que no dicen nada a quien busca.
-_SIN_INTERES = frozenset({'sha256', 'expected_sha256', 'start_line', 'total_lines', 'classification',
-                          'workspace_context', 'retry_guard_key', 'fingerprint'})
+_SIN_INTERES = frozenset({'sha256', 'expected_sha256', 'start_line', 'end_line', 'next_offset', 'line_cut',
+                          'total_lines', 'classification', 'workspace_context', 'retry_guard_key', 'fingerprint',
+                          'skipped_large_count'})
 
 
 def texto_de_salida(contenido):

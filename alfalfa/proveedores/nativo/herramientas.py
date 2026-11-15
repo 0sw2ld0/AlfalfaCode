@@ -25,6 +25,7 @@ from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
 from ...reintentos.politica import expensive_operation_identity, expensive_operation_needs_cause, retry_guard_key
 
 MAX_FILE = 1024 * 1024
+MAX_LECTURA = 16000  # caracteres de texto que devuelve read_file de una vez
 EDICIONES = ('write_file', 'edit_file', 'apply_patch')
 COMMAND_TIMEOUT_SECONDS = 120.0
 
@@ -321,7 +322,8 @@ TOOLS = [
     schema('list_files', 'List project files, excluding private/dependency directories.',
            {'path': STRING}, example=TOOL_ARGUMENT_EXAMPLES['list_files']),
     schema('read_file', 'Read exact UTF-8 text and SHA256 for safe editing; start_line is separate metadata. Returns '
-                        'up to 200 lines (limit); continue with offset when truncated is true. The sha256 is always of '
+                        'up to 200 lines (limit) and at most 16000 characters, always whole lines; when truncated '
+                        'is true, continue with offset = next_offset. The sha256 is always of '
                         'the WHOLE file, even when reading a slice. text has no line numbers: never copy line numbers '
                         'into edit_file. Images use inspect_image.',
            {'path': STRING,
@@ -828,12 +830,15 @@ class WorkspaceTools:
         if not base.is_dir():
             raise ValueError('Se esperaba un directorio.')
         count = 0
+        # Quien recorre sabe si el recorrido se quedó a medias (más de 5000 entradas).
+        self.recorrido_incompleto = False
         for directory, dirs, names in os.walk(base, followlinks=False):
             dirs[:] = sorted(d for d in dirs if d not in SKIP and not (Path(directory)/d).is_symlink()
                              and not self._en_el_hogar(Path(directory).resolve() / d))
             for name in sorted(names):
                 count += 1
                 if count > 5000:
+                    self.recorrido_incompleto = True
                     return
                 try:
                     path = self.path(str((Path(directory)/name).relative_to(self.root)))
@@ -1269,36 +1274,82 @@ class WorkspaceTools:
             return await web.leer(args['url'])
         if name == 'list_files':
             rows = [str(p.relative_to(self.root)) for p in self.files(args.get('path', '.'))]
-            return {'files': rows[:500], 'truncated': len(rows) > 500}
+            fila = {'files': rows[:500], 'truncated': len(rows) > 500 or self.recorrido_incompleto}
+            if self.recorrido_incompleto:
+                fila['reason'] = 'Hay más de 5000 entradas; indica path para ver una carpeta concreta.'
+            return fila
         if name == 'search':
             if not args['query'] or len(args['query']) > 500:
                 raise ValueError('Consulta vacía o demasiado larga.')
             rows = []
             scanned = 0
+            # Lo que no se pudo mirar se dice: un «sin coincidencias» tiene que querer decir que no las hay.
+            grandes, otra_codificacion = [], []
+
+            def resultado(truncated, reason=None):
+                fila = {'matches': rows, 'truncated': truncated}
+                if reason:
+                    fila['reason'] = reason
+                if grandes:
+                    fila['skipped_large'] = grandes[:20]
+                    fila['skipped_large_count'] = len(grandes)
+                if otra_codificacion:
+                    fila['not_utf8'] = otra_codificacion[:20]
+                return fila
+
             for index, path in enumerate(self.files(args.get('path', '.'))):
                 if index % 20 == 0:
                     await asyncio.sleep(0)
                 try:
                     data, text = self.read(path)
-                except (OSError, ValueError, UnicodeError):
+                except UnicodeDecodeError:
+                    # No es UTF-8 pero es texto (Latin-1, Windows-1252): se busca igual, byte a byte.
+                    data = path.read_bytes()
+                    text = data.decode('latin-1')
+                    otra_codificacion.append(str(path.relative_to(self.root)))
+                except ValueError as exc:
+                    if 'demasiado grande' in str(exc):
+                        grandes.append(str(path.relative_to(self.root)))
+                    continue
+                except OSError:
                     continue
                 scanned += len(data)
                 if scanned > 8*1024*1024:
-                    return {'matches':rows,'truncated':True,'reason':'Limita path para buscar en más archivos.'}
+                    return resultado(True, 'Limita path para buscar en más archivos.')
                 for number, line in enumerate(text.splitlines(), 1):
                     if args['query'] in line:
                         rows.append({'path': str(path.relative_to(self.root)), 'line': number, 'text': line[:500]})
                         if len(rows) >= 100:
-                            return {'matches': rows, 'truncated': True}
-            return {'matches': rows, 'truncated': False}
+                            return resultado(True)
+            if self.recorrido_incompleto:
+                return resultado(True, 'Solo se buscó en las primeras 5000 entradas; indica path para buscar en '
+                                       'el resto.')
+            if grandes:
+                return resultado(False, 'Los archivos de skipped_large pasan de 1 MB y no se buscó en ellos.')
+            return resultado(False)
         path = self.path(args['path'], escritura=name != 'read_file')
         if name == 'read_file':
             data, text = self.read(path)
             lines = text.splitlines(keepends=True)
             offset, limit = args.get('offset', 1), args.get('limit', 200)
-            selected = ''.join(lines[offset-1:offset-1+limit])
-            return {'sha256': digest(data), 'total_lines': len(lines), 'start_line':offset,
-                    'text': selected[:16000], 'truncated':len(selected)>16000 or offset-1+limit<len(lines)}
+            # El corte va por líneas enteras y dice dónde seguir: antes se cortaba a 16 000 caracteres
+            # por el medio de una línea y el modelo, al seguir con offset+limit, se saltaba el hueco.
+            partes, usado, fin = [], 0, offset - 1
+            for linea in lines[offset-1:offset-1+limit]:
+                if usado + len(linea) > MAX_LECTURA and partes:
+                    break
+                partes.append(linea[:MAX_LECTURA])
+                usado += len(linea)
+                fin += 1
+            fila = {'sha256': digest(data), 'total_lines': len(lines), 'start_line': offset,
+                    'text': ''.join(partes), 'truncated': fin < len(lines)}
+            if partes:
+                fila['end_line'] = fin
+            if fin < len(lines):
+                fila['next_offset'] = fin + 1
+            if partes and len(partes[-1]) < len(lines[fin-1]):
+                fila['line_cut'] = fin  # una sola línea de más de MAX_LECTURA caracteres
+            return fila
         before, text = self.read(path) if path.exists() else (None, '')
         expected = digest(before) if before is not None else 'NEW'
         if args['expected_sha256'] != expected:
