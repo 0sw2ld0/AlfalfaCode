@@ -29,3 +29,18 @@ La terminal (`alfalfa "encargo"`) no tiene cola: cada orden es un solo encargo.
 
 Entre turnos, un mensaje (o un botón de la caja de cierre) abre el turno siguiente
 y el motor lo confirma: deja de verse «en cola» y la sesión pasa a «trabajando».
+
+## Al detener el turno a mitad de una tanda
+
+Si el agente había pedido varias herramientas y cortas el turno (Detener, Enviar ahora o
+cerrar la app), ninguna corre después por su cuenta. Al seguir, el modelo lee primero tu
+mensaje y recibe un resultado por cada una:
+
+- Las que estaban **en cola** no se ejecutaron.
+- La que **esperaba tu permiso** tampoco: si el agente la vuelve a pedir, la tarjeta sale
+  otra vez.
+- La que estaba **en marcha** queda con resultado incierto. Durante ese turno el agente no
+  puede repetir la misma orden a ciegas; desde tu mensaje siguiente, sí.
+
+Nada de esto deja la sesión «bloqueada». Un integrador sin persona delante sigue
+reanudando la cola al volver a lanzar la sesión.
