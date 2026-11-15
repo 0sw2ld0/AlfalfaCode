@@ -306,6 +306,20 @@ class Subagentes:
         self.agentes = {}
         self._contador = 0
 
+    def _nombre_libre(self, sesion):
+        """El siguiente aN que no usó ningún subagente de esta sesión, tampoco en otro proceso.
+
+        El contador empieza en 0 en cada proceso y el runtime carga `native/<sesión>-aN/session.json`
+        si existe: tras reabrir la sesión, el nuevo «a1» heredaba la conversación del a1 anterior.
+        """
+        nativo = self.gestor.directory / 'native'
+        while True:
+            self._contador += 1
+            ident = 'a' + str(self._contador)
+            if ident not in self.agentes and not (self.carpeta / (ident + '.jsonl')).exists() \
+                    and not (nativo / (sesion + '-' + ident)).exists():
+                return ident
+
     def revisor_de_diff(self, modelo):
         """Subagente de una sola respuesta, sin herramientas ni contexto del principal."""
         from uuid import uuid4
@@ -379,10 +393,9 @@ class Subagentes:
         equipo = getattr(self.gestor, 'equipo', None)
         if equipo:
             equipo.comprobar_modelo(modelo)
-        self._contador += 1
-        ident = 'a' + str(self._contador)
-        nombre = ' '.join(str(args.get('description') or '').split())[:80] or mensaje.split('\n')[0][:60]
         principal = self.gestor.task
+        ident = self._nombre_libre(principal['id'])
+        nombre = ' '.join(str(args.get('description') or '').split())[:80] or mensaje.split('\n')[0][:60]
         task = dict(id=principal['id'] + '-' + ident, cwd=principal['cwd'], objective=mensaje, status='created',
                     provider='ollama', runner='native',
                     model=modelo,
