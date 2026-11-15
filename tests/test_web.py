@@ -6,11 +6,15 @@ from contextlib import redirect_stdout
 
 import cuysearch
 import pytest
+from cuysearch.extractor import PageExtractor
 from cuysearch.motores import Motor, MotorBloqueado
 from cuysearch.tipos import Resultado
 
 from alfalfa import ajustes, terminal
 from alfalfa.proveedores.nativo import web
+
+# Antes de que el conftest la sustituya en cada prueba.
+_LECTURA_DE_VERDAD = PageExtractor._extract_limited
 
 
 class MotorFalso(Motor):
@@ -131,6 +135,64 @@ def test_read_web_rechaza_destinos_locales_con_la_libreria():
             asyncio.run(web.leer(url))
     with pytest.raises(ValueError, match='sólo acepta'):
         asyncio.run(web.leer('file:///etc/passwd'))
+
+
+def test_read_web_no_sigue_un_dns_que_cambia(monkeypatch):
+    """M17: el nombre resuelve a una IP pública al comprobarlo y a 127.0.0.1 después («DNS
+    rebinding»). Se conecta a la IP comprobada, así que el servicio local no recibe nada. Sin red: la
+    conexión a la IP pública de pega se rechaza aquí mismo."""
+    import http.server
+    import socket
+    import threading
+
+    visitas = []
+
+    class Interno(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            visitas.append(self.path)
+            cuerpo = b'SECRETO-INTERNO'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
+
+        def log_message(self, *args):
+            pass
+
+    publica = '93.184.216.34'
+    real_dns, real_connect = socket.getaddrinfo, socket.socket.connect
+    consultas = []
+
+    def dns(host, port, *args, **kwargs):
+        nombre = host.decode() if isinstance(host, bytes) else str(host)
+        if nombre == 'reenlace.prueba.invalid':
+            consultas.append(nombre)
+            ip = publica if len(consultas) == 1 else '127.0.0.1'
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (ip, port or 0))]
+        return real_dns(host, port, *args, **kwargs)
+
+    def conectar(self, direccion):
+        if isinstance(direccion, tuple) and direccion[0] != '127.0.0.1':
+            raise ConnectionRefusedError('sin red en la prueba')
+        return real_connect(self, direccion)
+
+    servidor = http.server.HTTPServer(('127.0.0.1', 0), Interno)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    monkeypatch.setattr(socket, 'getaddrinfo', dns)
+    monkeypatch.setattr(socket.socket, 'connect', conectar)
+    # El conftest cambia la lectura por «sin red en las pruebas»: aquí hace falta la de verdad.
+    monkeypatch.setattr(PageExtractor, '_extract_limited', _LECTURA_DE_VERDAD)
+    try:
+        url = f'http://reenlace.prueba.invalid:{servidor.server_address[1]}/panel'
+        try:
+            salida = asyncio.run(web.leer(url))
+        except ValueError:
+            salida = None
+    finally:
+        servidor.shutdown()
+    assert visitas == [], f'se leyó el servicio local: {salida}'
+    assert consultas == ['reenlace.prueba.invalid']
 
 
 def test_read_web_con_la_libreria(monkeypatch):
