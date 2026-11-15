@@ -166,7 +166,7 @@ def problemas(texto, marco=False):
     if mezcladas:
         motivos.append('palabras que mezclan alfabetos (homoglifos): ' + ', '.join(mezcladas[:3]))
     if (_CREDENCIALES.search(texto) or _CLAVE_SUELTA.search(texto) or _MAS_CREDENCIALES.search(texto)
-            or _clave_conocida(texto) or _aleatorio(texto)):
+            or _clave_conocida(texto) or _aleatorio(texto) or _con_forma_de_clave(texto)):
         motivos.append('parece una credencial o una clave')
     normal = unicodedata.normalize('NFKC', texto).translate(_HOMOGLIFOS)
     if _ESPACIADAS.search(normal):
@@ -176,6 +176,12 @@ def problemas(texto, marco=False):
     if marco and _MARCO.search(normal):
         motivos.append('imita la estructura del prompt (títulos «#», citas «>», separadores o marcas de memoria)')
     return motivos
+
+
+def _con_forma_de_clave(texto):
+    """¿La redacción de secretos taparía algo? Así la memoria rechaza las mismas formas de clave."""
+    from ..busqueda_sesiones.redaccion import tapar
+    return tapar(texto) != texto
 
 
 def _clave_conocida(texto):

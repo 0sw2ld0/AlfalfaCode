@@ -68,8 +68,19 @@ PATRONES = (
     # JWT: cabecera y carga JSON codificadas en base64url, más su firma.
     (re.compile(r'\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b'), REDACTADO),
     (re.compile(r'\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}'
-                r'|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})'),
+                r'|glpat-[A-Za-z0-9_-]{16,}|xox[abprse]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}'
+                # Stripe (secreta y restringida), Hugging Face, npm, PyPI, SendGrid, Google OAuth,
+                # DigitalOcean y el token de un bot de Telegram: pasaban tal cual al modelo y al índice.
+                r'|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,}'
+                r'|pypi-AgE[A-Za-z0-9_-]{20,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|ya29\.[A-Za-z0-9_-]{20,}'
+                r'|do[por]_v1_[A-Za-z0-9]{32,}|\d{8,10}:AA[A-Za-z0-9_-]{30,})'),
      REDACTADO),
+    # Webhooks de Slack y Discord: la dirección entera es la credencial.
+    (re.compile(r'(https://hooks\.slack\.com/services/)[A-Za-z0-9/_-]+'), r'\1' + REDACTADO),
+    (re.compile(r'(https://(?:discord|discordapp)\.com/api/webhooks/)[0-9]+/[A-Za-z0-9_-]+'), r'\1' + REDACTADO),
+    # La clave en la consulta de una dirección (?key=…, &access_token=…).
+    (re.compile(r'(?i)([?&](?:api[_-]?key|key|token|access[_-]?token|auth|secret|password|sig|signature)=)'
+                r'[^&\s\'"#<>]+'), r'\1' + REDACTADO),
 )
 # Una clave secreta de AWS suelta: 40 caracteres de base64 con mayúsculas, minúsculas y cifras (un sha1
 # de git, todo hexadecimal en minúsculas, no lo es).
