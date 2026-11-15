@@ -1051,6 +1051,20 @@ def test_preparacion_de_verdad_con_varios_objetivos(sesion, permisos, monkeypatc
 MANIFIESTOS_MALICIOSOS = Path(__file__).with_name('fixtures') / 'manifiestos_maliciosos'
 
 
+def _rastros_en_cache(nuevas):
+    """Carpetas nuevas de ~/Library/Caches que delatarían a sourcekit-lsp o a evil. Las de
+    `fuera_del_sandbox` no cuentan: puede crearlas en cualquier momento otra suite que corra a la vez."""
+    from tests.casa import PREFIJO_FUERA_DEL_SANDBOX
+    return sorted(n for n in nuevas if not n.startswith(PREFIJO_FUERA_DEL_SANDBOX)
+                  and any(p in n.lower() for p in ('alfalfa', 'evil', 'marca')))
+
+
+def test_las_carpetas_de_otras_pruebas_no_son_rastros(fuera_del_sandbox):
+    """Lo que falló bajo carga: otra suite creó `alfalfa-prueba …` mientras este archivo vigilaba la caché."""
+    nuevas = {fuera_del_sandbox.name, 'com.apple.Safari', 'org.swift.alfalfa-build', 'EvilMacro', 'marca-de-evil'}
+    assert _rastros_en_cache(nuevas) == ['EvilMacro', 'marca-de-evil', 'org.swift.alfalfa-build']
+
+
 @pytest.mark.skipif(SOURCEKIT is None or SWIFT is None, reason='sourcekit-lsp o swift no están instalados')
 @pytest.mark.parametrize('manifiesto', ['dlsym', 'silgen'])
 @pytest.mark.parametrize('modo', ['auto', 'manual', 'ediciones', 'omitir'])
@@ -1088,7 +1102,7 @@ def test_los_manifiestos_del_verificador_no_ejecutan_nada(sesion, permisos, monk
     assert any(c.startswith('sourcekit-lsp') for c in resultado['diagnosticos'].get('revisado_con', [])), resultado
     assert not (raiz / '.build').exists() and not (raiz / '.swiftpm').exists()
     nuevas = (set(os.listdir(cache)) if cache.is_dir() else set()) - antes
-    assert not [n for n in nuevas if 'alfalfa' in n.lower() or 'evil' in n.lower() or 'marca' in n.lower()]
+    assert not _rastros_en_cache(nuevas)
     de_sourcekit = [p for p in pedidas if p['motivo'] != 'edicion']   # Manual también pregunta cada edición
     assert len(de_sourcekit) == (0 if modo == 'omitir' else 1)
 

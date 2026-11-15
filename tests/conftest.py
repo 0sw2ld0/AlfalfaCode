@@ -99,11 +99,11 @@ def fuera_del_sandbox():
     import shutil
     from pathlib import Path
 
-    from tests.casa import base_fuera_del_sandbox
+    from tests.casa import PREFIJO_FUERA_DEL_SANDBOX, base_fuera_del_sandbox
     base = base_fuera_del_sandbox()
     if base is None:
         pytest.skip('la casa del usuario cuelga de una carpeta temporal: no hay un sitio fuera del sandbox')
-    ruta = Path(tempfile.mkdtemp(prefix='alfalfa-prueba ', dir=base))
+    ruta = Path(tempfile.mkdtemp(prefix=PREFIJO_FUERA_DEL_SANDBOX, dir=base))
     try:
         yield ruta
     finally:

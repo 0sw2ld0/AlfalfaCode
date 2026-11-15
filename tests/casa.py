@@ -9,6 +9,10 @@ import pwd
 import tempfile
 from pathlib import Path
 
+# Las carpetas del fixture `fuera_del_sandbox` se crean en ~/Library/Caches con este prefijo. Otra suite
+# que corra a la vez puede crear una en cualquier momento: quien vigile esa carpeta debe ignorarlas.
+PREFIJO_FUERA_DEL_SANDBOX = 'alfalfa-prueba '
+
 
 def casa_real():
     """La casa del usuario según la base de usuarios del sistema, no según $HOME."""
