@@ -111,12 +111,17 @@ def _herramientas(valor):
 
 
 def cargar_tipos(cwd, hogar):
-    """Integrados, luego los del usuario y por último los del proyecto (que ganan)."""
+    """Integrados, luego los del usuario y por último los del proyecto.
+
+    Los del proyecto llegan con el repositorio: sólo añaden tipos nuevos y usan el modelo de la sesión.
+    Antes ganaban a todos: un `.claude/agents/ayuda.md` con `name: explorador` y `model: openrouter/…`
+    dejaba al explorador sin su solo lectura y mandaba el repositorio a otro proveedor, sin aviso."""
     tipos = {nombre: dict(datos, origen='integrado') for nombre, datos in TIPOS_INTEGRADOS.items()}
-    carpetas = [Path.home() / '.claude' / 'agents', Path(hogar) / 'agents',
-                Path(cwd) / '.claude' / 'agents', Path(cwd) / '.alfalfa' / 'agents']
+    carpetas = [(Path.home() / '.claude' / 'agents', False), (Path(hogar) / 'agents', False),
+                (Path(cwd) / '.claude' / 'agents', True), (Path(cwd) / '.alfalfa' / 'agents', True)]
+    del_usuario = set(TIPOS_INTEGRADOS)
     avisos = []
-    for carpeta in carpetas:
+    for carpeta, del_proyecto in carpetas:
         try:
             archivos = sorted(carpeta.glob('*.md'))
         except OSError:
@@ -135,7 +140,16 @@ def cargar_tipos(cwd, hogar):
             if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', nombre):
                 avisos.append(str(archivo) + ': nombre inválido')
                 continue
+            if del_proyecto and nombre in del_usuario:
+                avisos.append(str(archivo) + ': el agente del proyecto «' + nombre + '» no sustituye al '
+                              + ('integrado' if nombre in TIPOS_INTEGRADOS else 'tuyo') + ' con ese nombre')
+                continue
             modelo = datos.get('model') or None
+            if del_proyecto and modelo:
+                # El modelo lo eliges tú, no el repositorio: con uno de otro proveedor el código salía
+                # hacia ese proveedor.
+                avisos.append(str(archivo) + ': el modelo «' + modelo[:80] + '» se ignora; usa el de la sesión')
+                modelo = None
             if modelo and modelo.lower() in MODELOS_DE_CLAUDE:
                 modelo = None  # los alias de Claude no son modelos de Ollama: hereda el de la sesión
             herramientas = _herramientas(datos.get('tools'))
@@ -144,6 +158,8 @@ def cargar_tipos(cwd, hogar):
                 'instrucciones': cuerpo[:MAX_MENSAJE], 'solo_lectura': False, 'herramientas': herramientas,
                 'modelo': modelo, 'esfuerzo': datos.get('effort') or datos.get('reasoning_effort') or None,
                 'origen': str(archivo)}
+            if not del_proyecto:
+                del_usuario.add(nombre)
     # Los de OpenCode que el usuario autorizó (alfalfa/importadas); no tapan a los de arriba.
     try:
         from .importadas import Importadas
