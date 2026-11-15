@@ -7,5 +7,6 @@ y claves de los proveedores (`ollama_url`, `ollama_clave`, `openai_clave`, `anth
 `clave_compatible`, `alfalfa_servicio_url`).
 También cómo se nombran el runtime y el integrador en los textos (`nombres`), a
 qué ramas puede avanzar un agente con `git merge --ff-only` (`ramas_de_avance`) y
-qué órdenes propias de su proyecto da por seguras (`orden_permitida`). La
-aplicación los registra al cargarse.
+qué órdenes propias de su proyecto da por seguras (`orden_permitida`), y si un turno
+con algo pendiente acaba `blocked` en vez de `completed` con un aviso
+(`cierre_pendiente_bloquea`; ver [cierre](cierre.md)). La aplicación los registra al cargarse.

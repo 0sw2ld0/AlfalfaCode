@@ -183,6 +183,9 @@ class ColaEncargos:
                 diagnosticos=self.manager.diagnosticos.activos() if self.manager.diagnosticos else False,
                 diagnosticos_swift=self.manager.diagnosticos.forzado_swift if self.manager.diagnosticos else None,
                 reglas_equipo=self.manager.equipo)
+            # Un encargo con algo pendiente (una edición rechazada, pruebas sin repetir) acaba
+            # bloqueado y la cola se para ahí: no se empieza el siguiente sobre uno a medias.
+            hijo.cierre_pendiente_bloquea = True
             self.gestores[ident] = hijo
             hijo.task['titulo'] = fila['titulo']
             hijo.presupuesto = self.manager.presupuesto

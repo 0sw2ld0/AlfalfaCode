@@ -46,6 +46,19 @@ def firma_de_commits():
     return FIRMA
 
 
+def cierre_pendiente_bloquea():
+    """¿Acaba `blocked` un turno en el que el modelo ya respondió pero queda algo pendiente?
+
+    Pendiente es una operación fallida sin resolver en una sesión que cambió archivos, una
+    verificación desfasada o fallida, una operación de resultado incierto o un permiso negado.
+    En AlfalfaCode, no: el turno termina `completed` y lo pendiente sale como aviso («Queda
+    pendiente: …»), como en Claude Code y Codex. Un integrador que reparte tareas y no quiere dar
+    por buena una con algo pendiente devuelve True. Los hooks, el presupuesto y la revisión
+    siguen bloqueando en los dos casos.
+    """
+    return False
+
+
 def ramas_de_avance():
     """Ramas, además de main y origin/main, a las que un agente puede avanzar con `git merge --ff-only`."""
     return ()

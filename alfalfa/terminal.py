@@ -1051,6 +1051,15 @@ class TerminalManager:
                            + pendiente.herramienta + ') no está autorizada: se manda tal cual. Autorízala en '
                            'Ajustes ▸ Importar o con alfalfa --importar.')
             await rt.run(expandido or prompt)
+            if self.task['status'] == 'running' and not rt._cierre_bloquea():
+                # Con respuesta del modelo el turno está hecho: lo pendiente ya se avisó al cerrar
+                # (`_avisar_pendiente`), y un permiso negado lo decidió la persona.
+                inciertas = [row.get('tool') for row in rt.state.get('handoff_uncertain_operations', [])
+                             if isinstance(row, dict) and row.get('status') == 'uncertain']
+                if inciertas:
+                    rt._avisar_pendiente('resultado incierto de ' + ', '.join(map(str, inciertas)))
+                if rt.evidence._result({}):
+                    self.task['status'] = 'completed'
             if self.task['status'] == 'running':
                 # Lo que cambió fuera (otro agente en el mismo proyecto) y las órdenes de consulta
                 # fallidas de una sesión que no cambió nada no bloquean (ver `bloqueantes`).

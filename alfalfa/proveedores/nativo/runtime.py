@@ -696,6 +696,23 @@ class NativeRuntime:
             else:
                 row.update(status='resolved', resolved_at=time.time())
 
+    def _cierre_bloquea(self):
+        """¿Acaba `blocked` un turno con algo pendiente? Lo fija el gestor (una cola de encargos sí lo
+        quiere: no pasa al siguiente con el anterior a medias) o, si no, el integrador (ajustes)."""
+        fijado = getattr(self.manager, 'cierre_pendiente_bloquea', None)
+        if isinstance(fijado, bool):
+            return fijado
+        from ... import ajustes
+        return ajustes.cierre_pendiente_bloquea()
+
+    def _avisar_pendiente(self, texto):
+        """«Queda pendiente: …» al cerrar el turno, una vez por cada cosa pendiente distinta."""
+        huella = digest(texto.encode())
+        if self.state.get('aviso_pendiente') == huella:
+            return
+        self.state['aviso_pendiente'] = huella
+        self.manager.event(self.task, 'system', 'Queda pendiente: ' + texto[:600])
+
     def reject_conversation_tool(self, name):
         """Audit and reject all tool routes, including indirect or unknown names."""
         name = str(name or 'herramienta_desconocida')[:100]
@@ -3092,12 +3109,19 @@ class NativeRuntime:
                         self.task['proposal_status'] = 'pending'
                         self.manager.event(self.task, 'proposal', clean['content'][:12000])
                     bloqueantes = self.evidence.bloqueantes()
-                    if bloqueantes:
-                        self.task.update(status='blocked', summary='Operaciones sin resolver: '+
-                            json.dumps(bloqueantes,ensure_ascii=False)[:400])
-                    elif self.evidence.verificacion_bloquea(verification):
-                        self.task.update(status='blocked', summary='Verificación pendiente: '+
-                            json.dumps(verification, ensure_ascii=False)[:400])
+                    pendiente = (('Operaciones sin resolver: ' + json.dumps(bloqueantes, ensure_ascii=False))
+                                 if bloqueantes else
+                                 ('Verificación pendiente: ' + json.dumps(verification, ensure_ascii=False))
+                                 if self.evidence.verificacion_bloquea(verification) else None)
+                    if pendiente and self._cierre_bloquea():
+                        self.task.update(status='blocked', summary=pendiente[:400 + pendiente.index(':') + 2])
+                    elif pendiente:
+                        # El modelo ya respondió: el turno no se queda bloqueado por esto, ni los
+                        # siguientes. Se avisa una vez mientras lo pendiente no cambie.
+                        self._avisar_pendiente(
+                            '; '.join(str(v) for v in bloqueantes.values()) if bloqueantes else
+                            'la última comprobación falló' if verification['status'] == 'failed' else
+                            'no se han vuelto a pasar las comprobaciones después de los últimos cambios')
                     elif verification['status'] == 'changed_externally':
                         # Otro agente o programa tocó los archivos después de comprobarlos:
                         # con dos agentes en el mismo proyecto pasa siempre y no es un fallo de

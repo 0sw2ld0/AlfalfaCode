@@ -105,7 +105,9 @@ def test_si_la_sesion_cambio_archivos_una_orden_fallida_sigue_pendiente(tmp_path
     assert estado.get('changes')
     assert any('Antes de terminar' in str(m.get('content')) for m in vistos[-1]['messages']
                if m.get('role') == 'user')
-    assert tarea['status'] == 'blocked' and estado.get('unresolved')
+    # Sigue pendiente y se avisa, pero el turno no queda bloqueado (ajustes.cierre_pendiente_bloquea).
+    assert tarea['status'] == 'completed' and estado.get('unresolved')
+    assert estado.get('aviso_pendiente')
 
 
 def test_si_otro_agente_cambia_lo_ya_comprobado_se_avisa_sin_bloquear(tmp_path, monkeypatch):

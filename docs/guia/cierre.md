@@ -29,3 +29,15 @@ app le manda al padre una nota con los primeros 400 caracteres de su informe: el
 resumen de `wrap_up` o, si no lo hay, su última respuesta. Si el padre está
 trabajando, la nota entra al acabar su turno. Si está dormido o cerrado, se despierta
 sin cambiarte de pantalla. Un turno que corta el usuario no manda nota.
+
+## Lo que queda pendiente
+
+Si al terminar queda algo sin resolver (una orden que falló después de cambiar archivos, o
+comprobaciones sin repetir tras la última edición), el turno termina igual: el modelo ya
+respondió. AlfalfaCode lo avisa con una línea «Queda pendiente: …», una sola vez mientras
+lo pendiente no cambie, y lo sigue apuntando para el revisor. Antes de cerrar, el agente
+recibe una vez el aviso «Antes de terminar» para que lo arregle él mismo.
+
+Un integrador que reparte tareas y no quiere dar por buena una con algo pendiente hace que
+`ajustes.cierre_pendiente_bloquea()` devuelva True: entonces el turno acaba `blocked`, como
+antes. Los hooks, el presupuesto y la revisión bloquean siempre.
