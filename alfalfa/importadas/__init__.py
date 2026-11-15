@@ -735,4 +735,6 @@ class Importadas:
         agente = valor['agente'] if valor['agente'] in self.agentes() else None
         if valor['subagente'] or agente:
             nota += '. Hazla con un subagente (spawn_agent' + (', agent_type «' + agente + '»' if agente else '') + ')'
-        return nota + '.\n\n<plantilla-del-repositorio>\n' + cuerpo + '\n</plantilla-del-repositorio>'
+        from ..marcas import neutralizar
+        return (nota + '.\n\n<plantilla-del-repositorio>\n' + neutralizar(cuerpo, 'plantilla-del-repositorio')
+                + '\n</plantilla-del-repositorio>')
