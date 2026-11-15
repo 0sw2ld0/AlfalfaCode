@@ -9,7 +9,12 @@ entre los colaboradores del repositorio, como hace con Claude y con Codex.
 No se firma si:
 - el mensaje ya lleva la firma;
 - la orden solo enseña algo (`--dry-run`, `-h`, `--help`);
-- el git instalado es anterior a la 2.32, que es la primera con `--trailer`.
+- el git instalado es anterior a la 2.32, que es la primera con `--trailer`;
+- la orden no usa el git del sistema: uno con ruta relativa, o uno que vive donde las órdenes
+  del agente pueden escribir (la carpeta del proyecto, $TMPDIR, /private/tmp).
+
+Para saber la versión el arnés ejecuta `git --version` en su propio proceso: fuera del sandbox
+y antes de que nadie apruebe la orden. Por eso nunca lo hace con un `git` que no sea de confianza.
 
 Se apaga con `--sin-firma`, con `ALFALFA_FIRMA=0` o con el interruptor de
 Ajustes ▸ General de la app. Una aplicación que integra el arnés cambia la línea,
@@ -19,6 +24,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -77,8 +83,30 @@ def _subcomando(argv):
     return i if i < len(argv) else None
 
 
-def _admite_trailer(programa):
-    """Si el git de `programa` ya tiene `git commit --trailer` (2.32 o posterior)."""
+def _de_confianza(programa, proyecto=None):
+    """¿Puede el arnés ejecutar `programa` por su cuenta? Sólo el git del sistema: `git` a secas
+    (el primero del PATH) o una ruta absoluta, y nunca uno cuyo archivo real esté donde una orden
+    del agente puede escribir. Un ejecutable del repositorio llamado `git` no lo es."""
+    from .seatbelt import PRIVATE_TMP, _contains, ruta_comparable
+    if os.sep in programa:
+        if not os.path.isabs(programa):
+            return False
+        ruta = programa
+    else:
+        ruta = shutil.which(programa)
+        if ruta is None:
+            # No hay ninguno que ejecutar: `git --version` fallará sin lanzar nada.
+            return True
+    real = ruta_comparable(os.path.realpath(os.path.abspath(ruta)))
+    escribibles = [proyecto, os.environ.get('TMPDIR'), PRIVATE_TMP, '/tmp', '/var/tmp']
+    return not any(_contains(ruta_comparable(os.path.realpath(str(raiz))), real) for raiz in escribibles if raiz)
+
+
+def _admite_trailer(programa, proyecto=None):
+    """Si el git de `programa` ya tiene `git commit --trailer` (2.32 o posterior). De uno que no
+    es de confianza no se sabe, porque no se ejecuta: se responde que no."""
+    if not _de_confianza(programa, proyecto):
+        return False
     if programa not in _versiones:
         try:
             salida = subprocess.run([programa, '--version'], capture_output=True, text=True, timeout=5).stdout
@@ -89,8 +117,9 @@ def _admite_trailer(programa):
     return _versiones[programa]
 
 
-def firmar(argv, linea):
-    """`argv` con la firma si es un `git commit` que hay que firmar; si no, el mismo `argv`."""
+def firmar(argv, linea, proyecto=None):
+    """`argv` con la firma si es un `git commit` que hay que firmar; si no, el mismo `argv`.
+    `proyecto` es la carpeta de la sesión: un `git` de dentro no se ejecuta ni se firma."""
     if not linea:
         return argv
     i = _subcomando(argv)
@@ -103,6 +132,6 @@ def firmar(argv, linea):
     buscado = (correo[1] if correo else linea).lower()
     if any(buscado in a.lower() for a in resto):
         return argv
-    if not _admite_trailer(str(argv[0])):
+    if not _admite_trailer(str(argv[0]), proyecto):
         return argv
     return list(argv[:i + 1]) + ['--trailer', linea] + list(argv[i + 1:])

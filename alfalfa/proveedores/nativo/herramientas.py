@@ -1437,7 +1437,7 @@ class WorkspaceTools:
         # La firma de AlfalfaCode en un `git commit` (alfalfa/firma.py), antes del permiso:
         # la tarjeta enseña la orden que de verdad se ejecuta.
         from ... import firma
-        firmada = firma.firmar(argv, firma.texto(self.runtime.manager))
+        firmada = firma.firmar(argv, firma.texto(self.runtime.manager), self.runtime.task.get('cwd'))
         if firmada is not argv:
             argv = firmada
             args = {**args, 'argv': list(argv)}
