@@ -197,6 +197,11 @@ class OnRequestPolicy:
                 runtime.manager.event(runtime.task, 'system', 'Sandbox Seatbelt no disponible: ' + failure)
             if network and not lectura_de_red(argv, runtime):
                 reasons.append(RED)
+        # Fuera del sandbox (el reintento) vale lo que se ve sin él; dentro y sin red, sólo lo que
+        # de verdad puede hacer daño ahí (permisos/peligrosos.py, `dentro_del_sandbox`).
+        danger_fuera = danger
+        if danger and label == 'seatbelt' and not network:
+            danger = dangerous_command_match(argv, dentro_del_sandbox=True)
         if danger:
             reasons.append(PELIGROSO)
         if ruled == 'preguntar':
@@ -224,6 +229,7 @@ class OnRequestPolicy:
         result['denegacion_probable'] = True
         self._annotate(runtime, result, denegacion_probable=True)
         retry = uuid4().hex[:16]
+        danger = danger_fuera
         retry_reasons = [REINTENTO] + ([PELIGROSO] if danger else [])
         if equipo and ruled == 'preguntar':
             retry_reasons.append(REGLA_USUARIO)

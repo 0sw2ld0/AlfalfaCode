@@ -167,7 +167,7 @@ def test_explicit_shell_invocations_are_recognized(command, script):
     ('ls; rm -rf x', FORCED_RM), ('true && rm -f x || echo no', FORCED_RM), ('(cd a; rm -rf b)', FORCED_RM),
     ('{ rm -rf x; }', FORCED_RM), ('cat <(rm -rf x)', FORCED_RM), ('echo `rm -rf x`', FORCED_RM),
     ('X=1 Y="2" rm -rf x', FORCED_RM), ('rm -rf *', FORCED_RM), ('# rm -rf x\nls', None),
-    ("echo 'unbalanced", OTHER), ('cat <<EOF\nrm -rf x\nEOF', OTHER),
+    ("echo 'unbalanced", OTHER), ('cat <<EOF\nrm -rf x\nEOF', None), ('bash <<EOF\nrm -rf x\nEOF', FORCED_RM),
     ('echo "${X:-$(rm -rf y)}"', OTHER), ('echo "$(case a in a) rm -rf x;; esac)"', OTHER),
     ('case $x in a) rm -rf y;; esac', FORCED_RM),
 ])
@@ -245,7 +245,7 @@ def test_documented_differences_with_codex():
     # Codex toma `-u` por el nombre de la orden; aquí se salta su valor.
     assert dangerous_command_match(['env', '-u', 'X', 'rm', '-rf', 'y']) == FORCED_RM
     # Lo que no se sabe analizar pregunta en lugar de pasar.
-    assert dangerous_command_match(['bash', '-c', 'cat <<EOF\nx\nEOF']) == OTHER
+    assert dangerous_command_match(['bash', '-c', 'echo ${a[$i]}']) == OTHER
 
 
 def test_malformed_argv_fails_closed():
