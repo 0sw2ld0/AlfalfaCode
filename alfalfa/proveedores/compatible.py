@@ -137,6 +137,41 @@ def traducir_chat(payload, ficha=None, esfuerzo=None, openrouter=False):
     return cuerpo
 
 
+FILTRO_DE_CONTENIDO = 'content_filter'
+
+
+def fallo_de_chat(datos, nombre):
+    """(estado, texto) si una respuesta de `/chat/completions` con HTTP 200 es en realidad un fallo.
+
+    OpenRouter documenta que, si el proveedor de arriba falla después de empezar, la respuesta
+    llega con HTTP 200, `finish_reason: "error"` y el error en `choices[0].error`. Leída como
+    respuesta normal era un mensaje vacío: el turno insistía tres veces y acababa en «El modelo
+    terminó sin respuesta ni herramientas», sin el error real. Con `content_filter`, el texto a
+    medias se daba por la respuesta final.
+    """
+    opciones = datos.get('choices')
+    if not isinstance(opciones, list) or not opciones or not isinstance(opciones[0], dict):
+        return 502, 'respuesta de ' + nombre + ' sin ninguna elección (choices vacío)'
+    eleccion = opciones[0]
+    error = eleccion.get('error')
+    motivo = eleccion.get('finish_reason')
+    if error or motivo == 'error':
+        texto = codigo = None
+        if isinstance(error, dict):
+            texto = error.get('message')
+            codigo = error.get('code')
+        elif isinstance(error, str):
+            texto = error
+        texto = texto if isinstance(texto, str) and texto.strip() else (
+            'el proveedor de ' + nombre + ' falló a mitad de la respuesta')
+        # El código es del proveedor de arriba: un 401 o 403 suyo no es la clave del usuario.
+        estado = codigo if isinstance(codigo, int) and 400 <= codigo <= 599 and codigo not in (401, 403) else 502
+        return estado, texto
+    if motivo == FILTRO_DE_CONTENIDO:
+        return 422, FILTRO_DE_CONTENIDO + ': el filtro de contenido de ' + nombre + ' cortó la respuesta'
+    return None
+
+
 def respuesta_chat(datos, modelo):
     """La respuesta de `/chat/completions` como la de `/api/chat` de Ollama."""
     opciones = datos.get('choices') if isinstance(datos.get('choices'), list) else []
@@ -247,6 +282,9 @@ class Transporte(httpx.AsyncBaseTransport):
             return _json(502, {'error': error.get('message') if isinstance(error, dict) else error}, cabeceras)
         if tipo == 'responses':
             return _json(200, traducir_respuesta(datos, modelo), cabeceras)
+        fallo = fallo_de_chat(datos, self.proveedor.nombre)
+        if fallo:
+            return _json(fallo[0], {'error': fallo[1]}, cabeceras)
         return _json(200, respuesta_chat(datos, modelo), cabeceras)
 
     async def aclose(self):
@@ -327,6 +365,9 @@ class Compatible(Proveedor):
     def accion(self, clas, error_text):
         if clas.get('cause') == 'access_denied':
             return 'falta de acceso; revisa la clave de ' + self.nombre + ' en Proveedores; no se reintenta.'
+        if str(error_text or '').startswith(FILTRO_DE_CONTENIDO + ':'):
+            return ('el filtro de contenido de ' + self.nombre + ' cortó la respuesta; reformula la petición '
+                    'o elige otro modelo; no se reintenta.')
         return None
 
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None, transporte=None):
