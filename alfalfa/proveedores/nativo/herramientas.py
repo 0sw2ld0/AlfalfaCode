@@ -1655,6 +1655,8 @@ class WorkspaceTools:
         # Si el arnés cae de golpe, al volver mata este grupo (ver reap_orphans).
         if isinstance(getattr(proc, 'pid', None), int):
             self.runtime.task['process_group'] = registro_de_grupo(proc.pid, desde)
+            # Guardado ya: tras un kill -9 del arnés es lo único que permite recoger esta orden.
+            self.runtime.save()
         captured = bytearray()
         total = 0
         output_limit_exceeded = False

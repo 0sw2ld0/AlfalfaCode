@@ -182,6 +182,8 @@ def engine_text(effort):
 
 
 MODELO_POR_DEFECTO = 'deepseek-v4.1-flash:cloud'
+# Estados de una sesión con un proceso trabajando en ella.
+EN_MARCHA = ('running', 'waiting', 'starting')
 
 
 class SinProveedorPorDefecto(ValueError):
@@ -336,6 +338,7 @@ class TerminalManager:
                 self.task = json.loads((self.directory / 'task.json').read_text())
                 if self.task['id'] != ident:
                     raise ValueError('La sesión no coincide con su directorio.')
+                self._recuperar_cierre_brusco()
                 # Como Codex (thread/resume + turn/start): una sesión terminada
                 # admite un turno nuevo con su mensaje, pero no «continuar» sin él.
                 # `--esperar` sólo abre la sesión: el turno lo trae el siguiente mensaje.
@@ -516,6 +519,22 @@ class TerminalManager:
             self.event(self.task, 'system', 'Reglas de equipo activas (' + equipo.ORIGEN + '). Registro local: '
                        + str(self.auditoria_equipo.ruta))
 
+    def _recuperar_cierre_brusco(self):
+        """Con el cerrojo tomado, una sesión «en marcha» es de un proceso que ya no existe (kill -9,
+        apagón, la app forzada a cerrar). Antes seguía `running` para siempre, con el turno abierto y la
+        orden de entonces viva: se mata ese grupo de procesos (si sigue siendo el nuestro), se cierra el
+        turno y la sesión queda interrumpida, reanudable."""
+        if self.task.get('status') not in EN_MARCHA:
+            return
+        grupo = self.task.pop('process_group', None)
+        if isinstance(grupo, dict):
+            procesos.recoger_huerfanos([grupo])
+        turno = self.task.get('turno_actual')
+        if turno:
+            registro.cerrar_turno(self.task, turno, 'interrupted', None)
+        self.task['status'] = 'interrupted'
+        self.task['summary'] = ('El proceso anterior se cerró sin terminar el turno; la sesión quedó interrumpida '
+                                'y se puede continuar.')
     def save(self):
         self.task['updated_at'] = time.time()
         atomic_json(self.directory / 'task.json', self.transport.clean(self.task) if self.transport else self.task)
