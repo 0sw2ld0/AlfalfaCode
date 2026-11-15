@@ -36,8 +36,8 @@ INDICES = ('user_messages',)
 
 def _git(cwd, *args):
     try:
-        salida = subprocess.run(['git', '-C', str(cwd), *args], capture_output=True, text=True, timeout=5,
-                                env={k: os.environ[k] for k in ('PATH', 'HOME', 'LANG') if k in os.environ})
+        from .. import git_arnes
+        salida = git_arnes.run(cwd, *args, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         return None
     return (salida.stdout.strip() or None) if salida.returncode == 0 else None

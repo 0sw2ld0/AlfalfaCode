@@ -333,11 +333,9 @@ def _current_ignored(snapshot):
     if snapshot.get('git') is None:
         return set()
     try:
-        result = subprocess.run(
-            ['git', '-C', snapshot['root'], 'ls-files', '-oi', '--exclude-standard',
-             '--directory', '-z'],
-            capture_output=True, timeout=15, check=True,
-            env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'})
+        from .. import git_arnes
+        result = git_arnes.run(snapshot['root'], 'ls-files', '-oi', '--exclude-standard', '--directory', '-z',
+                               capture_output=True, timeout=15, check=True)
         names = result.stdout.decode(errors='surrogateescape').split('\0')
         root = Path(snapshot['root'])
         return {str(root / name.rstrip('/')) for name in names if name}
@@ -375,9 +373,8 @@ def matches(snapshot):
 def _preparado(root):
     """Huella de lo preparado en el índice: modo, blob, ruta y marcas
     (assume-unchanged, skip-worktree), sin los datos de stat."""
-    result = subprocess.run(['git', '-C', str(root), 'ls-files', '--stage', '-v', '--debug'],
-                            capture_output=True, timeout=15, check=True,
-                            env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'})
+    from .. import git_arnes
+    result = git_arnes.run(root, 'ls-files', '--stage', '-v', '--debug', capture_output=True, timeout=15, check=True)
     lineas = []
     for linea in result.stdout.split(b'\n'):
         if not linea.startswith(b' '):
@@ -443,10 +440,10 @@ def _fallo_al_recorrer(error):
 def _capture(root):
     tomada = time.time_ns()
     root = Path(root).resolve()
+    from .. import git_arnes
+
     def git(*args):
-        result = subprocess.run(['git', '-C', str(root), *args], capture_output=True,
-                                timeout=15, check=True,
-                                env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'})
+        result = git_arnes.run(root, *args, capture_output=True, timeout=15, check=True)
         return result.stdout.decode(errors='surrogateescape').rstrip('\n')
 
     def listar():

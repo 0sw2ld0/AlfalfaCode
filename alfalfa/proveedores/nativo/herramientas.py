@@ -1600,9 +1600,10 @@ class WorkspaceTools:
             # comprobación. Refrescarlo antes de la foto deja a git sin nada que
             # escribir; sólo cambian datos de stat, nunca contenido.
             def refrescar():
-                subprocess.run(['git', '-C', cwd, 'update-index', '-q', '--refresh'],
-                               capture_output=True, timeout=60,
-                               env={k: os.environ[k] for k in ('PATH', 'HOME', 'LANG') if k in os.environ})
+                # Siempre sobre la raíz de la sesión: con `cwd` en un repositorio que el agente montó
+                # dentro del sandbox, su config (core.fsmonitor) corría aquí, fuera del sandbox.
+                from ... import git_arnes
+                git_arnes.run(self.root, 'update-index', '-q', '--refresh', capture_output=True, timeout=60)
             try:
                 await asyncio.to_thread(refrescar)
             except (OSError, subprocess.SubprocessError):

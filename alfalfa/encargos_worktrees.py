@@ -8,16 +8,9 @@ OPCIONES = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false']
 
 
 def opciones_seguras(raiz):
-    filtros = subprocess.run(['git', *OPCIONES, '-C', str(raiz), 'config', '--name-only', '--get-regexp',
-                              r'^filter\..*\.(clean|smudge|process|required)$'], capture_output=True,
-                             text=True, timeout=10)
-    if filtros.returncode not in (0, 1):
-        raise ValueError('No se pudieron comprobar los filtros de Git.')
-    opciones = list(OPCIONES)
-    for nombre in sorted({clave.rsplit('.', 1)[0] for clave in filtros.stdout.splitlines()}):
-        for campo, valor in (('clean', ''), ('smudge', ''), ('process', ''), ('required', 'false')):
-            opciones += ['-c', nombre + '.' + campo + '=' + valor]
-    return opciones
+    # Las mismas que el resto del git del arnés (git_arnes): sin hooks, fsmonitor, filtros ni textconv.
+    from .git_arnes import opciones
+    return opciones(raiz)
 
 
 def git(raiz, *args):

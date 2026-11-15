@@ -100,12 +100,14 @@ def _env_con_git(raiz):
     """Los .env (rastreados, nuevos e ignorados) según git: rápido y sin límite de carpetas.
     None si la carpeta no está en un repositorio o git no responde."""
     import subprocess
-    base = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=off', '-C', str(raiz), 'ls-files', '-z']
+
+    from . import git_arnes
+    base = ['git', *git_arnes.opciones(raiz), '-c', 'core.quotepath=off', '-C', str(raiz), 'ls-files', '-z']
     rutas = []
     try:
         for extra in (['--cached', '--others', '--exclude-standard'], ['--others', '--ignored', '--exclude-standard']):
             salida = subprocess.run(base + extra + ['--', *_PATRONES_ENV], capture_output=True, timeout=30,
-                                    stdin=subprocess.DEVNULL, env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'))
+                                    stdin=subprocess.DEVNULL, env=git_arnes.entorno())
             if salida.returncode != 0:
                 return None
             rutas += [raiz / r for r in salida.stdout.decode(errors='surrogateescape').split('\0') if r]
