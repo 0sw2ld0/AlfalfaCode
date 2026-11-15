@@ -1177,30 +1177,48 @@ def marcar(ident, campo, valor):
         valor = valor in ('si', 'sí', 'true', '1')
     else:
         valor = ' '.join(valor.split())[:200]
-    marcas = _marcas(path)
-    if valor in ('', False):
-        marcas.pop(campo, None)
-    else:
-        marcas[campo] = valor
+    import fcntl
+
     from .sesiones import _escribir
-    _escribir(path / 'marcas.json', json.dumps(marcas, ensure_ascii=False))
-    return marcas
+    # Leer, cambiar y escribir bajo un cerrojo propio: dos `--marcar` a la vez (fijar y renombrar desde
+    # la barra lateral) perdían uno de los dos. No es el de la sesión: una en marcha también se marca.
+    cerrojo = os.open(path / 'marcas.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(cerrojo, fcntl.LOCK_EX)
+        marcas = _marcas(path)
+        if valor in ('', False):
+            marcas.pop(campo, None)
+        else:
+            marcas[campo] = valor
+        _escribir(path / 'marcas.json', json.dumps(marcas, ensure_ascii=False))
+        return marcas
+    finally:
+        os.close(cerrojo)
 
 
 def eliminar(ident):
     """`--eliminar-sesion ID`: la mueve a la Papelera de macOS, de donde se puede recuperar."""
+    import fcntl
     path = _carpeta_de_sesion(ident)
-    if _en_ejecucion(path):
-        raise ValueError('La sesión está en ejecución; detenla antes de eliminarla.')
-    papelera = Path.home() / '.Trash'
-    papelera.mkdir(exist_ok=True)
-    destino = papelera / ('alfalfa-' + ident)
-    n = 1
-    while destino.exists():
-        n += 1
-        destino = papelera / f'alfalfa-{ident}-{n}'
-    path.rename(destino)
-    return destino
+    # Con el cerrojo de la sesión tomado hasta moverla: antes se miraba si estaba en ejecución y después
+    # se movía, y una sesión que arrancara entre medias acababa en la Papelera mientras trabajaba.
+    cerrojo = os.open(path / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise ValueError('La sesión está en ejecución; detenla antes de eliminarla.') from None
+        papelera = Path.home() / '.Trash'
+        papelera.mkdir(exist_ok=True)
+        destino = papelera / ('alfalfa-' + ident)
+        n = 1
+        while destino.exists():
+            n += 1
+            destino = papelera / f'alfalfa-{ident}-{n}'
+        path.rename(destino)
+        return destino
+    finally:
+        os.close(cerrojo)
 
 
 def gestionar(args):
