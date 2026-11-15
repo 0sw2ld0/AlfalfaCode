@@ -40,6 +40,8 @@ from .herramientas import (
 )
 from .historial import VERSION as VERSION_SESION
 from .historial import Historial, Lista, Mensajes
+from .recorte import MAX_RESULTADO
+from .recorte import serializar as serializar_resultado
 
 
 def is_cloud(model, info=None):
@@ -2410,8 +2412,9 @@ class NativeRuntime:
                     and not mal_formada and ('error' in result or result.get('exit_code', 0) != 0)):
                 self.evidence.record_tool_error(
                     name, args, result.get('error') or 'La edición no se completó.')
-            if len(output) > 20000:
-                output = json.dumps({'truncated':True, 'text':output[:19000]}, ensure_ascii=False)
+            if len(output) > MAX_RESULTADO:
+                # Se recorta el campo largo, no el JSON ya serializado (ver recorte.py).
+                output = serializar_resultado(dict(result, **hook_notes) if hook_notes else result)
             fila = {'role':'tool','tool_name':str(name),'content':output}
             if operation_failed:
                 # Claude lo recibe como `is_error`; los demás proveedores no lo ven.
