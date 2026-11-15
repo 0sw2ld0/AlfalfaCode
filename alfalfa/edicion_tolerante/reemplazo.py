@@ -55,8 +55,21 @@ def _literal_occurrences(text, old):
     return occurrences
 
 
+def _con_finales_del_archivo(text, new):
+    """`new` en CRLF si todo el archivo usa CRLF y `new` trae LF sueltos.
+
+    Casi ningún modelo escribe `\r`: en un archivo CRLF, el bloque editado quedaba en LF y el
+    resto en CRLF, y la herramienta lo daba por bueno. Un archivo ya mezclado se deja como está.
+    """
+    crlf = text.count('\r\n')
+    if not crlf or crlf != text.count('\n') or '\n' not in new:
+        return new
+    return new.replace('\r\n', '\n').replace('\n', '\r\n')
+
+
 def tolerant_edit(text, old, new):
     """Sustituye un bloque único y conserva todo lo exterior byte por byte."""
+    new = _con_finales_del_archivo(text, new)
     if not old:
         raise ValueError('El bloque debe coincidir exactamente una vez.')
     occurrences = _literal_occurrences(text, old)

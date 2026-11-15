@@ -1419,6 +1419,8 @@ class WorkspaceTools:
             plan = planificar(blocks, current)
         except (NoEncaja, ParchInvalido) as exc:
             raise ValueError(str(exc) + ' No se escribió nada.') from None
+        # Un «Move to» conserva los permisos del origen (el bit de ejecución de un guion).
+        origen_de = {b.destino: b.ruta for b in blocks if getattr(b, 'destino', None) and b.destino != b.ruta}
         writes = []
         for name, content, action in plan:
             path, before, _ = seen.get(name) or (self.path(name, escritura=True), None, None)
@@ -1434,19 +1436,35 @@ class WorkspaceTools:
             if now != before:
                 raise ValueError('El archivo ' + name + ' cambió durante el parche; vuelve a leerlo. '
                                  'No se escribió nada.')
-        changes = []
         for name, path, before, after, action in writes:
             if before is not None:
                 backup = self.runtime.directory / ('before-' + digest(before))
                 if not backup.exists():
                     atomic_write(backup, before, 0o600)
-            self.path(name, escritura=True)
-            if after is None:
-                if path.exists():
-                    path.unlink()
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                atomic_write(path, after, stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644)
+        # Todo o nada también al escribir: si falla un archivo (carpeta sin permiso, disco lleno),
+        # se deshace lo ya escrito. Antes los primeros quedaban cambiados y el error no lo decía.
+        hechas = []
+        for name, path, before, after, action in writes:
+            modo = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+            if modo is None and name in origen_de:
+                origen = seen.get(origen_de[name], (None,))[0]
+                modo = stat.S_IMODE(origen.stat().st_mode) if origen is not None and origen.exists() else None
+            creadas = [p for p in reversed(path.parents) if not p.exists()]
+            try:
+                self.path(name, escritura=True)
+                if after is None:
+                    if path.exists():
+                        path.unlink()
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    atomic_write(path, after, modo if modo is not None else 0o644)
+            except (OSError, ValueError) as exc:
+                motivo = getattr(exc, 'strerror', None) or str(exc)
+                raise ValueError('No se pudo escribir ' + name + ': ' + motivo + '. '
+                                 + self._deshacer_parche(hechas, creadas) + ' El parche no se aplicó.') from None
+            hechas.append((name, path, before, modo, creadas))
+        changes = []
+        for name, path, before, after, action in writes:
             change = {'path': str(path.relative_to(self.root)),
                       'before': digest(before) if before is not None else 'NEW',
                       'after': digest(after) if after is not None else 'DELETED'}
@@ -1455,6 +1473,35 @@ class WorkspaceTools:
         self.runtime.state['workspace_revision'] = self.runtime.state.get('workspace_revision', 0) + 1
         return {'changes': changes,
                 'summary': 'Parche aplicado: ' + ', '.join(c['action'] + ' ' + c['path'] for c in changes) + '.'}
+
+    def _deshacer_parche(self, hechas, creadas_ahora=()):
+        """Devuelve a su estado los archivos ya escritos de un parche que falló; dice cómo fue."""
+        fallidas = []
+        for name, path, before, modo, creadas in reversed(hechas):
+            try:
+                if before is None:
+                    if path.exists():
+                        path.unlink()
+                else:
+                    atomic_write(path, before, modo if modo is not None else 0o644)
+                for carpeta in reversed(creadas):
+                    try:
+                        carpeta.rmdir()
+                    except OSError:
+                        break
+            except OSError:
+                fallidas.append(name)
+        for carpeta in reversed(list(creadas_ahora)):
+            try:
+                carpeta.rmdir()
+            except OSError:
+                break
+        if fallidas:
+            return ('No se pudieron deshacer ' + ', '.join(fallidas) + ': quedaron cambiados; la copia de antes '
+                    'está en la carpeta de la sesión.')
+        if hechas:
+            return 'Se deshicieron los ' + str(len(hechas)) + ' archivos ya escritos.'
+        return 'No se había escrito nada.'
 
     async def command(self, args, verification=False):
         return await self._command(args, verification)
