@@ -437,7 +437,42 @@ def _es_propio(argumento, espacio):
 
 
 
-def _herramienta_del_proyecto(programa, argumentos):
+# Opciones de npx / npm exec que no cambian qué programa corre.
+OPCIONES_DE_NPX = {'--no-install', '--offline', '--prefer-offline', '--no', '-n', '--silent', '-s', '--quiet', '-q'}
+
+
+def _binario_instalado(programa, argumentos, espacio):
+    """None si `npx`, `npm exec` o `pnpm exec` lanzan un programa ya instalado en el
+    node_modules/.bin del worktree; si no, el motivo para preguntar.
+
+    `npx -y paquete` baja de la red un paquete y lo ejecuta, y `npm exec -- sh -c …` o
+    `pnpm exec curl …` corren cualquier programa: no son herramientas del proyecto.
+    """
+    resto = argumentos[argumentos.index('exec') + 1:] if programa != 'npx' else list(argumentos)
+    while resto and resto[0].startswith('-') and resto[0] != '--':
+        if resto[0] not in OPCIONES_DE_NPX:
+            return programa + ' con ' + resto[0] + ', que baja o elige otro paquete'
+        resto = resto[1:]
+    if resto[:1] == ['--']:
+        resto = resto[1:]
+    nombre = resto[0] if resto else ''
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', nombre):
+        return programa + ' sin un programa instalado que lanzar'
+    raiz = Path(espacio).resolve()
+    candidatos = [raiz / 'node_modules' / '.bin' / nombre]
+    for nivel in ('*', '*/*'):
+        candidatos += raiz.glob(nivel + '/node_modules/.bin/' + nombre)
+    for candidato in candidatos:
+        try:
+            destino = candidato.resolve()
+        except OSError:
+            continue
+        if candidato.exists() and raiz in destino.parents:
+            return None
+    return nombre + ' no está instalado en el worktree: ' + programa + ' lo bajaría de la red'
+
+
+def _herramienta_del_proyecto(programa, argumentos, espacio=''):
     """(¿aprobable?, motivo) para el escalón de herramientas."""
     if programa not in HERRAMIENTAS:
         return None
@@ -450,6 +485,11 @@ def _herramienta_del_proyecto(programa, argumentos):
         posicion = argumentos.index('--prefix')
         argumentos = argumentos[:posicion] + argumentos[posicion + 2:]
     sub = next((a for a in argumentos if not a.startswith('-')), '')
+    if programa == 'npx' and argumentos not in (['--version'], ['-v']) or \
+            programa in ('npm', 'pnpm') and sub == 'exec':
+        motivo = _binario_instalado(programa, argumentos, espacio) if espacio else 'sin worktree'
+        if motivo:
+            return False, motivo
     if argumentos in (['--version'], ['-version'], ['version']):
         # `swift --version && swift build …`: un revisor esperó permiso por esto.
         return True, programa + ' sólo dice su versión'
@@ -542,12 +582,17 @@ def _fuera_del_espacio(argumento, espacio):
         # por buena, y `sort -o/ruta` igual.
         if '=' in argumento and argumento.startswith('--'):
             return _fuera_del_espacio(argumento.split('=', 1)[1], espacio)
-        if re.match(r'-[A-Za-z][/~]', argumento):
-            return _fuera_del_espacio(argumento[2:], espacio)
+        # También tras varias letras agrupadas: `sort -uo/ruta` o `sort -ro../x`.
+        pegado = re.match(r'-[A-Za-z]+((?:[/~]|\.\.(?:/|$)).*)', argumento)
+        if pegado:
+            return _fuera_del_espacio(pegado.group(1), espacio)
         return False
     if not argumento:
         return False
-    if '/' not in argumento and not argumento.startswith('~'):
+    if '/' not in argumento and not argumento.startswith('~') and argumento != '..' \
+            and not os.path.islink(os.path.join(espacio, argumento)):
+        # Un nombre suelto se queda dentro, salvo `..` (`grep -rn clave ..`) y un enlace
+        # simbólico del worktree (`cat enlace`), que pueden llevar fuera sin ninguna barra.
         return False
     if argumento.startswith('~'):
         return True
@@ -852,6 +897,9 @@ def partir_en_y(command, espacio=None, directorio=None, escritura=True):
     """
     lector = shlex.shlex(command, posix=True, punctuation_chars=True)
     lector.whitespace_split = True
+    # Sin comentarios: shlex corta en cualquier `#`, la shell sólo al principio de una
+    # palabra. Con `echo ok#x; git push…` se analizaba sólo el echo y corría el push.
+    lector.commenters = ''
     try:
         piezas = list(lector)
     except ValueError:
@@ -1083,8 +1131,34 @@ def _extraccion_a_cache(programa, argumentos, espacio):
 # Variables que cambian qué código se ejecuta: nunca se conceden solas.
 VARIABLES_PELIGROSAS = {'PATH', 'NODE_OPTIONS', 'BASH_ENV', 'ENV', 'ZDOTDIR', 'PROMPT_COMMAND',
                         'GIT_SSH_COMMAND', 'GIT_SSH', 'GIT_EXEC_PATH', 'GIT_CONFIG', 'GIT_CONFIG_GLOBAL',
-                        'PYTHONSTARTUP', 'PERL5OPT', 'PERL5LIB', 'RUBYOPT', 'EDITOR', 'VISUAL', 'SHELL'}
-PREFIJOS_PELIGROSOS = ('DYLD_', 'LD_', 'GIT_CONFIG_')
+                        'PYTHONSTARTUP', 'PERL5OPT', 'PERL5LIB', 'RUBYOPT', 'EDITOR', 'VISUAL', 'SHELL',
+                        # Otra casa u otra configuración: git leería un ~/.gitconfig con core.pager.
+                        'HOME', 'XDG_CONFIG_HOME', 'PYTHONHOME', 'PYTHONBREAKPOINT', 'LESSOPEN', 'LESSCLOSE',
+                        'BROWSER', 'DEVELOPER_DIR', 'TOOLCHAINS',
+                        # Compiladores y opciones de construcción que nombran un programa.
+                        'CC', 'CXX', 'CPP', 'LD', 'AR', 'AS', 'FC', 'LDSHARED', 'RUSTC', 'SWIFT_EXEC',
+                        'MAKEFLAGS', 'MFLAGS', 'GNUMAKEFLAGS', 'GOFLAGS', 'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS'}
+PREFIJOS_PELIGROSOS = ('DYLD_', 'LD_', 'GIT_CONFIG_', 'NPM_CONFIG_', 'YARN_', 'BASH_FUNC_')
+# De git sólo pasan las que dicen quién firma, hasta dónde subir o si preguntar. Las demás
+# eligen otro repositorio (GIT_DIR) o un programa (GIT_EXTERNAL_DIFF, GIT_ASKPASS…).
+GIT_INOFENSIVAS = {'GIT_CEILING_DIRECTORIES', 'GIT_TERMINAL_PROMPT', 'GIT_OPTIONAL_LOCKS', 'GIT_AUTHOR_NAME',
+                   'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL',
+                   'GIT_COMMITTER_DATE'}
+# Nombres que, en casi cualquier herramienta, llevan un programa o un archivo de configuración:
+# RIPGREP_CONFIG_PATH, GREP_OPTIONS, SSH_ASKPASS, MANPAGER, CARGO_BUILD_RUSTC_WRAPPER…
+FORMAS_PELIGROSAS = re.compile(r'.*(PAGER|EDITOR|ASKPASS|_OPTIONS|OPTS|_CONFIG_PATH|_CONFIG_FILE|CONFIG_HOME'
+                               r'|STARTUP|PRELOAD|WRAPPER|RUNNER|_COMMAND|_CMD|_EXEC|_SHELL|_HOOKS?)')
+# Un valor con espacios, comillas o signos de la shell es una orden, no un dato.
+VALOR_DE_ORDEN = re.compile(r'[\s;&|<>()`\'"]')
+
+
+def _variable_peligrosa(nombre, valor):
+    mayusculas = nombre.upper()
+    if mayusculas in ('PAGER', 'GIT_PAGER', 'MANPAGER') and valor in ('', 'cat'):
+        return False  # sin paginador
+    return (mayusculas in VARIABLES_PELIGROSAS or mayusculas.startswith(PREFIJOS_PELIGROSOS)
+            or (mayusculas.startswith('GIT_') and mayusculas not in GIT_INOFENSIVAS)
+            or bool(FORMAS_PELIGROSAS.fullmatch(mayusculas)))
 TEMPORALES = ('/tmp/', '/private/tmp/', '/var/folders/', '/private/var/folders/')
 MODULOS_DE_PRUEBA = {'pytest': 'pytest', 'unittest': 'pytest', 'mypy': 'mypy', 'ruff': 'ruff'}
 
@@ -1112,48 +1186,20 @@ def _quitar_entorno(partes, espacio):
                 return None, 'env con opciones'
     while resto and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', resto[0]):
         nombre, valor = resto[0].split('=', 1)
-        if nombre in VARIABLES_PELIGROSAS or nombre.startswith(PREFIJOS_PELIGROSOS):
+        if _variable_peligrosa(nombre, valor):
             return None, 'fija ' + nombre + ', que cambia qué se ejecuta'
+        if VALOR_DE_ORDEN.search(valor):
+            return None, 'el valor de ' + nombre + ' parece una orden'
         for trozo in valor.split(':'):
-            if trozo.startswith('~') or (trozo.startswith('/') and not trozo.startswith(TEMPORALES)
-                                         and _fuera_del_espacio(trozo, espacio)):
+            # Las relativas también se resuelven: `PYTHONPATH=../vecino` sale del worktree.
+            if trozo.startswith('~') or (not trozo.startswith(TEMPORALES) and _fuera_del_espacio(trozo, espacio)):
                 return None, 'una variable apunta fuera del worktree: ' + nombre
         resto = resto[1:]
     return resto, None
 
 
-BANDERAS_DE_LECTURA = {'-s', '-S', '-sS', '-i', '-I', '-L', '-sL', '-sSL', '-fsSL', '-f', '--silent', '--show-error',
-                       '--include', '--head', '--location', '--fail'}
-
-
-def _leer_robots(programa, argumentos):
-    """`curl https://sitio/robots.txt`: leer las reglas públicas de un sitio.
-
-    El revisor de un recolector tiene que comprobar que respeta el robots.txt,
-    y se quedaba esperando a una persona para leerlo. Sólo esa ruta, sólo GET
-    y sin guardar nada: cualquier otra bandera o dirección sigue preguntándose.
-    """
-    if programa != 'curl':
-        return None
-    urls, i = [], 0
-    while i < len(argumentos):
-        a = argumentos[i]
-        if a in ('--max-time', '-m', '--connect-timeout') and i + 1 < len(argumentos):
-            i += 2
-            continue
-        if a.startswith('-'):
-            if a not in BANDERAS_DE_LECTURA:
-                return None
-        else:
-            urls.append(a)
-        i += 1
-    from urllib.parse import urlparse
-    if len(urls) != 1:
-        return None
-    url = urlparse(urls[0])
-    if url.scheme not in ('http', 'https') or not url.hostname or url.path != '/robots.txt' or url.query:
-        return None
-    return True, 'lee el robots.txt público de ' + url.hostname
+# `curl https://<sitio>/robots.txt` ya no se concede solo: el nombre del sitio lo elige el
+# agente y puede llevar fuera lo que haya leído (`<datos>.atacante.example`).
 
 
 NAVEGADORES = {'Google Chrome', 'Chromium', 'chromium', 'google-chrome', 'Microsoft Edge'}
@@ -1464,6 +1510,67 @@ def _programa_ajeno(programa):
 PYTHON_DEL_SISTEMA = ('/opt/homebrew/', '/usr/bin/', '/usr/local/', '/Library/Frameworks/Python.framework/')
 
 
+# `git branch` y `git tag` listan, pero también borran (-d, -D), renombran (-m), copian (-c),
+# fuerzan (-f) o cambian el upstream (-u), y las ramas las comparten todos los worktrees: un
+# `git branch -D main` pasaba por «de sólo lectura». Sólo se admiten las opciones de listar.
+RAMAS_Y_ETIQUETAS = {
+    'branch': (set('arvlqi'), {'--all', '--remotes', '--verbose', '--list', '--show-current', '--merged',
+                               '--no-merged', '--contains', '--no-contains', '--points-at', '--sort', '--format',
+                               '--color', '--no-color', '--column', '--no-column', '--abbrev', '--no-abbrev',
+                               '--quiet', '--ignore-case', '--omit-empty'}),
+    'tag': (set('lni'), {'--list', '--sort', '--contains', '--no-contains', '--merged', '--no-merged',
+                         '--points-at', '--format', '--color', '--column', '--no-column', '--ignore-case',
+                         '--omit-empty'}),
+}
+# Las que llevan su valor en la palabra siguiente.
+CON_VALOR_DE_RAMAS = {'--merged', '--no-merged', '--contains', '--no-contains', '--points-at', '--sort', '--format'}
+
+
+def _git_ramas(sub, resto, escritura):
+    """None si `git branch`/`git tag` sólo listan (o, para quien escribe, crean); si no, el motivo."""
+    cortas, largas = RAMAS_Y_ETIQUETAS[sub]
+    listar, sueltos, i = False, [], 0
+    while i < len(resto):
+        a = resto[i]
+        if a == '--':
+            sueltos += resto[i + 1:]
+            break
+        if a.startswith('--'):
+            nombre = a.split('=', 1)[0]
+            if nombre not in largas:
+                return 'git ' + sub + ' ' + nombre + ' cambia ramas o etiquetas'
+            listar |= nombre == '--list'
+            if '=' not in a and nombre in CON_VALOR_DE_RAMAS:
+                i += 1
+        elif a.startswith('-') and len(a) > 1:
+            letras = re.sub(r'(?<=n)\d+', '', a[1:]) if sub == 'tag' else a[1:]
+            if set(letras) - cortas:
+                return 'git ' + sub + ' ' + a + ' cambia ramas o etiquetas'
+            listar |= 'l' in letras
+        else:
+            sueltos.append(a)
+        i += 1
+    if sueltos and not listar and not escritura:
+        return 'un revisor no crea ramas ni etiquetas'
+    return None
+
+
+def _salidas_de_sort(argumentos):
+    """Los archivos en los que `sort` escribe (-o X, -oX, -uo X, --output=X)."""
+    salidas = []
+    for i, a in enumerate(argumentos):
+        siguiente = argumentos[i + 1] if i + 1 < len(argumentos) else ''
+        if a.startswith('--output='):
+            salidas.append(a.split('=', 1)[1])
+        elif a == '--output':
+            salidas.append(siguiente)
+        else:
+            corta = re.fullmatch(r'-[bdfgiMhnRrcCsuVz]*o(.*)', a)
+            if corta:
+                salidas.append(corta.group(1) or siguiente)
+    return salidas
+
+
 def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     """Juzga una sola orden ya troceada en argumentos."""
     if not partes:
@@ -1636,6 +1743,17 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
                                     or (a.startswith('-o') and not a.startswith('--') and sub != 'grep')
                                     for a in argumentos):
             return False, 'git con una opción que escribe la salida en un archivo'
+        if sub == 'grep' and any(a.startswith('--open-files-in-pager') or re.match(r'-[A-Za-z]*O', a)
+                                 for a in argumentos[argumentos.index(sub) + 1:]):
+            return False, 'git grep -O abre los archivos con otro programa'
+        if sub in RAMAS_Y_ETIQUETAS:
+            rechazo = _git_ramas(sub, argumentos[argumentos.index(sub) + 1:], escritura)
+            if rechazo:
+                return False, rechazo
+    if programa == 'sort' and not escritura:
+        salidas = _salidas_de_sort(argumentos)
+        if salidas and not all(_bajo_cache(s, espacio) for s in salidas):
+            return False, 'un revisor no reescribe archivos (sort -o)'
     entrada = _entrar_en_el_espacio(programa, argumentos, espacio)
     if entrada is not None:
         return entrada
@@ -1727,9 +1845,6 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
     copia = _copia_dentro(programa, argumentos, espacio, escritura)
     if copia is not None:
         return copia
-    robots = _leer_robots(programa, argumentos)
-    if robots is not None:
-        return robots
     captura = _captura_sin_ventana(programa, argumentos, espacio, escritura)
     if captura is not None:
         return captura
@@ -1777,7 +1892,7 @@ def _analizar(partes, espacio, escritura, merge_base=None, lecturas=()):
         propia = None
     if isinstance(propia, str) and propia:
         return True, propia
-    herramienta = _herramienta_del_proyecto(programa, argumentos)
+    herramienta = _herramienta_del_proyecto(programa, argumentos, espacio)
     if herramienta is not None:
         if not herramienta[0]:
             return herramienta
