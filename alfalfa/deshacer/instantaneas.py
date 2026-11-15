@@ -893,6 +893,19 @@ class Almacen:
         return len(refs)
 
 
+def _disco_montado(ruta, volumenes=Path('/Volumes')):
+    """¿Está conectado el disco de `ruta`? Fuera de /Volumes siempre lo está (es el del sistema).
+
+    Antes, la limpieza diaria borraba las instantáneas de toda carpeta que no existiera en ese
+    momento: las de un proyecto en un disco externo se perdían al abrir AlfalfaCode sin él.
+    """
+    try:
+        partes = Path(ruta).relative_to(volumenes).parts
+    except ValueError:
+        return True
+    return bool(partes) and (volumenes / partes[0]).is_dir()
+
+
 def limpiar_todo(hogar, **kwargs):
     """Limpia todos los almacenes del hogar; quita los de carpetas que ya no existen. Devuelve refs borradas."""
     raiz = Path(hogar) / CARPETA
@@ -907,6 +920,8 @@ def limpiar_todo(hogar, **kwargs):
         except OSError:
             continue
         if not origen.is_dir():
+            if not _disco_montado(origen):
+                continue  # un disco externo desconectado: sus instantáneas siguen ahí cuando vuelva
             shutil.rmtree(carpeta, ignore_errors=True)
             continue
         almacen = Almacen.de_clave(hogar, carpeta.name, origen)
