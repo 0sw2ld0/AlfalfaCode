@@ -310,7 +310,11 @@ class OnRequestPolicy:
         if para_sesion:
             request['para_sesion'] = True
         prefijo = None
-        if (unsandboxed and para_sesion and not origenes and reglas is not None
+        # La tarjeta del modo Manual (sólo esa: dentro del sandbox, sin red ni peligro) también lo
+        # ofrece; la regla que guarda quita la pregunta del modo y la orden sigue en el sandbox.
+        from .modos import MOTIVO_MODO
+        solo_modo = list(reasons) == [MOTIVO_MODO]
+        if ((unsandboxed or solo_modo) and para_sesion and not origenes and reglas is not None
                 and not reglas.evaluar(list(argv)).coincidencias):
             # «No volver a preguntar por órdenes que empiecen por …», como el
             # ApprovedExecpolicyAmendment de Codex: nunca tras contenido externo, en órdenes
@@ -351,11 +355,11 @@ class OnRequestPolicy:
         if para_sesion and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
         if prefijo and respuesta == SIEMPRE:
-            OnRequestPolicy._guardar_siempre(runtime, reglas, prefijo, argv)
+            OnRequestPolicy._guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=not unsandboxed)
         return respuesta
 
     @staticmethod
-    def _guardar_siempre(runtime, reglas, prefijo, argv):
+    def _guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=False):
         """Escribe la regla en `$ALFALFA_HOME/reglas.toml` y la aplica ya a esta sesión y sus
         subagentes, que comparten el mismo objeto de reglas. Si no se puede guardar, la orden
         aprobada se ejecuta igual y se avisa."""
@@ -368,11 +372,13 @@ class OnRequestPolicy:
             if home is None:
                 raise ReglasInvalidas('no hay carpeta de AlfalfaCode')
             nuevas = guardar_para_siempre(home, prefijo, 'Aprobada con «No volver a preguntar» el '
-                                          + time.strftime('%Y-%m-%d') + ' (' + shlex.join(argv)[:120] + ').')
+                                          + time.strftime('%Y-%m-%d') + ' (' + shlex.join(argv)[:120] + ').',
+                                          dentro_del_sandbox=dentro_del_sandbox)
         except (ReglasInvalidas, OSError) as exc:
             runtime.manager.event(runtime.task, 'system', 'No se pudo guardar «No volver a preguntar» por «'
                                   + texto + '»: ' + str(exc)[:200] + '. Esta vez se ejecuta igual.')
             return
         reglas.reglas.append(nuevas.reglas[-1])
         runtime.manager.event(runtime.task, 'system', 'Ya no se preguntará por las órdenes que empiecen por «'
-                              + texto + '»: corren fuera del sandbox. Se quita en reglas.toml.')
+                              + texto + ('»: siguen dentro del sandbox, sin red.' if dentro_del_sandbox
+                                         else '»: corren fuera del sandbox.') + ' Se quita en reglas.toml.')
