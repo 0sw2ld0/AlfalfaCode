@@ -29,6 +29,9 @@ class Ollama(Proveedor):
     id = 'ollama'
     nombre = 'Ollama'
 
+    def accion(self, clas, error_text):
+        return None  # las de reintentos.fallos ya hablan de Ollama
+
     def url(self):
         from .. import ajustes
         return validar_url(ajustes.ollama_url())

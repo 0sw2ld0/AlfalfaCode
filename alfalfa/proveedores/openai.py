@@ -345,7 +345,7 @@ class OpenAI(Proveedor):
     def accion(self, clas, error_text):
         if clas.get('cause') == 'access_denied':
             return 'falta de acceso; revisa la clave de OpenAI en Proveedores; no se reintenta.'
-        return None
+        return super().accion(clas, error_text)
 
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         clave = self.clave()

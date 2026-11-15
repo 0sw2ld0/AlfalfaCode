@@ -380,7 +380,7 @@ class Compatible(Proveedor):
         if str(error_text or '').startswith(FILTRO_DE_CONTENIDO + ':'):
             return ('el filtro de contenido de ' + self.nombre + ' cortó la respuesta; reformula la petición '
                     'o elige otro modelo; no se reintenta.')
-        return None
+        return super().accion(clas, error_text)
 
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None, transporte=None):
         clave = self.clave()

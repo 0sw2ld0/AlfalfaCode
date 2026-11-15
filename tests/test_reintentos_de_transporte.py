@@ -268,7 +268,7 @@ async def test_el_aviso_de_reintento_dice_que_fallo_y_cuanto_espera(escena):
     ('OpenRouter transporte: intento 2/3 falló (conexión cortada); reintento en 2 s.', True),
     ('DeepSeek transporte: intento 1/3.', True),
     ('El modelo dijo: «Ollama transporte: intento 1/3.»', False),
-    ('Ollama transporte: agotados 3 intentos; sesión no completada.', False),
+    ('Ollama transporte: agotados 3 intentos; la petición no se completó.', False),
 ])
 def test_el_filtro_reconoce_el_aviso_de_cualquier_proveedor(texto, es):
     assert es_aviso_de_transporte(texto) is es

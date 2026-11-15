@@ -124,7 +124,19 @@ class Proveedor:
         raise NotImplementedError
 
     def accion(self, clas, error_text):
-        """Qué hacer ante un fallo clasificado, en palabras de este proveedor, o None."""
+        """Qué hacer ante un fallo clasificado, en palabras de este proveedor, o None.
+
+        La acción por defecto de `reintentos.fallos` habla de Ollama («revisa el servicio de Ollama»,
+        «ollama pull», «inicia sesión en Ollama»): aquí van las de cualquier otro proveedor. Ollama
+        la deja como está.
+        """
+        causa = clas.get('cause')
+        if causa == 'network':
+            return 'fallo de conexión; revisa la red y reintenta.'
+        if causa == 'model_not_found':
+            return 'modelo inexistente en ' + self.nombre + '; elige otro modelo; no se reintenta.'
+        if causa == 'access_denied':
+            return 'falta de acceso; revisa la clave de ' + self.nombre + ' en Proveedores; no se reintenta.'
         return None
 
     def ficha(self, modelo):
