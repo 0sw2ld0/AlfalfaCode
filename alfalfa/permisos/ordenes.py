@@ -396,8 +396,8 @@ def _copia_dentro(programa, argumentos, espacio, escritura):
 def _sin_seguimiento(ruta, espacio):
     """¿git no sigue nada en esta ruta? Entonces no es del repositorio."""
     try:
-        r = subprocess.run(['git', '-C', str(espacio), 'ls-files', '--error-unmatch', '--', str(ruta)],
-                           capture_output=True, timeout=10)
+        from .. import git_arnes
+        r = git_arnes.run(espacio, 'ls-files', '--error-unmatch', '--', str(ruta), capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return False
     return r.returncode != 0
