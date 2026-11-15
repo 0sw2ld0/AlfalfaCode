@@ -387,6 +387,18 @@ class Sandbox:
         return self._prefijo + list(argv)
 
 
+# Lo que reciben los linters y servidores de lenguaje: lo mismo que las órdenes del agente, más el idioma
+# y las rutas de las herramientas de Apple. Antes recibían el entorno entero del usuario: con
+# OPENAI_API_KEY o GITHUB_TOKEN en él, un `eslint.config.js` del proyecto (que es código del repositorio)
+# los veía y podía devolverlos en un diagnóstico, que va al modelo.
+ENTORNO = ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'DEVELOPER_DIR', 'SDKROOT', 'USER', 'LOGNAME',
+           'SHELL', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME')
+
+
+def entorno_base():
+    return {k: os.environ[k] for k in ENTORNO if k in os.environ}
+
+
 class Diagnosticos:
     """Los servidores de lenguaje y linters de una sesión."""
 
@@ -413,12 +425,12 @@ class Diagnosticos:
         """El entorno de lo que corre en el sandbox, leído al lanzarlo, con la caché de módulos de Clang/Swift
         donde el sandbox deja escribir."""
         from ..seatbelt import compiladores
-        return dict(self._env if self._env is not None else os.environ, **compiladores.entorno())
+        return dict(self._env if self._env is not None else entorno_base(), **compiladores.entorno())
 
     def entorno_de_sourcekit(self, cache):
         """El de sourcekit-lsp, que corre fuera del sandbox: su caché de módulos y sus temporales dentro de
         `cache`, nunca en $TMPDIR, donde las órdenes del sandbox podrían dejarle módulos preparados."""
-        base = {k: v for k, v in (self._env if self._env is not None else os.environ).items()
+        base = {k: v for k, v in (self._env if self._env is not None else entorno_base()).items()
                 if k not in ('CLANG_MODULE_CACHE_PATH', 'SWIFTPM_MODULECACHE_OVERRIDE', 'TMPDIR')}
         # La caché de módulos del SDK se comparte entre proyectos: sólo tiene módulos del SDK, compilados con
         # las opciones fijas de la base (ninguna ruta de cabeceras del proyecto).
