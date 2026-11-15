@@ -23,6 +23,10 @@ También valen las variables estándar `OLLAMA_API_KEY`, `OPENAI_API_KEY` y
 `ANTHROPIC_API_KEY`, y
 `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
 secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
+Si el proveedor por defecto deja de poder usarse (por ejemplo, falta su clave en esa
+terminal), una sesión nueva sin `--modelo` no se abre con otro proveedor: se para y dice
+qué falta. Guarda la clave, elige otro con `--proveedor-por-defecto` o indica el modelo
+con `--modelo`.
 La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
 también abre «Proveedores…» en el selector de modelo.
 

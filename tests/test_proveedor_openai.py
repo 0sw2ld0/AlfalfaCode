@@ -216,8 +216,9 @@ def test_el_proveedor_por_defecto_elige_su_modelo(tmp_path, monkeypatch):
     from alfalfa.terminal import TerminalManager, modelo_por_defecto
     monkeypatch.chdir(tmp_path)
     configuracion.cambiar(None, 'por_defecto', 'openai')
-    # Sin clave no se puede usar: se queda el de Ollama.
-    assert modelo_por_defecto() == 'deepseek-v4.1-flash:cloud'
+    # Sin clave no se puede usar, y no se cambia a otro proveedor por su cuenta.
+    with pytest.raises(ValueError, match='Elegiste OpenAI como proveedor por defecto'):
+        modelo_por_defecto()
     llavero.guardar('openai', 'sk-prueba-123')
     assert modelo_por_defecto() == 'openai/gpt-6-luna'
     m = TerminalManager('x', home=tmp_path / 'home')
