@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import stat
 import sys
 import unicodedata
@@ -203,19 +204,38 @@ def comprobar_enlaces_del_hogar(hogares):
             datos = os.lstat(hogar)
             if stat.S_ISREG(datos.st_mode):
                 if datos.st_nlink > 1:
-                    raise SandboxUnavailable('Un archivo protegido tiene enlaces duros.')
+                    raise SandboxUnavailable('Un archivo protegido tiene enlaces duros: ' + _romper_enlace(hogar))
                 continue
             for carpeta, dirs, archivos in os.walk(hogar, followlinks=False, onerror=error):
                 vistos += len(dirs) + len(archivos)
                 if vistos > HOME_SCAN_LIMIT:
-                    raise SandboxUnavailable('El hogar de AlfalfaCode es demasiado grande para comprobar sus enlaces.')
+                    raise SandboxUnavailable(
+                        'El hogar de AlfalfaCode es demasiado grande para comprobar sus enlaces: ' + hogar
+                        + ' tiene más de ' + f'{HOME_SCAN_LIMIT:,}'.replace(',', '.')
+                        + ' entradas. Mientras siga así, cada orden pide salir del sandbox.')
                 for nombre in archivos:
-                    datos = os.stat(os.path.join(carpeta, nombre), follow_symlinks=False)
+                    ruta = os.path.join(carpeta, nombre)
+                    datos = os.stat(ruta, follow_symlinks=False)
                     if stat.S_ISREG(datos.st_mode) and datos.st_nlink > 1:
                         raise SandboxUnavailable('El hogar de AlfalfaCode contiene archivos con enlaces duros; '
-                                                 'no se puede aislar por rutas.')
+                                                 'no se puede aislar por rutas: ' + _romper_enlace(ruta))
         except OSError as exc:
-            raise SandboxUnavailable('No se pudieron comprobar los enlaces del hogar de AlfalfaCode.') from exc
+            donde = getattr(exc, 'filename', None) or hogar
+            raise SandboxUnavailable('No se pudieron comprobar los enlaces del hogar de AlfalfaCode ('
+                                     + str(donde) + ': ' + (exc.strerror or type(exc).__name__) + ').') from exc
+
+
+def _romper_enlace(ruta):
+    """Qué archivo es y cómo dejarlo con un solo nombre, para que el sandbox vuelva a valer.
+
+    Seatbelt compara rutas: el otro nombre de un enlace duro no se puede proteger, y dentro del
+    sandbox no se pueden crear enlaces nuevos a archivos protegidos (`ln` falla). Copiarlo y
+    renombrar la copia encima deja este archivo con un único nombre; el otro conserva su copia.
+    """
+    copia = shlex.quote(ruta + '.copia')
+    return (ruta + '. Hasta que tenga un solo nombre, cada orden pide salir del sandbox. Para arreglarlo, '
+            'fuera de AlfalfaCode: cp -p ' + shlex.quote(ruta) + ' ' + copia + ' && mv ' + copia + ' '
+            + shlex.quote(ruta))
 
 
 def _ancestors(path, stop):
