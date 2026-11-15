@@ -245,12 +245,14 @@ def prefijo_para_siempre(propuesto, argv):
     return list(propuesto)
 
 
-def guardar_para_siempre(home, prefijo, justificacion):
+def guardar_para_siempre(home, prefijo, justificacion, dentro_del_sandbox=False):
     """Añade a `$ALFALFA_HOME/reglas.toml` la regla de «No volver a preguntar», como
     `append_amendment_and_update` de Codex con `~/.codex/rules/default.rules`.
 
     Comprueba antes que el archivo resultante se lee bien: si el actual es inválido o la
-    regla lo rompería, no escribe nada (ReglasInvalidas). Devuelve las reglas nuevas."""
+    regla lo rompería, no escribe nada (ReglasInvalidas). Devuelve las reglas nuevas.
+    `dentro_del_sandbox`: la regla sólo quita la pregunta del modo Manual; la orden sigue
+    corriendo en el sandbox, sin red."""
     import json
     import os
     import tempfile
@@ -259,7 +261,8 @@ def guardar_para_siempre(home, prefijo, justificacion):
         raise ReglasInvalidas(ARCHIVO + ' debe ser un archivo regular, sin enlaces.')
     actual = ruta.read_text(encoding='utf-8') if ruta.exists() else ''
     bloque = ('\n[[regla]]\npatron = ' + json.dumps(list(prefijo), ensure_ascii=False)
-              + '\ndecision = "permitida"\nfuera_del_sandbox = true\njustificacion = '
+              + '\ndecision = "permitida"\n' + ('' if dentro_del_sandbox else 'fuera_del_sandbox = true\n')
+              + 'justificacion = '
               + json.dumps(justificacion, ensure_ascii=False) + '\n')
     nuevo = actual + ('' if not actual or actual.endswith('\n') else '\n') + bloque
     if len(nuevo.encode('utf-8')) > MAX_ARCHIVO:

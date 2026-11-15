@@ -19,6 +19,7 @@ también si se cierra la app y se retoma; una bifurcación empieza sin ella.
 from __future__ import annotations
 
 import json
+import os
 
 CAMPO = 'aprobadas_en_sesion'
 MAXIMO = 200
@@ -26,15 +27,21 @@ MAXIMO = 200
 SESION = 'sesion'
 
 
+def _normal(ruta):
+    """`server`, `server/` y `./server` son la misma carpeta; `./src/mod.py` y `src/mod.py`, el
+    mismo archivo. Antes la clave guardaba el texto tal cual y lo aprobado no volvía a valer."""
+    return os.path.normpath(ruta) if isinstance(ruta, str) and ruta else ruta
+
+
 def clave_de_orden(argv, cwd=None, sin_sandbox=False, red=False):
     """Sin sandbox ya hay red: la clave no la distingue."""
-    carpeta = cwd if isinstance(cwd, str) and cwd not in ('', '.') else '.'
+    carpeta = _normal(cwd) if isinstance(cwd, str) and cwd not in ('', '.') else '.'
     return json.dumps(['orden', [str(a) for a in argv], carpeta, bool(sin_sandbox), bool(red) and not sin_sandbox],
                       ensure_ascii=False, separators=(',', ':'))
 
 
 def claves_de_edicion(rutas):
-    return [json.dumps(['edicion', str(r)], ensure_ascii=False, separators=(',', ':')) for r in rutas]
+    return [json.dumps(['edicion', _normal(str(r))], ensure_ascii=False, separators=(',', ':')) for r in rutas]
 
 
 def aprobadas(task, claves, *, registrar=True):
