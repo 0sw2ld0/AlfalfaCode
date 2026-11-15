@@ -241,11 +241,18 @@ def test_editar_y_repetir_las_pruebas_no_es_un_bucle(escena):
     assert escena.hechas.count('pruebas') == 5
 
 
-def test_la_misma_orden_sin_cambios_sigue_siendo_un_bucle_y_la_sesion_sigue(escena):
+def test_a_la_cuarta_la_misma_orden_no_corre_y_el_modelo_lo_sabe(escena):
     estado = escena.turno('prueba', *[tanda(orden('pruebas'))] * 5)
+    assert estado == 'completed', escena.m.task.get('summary')
+    assert escena.hechas == ['pruebas'] * 3
+    assert ['otra vez' in r for r in escena.resultados()['pruebas']] == [False, False, False, True, True]
+
+
+def test_si_insiste_sigue_siendo_un_bucle_y_la_sesion_sigue(escena):
+    estado = escena.turno('prueba', *[tanda(orden('pruebas'))] * 8)
     assert estado == 'failed' and 'Bucle detectado' in escena.m.task['summary']
     assert escena.hechas == ['pruebas'] * 3
-    # La que disparó el aviso no corre al seguir, y el turno siguiente no falla antes de empezar.
+    # La que cortó el turno no corre al seguir, y el turno siguiente no falla antes de empezar.
     assert escena.turno('hola') == 'completed'
     assert escena.hechas == ['pruebas'] * 3
     assert 'No se ejecutó' in escena.resultados()['pruebas'][-1]
