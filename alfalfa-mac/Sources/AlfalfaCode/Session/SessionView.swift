@@ -18,6 +18,7 @@ struct SessionView: View {
             VStack(spacing: 0) {
                 header(terminals)
                 conversation.environment(\.runInTerminal) { terminals.run($0) }
+                    .environment(\.openURL, OpenURLAction { url in openAgentLink(url) })
                 if let queue = session.timeline.taskQueue { TaskQueueCard(queue: queue, session: session) }
                 Composer(session: session)
             }
@@ -75,6 +76,25 @@ struct SessionView: View {
     private static var hasScrollGeometry: Bool {
         if #available(macOS 15, *) { return true }
         return false
+    }
+
+    /// Un enlace del texto del agente: las páginas web se abren; los archivos se enseñan en el Finder, sin
+    /// abrirlos (un `.command` se ejecutaría); lo demás no se abre.
+    private func openAgentLink(_ url: URL) -> OpenURLAction.Result {
+        switch AgentLinks.action(for: url, folder: session.cwd) {
+        case let .open(page):
+            NSWorkspace.shared.open(page)
+        case let .reveal(file):
+            if FileManager.default.fileExists(atPath: file.path) {
+                NSWorkspace.shared.activateFileViewerSelecting([file])
+            } else {
+                session.addNotice("No existe «\(file.path)».")
+            }
+        case .refuse:
+            session.addNotice("No se abrió el enlace «\(String(url.absoluteString.prefix(200)))»: desde la "
+                              + "conversación sólo se abren direcciones http y https, y los archivos se enseñan en el Finder.")
+        }
+        return .handled
     }
 
     private var conversation: some View {
