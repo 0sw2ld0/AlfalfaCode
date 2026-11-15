@@ -251,6 +251,16 @@ def ordenes(argv):
     return lista, opaca
 
 
+def _sin_cambios_de_carpeta(partes):
+    """Las partes sin los `cd <carpeta>` sueltos, que no ejecutan nada: `bash -lc 'cd App && swift build'`
+    lo cubre la regla «swift build». Antes `cd App` no lo cubría ninguna y se preguntaba siempre. Si no
+    queda ninguna otra orden, nada (un `cd` solo no lo decide una regla)."""
+    if not partes:
+        return partes
+    otras = [p for p in partes if not (len(p) == 2 and p[0] == 'cd' and not p[1].startswith('-'))]
+    return otras or None
+
+
 def _segmentos(argv):
     """Las órdenes que de verdad se ejecutan: las de dentro de `bash -lc`, o argv tal cual.
     None si el script no es analizable."""
@@ -289,7 +299,7 @@ def prefijo_para_siempre(propuesto, argv):
     Como `derive_requested_execpolicy_amendment_from_prefix_rule` de Codex: el que propone el
     modelo (`prefix_rule`), si no está prohibido y cubre cada parte de la orden; si no propone
     ninguno, para git se ofrece la suborden (`git commit`), nunca `git` a secas."""
-    partes = _segmentos(argv)
+    partes = _sin_cambios_de_carpeta(_segmentos(argv))
     if not partes:
         return None
     if propuesto is None and len(partes) == 1 and len(partes[0]) >= 2:
@@ -375,7 +385,7 @@ class Reglas:
         (`git status; rm -rf src`) no decide por la línea entera."""
         if self.evaluar(argv).decision != PERMITIDA:
             return False
-        partes = _segmentos(argv)
+        partes = _sin_cambios_de_carpeta(_segmentos(argv))
         if not partes:
             return False
         permitidas = [r for r in self.reglas if r.decision == PERMITIDA and (r.sin_sandbox or not sin_sandbox)]
