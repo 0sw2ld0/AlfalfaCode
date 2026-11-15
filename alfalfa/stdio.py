@@ -249,6 +249,11 @@ class Transport:
         if not self.in_turn and self.repaso is not None and not self.repaso.done():
             self.repaso.cancel()
             return True
+        if not self.in_turn and self.compacting and self.worker and not self.worker.done():
+            # «Compactar sesión» o «Seguir en una sesión nueva» entre turnos: antes Detener se ignoraba
+            # y la petición del resumen podía esperar hasta 600 s, con los mensajes en cola.
+            self.worker.cancel()
+            return True
         if self.stopped or not self.in_turn or not self.worker or self.worker.done():
             return False
         self.turno_cortado = True
