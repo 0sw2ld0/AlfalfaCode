@@ -13,8 +13,10 @@ repo=$(CDPATH= cd -- "$(dirname -- "$source_path")/.." && pwd)
 python=$repo/.venv/bin/python
 if [ ! -x "$python" ]; then
     # Worktrees share the environment of their repository, never system Python.
-    common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir) || exit 1
-    python=$(dirname -- "$common")/.venv/bin/python
+    # Outside git there is no shared environment: say what is missing, not git's error.
+    if common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+        python=$(dirname -- "$common")/.venv/bin/python
+    fi
 fi
 if [ ! -x "$python" ]; then
     echo 'AlfalfaCode: falta el .venv del repositorio.' >&2
