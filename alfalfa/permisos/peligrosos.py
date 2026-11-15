@@ -18,10 +18,9 @@ Diferencias intencionales con Codex (más conservadoras: sólo añaden preguntas
   opciones previas (`bash --norc -c`) y parámetros posicionales tras el guion;
   Codex exige exactamente `[shell, -c|-lc, guion]`.
 - No hay tree-sitter: un analizador léxico propio extrae las órdenes
-  literales. Lo que no sabe analizar (comillas sin cerrar, heredocs,
-  `${…}` con sustituciones) se clasifica como peligroso en lugar de
-  ignorarse, y un guion sintácticamente inválido (`if then rm -rf x`) se
-  analiza igualmente; Codex descarta los guiones con errores.
+  literales. Lo que no sabe analizar (comillas sin cerrar, `${…}` con
+  sustituciones) se clasifica como peligroso en lugar de ignorarse, y un
+  guion sintácticamente inválido (`if then rm -rf x`) se analiza igualmente; Codex descarta los guiones con errores.
 - Una shell o `eval` dentro de un guion con argumentos dinámicos
   (`bash -c "$X"`, `env sh -c "$X"`) no se puede leer y se clasifica como
   peligrosa; `eval` con texto literal se analiza como un guion. Codex no
@@ -37,6 +36,17 @@ Diferencias intencionales con Codex (más conservadoras: sólo añaden preguntas
   Codex trata ambas palabras como no literales y las omite.
 - `security` (la orden del Llavero de macOS) siempre pregunta: con ella se
   leerían las claves de los proveedores que AlfalfaCode guarda allí.
+- Heredocs: el cuerpo es la entrada de la orden, no otra orden. Se salta,
+  salvo que la orden sea una shell (entonces es su guion y se analiza) o el
+  cuerpo sin comillas lleve `$(…)` o `` `…` `` (no se sabe analizar).
+- Una shell que ejecuta un archivo (`bash scripts/test.sh tests/*.py`) puede
+  llevar argumentos dinámicos: son los de ese guion, no un guion a leer.
+- `dentro_del_sandbox`: lo que se va a ejecutar en el sandbox sin red sólo es
+  peligroso por lo que sí se ve. Lo que no se sabe analizar no pregunta: ahí
+  dentro no puede escribir fuera de la carpeta ni llegar al Llavero, igual que
+  un `python3 -c` cualquiera. `rm -f`/`rm -rf` sigue preguntando aunque sus
+  rutas estén dentro: el sandbox deja borrar en la carpeta, y ahí puede haber
+  trabajo sin guardar.
 - Sólo POSIX: no se portan las reglas de PowerShell/Windows ni el caso SIGSYS.
 """
 from __future__ import annotations
@@ -74,43 +84,54 @@ class _Unparseable(Exception):
     """El guion usa sintaxis que este analizador no sabe reducir a palabras literales."""
 
 
+# En un guion que no se sabe leer: `rm`, `sudo` o `security` como palabra suelta.
+_VISIBLE = re.compile(r'(?:^|[\s;&|(){}`!\'"/\\])(?:rm|sudo|security)(?=[\s;&|()`\'"]|$)')
+
+
 def executable_name_lookup_key(raw):
     name = raw.rsplit('/', 1)[-1]
     return name or None
 
 
-def dangerous_command_match(command):
-    """Regla peligrosa que cumple el argv (FORCED_RM, SUDO u OTHER), o None."""
+def dangerous_command_match(command, dentro_del_sandbox=None):
+    """Regla peligrosa que cumple el argv (FORCED_RM, SUDO u OTHER), o None.
+
+    `dentro_del_sandbox`: verdadero si va a correr en el sandbox sin red. Entonces lo que no se
+    sabe leer no cuenta; lo que sí se ve (rm forzado, sudo, security) pregunta igual."""
     if not isinstance(command, (list, tuple)) or not all(isinstance(a, str) for a in command):
         return OTHER
-    return _match_with_depth(list(command), 0)
+    return _match_with_depth(list(command), 0, dentro_del_sandbox)
 
 
-def _match_with_depth(command, depth):
+def _match_with_depth(command, depth, sandbox=None):
+    ilegible = None if sandbox else OTHER
     if depth > MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH:
-        return OTHER
-    found = _match_for_exec(command, depth)
+        return ilegible
+    found = _match_for_exec(command, depth, sandbox)
     if found:
         return found
     script = extract_shell_script(command)
     if script is None:
         return None
     if isinstance(script, _Dynamic):
-        return OTHER
+        return ilegible
     try:
         commands = parse_literal_commands(script)
     except _Unparseable:
-        return OTHER
+        # Aunque no se sepa leer entero, lo peligroso que se ve escrito sigue contando.
+        return OTHER if ilegible or _VISIBLE.search(script) else None
     for literal in commands:
         if literal is None:
-            return OTHER
-        found = _match_with_depth(literal, depth + 1)
+            if ilegible:
+                return ilegible
+            continue
+        found = _match_with_depth(literal, depth + 1, sandbox)
         if found:
             return found
     return None
 
 
-def _match_for_exec(command, depth):
+def _match_for_exec(command, depth, sandbox=None):
     cmd0 = executable_name_lookup_key(command[0]) if command else None
     if cmd0 == 'rm' and rm_args_include_force_option(command[1:]):
         return FORCED_RM
@@ -120,17 +141,17 @@ def _match_for_exec(command, depth):
         # Lee el Llavero, donde están las claves de los proveedores de AlfalfaCode.
         return OTHER
     if cmd0 == 'env':
-        return _match_for_env(command, depth)
+        return _match_for_env(command, depth, sandbox)
     if cmd0 == 'trap':
-        return _match_for_trap(command, depth)
+        return _match_for_trap(command, depth, sandbox)
     if cmd0 == 'eval' and any(isinstance(a, _Dynamic) for a in command[1:]):
-        return OTHER
+        return None if sandbox else OTHER
     if cmd0 == 'eval' and len(command) > 1:
-        return _match_with_depth(['sh', '-c', ' '.join(command[1:])], depth + 1)
+        return _match_with_depth(['sh', '-c', ' '.join(command[1:])], depth + 1, sandbox)
     return None
 
 
-def _match_for_env(command, depth):
+def _match_for_env(command, depth, sandbox=None):
     index = 1
     while index < len(command):
         argument = command[index]
@@ -165,7 +186,7 @@ def _match_for_env(command, depth):
                 words = shlex.split(text)
             except ValueError:
                 return OTHER
-            return _match_with_depth(['env'] + words + rest, depth + 1)
+            return _match_with_depth(['env'] + words + rest, depth + 1, sandbox)
         name, sep, _ = argument.partition('=')
         if sep and name and not name.startswith('-'):
             index += 1
@@ -175,10 +196,10 @@ def _match_for_env(command, depth):
         break
     if index < len(command) and isinstance(command[index], _Dynamic):
         return OTHER
-    return _match_with_depth(command[index:], depth + 1)
+    return _match_with_depth(command[index:], depth + 1, sandbox)
 
 
-def _match_for_trap(command, depth):
+def _match_for_trap(command, depth, sandbox=None):
     index = 1
     if index < len(command) and command[index] == '--':
         index += 1
@@ -186,7 +207,7 @@ def _match_for_trap(command, depth):
         return OTHER
     if index >= len(command) or command[index].startswith('-'):
         return None
-    return _match_with_depth(['sh', '-c', command[index]], depth + 1)
+    return _match_with_depth(['sh', '-c', command[index]], depth + 1, sandbox)
 
 
 def rm_args_include_force_option(args):
@@ -223,6 +244,26 @@ def extract_shell_script(command):
     return None
 
 
+def _shell_con_archivo(palabras):
+    """`bash [opciones] archivo [args…]` con opciones y archivo literales y sin -c."""
+    if executable_name_lookup_key(palabras[0].text) not in SHELLS:
+        return False
+    for palabra in palabras[1:]:
+        if not palabra.literal:
+            return False
+        texto = palabra.text
+        if texto in ('-o', '+o', '-O', '+O', '-s', '--'):
+            return False
+        if texto.startswith('--'):
+            continue
+        if re.fullmatch(r'[-+][A-Za-z]+', texto):
+            if 'c' in texto[1:] or 's' in texto[1:]:
+                return False
+            continue
+        return True
+    return False
+
+
 class _Word:
     __slots__ = ('text', 'literal', 'splits')
 
@@ -249,6 +290,9 @@ class _Parser:
         # Sustituciones $(…)/<(…) abiertas: un `case` dentro cerraría la cuenta
         # de paréntesis con su patrón «a)».
         self.nesting = 0
+        # Heredocs de la línea en curso, (delimitador, entre comillas, quitar tabuladores), y
+        # cuántas órdenes había al empezarla: sus cuerpos empiezan en el siguiente salto de línea.
+        self.heredocs, self.inicio_de_linea = [], 0
 
     def peek(self, offset=0):
         index = self.pos + offset
@@ -291,6 +335,8 @@ class _Parser:
             elif ch == '\n' or ch in ';|()' or (ch == '&' and self.peek(1) != '>'):
                 finish_command()
                 self.pos += 1
+                if ch == '\n':
+                    self._cuerpos_de_heredoc()
             elif ch == '#' and word is None:
                 while self.peek() not in ('', '\n'):
                     self.pos += 1
@@ -306,7 +352,8 @@ class _Parser:
                     word = None  # descriptor del redireccionamiento (2>)
                 finish_word()
                 if self.src.startswith('<<', self.pos) and not self.src.startswith('<<<', self.pos):
-                    raise _Unparseable('Heredoc.')
+                    self._heredoc()
+                    continue
                 while self.peek() in ('<', '>', '&', '|') and self.peek() != '':
                     self.pos += 1
                 redirect = True
@@ -317,6 +364,51 @@ class _Parser:
             else:
                 word = word or _Word()
                 self._word_part(word)
+
+    def _heredoc(self):
+        """`<<DELIM` o `<<-DELIM`: apunta el delimitador; el cuerpo se lee al acabar la línea."""
+        if self.nesting:
+            raise _Unparseable('Heredoc dentro de una sustitución.')
+        self.pos += 2
+        quitar = self.peek() == '-'
+        if quitar:
+            self.pos += 1
+        while self.peek() in ' \t':
+            self.pos += 1
+        delimitador, inicio = _Word(), self.pos
+        while self.peek() not in ('', ' ', '\t', '\n', ';', '|', '&', '<', '>', '(', ')'):
+            if self.peek() in '$`':
+                raise _Unparseable('Delimitador de heredoc dinámico.')
+            self._word_part(delimitador)
+        # Con comillas o barras en el delimitador, el cuerpo no se expande.
+        entre_comillas = self.src[inicio:self.pos] != delimitador.text
+        if not delimitador.text:
+            raise _Unparseable('Heredoc sin delimitador.')
+        self.heredocs.append((delimitador.text, entre_comillas, quitar))
+
+    def _cuerpos_de_heredoc(self):
+        pendientes, self.heredocs = self.heredocs, []
+        ordenes = self.commands[self.inicio_de_linea:]
+        for delimitador, entre_comillas, quitar in pendientes:
+            lineas = []
+            while True:
+                if self.pos >= len(self.src):
+                    raise _Unparseable('Heredoc sin cerrar.')
+                fin = self.src.find('\n', self.pos)
+                fin = len(self.src) if fin < 0 else fin
+                linea = self.src[self.pos:fin]
+                self.pos = fin + 1
+                if (linea.lstrip('\t') if quitar else linea) == delimitador:
+                    break
+                lineas.append(linea)
+            cuerpo = '\n'.join(lineas)
+            if not entre_comillas and ('$(' in cuerpo or '`' in cuerpo or '${' in cuerpo):
+                raise _Unparseable('Heredoc con sustituciones.')
+            # Para una shell, o para eval/source, el cuerpo es su guion: se analiza como tal.
+            if any(orden is None or orden and executable_name_lookup_key(orden[0]) in SHELLS | {'eval', 'source', '.'}
+                   for orden in ordenes):
+                self.commands.extend(parse_literal_commands(cuerpo))
+        self.inicio_de_linea = len(self.commands)
 
     def _emit(self, words):
         index = 0
@@ -345,8 +437,10 @@ class _Parser:
         # Las palabras dinámicas conservan su posición: omitirlas movería las que siguen.
         command = [w.value() for w in rest]
         if executable_name_lookup_key(rest[0].text) in SHELLS | {'eval'} and not all(w.literal for w in rest):
-            # Una shell o eval con texto dinámico ejecuta algo que no se puede leer.
-            command = None
+            # Una shell o eval con texto dinámico ejecuta algo que no se puede leer, salvo una shell que
+            # ejecuta un archivo literal: lo dinámico son los argumentos de ese guion.
+            if not _shell_con_archivo(rest):
+                command = None
         self.commands.append(command)
 
     def _word_part(self, word):
@@ -399,7 +493,7 @@ class _Parser:
         word.text += '\0'
         if self.peek() == '`':
             self.pos += 1
-            self.parse('`')
+            self._nested('`')
         elif self.peek(1) == '(':
             self.pos += 2
             self._nested(')')
