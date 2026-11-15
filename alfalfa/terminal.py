@@ -1427,11 +1427,14 @@ def main(argv=None):
                         help='No firmar como coautor a AlfalfaCode en los git commit del agente '
                              '(también ALFALFA_FIRMA=0)')
     parser.add_argument('--stdio', action='store_true')
+    parser.add_argument('--pacai', action='store_true',
+                        help='Hablar PACAI 0.2 por stdio (JSONL) en lugar de --stdio v2: la sesión se abre con el '
+                             '`hello` del cliente y el primer mensaje llega como `input`')
     parser.add_argument('--cola-encargos', nargs='?', const='', metavar='JSON',
                         help='Ejecutar una cola desde un archivo JSON; sin archivo, reanudar la cola de '
                              '--reanudar ID o preparar una cola desde la app con --stdio')
     parser.add_argument('--navegador', action='store_true',
-                        help='Con --stdio: la app ofrece su navegador propio (herramientas browser_*)')
+                        help='Con --stdio o --pacai: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--motor-navegador', choices=('webkit', 'cuybrowser'),
                         help='Activar browser_* explícitamente: WebKit en la app o CuyBrowser')
     parser.add_argument('--perfil-cuybrowser', default='alfalfa', metavar='NOMBRE',
@@ -1506,6 +1509,10 @@ def main(argv=None):
         except (ValueError, OSError) as exc:
             print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
             return 1
+    if args.pacai and (args.stdio or args.encargo or args.bifurcar or args.imagen or args.archivo
+                       or args.cola_encargos is not None):
+        parser.error('--pacai no se combina con --stdio, un encargo, --bifurcar, adjuntos ni --cola-encargos: '
+                     'la entrada llega como mensajes `input`')
     if args.cola_encargos == '' and not args.stdio and not args.reanudar:
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):
@@ -1569,7 +1576,8 @@ def main(argv=None):
             args.encargo = con_archivos(args.encargo, [os.path.abspath(os.path.expanduser(r)) for r in args.archivo])
         except ArchivoInvalido as exc:
             parser.error(str(exc))
-    if args.stdio or args.sesiones or args.modelos or args.turnos or args.historial or args.complementos:
+    if (args.stdio or args.pacai or args.sesiones or args.modelos or args.turnos or args.historial
+            or args.complementos):
         from .stdio import entry
         return entry(args)
     nueva = not args.reanudar and not args.bifurcar
