@@ -243,7 +243,11 @@ class ColaEncargos:
                 elif tipo == 'despierto':
                     padre.emit('despierto', activo=any(h.despierto.sostenida for h in cola.gestores.values()))
         transporte = Transporte(padre.output)
+        # La tarjeta la contesta la app al padre: los dos miran los mismos conjuntos. Sin
+        # `for_always` y `for_site`, «No volver a preguntar» y el sitio daban «id de permiso
+        # desconocido» y la tarjeta seguía en pantalla con el encargo parado.
         transporte.pending, transporte.for_session = padre.pending, padre.for_session
+        transporte.for_always, transporte.for_site = padre.for_always, padre.for_site
         transporte.secretos = padre.secretos
         return transporte
 
