@@ -62,7 +62,8 @@ PREGUNTAN = [
     ['git', 'diff', '--no-index', '/etc/passwd', 'README.md'], ['git', 'grep', '-O', 'hola'], ['git', 'config', '-l'],
     ['git', 'commit', '-m', 'x'], ['git', 'push'], ['git', 'stash'],
     # búsquedas que ejecutan programas
-    ['rg', '--pre', 'cat', 'hola'], ['rg', '--pre=cat', 'hola'], ['rg', '-z', 'hola'], ['grep', '-f', '/etc/passwd', 'src'],
+    ['rg', '--pre', 'cat', 'hola'], ['rg', '--pre=cat', 'hola'], ['rg', '-z', 'hola'],
+    ['grep', '-f', '/etc/passwd', 'src'],
     ['find', '.', '-delete'], ['find', '.', '-exec', 'rm', '{}', ';'], ['find', '/', '-name', 'x'],
     ['find', '-L', '/', '-name', 'x'],
     # rutas fuera, privadas, con secretos o por enlaces
