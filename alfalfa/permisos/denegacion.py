@@ -25,6 +25,11 @@ Diferencias intencionales con Codex:
   '…' failed: No such file or directory», código 71), el texto dice «sandbox»
   sólo porque es quien lanza la orden. No es un bloqueo: sin sandbox fallaría
   igual, así que no se ofrece el reintento.
+- «permission denied» no cuenta. Codex la lleva por Landlock, que en Linux contesta EACCES;
+  Seatbelt contesta siempre EPERM («Operation not permitted», Errno 1), al escribir y al
+  abrir conexiones. En macOS «Permission denied» son los permisos de siempre de Unix, la clave
+  de ssh («Permission denied (publickey)») o un guion sin +x: fallos de la propia orden, que
+  sin sandbox fallaría igual. Antes cada uno ofrecía repetir la orden sin sandbox.
 - La palabra «sandbox» sola no cuenta: aparecía en salidas normales (ruff o
   un grep que citan código sobre el sandbox) y ofrecía repetir sin sandbox una
   orden que sólo había fallado por sí misma. Cuentan los avisos propios de
@@ -37,7 +42,6 @@ import re
 
 SANDBOX_DENIED_KEYWORDS = (
     'operation not permitted',
-    'permission denied',
     'read-only file system',
     'seccomp',
     'landlock',
