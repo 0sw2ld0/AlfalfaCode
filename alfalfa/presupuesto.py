@@ -172,6 +172,11 @@ class GastoMensual:
         self._resto = lineas.pop()
         for linea in lineas:
             usd = self._usd(linea)
+            if usd is None:
+                # Una sesión que murió a media línea deja su trozo sin salto, y la siguiente fila se escribe
+                # pegada detrás: antes se perdían las dos, y el tope del mes contaba de menos.
+                corte = linea.rfind(b'{"t"')
+                usd = self._usd(linea[corte:]) if corte > 0 else None
             if usd is not None:
                 self._total += usd
         return self._total
