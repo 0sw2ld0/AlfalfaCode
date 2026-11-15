@@ -219,7 +219,7 @@ NO_HEREDADO = ('context_usage', 'recortes_tarifa', 'review_steps', 'review_deadl
                'length_recovery', 'unresolved', 'unresolved_records', 'resolution_records',
                'legacy_unresolved_records', 'legacy_resolution_records', 'legacy_unresolved_index',
                'resolutions_not_relevant', 'unresolved_nudged', 'verification_nudged', 'empty_nudges',
-               'tool_repeats', 'compactacion_sin_efecto', 'aviso_compactacion_sin_efecto')
+               'tool_repeats', 'compactacion_sin_efecto', 'aviso_compactacion_sin_efecto', 'aviso_pendiente')
 
 
 def continuar(sesiones, ident):
