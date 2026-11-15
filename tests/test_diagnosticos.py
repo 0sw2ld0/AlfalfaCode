@@ -92,6 +92,10 @@ def simulados(tmp_path, monkeypatch):
         'swift': '/usr/bin/swift', 'swiftc': '/usr/bin/swiftc', 'sdk': '/SDK', 'plataforma': '/Plataforma',
         'triple': 'arm64-apple-macosx26.0'})
     monkeypatch.setenv('ALFALFA_DIAGNOSTICOS', '1')
+    # Los servidores sólo reciben un entorno corto (sin las claves del usuario): el simulado se configura
+    # con estas variables, que tienen que llegarle.
+    monkeypatch.setattr(modulo, 'ENTORNO', modulo.ENTORNO + ('LSP_SIMULADO_REGISTRO', 'LSP_SIMULADO_MODO',
+                                                             'LSP_SIMULADO_RETRASO'))
     monkeypatch.setenv('LSP_SIMULADO_REGISTRO', str(tmp_path / 'metodos.txt'))
     # Con la suite cargada (sourcekit-lsp de verdad en otras pruebas) los simulados pueden pasar de 3 s;
     # las pruebas del plazo ponen el suyo.
