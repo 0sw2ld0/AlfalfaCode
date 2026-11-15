@@ -85,9 +85,18 @@ def test_make_inspecciona_carpeta_real(escena, forma):
     comprobar_rechazo(s, [orden], 'make-carpeta-' + forma)
 
 
+@pytest.fixture
+def casa_de_npm(tmp_path, monkeypatch):
+    """npm deja sus registros y su caché en ~/.npm: que sea una casa temporal y no la de quien corre la
+    suite. Las órdenes del agente sólo reciben PATH, HOME, TMPDIR, LANG y DEVELOPER_DIR, así que un
+    npm_config_cache no les llegaría."""
+    (tmp_path / 'casa').mkdir()
+    monkeypatch.setenv('HOME', str(tmp_path / 'casa'))
+
+
 @MACOS
 @pytest.mark.skipif(shutil.which('npm') is None, reason='npm no disponible')
-def test_npm_prefijo_inspecciona_carpeta_real(escena):
+def test_npm_prefijo_inspecciona_carpeta_real(escena, casa_de_npm):
     s = escena()
     (s.root / 'package.json').write_text(json.dumps({'scripts': {'test': 'node --test'}}))
     (s.root / 'sub').mkdir()
@@ -185,7 +194,7 @@ def test_make_include_no_acredita_receta_que_no_se_ejecuta(escena):
 
 @MACOS
 @pytest.mark.skipif(shutil.which('npm') is None, reason='npm no disponible')
-def test_npm_workspaces_no_acredita_script_de_raiz_no_ejecutado(escena):
+def test_npm_workspaces_no_acredita_script_de_raiz_no_ejecutado(escena, casa_de_npm):
     s = escena()
     (s.root / 'package.json').write_text(json.dumps({'private': True, 'workspaces': ['sub'],
                                                    'scripts': {'test': 'node --test'}}))
