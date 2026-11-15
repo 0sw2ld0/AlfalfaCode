@@ -1,9 +1,8 @@
-"""Rule-based retry classes and durable per-ticket retry budgets."""
+"""Rule-based retry classes and the guard against repeating expensive operations."""
 from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 
 from .fallos import patron_de_agotamiento
@@ -13,36 +12,6 @@ QUOTA_SATURATION = 'quota_saturation'
 TRANSIENT = 'transient'
 DEFECTIVE = 'defective_task_invocation'
 UNKNOWN = 'unknown'
-
-NO_PROGRESS_LIMIT_SECONDS = 120 * 60
-
-# Automatic attempts are cumulative for the life of a ticket. Progress can
-# renew the no-progress clock, but it never refunds an attempt.
-RETRY_POLICIES = {
-    LOCAL_SERVICE_UNAVAILABLE: {
-        'max_attempts': 3, 'max_elapsed_seconds': 2 * 60 * 60,
-        'backoff_base_seconds': 5 * 60, 'backoff_max_seconds': 30 * 60,
-    },
-    QUOTA_SATURATION: {
-        'max_attempts': 2, 'max_elapsed_seconds': 2 * 60 * 60,
-        'backoff_base_seconds': 15 * 60, 'backoff_max_seconds': 60 * 60,
-    },
-    TRANSIENT: {
-        'max_attempts': 2, 'max_elapsed_seconds': 60 * 60,
-        'backoff_base_seconds': 10 * 60, 'backoff_max_seconds': 30 * 60,
-    },
-    # A deterministic failure may be retried once only after observable
-    # progress; the failing command itself is not repeated by the supervisor.
-    DEFECTIVE: {
-        'max_attempts': 2, 'max_elapsed_seconds': 2 * 60 * 60,
-        'backoff_base_seconds': 0, 'backoff_max_seconds': 0,
-        'requires_progress': True,
-    },
-    UNKNOWN: {
-        'max_attempts': 0, 'max_elapsed_seconds': 0,
-        'backoff_base_seconds': 0, 'backoff_max_seconds': 0,
-    },
-}
 
 # Cuota o saturación: la lente «reintento» del clasificador único (reintentos/fallos.py),
 # que conserva las mismas señales y el mismo orden que la expresión que vivía aquí.
@@ -61,13 +30,6 @@ _DEFECT = re.compile(
     r'pytest_invocation_or_collection|verification_pending|pending_operations|loop_detected|'
     r'forbidden_recipe|execution_exception|does not support this model|not a model this version|'
     r'correcciones seguidas no cambiaron', re.I)
-_PYTEST_COUNT = (
-    r'(?:\d+|no)\s+(?:passed|failed|errors?|warnings?|skipped|xfailed|xpassed|'
-    r'deselected|selected|rerun)'
-)
-_PYTEST_SUMMARY_DURATION = re.compile(
-    rf'(?im)^(?P<prefix>[= \t]*(?:{_PYTEST_COUNT})(?:,\s*{_PYTEST_COUNT})*\s+in\s+)'
-    r'\d+(?:\.\d+)?s(?:\s+\(\d+(?::\d{2}){1,2}\))?(?P<suffix>[= \t]*)$')
 _TRANSIENT_OPERATION_CAUSES = {
     'timeout', 'server_error', 'network', 'disconnected', 'connection_reset',
     'temporarily_unavailable', 'dns', 'transient',
@@ -286,176 +248,3 @@ def classify_retry_failure(task=None, ticket_error='', operation_failures=None):
             candidates.add(DEFECTIVE)
     return next(iter(candidates)) if len(candidates) == 1 else UNKNOWN
 
-
-def new_retry_budget(now, snapshot=None):
-    snapshot = snapshot if isinstance(snapshot, dict) else {}
-    workspaces = snapshot.get('workspaces')
-    evidence = snapshot.get('evidence')
-    return {
-        'version': 1,
-        'no_progress_since': float(now),
-        'last_progress_at': float(now),
-        'last_observed_at': float(now),
-        'progress_generation': 0,
-        'content_generation': 0,
-        'workspaces': dict(workspaces) if isinstance(workspaces, dict) else {},
-        'evidence': sorted(set(evidence)) if isinstance(evidence, list) else [],
-        'attempts_by_class': {},
-        'first_seen_by_class': {},
-        'last_retry_by_class': {},
-        'class_progress_generation': {},
-        'exhausted': None,
-    }
-
-
-def _timestamp(value, fallback):
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return float(fallback)
-    value = float(value)
-    return value if value >= 0 and math.isfinite(value) else float(fallback)
-
-
-def observe_retry_budget(budget, snapshot, now):
-    """Record content/evidence changes; messages and duplicate operations do not count."""
-    if not isinstance(budget, dict) or budget.get('version') != 1:
-        return new_retry_budget(now, snapshot), False
-
-    effective_now = max(float(now), _timestamp(budget.get('last_observed_at'), now))
-    old_workspaces = budget.get('workspaces')
-    old_workspaces = old_workspaces if isinstance(old_workspaces, dict) else {}
-    new_workspaces = snapshot.get('workspaces') if isinstance(snapshot, dict) else {}
-    new_workspaces = new_workspaces if isinstance(new_workspaces, dict) else {}
-    content_changed = any(key in old_workspaces and old_workspaces[key] != value
-                          for key, value in new_workspaces.items())
-    changed = content_changed
-
-    old_evidence = set(item for item in budget.get('evidence', []) if isinstance(item, str))
-    new_evidence = set(item for item in (snapshot.get('evidence', []) if isinstance(snapshot, dict) else [])
-                       if isinstance(item, str))
-    if new_evidence - old_evidence:
-        changed = True
-
-    # New workspaces are baselined without treating their initial checkout as
-    # progress. Deleted workspaces do not erase history or refresh the clock.
-    merged_workspaces = dict(old_workspaces)
-    merged_workspaces.update(new_workspaces)
-    budget['workspaces'] = merged_workspaces
-    budget['evidence'] = sorted(old_evidence | new_evidence)[-5000:]
-    budget['last_observed_at'] = effective_now
-    if changed:
-        budget['last_progress_at'] = effective_now
-        budget['no_progress_since'] = effective_now
-        generation = budget.get('progress_generation', 0)
-        generation = generation if type(generation) is int and generation >= 0 else 0
-        budget['progress_generation'] = generation + 1
-        if budget.get('exhausted') == 'no_progress':
-            # El progreso observado después de una pausa vuelve a abrir el
-            # presupuesto de supervisión para que el ticket pueda reanudarse.
-            budget['exhausted'] = None
-    if content_changed:
-        content_generation = budget.get('content_generation', 0)
-        content_generation = content_generation if type(content_generation) is int and content_generation >= 0 else 0
-        budget['content_generation'] = content_generation + 1
-    else:
-        content_generation = budget.get('content_generation', 0)
-        budget['content_generation'] = content_generation if type(content_generation) is int \
-            and content_generation >= 0 else 0
-    return budget, changed
-
-
-def retry_decision(budget, failure_class, now, *, failure_since=None, cause_corrected=False):
-    """Return retry, wait, or stop under the finite persistent class limits."""
-    effective_now = max(float(now), _timestamp(budget.get('last_observed_at'), now))
-    stalled_for = max(0.0, effective_now - _timestamp(budget.get('no_progress_since'), effective_now))
-    if stalled_for >= NO_PROGRESS_LIMIT_SECONDS:
-        return {'action': 'stop', 'reason': 'no_progress', 'stalled_seconds': stalled_for}
-
-    policy = RETRY_POLICIES.get(failure_class, RETRY_POLICIES[UNKNOWN])
-    attempts = budget.get('attempts_by_class')
-    attempts = attempts if isinstance(attempts, dict) else {}
-    count = attempts.get(failure_class, 0)
-    count = count if type(count) is int and count >= 0 else 0
-    if policy['max_attempts'] == 0:
-        return {'action': 'stop', 'reason': 'class_not_retryable', 'attempts': count}
-    if count >= policy['max_attempts']:
-        return {'action': 'stop', 'reason': 'attempt_limit', 'attempts': count}
-
-    first_seen = budget.get('first_seen_by_class')
-    first_seen = first_seen if isinstance(first_seen, dict) else {}
-    budget['first_seen_by_class'] = first_seen
-    started = first_seen.setdefault(failure_class, _timestamp(failure_since, effective_now))
-    started = _timestamp(started, effective_now)
-    if effective_now - started >= policy['max_elapsed_seconds']:
-        return {'action': 'stop', 'reason': 'class_time_limit', 'attempts': count}
-
-    if policy.get('requires_progress'):
-        if not cause_corrected:
-            return {'action': 'wait', 'reason': 'cause_not_corrected', 'attempts': count}
-
-    delay = min(policy['backoff_base_seconds'] * (2 ** count),
-                policy['backoff_max_seconds'])
-    last_retry = budget.get('last_retry_by_class')
-    last_retry = last_retry if isinstance(last_retry, dict) else {}
-    anchor = _timestamp(last_retry.get(failure_class), started)
-    if effective_now - anchor < delay:
-        return {'action': 'wait', 'reason': 'backoff', 'wait_seconds': delay - (effective_now - anchor),
-                'attempts': count}
-    return {'action': 'retry', 'reason': 'eligible', 'attempts': count, 'wait_seconds': 0}
-
-
-def record_retry(budget, failure_class, now):
-    attempts = budget.setdefault('attempts_by_class', {})
-    count = attempts.get(failure_class, 0)
-    attempts[failure_class] = (count if type(count) is int and count >= 0 else 0) + 1
-    budget.setdefault('last_retry_by_class', {})[failure_class] = float(now)
-    budget.setdefault('first_seen_by_class', {}).setdefault(failure_class, float(now))
-
-
-def _is_pytest_invocation(argv):
-    """Recognize pytest commands so their wall-clock summary is not evidence."""
-    if not argv:
-        return False
-    values = [str(value) for value in argv]
-    program = values[0].replace('\\', '/').rsplit('/', 1)[-1].casefold()
-    if program == 'pytest' or re.fullmatch(r'pytest(?:-[0-9.]+)?', program):
-        return True
-    if program.startswith('python') and values[1:3] == ['-m', 'pytest']:
-        return True
-    return (program in ('uv', 'poetry', 'pipenv', 'tox', 'nox', 'hatch')
-            and any(value.replace('\\', '/').rsplit('/', 1)[-1].casefold() == 'pytest'
-                    for value in values[1:]))
-
-
-def operation_progress_key(record):
-    """Stable operation identity plus observed output, ignoring prose and timestamps."""
-    if not isinstance(record, dict):
-        return None
-    tool = str(record.get('tool') or '')
-    if tool not in ('run_command', 'run_checks'):
-        return None
-    classification = record.get('classification')
-    classification = classification if isinstance(classification, dict) else {}
-    argv = record.get('argv') if isinstance(record.get('argv'), list) else []
-    normalize_pytest_time = _is_pytest_invocation(argv)
-    observed = {}
-    for key in ('output', 'stdout', 'stderr', 'error'):
-        observed_value = record.get(key)
-        if isinstance(observed_value, str) and observed_value:
-            if normalize_pytest_time:
-                observed_value = _PYTEST_SUMMARY_DURATION.sub(
-                    r'\g<prefix><duration>\g<suffix>', observed_value)
-            observed[key] = observed_value
-    observed_digest = hashlib.sha256(json.dumps(
-        observed, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    value = {
-        'tool': tool,
-        'argv': argv,
-        'cwd': str(record.get('cwd') or ''),
-        'exit_code': record.get('exit_code'),
-        'disposition': str(classification.get('disposition') or ''),
-        'cause': str(classification.get('cause') or ''),
-        'verification_status': str(record.get('verification_status') or ''),
-        'observed_digest': observed_digest,
-    }
-    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(raw.encode()).hexdigest()

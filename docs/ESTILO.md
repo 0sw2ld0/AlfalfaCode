@@ -125,7 +125,7 @@ vive en su archivo dentro de `alfalfa/proveedores/nativo/runtime/`:
 
 | Archivo nuevo | Qué se lleva | Líneas aprox. |
 |---|---|---|
-| `entorno.py` | `is_cloud`, `perfil`, `limite_num_predict`, `manual_del_harness`, `entorno`, `podar_sesiones_nativas` (funciones sueltas de arriba del archivo) | 250 |
+| `entorno.py` | `is_cloud`, `perfil`, `limite_num_predict`, `manual_del_harness`, `entorno` (funciones sueltas de arriba del archivo) | 250 |
 | `fallos.py` | `_cadena_de_fallo`, `_es_fallo_tls`, `_texto_de_fallo`, `_es_desconexion_sin_respuesta`, más los métodos `_texto_de_error`, `_provider_error_text`, `_provider_failure` y `_retry_*`, `_log_transport_*` | 200 |
 | `peticion.py` | `endpoint`, `_cliente`, `_proveedor_actual`, `request` (125 líneas) | 180 |
 | `contexto.py` | `context`, `_context_messages`, `_estado_breve`, `_archivos_propios`, `user_message`, `_desglose`, `context_estimate`, `_record_context_details`, `_con_imagenes`, `_conversation_response_cap`, `_record_response_usage` | 300 |

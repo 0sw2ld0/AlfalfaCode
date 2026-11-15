@@ -9,7 +9,6 @@ import asyncio
 import hashlib
 import json
 import math
-import os
 import re
 import shlex
 import ssl
@@ -382,54 +381,6 @@ def entorno(root):
     except OSError:
         pass
     return '\n'.join(filas)
-
-SESIONES_NATIVAS_VIGENTES = 14 * 86400
-
-
-def podar_sesiones_nativas(manager, ahora=None, edad=SESIONES_NATIVAS_VIGENTES):
-    """Borra native/<tarea>/ (sesión y visiones cacheadas) de tareas terminadas hace más de `edad`.
-
-    Cada tarea nativa dejaba su carpeta para siempre. Se conserva la de toda
-    tarea que siga viva, pueda retomarse o la cite algo abierto (un relevo lee
-    la sesión de su origen). Sin la tarea en memoria (ya en el histórico),
-    decide la fecha de lo último escrito en la carpeta.
-    """
-    import shutil
-    ahora = ahora or time.time()
-    raiz = manager.directory / 'native'
-    try:
-        carpetas = [c for c in raiz.iterdir() if c.is_dir() and not c.is_symlink()]
-    except OSError:
-        return 0
-    citadas = manager._citadas() if hasattr(manager, '_citadas') else set()
-    for t in list(manager.tasks.values()):
-        for campo in ('handoff_source_task_id', 'source_task_id', 'source_task'):
-            if isinstance(t.get(campo), str) and t.get('status') not in manager.TERMINADAS:
-                citadas.add(t[campo])
-    borradas = 0
-    for carpeta in carpetas:
-        ident = carpeta.name
-        if ident in citadas or ident in manager.runners:
-            continue
-        tarea = manager.tasks.get(ident)
-        if tarea is not None:
-            if (tarea.get('status') not in manager.TERMINADAS or tarea.get('pending_relaunch')
-                    or tarea.get('quota_pause')):
-                continue
-            try:
-                fin = float(tarea.get('ended') or tarea.get('updated') or ahora)
-            except (TypeError, ValueError):
-                continue
-        else:
-            try:
-                fin = max([carpeta.stat().st_mtime] + [e.stat().st_mtime for e in os.scandir(carpeta)])
-            except OSError:
-                continue
-        if ahora - fin <= edad:
-            continue
-        shutil.rmtree(carpeta, ignore_errors=True)
-        borradas += 1
-    return borradas
 
 
 def _tokens_de_documentos(mensaje):
