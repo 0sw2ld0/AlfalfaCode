@@ -201,11 +201,32 @@ def test_un_enlace_duro_preexistente_no_reabre_el_hogar(escena):
     assert (hogar / 'hooks.json').read_text() == 'contenido original\n'
 
 
-def test_un_hogar_demasiado_grande_no_se_abre_sin_comprobarlo(escena, monkeypatch):
-    root, _ = escena
-    monkeypatch.setattr(seatbelt, 'HOME_SCAN_LIMIT', 0)
-    with pytest.raises(SandboxUnavailable, match='hogar.*demasiado grande'):
+@real
+def test_el_aviso_del_enlace_duro_dice_que_archivo_es_y_su_arreglo_funciona(escena):
+    """M2: el sandbox sigue negándose (Seatbelt no protege el otro nombre), pero dice qué archivo lo
+    provoca y la orden que lo arregla; tras ella el sandbox vuelve y el otro nombre ya no escribe aquí."""
+    root, hogar = escena
+    protegido = hogar / 'hooks.json'
+    alias = root / 'alias'
+    alias.hardlink_to(protegido)
+    with pytest.raises(SandboxUnavailable) as exc:
         SeatbeltSandbox(root).command_args(['/usr/bin/true'])
+    aviso = str(exc.value)
+    assert os.path.realpath(protegido) in aviso and 'cada orden pide salir del sandbox' in aviso
+    arreglo = aviso.split('fuera de AlfalfaCode: ', 1)[1]
+    subprocess.run(['/bin/sh', '-c', arreglo], check=True)
+    assert os.stat(protegido).st_nlink == 1 and protegido.read_text() == 'contenido original\n'
+    orden = asyncio.run(SeatbeltSandbox(root).prepare(['/bin/sh', '-c', 'echo alterado > alias']))
+    assert subprocess.run(orden, cwd=root).returncode == 0
+    assert protegido.read_text() == 'contenido original\n'
+
+
+def test_un_hogar_demasiado_grande_no_se_abre_sin_comprobarlo(escena, monkeypatch):
+    root, hogar = escena
+    monkeypatch.setattr(seatbelt, 'HOME_SCAN_LIMIT', 0)
+    with pytest.raises(SandboxUnavailable, match='hogar.*demasiado grande') as exc:
+        SeatbeltSandbox(root).command_args(['/usr/bin/true'])
+    assert os.path.realpath(hogar) in str(exc.value)  # cuál, para poder arreglarlo
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason='root puede recorrer carpetas sin permisos')
