@@ -935,6 +935,8 @@ async def run(args, transport):
                 code = await transport.worker
             except asyncio.CancelledError:
                 code = 130
+            except Exception as exc:  # noqa: BLE001 — un fallo del arnés en un turno no cierra la sesión
+                code = _turno_que_revento(manager, transport, exc)
             eco = True
             if transport.interrupted:
                 code = 130
@@ -1011,6 +1013,30 @@ async def run(args, transport):
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
     cierre.terminado()
     return code
+
+
+def _turno_que_revento(manager, transport, exc):
+    """Un error inesperado del arnés dentro de un turno: el turno falla y la sesión sigue.
+
+    Antes subía hasta el final de `run`: la sesión entera se cerraba con «No se pudo iniciar o
+    ejecutar la sesión» y la excepción no quedaba en ningún sitio. Ahora se apunta con su traza en
+    `errores.log` de la sesión y la app lo ve como el fallo de ese turno.
+    """
+    import traceback
+    resumen = 'Fallo inesperado en el turno (' + type(exc).__name__ + '): ' + (str(exc)[:300] or 'sin detalle')
+    try:
+        with open(manager.directory / 'errores.log', 'a', encoding='utf-8') as registro:
+            registro.write(time.strftime('%Y-%m-%dT%H:%M:%S') + ' ' + transport.clean(
+                ''.join(traceback.format_exception(exc))) + '\n')
+    except OSError:
+        pass
+    manager.task.update(status='failed', summary=resumen + '. El detalle está en errores.log de la sesión.')
+    transport.emit('error', texto=resumen)
+    try:
+        manager.save()
+    except OSError:
+        pass
+    return 1
 
 
 async def _cancelar_revision(transport):
