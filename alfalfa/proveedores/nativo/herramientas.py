@@ -1069,6 +1069,9 @@ class WorkspaceTools:
         # el turno no acaba «bloqueado» por haberlos rechazado (sólo se quedan sin diagnósticos).
         politica = self.runtime.approval_policy
         negados = getattr(politica, 'denied', None)
+        # Este permiso llega después de la edición: una tarjeta suya sin contestar no quiere decir
+        # que la herramienta no se ejecutó (ver NativeRuntime.approve).
+        llamada, self.runtime._llamada = getattr(self.runtime, '_llamada', None), None
         try:
             if plazo is None:
                 return await self.runtime.approve(peticion)
@@ -1077,6 +1080,8 @@ class WorkspaceTools:
             if isinstance(negados, int) and isinstance(getattr(politica, 'denied', None), int):
                 politica.denied = negados
             raise
+        finally:
+            self.runtime._llamada = llamada
 
     def _contenido_previo(self, sha):
         """El contenido anterior a una edición, de su copia privada `before-<sha>`, o None."""

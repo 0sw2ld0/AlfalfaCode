@@ -29,6 +29,15 @@ from .proveedores.nativo.herramientas import atomic_json
 from .proveedores.nativo.runtime import SIN_EFECTOS, NativeRuntime
 from .seatbelt import SeatbeltSandbox
 
+# Estado de una orden «incierta» cuyo aviso ya tuvo su turno: deja de frenar su repetición.
+CADUCADA = 'expired'
+
+
+def es_de_interrupcion(row):
+    """¿Es la fila de una orden que se cortó en marcha en esta misma sesión (Detener, cierre)?"""
+    return isinstance(row, dict) and str(row.get('id') or '').startswith('terminal-interrupted-')
+
+
 INSTRUCTIONS = '''Eres AlfalfaCode, un agente de programación de terminal. Trabaja en la carpeta
 indicada y conserva los cambios ajenos. No modifiques archivos fuera de la carpeta
 de trabajo. La única excepción es el almacenamiento de sesiones gestionado por el
@@ -779,8 +788,10 @@ class TerminalManager:
             original_save = rt.save
 
             def sanitized_save():
-                rt.state.update(self.transport.clean(rt.state))
-                self.task.update(self.transport.clean(self.task))
+                # En el sitio: sustituir el estado por copias dejaba al motor marcando las llamadas
+                # en objetos viejos, y al seguir tras Detener la orden cortada se repetía.
+                self.transport.limpiar_en_sitio(rt.state)
+                self.transport.limpiar_en_sitio(self.task)
                 original_save()
 
             rt.save = sanitized_save
@@ -804,6 +815,9 @@ class TerminalManager:
             rt.context = context_with_messages
             rt.compact_request = self.transport.take_compact
             rt.redireccion = self.transport.redireccion
+        # Con una persona delante, lo que quedó de un turno cortado no corre antes de leer su
+        # mensaje: se cierra y el modelo decide con lo que ella diga.
+        rt.ejecuta_cola_heredada = False
         # Reuse the engine's durable uncertainty ledger, including its command
         # fingerprint guard. Merely reporting a pending call as uncertain must
         # not permit the next model turn to replay it as a new call.
@@ -815,6 +829,13 @@ class TerminalManager:
                     and function.get('name') != BUSCAR
                     and not any(row['id'] == ident for row in uncertain)):
                 uncertain.append(dict(id=ident, function=function, status='uncertain'))
+        # Una orden cortada frena su repetición en el turno en que se avisa, no en los siguientes:
+        # si aquí vuelve a estar en marcha es que se cortó otra vez y el aviso se renueva.
+        cortadas = {row['id'] for row in uncertain if es_de_interrupcion(row)}
+        if cortadas:
+            rt.state['handoff_uncertain_operations'] = [
+                row for row in rt.state.get('handoff_uncertain_operations', [])
+                if not (isinstance(row, dict) and row.get('id') in cortadas and row.get('status') == CADUCADA)]
         rt._inherit_handoff_uncertain_operations()
         rt.save()
         return rt
@@ -1054,9 +1075,10 @@ class TerminalManager:
             if self.task['status'] == 'running':
                 # Lo que cambió fuera (otro agente en el mismo proyecto) y las órdenes de consulta
                 # fallidas de una sesión que no cambió nada no bloquean (ver `bloqueantes`).
+                # Una orden que la persona cortó tampoco: ya lo sabe, y el modelo recibió el aviso.
                 if (rt.evidence.verificacion_bloquea(rt.evidence.handoff())
                         or rt.evidence.bloqueantes() or self.approval.denied
-                        or any(row.get('status') == 'uncertain' for row in
+                        or any(row.get('status') == 'uncertain' and not es_de_interrupcion(row) for row in
                                rt.state.get('handoff_uncertain_operations', []))
                         or not rt.evidence._result({})):
                     self.task['status'] = 'blocked'
@@ -1082,8 +1104,12 @@ class TerminalManager:
             for proc in list(self.processes.values()):
                 await self.terminate(proc)
             if self.transport:
-                self.task.update(self.transport.clean(self.task))
-                rt.state.update(self.transport.clean(rt.state))
+                self.transport.limpiar_en_sitio(self.task)
+                self.transport.limpiar_en_sitio(rt.state)
+            # El aviso de una orden cortada vale para este turno; en el siguiente ya se puede repetir.
+            for row in rt.state.get('handoff_uncertain_operations', []):
+                if es_de_interrupcion(row) and row.get('status') == 'uncertain':
+                    row.update(status=CADUCADA, expired_at=time.time())
             rt.evidence.finish(error=self.task.get('summary') if self.task['status'] != 'completed' else None)
             if self.exportacion_navegador is not None:
                 self.exportacion_navegador.terminar()

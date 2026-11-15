@@ -125,6 +125,25 @@ class Transport:
             return [self.clean(v) for v in value]
         return value
 
+    def limpiar_en_sitio(self, value):
+        """Como `clean`, pero dentro del mismo dict o lista: quien tenga una referencia a una parte
+        del estado (la tanda de herramientas en curso) sigue apuntando a lo que se guarda."""
+        from . import proveedores
+        secretos = sorted(set(self.secretos) | set(proveedores.secretos()), key=len, reverse=True)
+        pendientes = [value]
+        while pendientes:
+            actual = pendientes.pop()
+            for clave, hijo in list(actual.items() if isinstance(actual, dict) else enumerate(actual)):
+                if isinstance(hijo, str):
+                    limpio = hijo
+                    for secreto in secretos:
+                        limpio = limpio.replace(secreto, '[REDACTADO]')
+                    if limpio != hijo:
+                        actual[clave] = limpio
+                elif isinstance(hijo, (dict, list)):
+                    pendientes.append(hijo)
+        return value
+
     def emit(self, tipo, **fields):
         if getattr(self, 'salida_rota', False):
             return
