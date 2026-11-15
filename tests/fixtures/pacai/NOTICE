@@ -1,0 +1,6 @@
+PACAI (Protocol for Agent Communication And Interfaces)
+Copyright 2026 Oswaldo Leon
+
+Esta carpeta incluye los ejemplos de conformidad de PACAI 0.2 (valid/, invalid/),
+publicados bajo la Apache License 2.0 (ver LICENSE en esta carpeta). Se copian tal
+cual, sin modificar.

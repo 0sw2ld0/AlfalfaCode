@@ -17,6 +17,8 @@ from .reintentos.fallos import es_aviso_de_transporte
 
 VERSION = 2
 MAX_MENSAJE = 20000
+# Encargo provisional de una sesión `--pacai` nueva hasta que llega su primer `input`.
+OBJETIVO_PACAI = 'Sesión PACAI'
 # El texto de un mensaje que sólo trae imágenes (también lo usa la app de Mac).
 SOLO_IMAGENES = 'Mira la imagen adjunta.'
 SOLO_ARCHIVOS = 'Lee el archivo adjunto.'
@@ -250,6 +252,12 @@ class Transport:
         else:
             self.compact_now = pedido
             self.wake.set()
+
+    def conectar(self, manager):
+        """`run` ya tiene su TerminalManager. v2 no lo necesita; `--pacai` sí (subagentes, diff del turno)."""
+
+    def turno_empieza(self, prompt):
+        """`run` va a abrir un turno con este mensaje. v2 no lo anuncia; `--pacai` abre su ejecución."""
 
     def take_compact(self):
         pending, self.compact_pending = self.compact_pending, False
@@ -703,9 +711,12 @@ async def run(args, transport):
         from .terminal import resolve_fork
         resolve_fork(args)
         cola = getattr(args, 'cola_encargos', None)
+        # `--pacai` abre la sesión sin turno: el primero lo trae un `input`.
+        pacai = bool(getattr(args, 'pacai', False))
         esperar = ((bool(getattr(args, 'esperar', False)) and bool(args.reanudar))
-                   or cola is not None) and not args.encargo
-        manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None else None),
+                   or cola is not None or pacai) and not args.encargo
+        manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None
+                                                   else OBJETIVO_PACAI if pacai and not args.reanudar else None),
                                   resume=args.reanudar, model=args.modelo,
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
@@ -719,6 +730,7 @@ async def run(args, transport):
                                   monthly_budget=getattr(args, 'presupuesto_mes', None),
                                   diagnosticos=diagnostics(args), firma=signature(args),
                                   diagnosticos_swift=swift_diagnostics(args))
+        transport.conectar(manager)
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
             marcar(manager.task['id'], 'titulo', args.titulo)
@@ -930,6 +942,11 @@ async def run(args, transport):
                 prompt = await transport.next_message()
                 continue
             transport.turno_cortado = False
+            if pacai and manager.task.get('objective') == OBJETIVO_PACAI:
+                # El primer mensaje es el encargo de la sesión, como el que `--stdio` recibe en la orden.
+                manager.task['objective'] = _texto_escrito(prompt)[:2000] or OBJETIVO_PACAI
+                manager.save()
+            transport.turno_empieza(prompt)
             transport.worker = asyncio.create_task(manager.run(prompt, eco=eco))
             try:
                 code = await transport.worker
@@ -1365,7 +1382,11 @@ def check_command(argv):
 
 
 def entry(args):
-    transport = Transport(sys.stdout)
+    if getattr(args, 'pacai', False):
+        from .pacai.transporte import TransportePacai
+        transport = TransportePacai(sys.stdout)
+    else:
+        transport = Transport(sys.stdout)
     if getattr(args, 'complementos', False):
         from .complementos import CargadorComplementos
         from .terminal import home_dir

@@ -1,0 +1,1342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pacai-0.2.schema.json",
+  "title": "Mensaje PACAI 0.2",
+  "type": "object",
+  "required": [
+    "pacai",
+    "id",
+    "type",
+    "session",
+    "sender",
+    "seq",
+    "time",
+    "payload"
+  ],
+  "properties": {
+    "pacai": {
+      "const": "0.2"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "type": {
+      "type": "string"
+    },
+    "session": {
+      "type": "string",
+      "minLength": 16
+    },
+    "sender": {
+      "enum": [
+        "agent",
+        "client"
+      ]
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reply_to": {
+      "type": "string",
+      "minLength": 8
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "type": {
+          "const": "hello"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "versions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "profiles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "extensions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            },
+            "client_tools": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/client_tool"
+              }
+            },
+            "limits": {
+              "type": "object",
+              "properties": {
+                "max_message_bytes": {
+                  "type": "integer",
+                  "minimum": 1024
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            "resume_after_seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "render": {
+              "type": "object"
+            },
+            "implementation": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "versions"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "session_started"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "profiles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "extensions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "agent": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            "resumed": {
+              "type": "boolean"
+            },
+            "resume_after_seq": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "version",
+            "profiles",
+            "extensions"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      },
+      "required": [
+        "reply_to"
+      ]
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "input"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "blocks": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/block"
+                  }
+                },
+                "mode": {
+                  "enum": [
+                    "new_run",
+                    "steer"
+                  ]
+                },
+                "run_id": {
+                  "type": "string",
+                  "minLength": 8
+                }
+              },
+              "required": [
+                "blocks"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "steer"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              },
+              "then": {
+                "required": [
+                  "run_id"
+                ]
+              }
+            }
+          ]
+        },
+        "sender": {
+          "const": "client"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "run_started"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "input_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "parent_run_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "agent": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "input_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "parent_run_id"
+                  ]
+                }
+              ]
+            },
+            {
+              "dependentRequired": {
+                "tool_call_id": [
+                  "parent_run_id"
+                ]
+              }
+            }
+          ]
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "run_finished"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "run_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "outcome": {
+                  "enum": [
+                    "success",
+                    "interrupted",
+                    "failed",
+                    "blocked"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "run_id",
+                "outcome"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "if": {
+                "properties": {
+                  "outcome": {
+                    "enum": [
+                      "failed",
+                      "blocked"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "detail"
+                ]
+              }
+            }
+          ]
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "message_start"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "role": {
+              "enum": [
+                "assistant",
+                "user",
+                "system",
+                "tool"
+              ]
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/block"
+              }
+            }
+          },
+          "required": [
+            "run_id",
+            "role"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "message_delta"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/block"
+              }
+            }
+          },
+          "required": [
+            "message_id",
+            "blocks"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "message_end"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/block"
+              }
+            }
+          },
+          "required": [
+            "message_id"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tool_start"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "arguments": {
+              "type": "object"
+            },
+            "side": {
+              "enum": [
+                "agent",
+                "client"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "approval_id": {
+              "type": "string",
+              "minLength": 8
+            }
+          },
+          "required": [
+            "run_id",
+            "name",
+            "arguments",
+            "side"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tool_end"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tool_call_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "status": {
+              "enum": [
+                "success",
+                "error",
+                "cancelled"
+              ]
+            },
+            "output": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/block"
+              }
+            },
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tool_call_id",
+            "status"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sender": {
+                "const": "client"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reply_to"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "approval_request"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "tool_call_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "arguments": {
+              "type": "object"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "reason": {
+              "type": "string",
+              "pattern": "^(dangerous|network|outside_sandbox|sandbox_denied_retry|external_tool|policy|[a-z][a-z0-9_]*\\.[a-z0-9_.]+)$"
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "once",
+                  "session"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "expires": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "run_id",
+            "tool_call_id",
+            "name",
+            "arguments",
+            "digest",
+            "reason",
+            "scopes",
+            "expires"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "approval_result"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "decision": {
+                  "enum": [
+                    "approved",
+                    "denied",
+                    "expired"
+                  ]
+                },
+                "scope": {
+                  "enum": [
+                    "once",
+                    "session"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "decision"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "if": {
+                "properties": {
+                  "decision": {
+                    "const": "approved"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "scope"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "scope"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "reply_to"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sender": {
+                "const": "agent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "properties": {
+                  "decision": {
+                    "const": "expired"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "payload": {
+                "properties": {
+                  "decision": {
+                    "enum": [
+                      "approved",
+                      "denied"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "interrupt"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            }
+          },
+          "required": [
+            "run_id"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "client"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "usage"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "input_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cached_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "context_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "context_limit": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cost": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                }
+              },
+              "required": [
+                "amount",
+                "currency"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "heartbeat"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "last_seq": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "last_seq"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "error"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 8
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "close"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "snapshot"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "runs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/run_state"
+              }
+            },
+            "pending_approvals": {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "const": "approval_request"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "last_messages": {
+              "type": "array",
+              "items": {
+                "$ref": "#"
+              }
+            }
+          },
+          "required": [
+            "runs",
+            "pending_approvals"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      },
+      "required": [
+        "reply_to"
+      ]
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "voice_turn"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "client_speaking",
+                "agent_listening",
+                "barge_in"
+              ]
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "state_snapshot"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "agent": {
+              "type": "object"
+            },
+            "client": {
+              "type": "object"
+            }
+          },
+          "required": [],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "state_delta"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "patch": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "add",
+                      "remove",
+                      "replace",
+                      "move",
+                      "copy",
+                      "test"
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/(agent|client)(/.*)?$"
+                  }
+                },
+                "required": [
+                  "op",
+                  "path"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "patch"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "plan_updated"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "in_progress",
+                      "completed"
+                    ]
+                  }
+                },
+                "required": [
+                  "text",
+                  "status"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "run_id",
+            "steps"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "diff_updated"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "added": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "removed": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "patch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "run_id",
+            "files"
+          ],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "expression"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "message_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "emotion": {
+              "type": "string"
+            },
+            "intensity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "gesture": {
+              "type": "string"
+            },
+            "voice_style": {
+              "type": "string"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "character": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "additionalProperties": true
+        },
+        "sender": {
+          "const": "agent"
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*\\.[a-z0-9_.]+$"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "block": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "file"
+            },
+            "name": {
+              "type": "string"
+            },
+            "media_type": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "media_type"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "structured"
+            },
+            "schema": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "type",
+            "schema",
+            "data"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "audio"
+            },
+            "media_type": {
+              "type": "string"
+            },
+            "encoding": {
+              "enum": [
+                "pcm16",
+                "opus",
+                "mp3"
+              ]
+            },
+            "data": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "transcript": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "media_type",
+            "encoding"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "client_tool": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "input_schema": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "input_schema"
+      ],
+      "additionalProperties": true
+    },
+    "run_state": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "status": {
+              "enum": [
+                "active",
+                "finished"
+              ]
+            },
+            "outcome": {
+              "enum": [
+                "success",
+                "interrupted",
+                "failed",
+                "blocked"
+              ]
+            },
+            "parent_run_id": {
+              "type": "string",
+              "minLength": 8
+            }
+          },
+          "required": [
+            "run_id",
+            "status"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "finished"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "outcome"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "outcome"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
