@@ -177,6 +177,8 @@ def bifurcar(sesiones, ident, turno=None):
             if isinstance(punto, dict) and punto.get('through', 0) > hasta:
                 estado.pop('checkpoint', None)
             estado.pop('context_usage', None)
+            # La respuesta cortada, si la hubo, quedó fuera del tramo que se copia.
+            estado.pop('length_recovery', None)
             historial.escribir(nativo, estado)
             for previa in estado_origen.parent.glob('before-*'):
                 if previa.is_file() and not previa.is_symlink():

@@ -1008,6 +1008,11 @@ class TerminalManager:
                 self.save()
                 return 130
         rt = self.runtime()
+        # Una recuperación por límite de salida gastada o cortada a medias era de la respuesta
+        # anterior. La marca frena a quien reanuda solo (un integrador no la repite por su cuenta);
+        # con un mensaje nuevo de la persona, la sesión sigue.
+        if rt.state.pop('length_recovery', None) is not None:
+            rt.save()
         print('AlfalfaCode · Sesión: ' + self.task['id'], flush=True)
         # Cada mensaje que abre un turno le da un id y marca su tramo del historial.
         # El cierre (wrap_up) es de cada turno: el del anterior ya no vale.
