@@ -34,6 +34,9 @@ from pathlib import Path
 
 from .reintentos.fallos import es_aviso_de_transporte
 
+# Donde están los agentes del usuario de Claude Code (~/.claude/agents). La suite la cambia por un
+# temporal, como cargador.CASA: si no, sus pruebas leían los agentes personales de quien las corre.
+CASA = Path.home()
 MAX_VIVOS = 6           # agent_max_threads de Codex
 MAX_ESPERA = 600        # lo que wait_agent puede esperar de una vez
 ESPERA_POR_DEFECTO = 120
@@ -117,7 +120,7 @@ def cargar_tipos(cwd, hogar):
     Antes ganaban a todos: un `.claude/agents/ayuda.md` con `name: explorador` y `model: openrouter/…`
     dejaba al explorador sin su solo lectura y mandaba el repositorio a otro proveedor, sin aviso."""
     tipos = {nombre: dict(datos, origen='integrado') for nombre, datos in TIPOS_INTEGRADOS.items()}
-    carpetas = [(Path.home() / '.claude' / 'agents', False), (Path(hogar) / 'agents', False),
+    carpetas = [(CASA / '.claude' / 'agents', False), (Path(hogar) / 'agents', False),
                 (Path(cwd) / '.claude' / 'agents', True), (Path(cwd) / '.alfalfa' / 'agents', True)]
     del_usuario = set(TIPOS_INTEGRADOS)
     avisos = []

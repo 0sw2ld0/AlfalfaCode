@@ -16,6 +16,16 @@ os.environ['ALFALFA_IMPORTAR_CASA'] = tempfile.mkdtemp(prefix='casa-ajena-')
 os.environ['ALFALFA_DIAGNOSTICOS'] = '0'
 # Ni la revisión de aprendizaje al cerrar el turno pide nada al modelo falso: test_aprendizaje la enciende.
 os.environ['ALFALFA_APRENDER_REVISION'] = '0'
+# Ni su ~/.gitconfig: con `commit.gpgsign = true` (o un hook global) fallaba el primer `git commit` de
+# una docena de archivos. Git usa una configuración propia de la suite, con un nombre y un correo de
+# prueba, también en los procesos hijos; y nada de un GIT_DIR o un GIT_INDEX_FILE heredados.
+for _nombre in [n for n in os.environ if n.startswith('GIT_')]:
+    del os.environ[_nombre]
+_GITCONFIG = os.path.join(tempfile.mkdtemp(prefix='git-de-la-suite-'), 'gitconfig')
+with open(_GITCONFIG, 'w') as _archivo:
+    _archivo.write('[user]\n\tname = Prueba\n\temail = prueba@example.com\n'
+                   '[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n')
+os.environ.update(GIT_CONFIG_GLOBAL=_GITCONFIG, GIT_CONFIG_NOSYSTEM='1')
 
 
 import pytest  # noqa: E402  (después de limpiar el entorno)
@@ -71,6 +81,14 @@ def _sin_habilidades_del_usuario(tmp_path_factory, monkeypatch):
     """Las habilidades sueltas de ~/.claude/skills y ~/.codex/skills de quien corre la suite no entran."""
     from alfalfa.complementos import cargador
     monkeypatch.setattr(cargador, 'CASA', tmp_path_factory.mktemp('casa'))
+
+
+@pytest.fixture(autouse=True)
+def _sin_agentes_del_usuario(tmp_path_factory, monkeypatch):
+    """Los agentes de ~/.claude/agents de quien corre la suite no entran: un `explorador.md` propio
+    tapaba al integrado y cambiaba lo que prueban las de subagentes."""
+    from alfalfa import subagentes
+    monkeypatch.setattr(subagentes, 'CASA', tmp_path_factory.mktemp('casa-agentes'))
 
 
 @pytest.fixture(autouse=True)

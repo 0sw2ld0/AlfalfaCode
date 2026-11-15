@@ -36,9 +36,11 @@ GRATIS = [
 
 
 @pytest.fixture
-def sin_nada(monkeypatch):
-    """Un Mac recién instalado: sin claves, sin Ollama y con estos gratis en el catálogo."""
+def sin_nada(monkeypatch, tmp_path):
+    """Un Mac recién instalado: sin claves, sin Ollama y con estos gratis en el catálogo. Su carpeta de
+    AlfalfaCode es un temporal: `terminal.main` creaba ~/.alfalfa/sesiones en la casa de quien corre la suite."""
     from alfalfa import catalogo
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path / 'alfalfa'))
     monkeypatch.setattr(primera_vez, 'ollama_instalado', lambda: False)
     monkeypatch.setattr(primera_vez, 'ollama_responde', lambda get=None: False)
     monkeypatch.setattr(catalogo, 'gratis_ahora', lambda red=False: list(GRATIS))
