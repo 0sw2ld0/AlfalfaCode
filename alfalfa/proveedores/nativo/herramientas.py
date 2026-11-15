@@ -1010,6 +1010,9 @@ class WorkspaceTools:
         return digest(identity.encode())
 
     async def call(self, name, args):
+        if not isinstance(name, str) or not name:
+            # Un nombre que no es texto (una lista, un número) hacía saltar un TypeError fuera del turno.
+            raise ValueError('Nombre de herramienta inválido: ' + json.dumps(name, ensure_ascii=False)[:100])
         auditoria = getattr(self.runtime.manager, 'auditoria_equipo', None)
         if auditoria is None:
             return await self._call_con_diagnosticos(name, args)
