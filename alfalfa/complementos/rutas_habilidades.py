@@ -1,5 +1,4 @@
 """Carpetas de habilidades del proyecto que sólo escribe el arnés con su tarjeta."""
-import os
 import unicodedata
 from pathlib import Path
 
@@ -29,20 +28,3 @@ def es_habilidad(cwd, ruta):
     ruta = _clave(ruta)
     return any(ruta == _clave(p) or ruta.startswith(_clave(p).rstrip('/') + '/')
                for p in carpetas_protegidas(cwd))
-
-
-def carpetas_descubiertas(cwd, limite=200_000):
-    """Sólo metadatos: incluye habilidades de futuros cwd y destinos de enlaces previos."""
-    pendientes, encontradas, vistas = [Path(cwd).resolve()], set(), 0
-    while pendientes:
-        with os.scandir(pendientes.pop()) as entradas:
-            for entrada in entradas:
-                vistas += 1
-                if vistas > limite:
-                    raise ValueError('No se pudo completar la comprobación de las carpetas de habilidades.')
-                nombre = _clave(entrada.name)
-                if nombre in {'.' + f for f in FORMATOS}:
-                    encontradas.add(Path(entrada.path).resolve())
-                elif nombre != '.git' and entrada.is_dir(follow_symlinks=False):
-                    pendientes.append(Path(entrada.path))
-    return tuple(sorted(encontradas))
