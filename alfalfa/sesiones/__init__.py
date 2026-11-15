@@ -18,6 +18,7 @@ de tarifa), con `continuada_de` = {sesion}.
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
@@ -127,6 +128,17 @@ def _privada(path):
     return path
 
 
+@contextlib.contextmanager
+def _sin_restos(destino):
+    """Si algo falla al llenar una sesión nueva, su carpeta no se queda a medias: sin task.json, la barra
+    lateral la enseñaba como una sesión «corrupta» más por cada intento."""
+    try:
+        yield destino
+    except BaseException:
+        shutil.rmtree(destino, ignore_errors=True)
+        raise
+
+
 def _escribir(path, valor):
     temporal = path.with_name(path.name + '.tmp')
     fd = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
@@ -158,52 +170,58 @@ def bifurcar(sesiones, ident, turno=None):
         if elegido is None:
             raise ValueError('Esa sesión no tiene un turno terminado con ese id: ' + str(turno)[:40])
         nuevo = uuid4().hex[:16]
-        destino = _privada(Path(sesiones) / nuevo)
-        conservados = task['turnos'][:task['turnos'].index(elegido) + 1]
-        ids = {t['id'] for t in conservados}
-        estado_origen = origen / 'native' / ident / 'session.json'
-        nativo = _privada(_privada(destino / 'native') / nuevo)
-        if estado_origen.is_file():
-            from ..proveedores.nativo import historial
-            # Cualquier versión: la 3 guarda la conversación en messages.jsonl.
-            estado = historial.leer(estado_origen)
-            hasta = elegido['hasta']
-            estado['messages'] = estado.get('messages', [])[:hasta]
-            estado['pending'] = []
-            for clave in INDICES:
-                if isinstance(estado.get(clave), list):
-                    estado[clave] = [i for i in estado[clave] if isinstance(i, int) and i < hasta]
-            punto = estado.get('checkpoint')
-            if isinstance(punto, dict) and punto.get('through', 0) > hasta:
-                estado.pop('checkpoint', None)
-            estado.pop('context_usage', None)
-            # La respuesta cortada, si la hubo, quedó fuera del tramo que se copia.
-            estado.pop('length_recovery', None)
-            historial.escribir(nativo, estado)
-            for previa in estado_origen.parent.glob('before-*'):
-                if previa.is_file() and not previa.is_symlink():
-                    shutil.copy2(previa, nativo / previa.name)
-        fin = elegido.get('fin') or time.time()
-        filas = []
-        transcripcion = origen / (ident + '.jsonl')
-        if transcripcion.is_file():
-            for linea in transcripcion.read_text().splitlines():
-                fila = json.loads(linea)
-                if fila.get('turno') in ids or ('turno' not in fila and fila.get('time', 0) <= fin):
-                    filas.append(linea)
-        _escribir(destino / (nuevo + '.jsonl'), ''.join(fila + '\n' for fila in filas))
-        # Las aprobaciones «en esta sesión» no pasan a la bifurcada: es otra sesión.
-        for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group', 'aprobadas_en_sesion'):
-            task.pop(clave, None)
-        # El gasto es de la otra sesión, como al «Seguir en una sesión nueva»: la bifurcada empieza de
-        # cero para su tope (no nace al 84 % sin avisar) y su caché. El del mes sigue contando aparte.
-        for clave in ('coste_usd', 'cache', 'presupuesto_avisos', 'presupuesto_sin_precio'):
-            task.pop(clave, None)
-        meta = dict(task.get('meta') or {}, id=nuevo, fecha=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
-        task.update(id=nuevo, status='created', turnos=conservados, meta=meta,
-                    bifurcada_de=dict(sesion=ident, turno=elegido['id']), updated_at=time.time())
-        _escribir(destino / 'task.json', json.dumps(task, ensure_ascii=False))
-        return nuevo
+        with _sin_restos(_privada(Path(sesiones) / nuevo)) as destino:
+            conservados = task['turnos'][:task['turnos'].index(elegido) + 1]
+            ids = {t['id'] for t in conservados}
+            estado_origen = origen / 'native' / ident / 'session.json'
+            nativo = _privada(_privada(destino / 'native') / nuevo)
+            if estado_origen.is_file():
+                from ..proveedores.nativo import historial
+                # Cualquier versión: la 3 guarda la conversación en messages.jsonl.
+                estado = historial.leer(estado_origen)
+                hasta = elegido['hasta']
+                estado['messages'] = estado.get('messages', [])[:hasta]
+                estado['pending'] = []
+                for clave in INDICES:
+                    if isinstance(estado.get(clave), list):
+                        estado[clave] = [i for i in estado[clave] if isinstance(i, int) and i < hasta]
+                punto = estado.get('checkpoint')
+                if isinstance(punto, dict) and punto.get('through', 0) > hasta:
+                    estado.pop('checkpoint', None)
+                estado.pop('context_usage', None)
+                # La respuesta cortada, si la hubo, quedó fuera del tramo que se copia.
+                estado.pop('length_recovery', None)
+                historial.escribir(nativo, estado)
+                for previa in estado_origen.parent.glob('before-*'):
+                    if previa.is_file() and not previa.is_symlink():
+                        shutil.copy2(previa, nativo / previa.name)
+            fin = elegido.get('fin') or time.time()
+            filas = []
+            transcripcion = origen / (ident + '.jsonl')
+            if transcripcion.is_file():
+                for linea in transcripcion.read_text().splitlines():
+                    try:
+                        fila = json.loads(linea)
+                    except ValueError:
+                        continue  # una línea a medias (un corte de luz, el disco lleno) no impide bifurcar
+                    if not isinstance(fila, dict):
+                        continue
+                    if fila.get('turno') in ids or ('turno' not in fila and fila.get('time', 0) <= fin):
+                        filas.append(linea)
+            _escribir(destino / (nuevo + '.jsonl'), ''.join(fila + '\n' for fila in filas))
+            # Las aprobaciones «en esta sesión» no pasan a la bifurcada: es otra sesión.
+            for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group',
+                          'aprobadas_en_sesion'):
+                task.pop(clave, None)
+            # El gasto es de la otra sesión, como al «Seguir en una sesión nueva»: la bifurcada empieza
+            # de cero para su tope (no nace al 84 % sin avisar) y su caché. El del mes sigue contando aparte.
+            for clave in ('coste_usd', 'cache', 'presupuesto_avisos', 'presupuesto_sin_precio'):
+                task.pop(clave, None)
+            meta = dict(task.get('meta') or {}, id=nuevo, fecha=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
+            task.update(id=nuevo, status='created', turnos=conservados, meta=meta,
+                        bifurcada_de=dict(sesion=ident, turno=elegido['id']), updated_at=time.time())
+            _escribir(destino / 'task.json', json.dumps(task, ensure_ascii=False))
+            return nuevo
     finally:
         os.close(cerrojo)
 
@@ -240,29 +258,29 @@ def continuar(sesiones, ident):
     if not isinstance(punto, dict) or punto.get('estilo') != 'codex' or not isinstance(punto.get('text'), str):
         raise ValueError('Compacta la sesión antes de seguir en una nueva: hace falta su resumen.')
     nuevo = uuid4().hex[:16]
-    destino = _privada(Path(sesiones) / nuevo)
-    nativo = _privada(_privada(destino / 'native') / nuevo)
-    # Sólo las instrucciones de sistema (el motor las rehace en cada turno) y el resumen,
-    # como al compactar entre turnos: el último mensaje del usuario ya está contestado.
-    estado['messages'] = list(estado.get('messages') or [])[:1]
-    estado['pending'] = []
-    for clave in INDICES:
-        estado[clave] = []
-    estado['checkpoint'] = dict(punto, through=len(estado['messages']), entre_turnos=True)
-    for clave in NO_HEREDADO:
-        estado.pop(clave, None)
-    historial.escribir(nativo, estado)
-    for previa in estado_origen.parent.glob('before-*'):
-        if previa.is_file() and not previa.is_symlink():
-            shutil.copy2(previa, nativo / previa.name)
-    ahora = time.time()
-    fila = dict(role='system', time=ahora,
-                text='Sesión continuada de ' + ident + ': empieza con el resumen de su conversación.',
-                compactacion=dict(estado='hecha', motivo='continuacion', antes=punto.get('tokens_antes') or 0,
-                                  despues=0, resumen=punto['text']))
-    _escribir(destino / (nuevo + '.jsonl'), json.dumps(fila, ensure_ascii=False) + '\n')
-    nueva = {k: task[k] for k in HEREDADO if k in task}
-    nueva.update(id=nuevo, status='created', turnos=[], continuada_de=dict(sesion=ident), updated_at=ahora,
-                 meta=metadatos(nuevo, nueva.get('cwd', ''), nueva.get('model'), nueva.get('effort')))
-    _escribir(destino / 'task.json', json.dumps(nueva, ensure_ascii=False))
-    return nuevo
+    with _sin_restos(_privada(Path(sesiones) / nuevo)) as destino:
+        nativo = _privada(_privada(destino / 'native') / nuevo)
+        # Sólo las instrucciones de sistema (el motor las rehace en cada turno) y el resumen,
+        # como al compactar entre turnos: el último mensaje del usuario ya está contestado.
+        estado['messages'] = list(estado.get('messages') or [])[:1]
+        estado['pending'] = []
+        for clave in INDICES:
+            estado[clave] = []
+        estado['checkpoint'] = dict(punto, through=len(estado['messages']), entre_turnos=True)
+        for clave in NO_HEREDADO:
+            estado.pop(clave, None)
+        historial.escribir(nativo, estado)
+        for previa in estado_origen.parent.glob('before-*'):
+            if previa.is_file() and not previa.is_symlink():
+                shutil.copy2(previa, nativo / previa.name)
+        ahora = time.time()
+        fila = dict(role='system', time=ahora,
+                    text='Sesión continuada de ' + ident + ': empieza con el resumen de su conversación.',
+                    compactacion=dict(estado='hecha', motivo='continuacion', antes=punto.get('tokens_antes') or 0,
+                                      despues=0, resumen=punto['text']))
+        _escribir(destino / (nuevo + '.jsonl'), json.dumps(fila, ensure_ascii=False) + '\n')
+        nueva = {k: task[k] for k in HEREDADO if k in task}
+        nueva.update(id=nuevo, status='created', turnos=[], continuada_de=dict(sesion=ident), updated_at=ahora,
+                     meta=metadatos(nuevo, nueva.get('cwd', ''), nueva.get('model'), nueva.get('effort')))
+        _escribir(destino / 'task.json', json.dumps(nueva, ensure_ascii=False))
+        return nuevo
