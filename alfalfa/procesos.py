@@ -266,16 +266,6 @@ def recoger_huerfanos(registros, espera=ESPERA_TERM):
     return nuestros
 
 
-def pid_vivo(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except PermissionError:
-        return True  # existe, aunque sea de otro usuario
-    except (ProcessLookupError, OverflowError, TypeError, ValueError):
-        return False
-
-
 async def comunicar(proc, plazo, entrada=None):
     """communicate() con plazo; si vence o se cancela, mata el grupo entero y lo espera.
 
