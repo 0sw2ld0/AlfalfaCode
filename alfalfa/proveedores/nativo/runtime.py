@@ -999,14 +999,16 @@ class NativeRuntime:
         self.task['runtime_transport_retry_exhausted'] = True
         self.task['runtime_transport_retry_exhaustion'] = reason
         if reason == 'attempt_limit':
+            # La sesión sigue: lo que no se completó es esta petición (puede ser una interna, como el
+            # resumen al compactar).
             texto = (self._proveedor_actual().nombre + ' transporte: agotados ' + str(attempts)
-                     + ' intentos; sesión no completada.')
+                     + ' intentos; la petición no se completó.')
         elif reason == 'retry_after':
             texto = (self._proveedor_actual().nombre + ' transporte: el proveedor pide esperar más que el plazo '
                      'de la petición; no se reintenta.')
         else:
-            texto = (self._proveedor_actual().nombre + ' transporte: plazo de sesión agotado tras ' + str(attempts)
-                     + ' intentos; no se completó la sesión.')
+            texto = (self._proveedor_actual().nombre + ' transporte: plazo de reintentos agotado tras ' + str(attempts)
+                     + ' intentos; la petición no se completó.')
         self.manager.event(self.task, 'system', texto)
 
     async def _retry_or_raise(self, clas, error_text, attempt, deadline, retry_after=None, cause=None):

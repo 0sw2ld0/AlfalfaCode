@@ -304,7 +304,7 @@ class Alfalfa(Proveedor):
                     'en otro); revísalo en Proveedores; no se reintenta.')
         if estado == 401:
             return 'falta activar el código o la hora de este Mac no coincide con la del servicio; no se reintenta.'
-        return None
+        return super().accion(clas, error_text)
 
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         codigo = self.codigo()
