@@ -389,8 +389,8 @@ extension BrowserScripts {
     /// - no hay red (fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, window.open);
     /// - el valor de un campo de contraseña se lee vacío, también con FormData y getAttribute.
     /// La regex del motor (`navegador.parece_que_cambia`) sólo es una ayuda; esto es la barrera. Lo
-    /// que queda fuera: `location` (no se puede redefinir; navegar sigue pasando por la política del
-    /// navegador), el atributo `value` escrito en el HTML de una contraseña (outerHTML) y un marco que
+    /// que queda fuera: `location` (no se puede redefinir, y una URL `javascript:` no pasa por la política
+    /// del navegador: lo para `ReadOnlyScript` antes de correr el script), el atributo `value` escrito en el HTML de una contraseña (outerHTML) y un marco que
     /// la página cree mientras el script espera (se instalan en los marcos que hay al empezar).
     static let readOnlyWorld = #"""
     (() => {
