@@ -20,6 +20,9 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var ollama: Bool?
     @Published private(set) var answered: Set<String> = []
     @Published private(set) var stopping = false
+    private let stopControl = EngineStop()
+    /// Lo que se escribió mientras el motor se cerraba: abre el siguiente en cuanto termine este.
+    private var heldMessage: (text: String, images: [URL])?
     @Published private(set) var reviewingCode = false
     @Published private(set) var workingQueue = false
     @Published private var liveBrowserExport: String?
@@ -132,6 +135,8 @@ final class LiveSession: ObservableObject, Identifiable {
         do {
             try child.start()
             process = child
+            stopControl.reset()
+            stopping = false
         } catch {
             timeline.addNotice("No se pudo iniciar alfalfa: \(error.localizedDescription)")
             timeline.processExited(code: 1)
@@ -165,6 +170,10 @@ final class LiveSession: ObservableObject, Identifiable {
            let gone = timeline.unqueued(id: id, removed: removed, reason: reason), gone.action == .edit {
             returnToComposer(gone.text)
         }
+        if case .turnFinished = message {
+            stopControl.reset()
+            stopping = false
+        }
         if case let .turnFinished(outcome) = message {
             liveBrowserExport = outcome.state == "completed" ? outcome.wrapUp?.browserExport?.id : nil
             onTurnFinished?(outcome)
@@ -190,6 +199,8 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     private func exited(code: Int32, stderr: String) {
+        stopControl.reset()
+        stopping = false
         workingQueue = false
         pendingQueueAction = nil
         reviewingCode = false
@@ -207,6 +218,17 @@ final class LiveSession: ObservableObject, Identifiable {
         }
         onChange?()
         Task { await refreshPanel() }
+        if let held = heldMessage {
+            heldMessage = nil
+            if isDormant {
+                wake(with: held.text.isEmpty ? Attachments.placeholder(for: held.images.map(\.path)) : held.text,
+                     images: held.images)
+            } else {
+                // Sin sesión que reanudar: vuelve al cuadro, no se pierde.
+                if !held.text.isEmpty { pendingDraft = held.text }
+                draftImages = held.images
+            }
+        }
     }
 
     func refreshPanel() async {
@@ -246,10 +268,19 @@ final class LiveSession: ObservableObject, Identifiable {
             wake(with: clean.isEmpty ? Attachments.placeholder(for: images) : clean, images: urls)
             return
         }
-        guard !clean.isEmpty || !images.isEmpty, process != nil else { return }
+        guard !clean.isEmpty || !images.isEmpty, let process else { return }
+        if !process.acceptsInput {
+            // El motor ya no lee (se está cerrando): el mensaje se perdía sin aviso. Se guarda y abre
+            // el siguiente motor en cuanto termine este.
+            heldMessage = (clean, draftImages)
+            draftImages = []
+            timeline.addNotice("El motor se está cerrando: tu mensaje se enviará en cuanto vuelva a abrirse.")
+            onChange?()
+            return
+        }
         let queueID = Self.newQueueID()
         timeline.addUser(ImageTags.join(clean, images: images), queued: true, queueID: queueID)
-        process?.send(.message(clean, images: images, id: queueID))
+        process.send(.message(clean, images: images, id: queueID))
         draftImages = []
     }
 
@@ -451,11 +482,15 @@ final class LiveSession: ObservableObject, Identifiable {
     }
 
     func stop() {
-        guard let process, !stopping else { return }
+        guard let process, stopControl.begin(process) else { return }
         stopping = true
         process.send(.cancel)
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
-            MainActor.assumeIsolated { self?.process?.terminate() }
+            MainActor.assumeIsolated {
+                // Sólo el motor que se detuvo, y sólo si el turno no terminó: no el siguiente.
+                guard let self, self.stopControl.shouldTerminate(self.process) else { return }
+                self.process?.terminate()
+            }
         }
     }
 
