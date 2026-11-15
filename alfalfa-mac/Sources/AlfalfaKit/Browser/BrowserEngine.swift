@@ -338,6 +338,10 @@ public final class BrowserEngine: NSObject {
             // Con permiso, en la página; sin él, en el mundo de sólo lectura (con sus barreras de nuevo,
             // por si el documento empezó antes de que hubiera script de usuario).
             let modifies = request.bool("modifica")
+            if !modifies, let reason = ReadOnlyScript.refusal(code) {
+                throw BrowserFailure("browser_eval sin modifies sólo lee: el script " + reason
+                                     + ". Si hace falta, repite con modifies: true (pide permiso).")
+            }
             var result = try await evaluate((modifies ? "" : BrowserScripts.readOnlyWorld + "\n")
                                             + BrowserScripts.evaluate(code), [:],
                                             in: modifies ? .page : readingWorld)

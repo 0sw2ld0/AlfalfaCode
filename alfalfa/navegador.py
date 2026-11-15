@@ -325,6 +325,27 @@ _CAMBIA = re.compile(
     r'|\b(?:document\.cookie|history\.go|history\.back|history\.forward)\b')
 
 
+# `location` no se puede tapar en el mundo de sólo lectura de la app (WebKit no deja redefinirlo):
+# `location['assign']('javascript:…')` ejecutaba código en la página sin tarjeta. Sólo se dejan
+# pasar las lecturas de sus partes; cualquier otro uso (corchetes, métodos, el objeto entero) y
+# cualquier URL `javascript:` del script piden permiso.
+_LEE_LOCATION = re.compile(r'\blocation\s*\.\s*(?:href|host|hostname|pathname|search|hash|origin|protocol|port)\b')
+_LOCATION = re.compile(r'location', re.I)
+_ESCAPE = re.compile(r'\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4}))')
+
+
+def _sin_escapes(texto):
+    return _ESCAPE.sub(lambda m: chr(min(int(m[1] or m[2] or m[3], 16), 0x10FFFF)), texto)
+
+
+def _usa_location(script):
+    crudo = _sin_escapes(script)
+    if re.search(r'javascript\s*:', crudo, re.I):
+        return True
+    lecturas = len(_LEE_LOCATION.findall(crudo))
+    return len(_LOCATION.findall(crudo)) > lecturas
+
+
 def parece_que_cambia(script):
     """¿Este JavaScript cambia la página, navega, guarda o usa la red? Filtro prudente:
     un falso positivo sólo pide permiso.
@@ -336,6 +357,8 @@ def parece_que_cambia(script):
     JavaScript sin permiso corre en el mundo de sólo lectura de la app
     (BrowserScripts.readOnlyWorld), donde los cambios, los envíos, la red y las
     contraseñas están bloqueados."""
+    if _usa_location(script):
+        return True
     limpio = _CADENAS.sub('""', script)
     limpio = _DECLARACION.sub('DECL', limpio)
     limpio = _PARAMETRO_POR_DEFECTO.sub('(P)=>', limpio)
