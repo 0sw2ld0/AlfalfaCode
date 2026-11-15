@@ -64,6 +64,7 @@ main() {
 
   TMP="$(mktemp -d "${TMPDIR:-/tmp}/alfalfa-instalar.XXXXXX")"
   VOLUMEN=""
+  DISCO=""
   NUEVA=""
   # EXIT limpia siempre; una señal (Ctrl-C, cerrar la terminal) limpia y para con su código.
   trap limpiar EXIT
@@ -106,8 +107,10 @@ main() {
   # --- 3. Montar y comprobar la app -----------------------------------------------------------
   VOLUMEN="$TMP/volumen"
   mkdir "$VOLUMEN"
-  hdiutil attach -nobrowse -readonly -noautoopen -quiet -mountpoint "$VOLUMEN" "$TMP/AlfalfaCode.dmg" \
-    || { VOLUMEN=""; falla "no se pudo montar el DMG"; }
+  # El disco (/dev/diskN) se guarda para desconectarlo entero aunque el punto de montaje ya no exista.
+  DISCO="$(hdiutil attach -nobrowse -readonly -noautoopen -plist -mountpoint "$VOLUMEN" "$TMP/AlfalfaCode.dmg" \
+    | grep -o '/dev/disk[0-9]*' | head -n 1)" || true
+  [ -n "$DISCO" ] || { VOLUMEN=""; falla "no se pudo montar el DMG"; }
   APP="$VOLUMEN/AlfalfaCode.app"
   [ -d "$APP" ] || falla "el DMG no trae AlfalfaCode.app"
   codesign --verify --deep --strict "$APP" 2>/dev/null || falla "la firma de la app no es válida"
@@ -138,8 +141,7 @@ main() {
   ditto "$APP/Contents/Helpers" "$NUEVA/Helpers"
   printf 'curl\n%s\n' "$VERSION" > "$NUEVA/instalacion"
   "$NUEVA/Resources/motor/alfalfa" --version >/dev/null 2>&1 || { rm -rf "$NUEVA"; falla "el motor copiado no arranca"; }
-  hdiutil detach -quiet "$VOLUMEN" || true
-  VOLUMEN=""
+  desmontar || true
 
   VIEJA=""
   if [ -e "$RAIZ" ]; then
@@ -299,8 +301,22 @@ desinstalar() {
   fi
 }
 
+# Desconecta el DMG; si está ocupado, a la fuerza. Si ni así, lo avisa y lo deja anotado para que
+# limpiar() lo intente otra vez, en lugar de olvidarlo montado.
+desmontar() {
+  [ -n "${VOLUMEN:-}" ] || return 0
+  objetivo="${DISCO:-$VOLUMEN}"
+  if hdiutil detach -quiet "$objetivo" 2>/dev/null || hdiutil detach -quiet -force "$objetivo" 2>/dev/null; then
+    VOLUMEN=""
+    DISCO=""
+    return 0
+  fi
+  aviso "no se pudo desconectar el DMG; quítalo con: hdiutil detach -force $objetivo"
+  return 1
+}
+
 limpiar() {
-  if [ -n "${VOLUMEN:-}" ]; then hdiutil detach -quiet -force "$VOLUMEN" 2>/dev/null || true; VOLUMEN=""; fi
+  desmontar || VOLUMEN=""
   if [ -n "${TMP:-}" ]; then rm -rf "$TMP"; TMP=""; fi
   if [ -n "${NUEVA:-}" ]; then rm -rf "$NUEVA"; NUEVA=""; fi
   return 0
