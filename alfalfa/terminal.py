@@ -902,6 +902,11 @@ class TerminalManager:
         try:
             await rt.compact_now(instructions)
             return True
+        except asyncio.CancelledError:
+            # Detener: la conversación sigue como estaba (el resumen sólo se escribe al llegar).
+            self.compaction_event(self.task, 'Compactación detenida: la conversación sigue igual.',
+                                  {'estado': 'fallida', 'motivo': 'detenida'})
+            raise
         except Exception as exc:  # noqa: BLE001 — un fallo al compactar no cierra la sesión
             # Lo que falla antes de pedir el resumen (sin historia, sin modelo) no tiene
             # marca propia: se dice aquí.
