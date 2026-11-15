@@ -251,6 +251,9 @@ class Transport:
             return True
         if self.stopped or not self.in_turn or not self.worker or self.worker.done():
             return False
+        if self.turno_cortado:
+            # Ya se está cortando: otro cancel caería en mitad del cierre del turno.
+            return True
         self.turno_cortado = True
         for ident in list(self.pending):
             self.resolve(ident, False, 'Turno interrumpido')
