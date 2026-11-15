@@ -21,6 +21,7 @@ import json
 import os
 import re
 import stat
+from itertools import dropwhile
 from pathlib import Path
 
 from .busqueda_sesiones.lectura import externa
@@ -273,8 +274,59 @@ _URL_DE_RED = re.compile(r'^(?:https?|ftp|ssh|sftp|wss?)://', re.I)
 _VARIABLE = re.compile(r'\$\{?([A-Za-z_][A-Za-z0-9_]*)|^([A-Za-z_][A-Za-z0-9_]*)=')
 _URL = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*://')
 _MOVER = re.compile(r'^\*\*\* Move to: (.+)$', re.MULTILINE)
+# Nombre de variable secreta: en mayúsculas, con la palabra entera (GITHUB_TOKEN, OPENAI_API_KEY).
+# RE_SECRETO busca en cualquier parte y sin distinguir: TOKENIZERS_PARALLELISM o el `$key` de un
+# bucle pedían el sí.
+_VARIABLE_SECRETA = re.compile(r'(?:^|_)(?:TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIALS?|APIKEY|PAT)S?(?:$|_)')
+# Órdenes que sólo miran nombres, tamaños y fechas: no leen el contenido.
+SOLO_METADATOS = frozenset({'ls', 'du', 'stat', 'file', 'realpath', 'which', 'wc'})
+# Una URL como argumento de estas es texto (un patrón, un mensaje), no una conexión.
+URL_COMO_TEXTO = frozenset({'grep', 'rg', 'echo', 'printf', 'sed', 'awk', 'jq'})
 # Rutas de fuera que no son del usuario: tirar la salida o escribir en la terminal.
 _DISPOSITIVOS = frozenset({'/dev/null', '/dev/stdout', '/dev/stderr', '/dev/tty'})
+
+
+def _variable_secreta(nombre):
+    return bool(nombre) and nombre.upper() == nombre and _VARIABLE_SECRETA.search(nombre) is not None
+
+
+# Nombres que sólo pueden ser secretos: cuentan aunque el archivo no exista. «credentials» o
+# «secrets» también son palabras corrientes (`rg -n credentials src`): sólo cuentan si existen.
+_PALABRAS_AMBIGUAS = frozenset({'credentials', 'secrets', 'WebKit', 'Cookies', 'HTTPStorages'})
+
+
+def _secreta_inequivoca(pieza):
+    from .permisos.rutas import SENSIBLES, privado_del_espacio
+    if pieza.startswith('-') and '=' in pieza:
+        pieza = pieza.split('=', 1)[1]
+    partes = [p for p in Path(pieza).parts if p != '.DS_Store']
+    return any(privado_del_espacio(p) or p.startswith('.env') or (p in SENSIBLES and p not in _PALABRAS_AMBIGUAS)
+               for p in partes)
+
+
+def _como_ruta(pieza, raiz):
+    """La ruta que nombra `pieza` si de verdad parece una ruta (existe ella o su carpeta), o None.
+
+    `/api/v1` en `grep -rn /api/v1 src` o `/BEGIN/,/END/p` en un sed son patrones: antes
+    contaban como «ruta de fuera de la carpeta». En `--basetemp=/private/tmp/x` la ruta es el valor.
+    """
+    if pieza.startswith('-') and '=' in pieza:
+        pieza = pieza.split('=', 1)[1]
+    if not pieza or ' ' in pieza or _URL.match(pieza):
+        return None
+    if pieza.startswith('~'):
+        return pieza
+    if '..' in Path(pieza).parts:
+        return pieza
+    partes = Path(pieza).parts
+    try:
+        if Path(pieza).is_absolute():
+            # /Users/otro/.zshrc es una ruta aunque no exista; /api/v1 o /BEGIN/,/END/p, no.
+            return pieza if len(partes) > 1 and (Path('/') / partes[1]).exists() else None
+        ruta = Path(raiz) / pieza
+        return pieza if ruta.exists() or ruta.is_symlink() else None
+    except OSError:
+        return pieza
 
 
 def contaminada(runtime):
@@ -383,24 +435,38 @@ def riesgo(nombre, args, raiz, *, sandbox=True):
         cwd = args.get('cwd')
         if isinstance(cwd, str) and cwd not in ('', '.') and (Path(cwd).is_absolute() or _ruta_ajena(cwd, raiz)):
             return 'corre fuera de la carpeta de trabajo'
-        if Path(argv[0]).name in PROGRAMAS_DE_SECRETOS:
-            return 'puede leer secretos (' + Path(argv[0]).name + ')'
+        # `env PYTHONPATH=. pytest -q`: env delante de una orden sólo le pone variables. Sola
+        # (o con nada más que variables) imprime el entorno, y eso sí puede leer secretos.
+        if Path(argv[0]).name == 'env':
+            resto = list(dropwhile(lambda a: a.startswith('-') or '=' in a, argv[1:]))
+            if not resto:
+                return 'puede leer secretos (env)'
+            asignadas = argv[1:len(argv) - len(resto)]
+            secreta = next((a.split('=', 1)[0] for a in asignadas if _variable_secreta(a.split('=', 1)[0])), None)
+            if secreta:
+                return 'usa una variable secreta (' + secreta + ')'
+            argv = resto
+        programa = Path(argv[0]).name
+        if programa in PROGRAMAS_DE_SECRETOS:
+            return 'puede leer secretos (' + programa + ')'
         # Con needs_network o require_escalated ya pregunta la política, con este motivo añadido:
         # una sola tarjeta. Sin declararlo, un programa de red o una URL piden el sí aquí.
         declara = args.get('needs_network') is True or args.get('sandbox_permissions') == 'require_escalated'
-        if not declara and Path(argv[0]).name in PROGRAMAS_DE_RED:
-            return 'usa la red (' + Path(argv[0]).name + ')'
+        if not declara and programa in PROGRAMAS_DE_RED:
+            return 'usa la red (' + programa + ')'
         for pieza in _piezas(argv):
-            if not declara and (pieza in PROGRAMAS_DE_RED or _URL_DE_RED.match(pieza)):
+            if not declara and (pieza in PROGRAMAS_DE_RED or (_URL_DE_RED.match(pieza)
+                                                             and programa not in URL_COMO_TEXTO)):
                 return 'usa la red (' + pieza[:120] + ')'
             if pieza in ('security', 'printenv'):  # dentro de un `sh -c '…'`
                 return 'puede leer secretos (' + pieza + ')'
-            if _secreta(pieza):
+            ruta = _como_ruta(pieza, raiz)
+            if programa not in SOLO_METADATOS and (_secreta_inequivoca(pieza) or (ruta and _secreta(ruta))):
                 return 'lee o toca secretos (' + pieza[:120] + ')'
             variable = _VARIABLE.search(pieza)
-            if variable and RE_SECRETO.search(variable[1] or variable[2] or ''):
+            if variable and _variable_secreta(variable[1] or variable[2] or ''):
                 return 'usa una variable secreta (' + (variable[1] or variable[2]) + ')'
-            if ' ' not in pieza and _ruta_ajena(pieza, raiz):
+            if ruta and not _en_temporal(ruta, raiz) and _ruta_ajena(ruta, raiz):
                 return 'usa una ruta de fuera de la carpeta (' + pieza[:120] + ')'
         return None
     return None
