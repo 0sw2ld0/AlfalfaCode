@@ -3,15 +3,189 @@
 No reutiliza safe_command: éste presupone un worktree desechable.
 """
 import json
+import re
 import shlex
 import shutil
 import sys
 from pathlib import Path
 
+# Lecturas que Manual y «Aceptar ediciones» dejan pasar sin preguntar. Es una lista de
+# permitidos por programa y opción, no de prohibidos: lo que no se reconoce entero pregunta.
+# La orden corre igualmente en el sandbox (sin red, sin escribir fuera de la carpeta); esta
+# lista sólo decide si además hace falta un sí por ser un cambio. Antes sólo pasaban pwd,
+# git status (tres formas), cat/head/wc/ls con muy pocas opciones y rg --files: git log -1,
+# git diff, ls -lh, cat .gitignore o rg -n hola preguntaban.
+GIT_LECTURA = {'status', 'log', 'show', 'diff', 'blame', 'shortlog', 'describe', 'rev-parse', 'ls-files',
+               'ls-tree', 'merge-base', 'rev-list', 'cat-file', 'grep', 'check-ignore', 'branch', 'tag',
+               'reflog', 'whatchanged'}
+# Opciones de git que escriben, ejecutan programas configurados o leen fuera del repositorio.
+GIT_PROHIBIDAS = ('--output', '--ext-diff', '--textconv', '--no-index', '--open-files-in-pager', '-O',
+                  '--exec', '--upload-pack', '--receive-pack', '--edit-description', '--set-upstream-to',
+                  '--unset-upstream', '--delete', '--move', '--copy', '--force', '--track', '--create-reflog',
+                  '--sign', '--annotate', '--message', '--file')
+# Lecturas de git que no aceptan nombres sueltos (un nombre suelto crearía la rama o la etiqueta).
+GIT_SOLO_LISTAR = {'branch': {'-a', '-r', '-v', '-vv', '-l', '--list', '--all', '--remotes', '--show-current',
+                              '--merged', '--no-merged', '--contains', '--sort', '--format', '--color',
+                              '--no-color', '--column', '--no-column', '-q'},
+                   'tag': {'-l', '--list', '-n', '--sort', '--contains', '--merged', '--no-merged', '--format',
+                           '--points-at', '--column', '--no-column'},
+                   'reflog': {'show', '-n', '--date', '--format', '--oneline'}}
+# Opciones de las órdenes de archivos: (sueltas, con valor). Ningún valor es una ruta.
+OPCIONES = {
+    'cat': ({'-n', '-b', '-s', '-v', '-e', '-t', '-u', '-l'}, {}),
+    'head': ({'-q', '-v'}, {'-n': False, '-c': False}),
+    'tail': ({'-q', '-v', '-r'}, {'-n': False, '-c': False, '-b': False}),
+    'wc': ({'-l', '-c', '-w', '-m'}, {}),
+    'nl': ({'-b', '-ba', '-bt', '-bn'}, {'-w': False, '-s': False, '-v': False, '-i': False}),
+    'file': ({'-b', '-i', '-L', '-h', '-k', '-z', '--mime', '--mime-type', '--brief'}, {}),
+    'stat': ({'-L', '-l', '-n', '-q', '-r', '-s', '-x'}, {'-f': False, '-t': False}),
+    'du': ({'-s', '-h', '-k', '-m', '-c', '-a', '-x', '-sh', '-hs', '-ch', '-sk', '-H', '-L', '-P'},
+           {'-d': False}),
+}
+# grep y rg: opciones con valor (el valor nunca es una ruta: las de archivo, como -f, preguntan).
+GREP_CON_VALOR = {'-e', '-m', '-A', '-B', '-C', '--include', '--exclude', '--exclude-dir', '--color',
+                  '--colour', '--max-count', '--context', '--after-context', '--before-context', '--regexp'}
+RG_CON_VALOR = {'-e', '-m', '-A', '-B', '-C', '-g', '-t', '-T', '--glob', '--iglob', '--type', '--type-not',
+                '--max-count', '--context', '--after-context', '--before-context', '--regexp', '--color',
+                '--max-depth', '-d', '--sort', '--sortr', '-M', '--max-columns', '--max-filesize', '-j',
+                '--threads'}
+# --pre ejecuta un programa por archivo; -z/--search-zip lanza descompresores; --hostname-bin ejecuta.
+RG_PROHIBIDAS = {'--pre', '--pre-glob', '-z', '--search-zip', '--hostname-bin', '--ignore-file', '--path-separator'}
+FIND_OPCIONES = {'-H', '-L', '-P', '-E', '-X', '-s', '-x', '-d'}
+IMPRIME = re.compile(r'(?:\d+|\$)(?:,(?:\d+|\$))?p')
+FIND_PROHIBIDAS = {'-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf', '-fls'}
+
+
+def _ruta_leible(value, root, workspace):
+    """¿`value` es una ruta dentro de la carpeta, sin enlaces ni tramos privados o con secretos?"""
+    from .rutas import privado_del_espacio, sensible
+    if not value or '\0' in value:
+        return False
+    path = root / value
+    resuelta = path.resolve()
+    if '..' in Path(value).parts or not resuelta.is_relative_to(workspace):
+        return False
+    relativa = resuelta.relative_to(workspace)
+    if any(privado_del_espacio(p) for p in relativa.parts) or sensible(relativa):
+        return False
+    for parent in (path, *path.parents):
+        if parent == root or parent == workspace:
+            break
+        if parent.is_symlink():
+            return False
+    return True
+
+
+def _archivos(programa, args, root, workspace):
+    """cat, head, tail, wc, nl, file, stat, du: opciones conocidas y rutas leíbles."""
+    sueltas, con_valor = OPCIONES[programa]
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in sueltas:
+            i += 1
+            continue
+        if a in con_valor:
+            if i + 1 >= len(args):
+                return False
+            i += 2
+            continue
+        # -n20, -c5, -20 (head y tail)
+        if programa in ('head', 'tail') and (a[:2] in ('-n', '-c') and a[2:].lstrip('+').isdigit()
+                                             or a[1:].isdigit() and a.startswith('-')):
+            i += 1
+            continue
+        if a.startswith('-'):
+            return False  # tail -f no termina; lo demás no se conoce
+        if not _ruta_leible(a, root, workspace):
+            return False
+        i += 1
+    return True
+
+
+def _ls(args, root, workspace):
+    for a in args:
+        if a.startswith('-'):
+            # ls sólo lista: cualquier combinación de letras vale.
+            if a.startswith('--') and a not in ('--color', '--color=auto', '--color=never'):
+                return False
+            continue
+        if not _ruta_leible(a, root, workspace):
+            return False
+    return True
+
+
+def _busqueda(args, root, workspace, con_valor, prohibidas):
+    """grep y rg: opciones conocidas, un patrón y rutas leíbles."""
+    patron, i = False, 0
+    while i < len(args):
+        a = args[i]
+        nombre = a.split('=', 1)[0]
+        if nombre in prohibidas or a in prohibidas:
+            return False
+        if a == '--':
+            rutas = args[i + 1:]
+            if not patron and rutas:
+                rutas = rutas[1:]
+            return all(_ruta_leible(r, root, workspace) for r in rutas)
+        if a.startswith('-'):
+            if nombre in con_valor:
+                if nombre in ('-e', '--regexp'):
+                    patron = True
+                i += 1 if '=' in a or (len(a) > 2 and not a.startswith('--')) else 2
+                continue
+            if a.startswith('--'):
+                if '=' in a or not a[2:].replace('-', '').isalpha():
+                    return False
+            elif not a[1:].isalnum():
+                return False
+            # Banderas cortas agrupadas (-rn, -inw): ninguna lleva valor salvo la última.
+            if not a.startswith('--') and any('-' + c in prohibidas or '-' + c in ('-f',) for c in a[1:]):
+                return False
+            i += 1
+            continue
+        if not patron:
+            patron = True
+        elif not _ruta_leible(a, root, workspace):
+            return False
+        i += 1
+    return patron or '--files' in args
+
+
+def _find(args, root, workspace):
+    i = 0
+    while i < len(args) and args[i] in FIND_OPCIONES:
+        i += 1
+    while i < len(args) and not args[i].startswith(('-', '(', '!')):
+        if not _ruta_leible(args[i], root, workspace):
+            return False
+        i += 1
+    return not any(a in FIND_PROHIBIDAS for a in args[i:])
+
+
+def _git(args):
+    if not args or args[0] not in GIT_LECTURA:
+        return False  # git -C, git -c… delante del subcomando tampoco
+    sub, resto = args[0], args[1:]
+    for a in resto:
+        nombre = a.split('=', 1)[0]
+        if nombre in GIT_PROHIBIDAS or (nombre.startswith('-') and not nombre.startswith('--')
+                                         and 'O' in nombre[1:] and sub == 'grep'):
+            return False
+    if sub in GIT_SOLO_LISTAR:
+        permitidas = GIT_SOLO_LISTAR[sub]
+        # `git tag -l 'v1.*'`: tras -l, un nombre suelto es un patrón, no una etiqueta nueva.
+        patrones = sub == 'tag' and bool(resto) and resto[0] in ('-l', '--list')
+        return all(a.split('=', 1)[0] in permitidas or (sub == 'tag' and a[:2] == '-n' and a[2:].isdigit())
+                   or (patrones and not a.startswith('-')) for a in resto)
+    return True
+
 
 def solo_lectura(argv, root, folder=None):
     """folder: carpeta absoluta de la orden (cwd); sus rutas relativas se miden desde ahí."""
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+        return False
+    if any('\0' in a for a in argv):
         return False
     workspace = Path(root).resolve()
     executable = shutil.which(argv[0])
@@ -20,32 +194,31 @@ def solo_lectura(argv, root, folder=None):
     root = Path(folder).resolve() if folder else workspace
     if root != workspace and not root.is_relative_to(workspace):
         return False
-    if argv == ['pwd']:
+    if '/' in argv[0]:
+        return False  # una ruta al programa: puede ser otro con el mismo nombre
+    programa, args = argv[0], argv[1:]
+    if programa in ('pwd', 'true') and not args:
         return True
-    if argv in (['git', 'status'], ['git', 'status', '--short'], ['git', 'status', '--porcelain']):
-        return True
-    if argv[:4] == ['git', 'diff', '--no-ext-diff', '--no-textconv']:
-        return all(a in ('--stat', '--check', '--name-only', '--cached') for a in argv[4:])
-    if argv == ['rg', '--files']:
-        return True
-    # No options which can execute programs, follow links, or write output.
-    if argv[0] not in ('cat', 'head', 'wc', 'ls'):
-        return False
-    options = {'cat': {'-n'}, 'head': set(), 'wc': {'-l', '-c', '-w'}, 'ls': {'-l', '-a', '-la'}}
-    for value in argv[1:]:
-        if value in options[argv[0]]:
-            continue
-        if value.startswith('-') or '\0' in value:
-            return False
-        path = root / value
-        if '..' in path.parts or not path.resolve().is_relative_to(root):
-            return False
-        for parent in (path, *path.parents):
-            if parent == root:
-                break
-            if parent.is_symlink() or parent.name.startswith('.'):
-                return False
-    return True
+    if programa in ('basename', 'dirname', 'which', 'realpath', 'date', 'echo'):
+        return programa != 'date' or all(a.startswith('+') or a in ('-u', '-R') for a in args)
+    if programa == 'git':
+        return _git(args)
+    if programa in OPCIONES:
+        return _archivos(programa, args, root, workspace)
+    if programa == 'ls':
+        return _ls(args, root, workspace)
+    if programa == 'grep':
+        return _busqueda(args, root, workspace, GREP_CON_VALOR, {'-f', '--file'})
+    if programa == 'rg':
+        return _busqueda(args, root, workspace, RG_CON_VALOR, RG_PROHIBIDAS)
+    if programa == 'find':
+        return _find(args, root, workspace)
+    if programa == 'sed':
+        # sed -n '1,20p' archivo: sólo imprime líneas.
+        from .ordenes import _sed_que_solo_imprime
+        return _sed_que_solo_imprime(args) and all(
+            _ruta_leible(a, root, workspace) for a in args if not a.startswith('-') and not IMPRIME.fullmatch(a))
+    return False
 
 
 MOTIVO_TERMINAL = {
