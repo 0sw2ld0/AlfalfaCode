@@ -136,6 +136,10 @@ public final class AlfalfaProcess: @unchecked Sendable {
 
     public var isRunning: Bool { process.isRunning }
 
+    /// ¿Lee todavía lo que se le escribe? No, si ya se cerró su entrada o terminó: un mensaje enviado
+    /// entonces se perdería sin aviso.
+    public var acceptsInput: Bool { queue.sync { !inputClosed && process.isRunning } }
+
     public func start() throws {
         signal(SIGPIPE, SIG_IGN)
         group.enter() // stdout
@@ -176,6 +180,11 @@ public final class AlfalfaProcess: @unchecked Sendable {
             guard let self else { return }
             let tail = Redactor.clean(String(decoding: self.stderrTail, as: UTF8.self))
             self.onExit?(self.process.terminationStatus, tail)
+            // Los cierres pueden retener al propio proceso (el de `run` lo hace a propósito, para que viva
+            // hasta el final): sin soltarlos, cada consulta de una pasada dejaba su proceso y sus tuberías
+            // vivos, y tras unas decenas de recargas fallaban Pipe() y Process.run().
+            self.onExit = nil
+            self.onMessage = nil
         }
     }
 
