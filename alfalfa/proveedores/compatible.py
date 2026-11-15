@@ -35,6 +35,16 @@ CONOCIDOS = {
 }
 ESFUERZOS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')
 REFERENCIA = 'https://github.com/0sw2ld0/AlfalfaCode'
+# Paquetes del catálogo que hablan otra API: en OpenCode Zen, Claude va por la de Anthropic y Gemini
+# por la de Google. Antes se mandaban igual a /chat/completions y el error no decía por qué.
+OTRAS_APIS = {'@ai-sdk/anthropic': 'Anthropic', '@ai-sdk/google': 'Google', '@ai-sdk/google-vertex': 'Google',
+              '@ai-sdk/mistral': 'Mistral', '@ai-sdk/amazon-bedrock': 'Amazon Bedrock'}
+
+
+def otra_api(proveedor, modelo, paquete):
+    api = OTRAS_APIS.get(paquete, paquete)
+    return (str(modelo) + ' de ' + proveedor.nombre + ' habla la API de ' + api + ', no la de OpenAI, y AlfalfaCode '
+            'no la usa con este proveedor. Elige otro modelo de ' + proveedor.nombre + '.')
 
 
 def esfuerzo_para(ficha, esfuerzo, pensar):
@@ -258,6 +268,8 @@ class Transporte(httpx.AsyncBaseTransport):
         if ruta != '/api/chat':
             return _json(404, {'error': 'ruta no disponible con ' + self.proveedor.nombre + ': ' + ruta})
         tipo, _ = catalogo.api_de(self.proveedor.datos(), ficha)
+        if tipo is None and (ficha or {}).get('paquete'):
+            return _json(400, {'error': otra_api(self.proveedor, modelo, ficha['paquete'])})
         if tipo == 'responses':
             cuerpo = traducir_peticion(pedido, self.tarea.get('effort'))
             respuesta = await self.http.post(self.url + '/responses', json=cuerpo)
