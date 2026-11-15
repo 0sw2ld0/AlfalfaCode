@@ -276,6 +276,135 @@ Al reanudar se conservan modelo y esfuerzo salvo que se indiquen otros.
 El lanzador conserva la carpeta actual y utiliza el `.venv` del repositorio;
 en worktrees utiliza el del repositorio compartido.
 
+## Control con PACAI: `alfalfa --pacai`
+
+`alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.2 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor
+(TerminalManager y NativeRuntime): cambia sólo el idioma. `--stdio` v2 sigue igual y no se retira; la app de Mac
+y Chiyo siguen usándolo.
+
+### Qué es PACAI
+
+PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común entre un **agente** y un **cliente**
+(app, móvil, widget, terminal…). AlfalfaCode es su primera implementación: **PACAI-Core + perfil `work` + extensión
+`alfalfa`**, sobre el transporte stdio. Quedan fuera por ahora la reanudación en red, WebSocket y SSE, y los perfiles
+`voice`, `shared_state` y `expression`.
+
+### Cómo se usa
+
+```bash
+alfalfa --pacai                      # sesión nueva; el primer encargo llega como `input`
+alfalfa --pacai --reanudar ID        # abre una sesión guardada y espera un `input`
+alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramienta del cliente `browser`)
+```
+
+`--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o `--cola-encargos`: la entrada
+llega siempre como mensajes. stdout lleva **sólo** mensajes PACAI, uno por línea; los registros van a stderr.
+Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos pendientes.
+
+```jsonl
+{"pacai":"0.2","id":"c_1","type":"hello","session":"s_0123456789abcdef","sender":"client","seq":1,"time":"2026-11-15T10:00:00Z","payload":{"versions":["0.2"],"profiles":["work"],"extensions":["alfalfa"]}}
+{"pacai":"0.2","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.2"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.21"}}}
+{"pacai":"0.2","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.2","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.21"}}}
+{"pacai":"0.2","id":"c_2","type":"input","session":"s_0123456789abcdef","sender":"client","seq":2,"time":"…","payload":{"blocks":[{"type":"text","text":"Corrige el test de login"}]}}
+{"pacai":"0.2","id":"m_a3","type":"run_started","…":"…","payload":{"input_id":"c_2"}}
+{"pacai":"0.2","id":"m_a4","type":"tool_start","…":"…","payload":{"run_id":"m_a3","name":"run_command","arguments":{"argv":["pytest","-q"],"purpose":"Probar"},"side":"agent","title":"Ejecutar pytest -q"}}
+{"pacai":"0.2","id":"m_a5","type":"approval_request","…":"…","payload":{"run_id":"m_a3","tool_call_id":"m_a4","name":"run_command","arguments":{"…":"…"},"digest":"sha256:…","reason":"network","scopes":["once"],"expires":"…"}}
+{"pacai":"0.2","id":"c_3","type":"approval_result","reply_to":"m_a5","…":"…","payload":{"decision":"approved","scope":"once"}}
+```
+
+La sesión negocia con el `hello` del cliente: el agente adopta su `session`, contesta con su propio `hello` y con
+`session_started` (con `reply_to`), y los perfiles y extensiones activos son la intersección. Un cliente que sólo
+declare `versions` recibe el núcleo. Sin versión común, `error` `version_incompatible` y cierre.
+
+### Correspondencia con `--stdio` v2
+
+| `--stdio` v2 | PACAI 0.2 |
+|---|---|
+| `sesion` | `session_started` (`agent`); lo demás de la sesión, `alfalfa.session` |
+| entrada `mensaje` | `input` `new_run` (con una ejecución en curso **espera** a que acabe) |
+| entrada `redirigir`, `enviar_ahora` | `input` `steer` con el `run_id` de la ejecución (`alfalfa.send_now` para sacar una entrada de la cola) |
+| entrada `cancelar` / EOF | `close` del cliente / EOF (niegan lo pendiente) |
+| entrada `interrumpir` | `interrupt` con `run_id` (la raíz o una subejecución) |
+| primer evento de un turno | `run_started` (`payload.input_id`); su `id` es el `run_id` |
+| `turno_terminado` | `run_finished` (`completed`→`success`, `blocked`, `failed`, `cortado`/`interrupted`→`interrupted`) |
+| `evento` `agent` | `message_start` / `message_delta` / `message_end` (`role` `assistant`) |
+| `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella, `alfalfa.notice` |
+| `evento` `user` | no sale: el cliente ya lo mandó |
+| `evento` `tool` (`herramienta.fase` `inicio`/`fin`) | `tool_start` / `tool_end` (`status` `success` o `error` según la clasificación del motor) |
+| `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes`, `expires`) |
+| entrada `permiso` | `approval_result` (`approved` o `denied`, `scope` `once` o `session`) |
+| `permiso_resuelto` | no sale (lo resolvió el cliente); si nadie contesta a tiempo, `approval_result` `expired` del agente |
+| `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el desglose, `alfalfa.context` |
+| `plan` | `plan_updated` (perfil `work`) |
+| cambios del turno (diff de la instantánea) | `diff_updated` (perfil `work`) |
+| `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id`, sus mensajes, herramientas y aprobaciones con su propio `run_id` |
+| `navegador` / `navegador_respuesta` | `tool_start` con `side: "client"` (herramienta `browser`) / `tool_end` del cliente |
+| `error` | `error` (`code` `alfalfa.engine_error`, o `message_too_large`, `invalid_message`…) |
+| `fin` | `close` (el motivo en `reason`) |
+| `presupuesto`, `procesos`, `despierto`, `cuota`, `preparando`, `revision_codigo`, `encargos`, `aprendizaje_*`, `quitado_de_cola`, `sesion_cambiada`… | extensión `alfalfa.*` (`alfalfa.budget`, `alfalfa.processes`, `alfalfa.awake`, `alfalfa.quota`, `alfalfa.preparing`, `alfalfa.code_review`, `alfalfa.jobs`, `alfalfa.learning_proposed`…) |
+
+El payload de las extensiones `alfalfa.*` lleva los campos de v2 tal cual (`texto`, `tokens`, `estado`…); sólo los
+**tipos** están en inglés. Un cliente ignora los tipos que no conozca. Las extensiones sólo se envían si el cliente
+declaró `alfalfa` en su `hello`.
+
+### Órdenes de AlfalfaCode (extensión `alfalfa`)
+
+Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente. Sus campos son los de v2:
+
+| Mensaje | Hace lo de v2 |
+|---|---|
+| `alfalfa.set_settings` | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
+| `alfalfa.compact`, `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
+| `alfalfa.set_context_mode`, `alfalfa.set_budget` | `contexto`, `presupuesto` |
+| `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` |
+| `alfalfa.resolve_learning`, `alfalfa.review_code`, `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
+| `alfalfa.export_browser_test`, `alfalfa.jobs_command`, `alfalfa.stop_process` | `exportar_prueba_navegador`, `encargos`, `detener_proceso` |
+| `alfalfa.dequeue`, `alfalfa.send_now` | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
+
+### Reglas que PACAI exige
+
+- **Una sola ejecución raíz activa.** Un `input` `new_run` con una en curso se encola y su `run_started` llega al
+  cerrarse la anterior (en v2 un `mensaje` entraba en el turno en curso: eso es ahora `steer`).
+- **Toda ejecución se cierra con `run_finished`**, y no antes de que se cierren sus herramientas y sus
+  subejecuciones. Una herramienta cortada por una interrupción se cierra con `tool_end` `cancelled`; la subejecución
+  termina antes que su madre.
+- **Aprobaciones.** El `digest` es `sha256` de los argumentos canonizados (JCS, RFC 8785) y cubre los mismos
+  argumentos que el `tool_start`. Sin respuesta en 10 minutos (`expires`), el agente declara `expired` y no ejecuta.
+  Una respuesta tardía, o un valor que no sea exactamente `approved` o `denied`, no vale. «Aprobar para la sesión»
+  (`scope: "session"`) sólo cubre el mismo nombre y los mismos argumentos; cada repetición es un `tool_start` con
+  `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.
+- **Herramientas del cliente.** El navegador de la app (`--navegador`) es la herramienta `browser` que el cliente
+  declara en `hello.client_tools`: el agente emite `tool_start` con `side: "client"` y el cliente contesta con
+  `tool_end` y `reply_to`. El cuerpo de su respuesta va en un bloque `structured` con los campos de
+  `navegador_respuesta` de v2 (`ok`, `resultado`, `error`, `permiso`). Sin esa declaración, el motor recibe un «no».
+- **Mensajes del cliente.** Se validan contra el esquema; un `seq` repetido o con huecos, un `id` repetido con otro
+  contenido, un `approval_result` sin petición pendiente o una extensión no negociada reciben su `error`
+  (`invalid_message`, `seq_unrecoverable`, `unknown_approval`, `not_negotiated`…) y la sesión sigue, salvo
+  `seq_unrecoverable`.
+
+### Límites de esta primera versión
+
+- Los `input` admiten bloques de texto; `file` y `structured` se rechazan con `invalid_message`.
+- Los `arguments` de un `tool_start` son los que el motor muestra en su evento (`Inicio <herramienta> · …`, ya sin
+  secretos y recortados a 1000 caracteres); si no caben, llevan `truncated: true` con la orden, la carpeta y los
+  archivos.
+- Un permiso que llega fuera de una ejecución (guardar una prueba del navegador entre turnos, o un encargo de la
+  cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
+- Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
+  seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
+- `diff_updated` sale al cerrar un turno que editó archivos y sólo con la instantánea de deshacer activa.
+
+### Comprobarlo
+
+El verificador de PACAI (`conformance/verificar.py`) acepta una transcripción con los mensajes de los dos lados:
+
+```bash
+python3 conformance/verificar.py transcripcion.jsonl
+```
+
+La suite de AlfalfaCode comprueba lo mismo con el esquema y las reglas de sesión del protocolo
+(`tests/test_pacai_*.py`, con los ejemplos de conformidad de `tests/fixtures/pacai`).
+
 ## Permisos on-request
 
 `run_command` y `run_checks` siguen la política on-request de Codex
