@@ -4,7 +4,6 @@ import copy
 import io
 import json
 import os
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -16,6 +15,7 @@ from alfalfa.permisos import modos
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
+from tests.casa import casa_real
 
 
 @pytest.fixture
@@ -820,13 +820,14 @@ def test_las_temporales_del_sandbox_cuentan_como_la_carpeta(temporales):
 
 @pytest.mark.parametrize(('ruta', 'motivo'), [
     ('~/x.py', 'fuera de la carpeta'),
-    (str(Path.home() / 'x.py'), 'fuera de la carpeta'),
+    (str(casa_real() / 'x.py'), 'fuera de la carpeta'),
     ('/etc/hosts', 'fuera de la carpeta'),
     ('/private/tmp/.env', 'secretos'),
     ('/private/tmp/proyecto/.git/hooks/pre-commit', 'secretos'),
 ])
-def test_lo_demas_de_fuera_sigue_preguntando(temporales, ruta, motivo):
+def test_lo_demas_de_fuera_sigue_preguntando(temporales, ruta, motivo, monkeypatch):
     raiz, _ = temporales
+    monkeypatch.setenv('HOME', str(casa_real()))  # `~` es la casa de verdad, no un temporal
     explicacion = seguridad.riesgo('write_file', {'path': ruta, 'content': 'x'}, raiz)
     assert explicacion and motivo in explicacion
 
@@ -834,7 +835,7 @@ def test_lo_demas_de_fuera_sigue_preguntando(temporales, ruta, motivo):
 def test_un_enlace_en_tmp_que_apunta_al_hogar_sigue_preguntando(temporales):
     raiz, tmpdir = temporales
     enlace = tmpdir / 'al-hogar'
-    enlace.symlink_to(Path.home())
+    enlace.symlink_to(casa_real())
     explicacion = seguridad.riesgo('write_file', {'path': str(enlace / 'x.py'), 'content': 'x'}, raiz)
     assert explicacion and 'fuera de la carpeta' in explicacion
 

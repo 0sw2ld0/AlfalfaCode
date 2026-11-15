@@ -10,7 +10,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -75,7 +74,9 @@ def test_command_args_follow_codex_shape(tmp_path):
         'WRITABLE_ROOT_0': os.path.realpath(root),
         'WRITABLE_ROOT_1': os.path.realpath(tmp),
         'WRITABLE_ROOT_2': '/private/tmp'}
-    assert {v for k, v in params.items() if not k.startswith('WRITABLE_ROOT_')} == outer_ancestors(sandbox)
+    # ALFALFA_HOME_*: la carpeta de datos, cuando cae dentro de una raíz escribible (un HOME temporal).
+    assert {v for k, v in params.items() if not k.startswith(('WRITABLE_ROOT_', 'ALFALFA_HOME_'))} \
+        == outer_ancestors(sandbox)
     assert all(a.startswith('-D') for a in command[3:split])
     policy = command[2]
     assert policy.startswith(seatbelt.BASE_POLICY)
@@ -408,18 +409,9 @@ def sandboxed(sandbox, argv, cwd, timeout=30):
 
 
 @pytest.fixture
-def outside_home():
-    """Carpeta real en $HOME, fuera de $TMPDIR, /private/tmp y la carpeta de trabajo."""
-    base = Path.home() / 'Library' / 'Caches'
-    if not base.is_dir():
-        base = Path.home()
-    path = Path(tempfile.mkdtemp(prefix='alfalfa-seatbelt-prueba ', dir=base))
-    tmp = os.path.realpath(os.environ.get('TMPDIR') or '/private/tmp')
-    assert not os.path.realpath(path).startswith(tmp.rstrip('/') + '/')
-    try:
-        yield path
-    finally:
-        shutil.rmtree(path, ignore_errors=True)
+def outside_home(fuera_del_sandbox):
+    """Carpeta real en la casa del usuario, fuera de $TMPDIR, /private/tmp y la carpeta de trabajo."""
+    return fuera_del_sandbox
 
 
 @real

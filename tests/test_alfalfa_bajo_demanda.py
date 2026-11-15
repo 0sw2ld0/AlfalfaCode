@@ -9,11 +9,9 @@ import io
 import json
 import os
 import select
-import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 from pathlib import Path
 
@@ -75,16 +73,9 @@ def session(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def outside_home():
-    """Carpeta real en $HOME, fuera de $TMPDIR, /private/tmp y la carpeta de trabajo."""
-    base = Path.home() / 'Library' / 'Caches'
-    if not base.is_dir():
-        base = Path.home()
-    path = Path(tempfile.mkdtemp(prefix='alfalfa-bajo-demanda-prueba ', dir=base))
-    try:
-        yield path
-    finally:
-        shutil.rmtree(path, ignore_errors=True)
+def outside_home(fuera_del_sandbox):
+    """Carpeta real en la casa del usuario, fuera de $TMPDIR, /private/tmp y la carpeta de trabajo."""
+    return fuera_del_sandbox
 
 
 def commands(spawned):
