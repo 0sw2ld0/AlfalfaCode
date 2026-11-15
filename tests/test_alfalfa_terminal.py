@@ -280,11 +280,53 @@ def test_failure_and_interruption_exit_codes(tmp_path, monkeypatch):
             m.close()
 
 
+def repo_de_mentira(carpeta, venv=True):
+    """Un repositorio con el lanzador de verdad, el paquete y un `.venv/bin/python` que llama al Python
+    de la suite. Así la prueba no depende de dónde tenga su venv quien la corre (antes exigía un `.venv`
+    dentro del repo y fallaba con uno aparte)."""
+    (carpeta / 'scripts').mkdir(parents=True)
+    (carpeta / 'scripts' / 'alfalfa').write_bytes((REPO / 'scripts' / 'alfalfa').read_bytes())
+    (carpeta / 'scripts' / 'alfalfa').chmod(0o755)
+    (carpeta / 'alfalfa').symlink_to(REPO / 'alfalfa')
+    if venv:
+        (carpeta / '.venv' / 'bin').mkdir(parents=True)
+        (carpeta / '.venv' / 'bin' / 'python').write_text('#!/bin/sh\nexec ' + sys.executable + ' "$@"\n')
+        (carpeta / '.venv' / 'bin' / 'python').chmod(0o755)
+    return carpeta
+
+
+def lanzar(programa, cwd):
+    return subprocess.run([str(programa), '--help'], cwd=cwd, capture_output=True, text=True, timeout=30)
+
+
 def test_launcher_from_other_directory_and_symlink(tmp_path):
-    link = tmp_path / 'alfalfa'
-    link.symlink_to(REPO / 'scripts/alfalfa')
-    result = subprocess.run([str(link), '--help'], cwd=tmp_path, capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0 and 'AlfalfaCode' in result.stdout
+    repo = repo_de_mentira(tmp_path / 'repo')
+    link = tmp_path / 'bin' / 'alfalfa'
+    link.parent.mkdir()
+    link.symlink_to(repo / 'scripts' / 'alfalfa')
+    (tmp_path / 'otra').mkdir()
+    result = lanzar(link, tmp_path / 'otra')
+    assert result.returncode == 0 and 'AlfalfaCode' in result.stdout, result.stderr
+
+
+def test_el_lanzador_de_un_worktree_usa_el_venv_de_su_repositorio(tmp_path):
+    git = ['git', '-c', 'user.name=Prueba', '-c', 'user.email=prueba@example.com', '-c', 'commit.gpgsign=false']
+    principal = repo_de_mentira(tmp_path / 'principal')
+    (principal / '.gitignore').write_text('.venv/\n')
+    subprocess.run(['git', 'init', '-q'], cwd=principal, check=True)
+    subprocess.run(git + ['add', '-A'], cwd=principal, check=True)
+    subprocess.run(git + ['commit', '-qm', 'inicio'], cwd=principal, check=True)
+    subprocess.run(git + ['worktree', 'add', '-q', str(tmp_path / 'wt')], cwd=principal, check=True)
+    assert not (tmp_path / 'wt' / '.venv').exists()
+    result = lanzar(tmp_path / 'wt' / 'scripts' / 'alfalfa', tmp_path)
+    assert result.returncode == 0 and 'AlfalfaCode' in result.stdout, result.stderr
+
+
+def test_sin_venv_lo_dice_en_vez_del_error_de_git(tmp_path):
+    repo = repo_de_mentira(tmp_path / 'repo', venv=False)
+    result = lanzar(repo / 'scripts' / 'alfalfa', tmp_path)
+    assert result.returncode == 1
+    assert result.stderr.strip() == 'AlfalfaCode: falta el .venv del repositorio.', result.stderr
 
 
 def test_execute_resume_no_integrator_data_or_imports(tmp_path):
