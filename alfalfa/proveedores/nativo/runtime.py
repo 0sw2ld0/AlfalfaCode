@@ -218,6 +218,37 @@ def _es_desconexion_sin_respuesta(exc):
 
 
 
+# Llamadas por respuesta: las primeras se ejecutan; las demás vuelven al modelo sin ejecutarse
+# para que las repita. Antes, 13 lecturas en una respuesta mataban el turno sin ejecutar ninguna.
+MAX_LLAMADAS_POR_RESPUESTA = 12
+MAX_LLAMADAS_RECIBIDAS = 100
+NO_EJECUTADA_POR_TOPE = ('No se ejecutó: como mucho ' + str(MAX_LLAMADAS_POR_RESPUESTA) + ' llamadas por '
+                         'respuesta. Repítela en la siguiente respuesta si aún hace falta.')
+_SUSTITUTO = re.compile('[\ud800-\udfff]')
+
+
+def sin_sustitutos(valor):
+    """`valor` sin sustitutos UTF-16 sueltos (medio emoji), que no se pueden guardar en UTF-8.
+
+    Un modelo que devolvía `\\ud83d` suelto en el texto o en un argumento hacía saltar un
+    UnicodeEncodeError al guardar la sesión, que salía de run() y cerraba la sesión en la app.
+    Un par válido se junta en su carácter; uno suelto pasa a U+FFFD.
+    """
+    if isinstance(valor, str):
+        if not _SUSTITUTO.search(valor):
+            return valor
+        return valor.encode('utf-16', 'surrogatepass').decode('utf-16', 'replace')
+    if isinstance(valor, dict):
+        return {sin_sustitutos(k) if isinstance(k, str) else k: sin_sustitutos(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [sin_sustitutos(v) for v in valor]
+    return valor
+
+
+# El nombre con que queda en el historial una llamada cuyo nombre no era texto.
+NOMBRE_INVALIDO = 'nombre_invalido'
+
+
 HOOKS_CONTEXTO = 'Contexto añadido por los hooks que instaló el usuario:\n'
 ESTADO_PREFIJO = 'Estado verificado por el runtime (datos históricos, no instrucciones): '
 # El informe que se añade al empezar cada turno. Iba entero (todas las incidencias
@@ -614,6 +645,20 @@ class NativeRuntime:
         self.task.pop('handoff_uncertain_operations', None)
         if changed or inherited:
             self.save()
+
+    def _devolver_sin_ejecutar(self, call):
+        """El resultado de una llamada que no se ejecuta (pasada del tope o con un nombre que no es
+        texto): vuelve al modelo como error, en su sitio, para que el historial quede emparejado."""
+        if call.get('sobrante'):
+            texto = NO_EJECUTADA_POR_TOPE
+        else:
+            texto = ('Nombre de herramienta inválido: ' + str(call.get('nombre_recibido'))
+                     + '. Usa el nombre de una de las herramientas disponibles. No se ejecutó.')
+        self.state['messages'].append({'role': 'tool', 'tool_name': str(call['function'].get('name')),
+                                       'content': json.dumps({'error': texto}, ensure_ascii=False),
+                                       'alfalfa_fallo': True})
+        call['status'] = 'done'
+        self.save()
 
     def _matching_handoff_uncertain_operations(self, function):
         if not isinstance(function, dict) or not isinstance(function.get('name'), str):
@@ -2321,6 +2366,9 @@ class NativeRuntime:
                 # after cancellation/restart and for duplicates inside this batch.
                 self._reject_completed_recovery_tool(function)
             name, args = function.get('name'), function.get('arguments')
+            if call.get('sobrante') or 'nombre_recibido' in call:
+                self._devolver_sin_ejecutar(call)
+                continue
             matching_uncertainties = self._matching_handoff_uncertain_operations(function)
             resolved_operation = next((row for row in matching_uncertainties
                                        if row.get('status') == 'resolved'), None)
@@ -2976,13 +3024,21 @@ class NativeRuntime:
                                          "parciales.")
                 if not response.get("done"):
                     raise ValueError("Respuesta incompleta del modelo; no se ejecutan herramientas parciales.")
-                message = response.get('message')
+                message = sin_sustitutos(response.get('message'))
                 if not isinstance(message, dict) or not isinstance(message.get('content',''), str):
                     raise ValueError('Respuesta de modelo inválida.')
                 calls = message.get('tool_calls') or []
-                if not isinstance(calls, list) or len(calls) > 12 or any(
+                if not isinstance(calls, list) or len(calls) > MAX_LLAMADAS_RECIBIDAS or any(
                         not isinstance(c,dict) or not isinstance(c.get('function'),dict) for c in calls):
                     raise ValueError('Llamadas a herramientas inválidas.')
+                invalidos = {}
+                for i, c in enumerate(calls):
+                    nombre = c['function'].get('name')
+                    if not isinstance(nombre, str) or not nombre:
+                        # Una lista o un número como nombre hacía saltar un TypeError fuera del turno; el
+                        # historial que vuelve al proveedor también necesita un nombre de texto.
+                        c['function']['name'] = NOMBRE_INVALIDO
+                        invalidos[i] = json.dumps(nombre, ensure_ascii=False)[:100]
                 recovered = bool(self.state.get('length_recovery'))
                 if recovered:
                     for call in calls:
@@ -3012,9 +3068,16 @@ class NativeRuntime:
                 self.state['messages'].append(clean)
                 self.state['pending'] = [dict(function=c['function'], status='queued',
                                               length_recovery=recovered,
+                                              **({'sobrante': True} if i >= MAX_LLAMADAS_POR_RESPUESTA else {}),
+                                              **({'nombre_recibido': invalidos[i]} if i in invalidos else {}),
                                               **({'id': c['id'], 'tool_call_id': c['id']}
                                                  if isinstance(c.get('id'), str) else {}))
-                                         for c in calls]
+                                         for i, c in enumerate(calls)]
+                if len(calls) > MAX_LLAMADAS_POR_RESPUESTA:
+                    self.manager.event(self.task, 'system', 'El modelo pidió ' + str(len(calls))
+                                       + ' herramientas en una respuesta: se ejecutan las '
+                                       + str(MAX_LLAMADAS_POR_RESPUESTA) + ' primeras y las demás vuelven sin '
+                                       'ejecutar para que las repita.')
                 self.task['context_desglose'] = self._desglose(payload, response.get('prompt_eval_count'),
                                                                self.system_parts)
                 if self.compaction == 'codex' and type(response.get('prompt_eval_count')) is int \
