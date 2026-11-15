@@ -51,8 +51,10 @@ def _reemplazos(originales, ruta, trozos):
                 raise NoEncaja("No se encontró el contexto '" + trozo.contexto + "' en " + ruta + '.')
             indice = encontrado + 1
         if not trozo.viejas:
-            # Sólo añade: al final del archivo, como Codex.
-            reemplazos.append((len(originales), 0, list(trozo.nuevas)))
+            # Sólo añade. Con contexto (`@@ def uno():`), justo detrás de esa línea: al final del
+            # archivo caía dentro de otra función. Sin contexto, al final, como Codex.
+            sitio = indice if trozo.contexto is not None else len(originales)
+            reemplazos.append((sitio, 0, list(trozo.nuevas)))
             continue
         patron, nuevas = trozo.viejas, trozo.nuevas
         encontrado = seek_sequence(originales, patron, indice, trozo.fin_de_archivo)
