@@ -1141,43 +1141,55 @@ class TerminalManager:
             self.task.update(status='failed', summary=str(exc))
             return 1
         finally:
-            rt.antes_de_cambiar = None
-            # La de antes tiene que quedar apuntada antes que la de después (y no chocar con ella).
-            await self._esperar_instantanea(previa, mostrar=False)
-            # Un subagente no sigue solo cuando el turno acaba o se interrumpe.
-            await self.subagentes.detener_todos()
-            for proc in list(self.processes.values()):
-                await self.terminate(proc)
-            if self.transport:
-                self.transport.limpiar_en_sitio(self.task)
-                self.transport.limpiar_en_sitio(rt.state)
-            # El aviso de una orden cortada vale para este turno; en el siguiente ya se puede repetir.
-            for row in rt.state.get('handoff_uncertain_operations', []):
-                if es_de_interrupcion(row) and row.get('status') == 'uncertain':
-                    row.update(status=CADUCADA, expired_at=time.time())
-            rt.evidence.finish(error=self.task.get('summary') if self.task['status'] != 'completed' else None)
-            if self.exportacion_navegador is not None:
-                self.exportacion_navegador.terminar()
-            registro.cerrar_turno(self.task, turno['id'], self.task['status'], len(rt.state.get('messages', [])),
-                                  cierre=self.task.get('cierre'),
-                                  gasto=registro.gasto_del_turno(self.task, *antes))
-            # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
-            # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
-            await self._instantanea(turno['id'], 'despues', deshacer.contar_cambios(rt.state))
-            await self.pruebas_interfaz.terminar()
-            self.revision_codigo.ofrecer(turno)
-            rt._record_context_details()
-            if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
-                self.context(self.task, self.task['context_tokens'], self.task['context_limit'])
-            rt.save()
-            print('AlfalfaCode · ' + self.task['status'] + ': ' + self.task.get('summary', ''), flush=True)
-            if self.transport is None:
-                gasto_texto = texto_del_gasto(self.task)
-                if gasto_texto:
-                    print('AlfalfaCode · ' + gasto_texto, flush=True)
-            if self.transport is None and self.task.get('cierre'):
-                print(texto_del_cierre(self.task['cierre']), flush=True)
+            # Un segundo Detener (o Ctrl-C) mientras el turno se cierra caía en uno de estos `await` y
+            # se saltaba el resto: los procesos seguían, el turno quedaba `running`, sin instantánea
+            # ni guardado. El cierre corre protegido y se espera hasta el final.
+            async def cerrar():
+                rt.antes_de_cambiar = None
+                # La de antes tiene que quedar apuntada antes que la de después (y no chocar con ella).
+                await self._esperar_instantanea(previa, mostrar=False)
+                # Un subagente no sigue solo cuando el turno acaba o se interrumpe.
+                await self.subagentes.detener_todos()
+                for proc in list(self.processes.values()):
+                    await self.terminate(proc)
+                if self.transport:
+                    self.transport.limpiar_en_sitio(self.task)
+                    self.transport.limpiar_en_sitio(rt.state)
+                # El aviso de una orden cortada vale para este turno; en el siguiente ya se puede repetir.
+                for row in rt.state.get('handoff_uncertain_operations', []):
+                    if es_de_interrupcion(row) and row.get('status') == 'uncertain':
+                        row.update(status=CADUCADA, expired_at=time.time())
+                rt.evidence.finish(error=self.task.get('summary') if self.task['status'] != 'completed' else None)
+                if self.exportacion_navegador is not None:
+                    self.exportacion_navegador.terminar()
+                registro.cerrar_turno(self.task, turno['id'], self.task['status'], len(rt.state.get('messages', [])),
+                                      cierre=self.task.get('cierre'),
+                                      gasto=registro.gasto_del_turno(self.task, *antes))
+                # Y al terminar: lo que deja el agente, para no pisar al deshacer lo que cambies después.
+                # En otro hilo: no para el bucle de --stdio (puede tocar limpiar el almacén).
+                await self._instantanea(turno['id'], 'despues', deshacer.contar_cambios(rt.state))
+                await self.pruebas_interfaz.terminar()
+                self.revision_codigo.ofrecer(turno)
+                rt._record_context_details()
+                if isinstance(self.task.get('context_tokens'), int) and isinstance(self.task.get('context_limit'), int):
+                    self.context(self.task, self.task['context_tokens'], self.task['context_limit'])
+                rt.save()
+                print('AlfalfaCode · ' + self.task['status'] + ': ' + self.task.get('summary', ''), flush=True)
+                if self.transport is None:
+                    gasto_texto = texto_del_gasto(self.task)
+                    if gasto_texto:
+                        print('AlfalfaCode · ' + gasto_texto, flush=True)
+                if self.transport is None and self.task.get('cierre'):
+                    print(texto_del_cierre(self.task['cierre']), flush=True)
 
+            cierre = asyncio.ensure_future(cerrar())
+            while not cierre.done():
+                try:
+                    await asyncio.shield(cierre)
+                except asyncio.CancelledError:
+                    if cierre.done():
+                        break
+            cierre.result()
 
 def texto_del_gasto(task):
     """«Coste estimado: 0,37 $ · Caché: ahorró 0,12 $ (…)», o '' sin precio ni caché."""
