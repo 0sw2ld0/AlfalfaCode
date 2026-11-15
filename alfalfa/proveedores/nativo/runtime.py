@@ -233,6 +233,12 @@ def _es_desconexion_sin_respuesta(exc):
 
 # Llamadas por respuesta: las primeras se ejecutan; las demás vuelven al modelo sin ejecutarse
 # para que las repita. Antes, 13 lecturas en una respuesta mataban el turno sin ejecutar ninguna.
+# Repeticiones de la misma llamada sin que cambie nada: a la cuarta se avisa al modelo (y no se ejecuta),
+# pasada esta cifra se corta el turno.
+MAX_REPETICIONES = 6
+AVISO_DE_BUCLE = ('Esta misma llamada ya se repitió 3 veces sin que cambiara nada en el proyecto; no se ejecutó '
+                  'otra vez. Cambia de enfoque (otra orden u otro archivo, o lee con calma el error de antes) o '
+                  'termina y explica dónde te atascaste.')
 MAX_LLAMADAS_POR_RESPUESTA = 12
 MAX_LLAMADAS_RECIBIDAS = 100
 NO_EJECUTADA_POR_TOPE = ('No se ejecutó: como mucho ' + str(MAX_LLAMADAS_POR_RESPUESTA) + ' llamadas por '
@@ -2521,37 +2527,42 @@ class NativeRuntime:
                 key = digest((str(revision)+
                               json.dumps(function, sort_keys=True)).encode())
                 self.repeats[key] = self.repeats.get(key, 0)+1
-                if self.repeats[key] > 3:
+                # A la cuarta vez se le dice al modelo y no se ejecuta; sólo si insiste se corta el turno. Antes se
+                # cortaba a la cuarta, y el trabajo hecho hasta ahí acababa en «failed» sin que el modelo lo supiera.
+                if self.repeats[key] > MAX_REPETICIONES:
                     raise ValueError('Bucle detectado: la misma herramienta se repitió sin progreso. Sesión guardada.')
-                # La instantánea de antes del turno (deshacer) se toma mientras el modelo responde: lo
-                # que puede cambiar archivos la espera; leer, no.
-                if self.antes_de_cambiar is not None:
-                    from ...deshacer import espera
-                    if espera(str(name)):
-                        await self.antes_de_cambiar()
-                call['status'] = 'executing'
-                self.save()
-                self.task['activity'] = name
-                shown = (self.mcp.para_mostrar(args) if self.mcp is not None and self.mcp.es_propia(name)
-                         else args)
-                if str(name).startswith('browser_'):
-                    # Lo que se escribe en un campo de contraseña no sale ni en la app ni en los eventos.
-                    from ...navegador import para_mostrar
-                    shown = para_mostrar(name, shown, getattr(self.manager, 'navegador', None))
-                self._tool_event('Inicio '+str(name)+' · '+str(shown)[:1000], datos_de_inicio(name, shown))
-                self._llamada = call
-                try:
-                    if self._hooks_activos() and not self.task.get('review'):
-                        result, executed, hook_notes = await self._call_with_hooks(call, name, args)
-                    else:
-                        try:
-                            result = await self.tools.call(name, args)
-                            executed = True
-                        except (ValueError, OSError, UnicodeError, asyncio.TimeoutError) as exc:
-                            result = {'error': str(exc) or 'La operación excedió su tiempo límite.'}
-                            executed = True
-                finally:
-                    self._llamada = None
+                if self.repeats[key] > 3:
+                    result = {'error': AVISO_DE_BUCLE}
+                else:
+                    # La instantánea de antes del turno (deshacer) se toma mientras el modelo responde: lo
+                    # que puede cambiar archivos la espera; leer, no.
+                    if self.antes_de_cambiar is not None:
+                        from ...deshacer import espera
+                        if espera(str(name)):
+                            await self.antes_de_cambiar()
+                    call['status'] = 'executing'
+                    self.save()
+                    self.task['activity'] = name
+                    shown = (self.mcp.para_mostrar(args) if self.mcp is not None and self.mcp.es_propia(name)
+                             else args)
+                    if str(name).startswith('browser_'):
+                        # Lo que se escribe en un campo de contraseña no sale ni en la app ni en los eventos.
+                        from ...navegador import para_mostrar
+                        shown = para_mostrar(name, shown, getattr(self.manager, 'navegador', None))
+                    self._tool_event('Inicio '+str(name)+' · '+str(shown)[:1000], datos_de_inicio(name, shown))
+                    self._llamada = call
+                    try:
+                        if self._hooks_activos() and not self.task.get('review'):
+                            result, executed, hook_notes = await self._call_with_hooks(call, name, args)
+                        else:
+                            try:
+                                result = await self.tools.call(name, args)
+                                executed = True
+                            except (ValueError, OSError, UnicodeError, asyncio.TimeoutError) as exc:
+                                result = {'error': str(exc) or 'La operación excedió su tiempo límite.'}
+                                executed = True
+                    finally:
+                        self._llamada = None
             if executed:
                 self._record_handoff_operation_result(matching_uncertainties, result)
                 self._record_handoff_inspection(name, args, result)

@@ -679,9 +679,13 @@ def test_leer_entre_clics_no_es_un_bucle(tmp_path, monkeypatch):
 
 
 def test_leer_sin_cambios_sigue_siendo_un_bucle(tmp_path, monkeypatch):
+    # A la cuarta lectura igual se le dice al modelo y no se lee; si insiste, se corta el turno.
     tarea, app = _turno_con_llamadas(tmp_path, monkeypatch, [('browser_read', {})] * 5)
+    assert tarea['status'] == 'completed', tarea.get('summary')
+    (tmp_path / 'otra').mkdir()
+    tarea, app = _turno_con_llamadas(tmp_path / 'otra', monkeypatch, [('browser_read', {})] * 9)
     assert tarea['status'] == 'failed' and 'Bucle detectado' in tarea['summary']
-    # La primera lectura cuenta que hay página (la url cambió); de las otras, la cuarta igual se para.
+    # La primera lectura cuenta que hay página (la url cambió); de las otras, la cuarta igual ya no se lee.
     assert [a for a, _ in app.peticiones].count('leer') == 4
 
 
