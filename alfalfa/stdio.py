@@ -66,6 +66,8 @@ class Transport:
         self.secretos = set()
         # {"tipo":"detener_proceso","id":"p1"|"todos"}: lo conecta run() con el gestor.
         self.stop_process = None
+        # Tareas lanzadas sin esperar (en_segundo_plano): con referencia hasta que acaban.
+        self.sueltas = set()
         # {"tipo":"mantener_despierto","activo":bool}: el interruptor de Ajustes, ya.
         self.keep_awake = None
         # {"tipo":"diagnosticos","activo":bool}: el de «Ver los errores al editar», desde la siguiente edición.
@@ -144,6 +146,25 @@ class Transport:
                 elif isinstance(hijo, (dict, list)):
                     pendientes.append(hijo)
         return value
+
+    def en_segundo_plano(self, coro, que):
+        """Lanza `coro` sin esperarla, con referencia y diciendo su fallo.
+
+        Antes `asyncio.create_task(…)` sin guardar la tarea: el recolector podía llevársela a medias y
+        una excepción que no fuera ValueError sólo acababa, si acaso, en «Task exception was never
+        retrieved» por stderr, y la app no se enteraba de que no se detuvo nada.
+        """
+        tarea = asyncio.ensure_future(coro)
+        self.sueltas.add(tarea)
+
+        def al_terminar(hecha):
+            self.sueltas.discard(hecha)
+            if hecha.cancelled() or hecha.exception() is None:
+                return
+            error = hecha.exception()
+            self.emit('error', texto=que + ' falló: ' + (str(error) or type(error).__name__))
+        tarea.add_done_callback(al_terminar)
+        return tarea
 
     def emit(self, tipo, **fields):
         if getattr(self, 'salida_rota', False):
@@ -238,7 +259,7 @@ class Transport:
         """Corta el turno en marcha, como Esc en Codex y Claude Code; la sesión sigue abierta. Entre
         turnos corta el repaso de aprendizaje, si está en marcha."""
         if self.cola_encargos is not None and self.cola_encargos.activa:
-            asyncio.create_task(self.cola_encargos.detener())
+            self.en_segundo_plano(self.cola_encargos.detener(), 'Detener la cola')
             return True
         if not self.in_turn and self.exportando:
             self.exportacion.cancel()
@@ -755,7 +776,7 @@ async def run(args, transport):
                         await manager.fondo.detener(ident)
                 except ValueError as exc:
                     transport.emit('error', texto=str(exc))
-            asyncio.ensure_future(detener())
+            transport.en_segundo_plano(detener(), 'Detener el proceso')
 
         transport.stop_process = detener_proceso
         transport.keep_awake = lambda activo: manager.cola_encargos.cambiar('despierto', activo)
@@ -795,7 +816,7 @@ async def run(args, transport):
                 elif accion == 'pausar':
                     manager.cola_encargos.pausar()
                 elif accion == 'detener':
-                    asyncio.create_task(manager.cola_encargos.detener())
+                    transport.en_segundo_plano(manager.cola_encargos.detener(), 'Detener la cola')
                 elif accion == 'cancelar':
                     manager.cola_encargos.cancelar()
                 else:
