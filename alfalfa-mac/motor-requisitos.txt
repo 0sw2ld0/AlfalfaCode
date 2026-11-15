@@ -8,7 +8,7 @@ certifi==2026.10.23
 cffi==2.1.1
 click==8.5.1
 cryptography==50.0.2
-cuysearch @ git+https://github.com/0sw2ld0/CuySearch@25366c087cc7ea8e44266adda6d03b60ea763cc9
+cuysearch @ git+https://github.com/0sw2ld0/CuySearch@313b5972d67dd7b5a2c081f60f22f2deecab58d5
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
