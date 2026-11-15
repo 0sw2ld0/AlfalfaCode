@@ -32,13 +32,14 @@ import re
 import time
 from pathlib import Path
 
+from .reintentos.fallos import es_aviso_de_transporte
+
 MAX_VIVOS = 6           # agent_max_threads de Codex
 MAX_ESPERA = 600        # lo que wait_agent puede esperar de una vez
 ESPERA_POR_DEFECTO = 120
 MAX_INFORME = 12000     # caracteres del informe que vuelven al principal
 MAX_MENSAJE = 20000
 MAX_TIPOS = 50
-RUIDO = tuple(n + ' transporte: intento' for n in ('Ollama', 'OpenAI', 'Anthropic', 'Alfalfa'))
 NOTA_REDIRIGIDO = ('El usuario te escribió y pidió que lo leas ya: su mensaje está en la conversación. El subagente '
                    'sigue trabajando; recoge su informe después con wait_agent.')
 
@@ -232,7 +233,7 @@ class _GestorDeSubagente:
         fd = os.open(self._sub.registro, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as archivo:
             archivo.write(json.dumps(fila, ensure_ascii=False) + '\n')
-        if role == 'system' and text.startswith(RUIDO):
+        if role == 'system' and es_aviso_de_transporte(text):
             return  # los reintentos de transporte no son pasos del subagente
         if role == 'tool' and not text.startswith('Inicio '):
             self._sub.pasos += 1

@@ -165,7 +165,7 @@ _SENALES_SOLICITUD_INVALIDA = ('invalid request', 'bad request', 'malformed', 'u
 _ACCIONES = {
     'saturation': 'saturación o cuota llena; espera y reintenta más tarde.',
     'server_error': 'fallo temporal del servidor; espera y reintenta.',
-    'disconnected': 'el servidor cerró la conexión sin responder; espera y reintenta.',
+    'disconnected': 'el servidor cortó la conexión antes de terminar la respuesta; espera y reintenta.',
     'timeout': 'no respondió a tiempo (timed out); espera y reintenta.',
     'network': 'fallo de conexión; revisa la red o el servicio de Ollama y reintenta.',
     'invalid_request': 'solicitud inválida; revisa los parámetros y el cuerpo que envía el arnés; no se reintenta.',
@@ -313,3 +313,22 @@ def _ollama_failure(clas, error_text=None, intentos=None, nombre='Ollama'):
     return OllamaError(_mensaje_ollama(clas, detalle, intentos, nombre), kind=clas['kind'],
                        cause=clas['cause'], status_code=clas.get('status_code'),
                        retry=clas['retry'], action=clas['action'], detail=detalle)
+
+
+# Aviso que el runtime deja al reintentar una petición («OpenRouter transporte: intento 1/3 …»).
+# La app y los subagentes lo apartan de la conversación; vale para cualquier nombre de proveedor.
+_AVISO_DE_TRANSPORTE = re.compile(r'\w[\w .-]{0,40} transporte: intento \d+/\d+\b')
+
+# Lo que se dice del intento fallido en ese aviso, en pocas palabras.
+MOTIVO_DE_REINTENTO = {
+    'saturation': 'saturado o sin cuota',
+    'server_error': 'fallo del servidor',
+    'disconnected': 'conexión cortada',
+    'timeout': 'sin respuesta a tiempo',
+    'network': 'fallo de red',
+}
+
+
+def es_aviso_de_transporte(texto):
+    """¿Es `texto` el aviso de reintento de transporte de algún proveedor?"""
+    return isinstance(texto, str) and _AVISO_DE_TRANSPORTE.match(texto) is not None
