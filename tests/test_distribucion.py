@@ -4,6 +4,7 @@ hacer de GitHub, del equipo y de la notarización. Nunca salen a internet ni toc
 import hashlib
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,30 @@ done
 exec /usr/bin/codesign "$@"
 '''
 SPCTL = '#!/bin/sh\nexit ${FALSO_SPCTL:-0}\n'
+HDIUTIL_OCUPADO = '''#!/bin/sh
+# hdiutil de verdad, salvo «detach» sin -force: el disco está ocupado, como bajo carga.
+if [ "$1" = detach ] && ! printf '%s\\n' "$@" | grep -qx -- -force; then
+  echo 'hdiutil: detach failed - Resource busy' >&2
+  exit 16
+fi
+exec /usr/bin/hdiutil "$@"
+'''
+
+
+def _imagenes_bajo(carpeta):
+    """Las imágenes conectadas cuyo DMG estaba dentro de `carpeta`."""
+    salida = subprocess.run(['hdiutil', 'info', '-plist'], capture_output=True, check=True).stdout
+    raiz = str(Path(carpeta).resolve())
+    return [i for i in plistlib.loads(salida).get('images', []) if i.get('image-path', '').startswith(raiz)]
+
+
+@pytest.fixture(autouse=True)
+def sin_imagenes_colgadas(tmp_path):
+    """Una prueba que falla o se interrumpe no deja su DMG conectado para las suites siguientes."""
+    yield
+    for imagen in _imagenes_bajo(tmp_path):
+        disco = min((e['dev-entry'] for e in imagen.get('system-entities', [])), key=len)
+        subprocess.run(['hdiutil', 'detach', '-force', disco], capture_output=True)
 
 
 def _ejecutable(ruta, texto):
@@ -136,6 +161,14 @@ def test_instala_desde_la_release_de_github_y_reinstala(entorno):
     assert _instalar(env).returncode == 0
     assert (home / '.zshrc').read_text().count('AlfalfaCode (instalar.sh)') == 1
     assert not list((home / '.local' / 'share').glob('.alfalfa-*'))
+
+
+def test_no_deja_el_dmg_conectado_si_el_disco_esta_ocupado(entorno, tmp_path):
+    env, _, _ = entorno
+    _ejecutable(tmp_path / 'falsos' / 'hdiutil', HDIUTIL_OCUPADO)
+    r = _instalar(env)
+    assert r.returncode == 0, r.stderr
+    assert _imagenes_bajo(tmp_path) == []
 
 
 @pytest.mark.parametrize('senal,codigo', [('INT', 130), ('HUP', 129), ('TERM', 143)])
