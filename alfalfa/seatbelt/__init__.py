@@ -20,7 +20,9 @@ Adaptaciones respecto a Codex, todas en este módulo (los .sbpl son copia exacta
   construir la política) y los de la carpeta de trabajo dentro de otra raíz.
   Un directorio ilegible al recorrerlo puede ocultar un `.git`: no se renombra
   ni borra ningún directorio suyo ni de su interior. Si el árbol es demasiado
-  grande para recorrerlo, eso vale para toda la carpeta de trabajo.
+  grande para recorrerlo entero, eso vale para las carpetas de primer nivel que
+  quedaron a medias (y para toda la carpeta de trabajo sólo si ni ella se pudo
+  listar): el sandbox sigue en pie y no se pide salir de él por eso.
 - Las raíces se resuelven con realpath en lugar de rechazar enlaces: la
   política nombra el destino real, que es lo que Seatbelt compara.
 - El hogar del entorno y el de la sesión siguen de solo lectura dentro de una raíz
@@ -35,6 +37,7 @@ import os
 import stat
 import sys
 import unicodedata
+from collections import deque
 from pathlib import Path
 
 from ..procesos import comunicar
@@ -45,8 +48,10 @@ PRIVATE_TMP = '/private/tmp'
 # Las carpetas de instrucciones las escribe el arnés tras su tarjeta, fuera de las órdenes.
 PROTECTED_METADATA = ('.git', '.alfalfa', '.agents', '.claude', '.codex')
 PREFLIGHT_SECONDS = 10.0
-# Entradas que se recorren buscando `.git` anidados antes de rendirse.
+# Entradas que se recorren buscando `.git` y carpetas de instrucciones anidados antes de rendirse.
 SCAN_LIMIT = 200_000
+# Más subárboles a medias que éstos y se sella la carpeta de trabajo entera: cada uno es un parámetro.
+MAX_SEALED = 64
 # Independiente del recorrido del workspace: agotar aquél sella directorios; éste debe comprobarse entero.
 HOME_SCAN_LIMIT = 200_000
 
@@ -222,37 +227,78 @@ def _ancestors(path, stop):
     return found
 
 
-def nested_metadata_ancestors(workspace, limit=None):
-    """(directorios, subárboles) de `workspace` cuyo renombrado sacaría un `.git`
-    anidado de la protección, o None si el árbol supera `limit` entradas.
+def recorrer_carpeta_de_trabajo(workspace, limit=None):
+    """Un solo recorrido de `workspace`: (anclados, sellados, instrucciones, entera).
 
-    Los directorios se protegen uno a uno; los subárboles, enteros, porque son
-    directorios ilegibles que pueden ocultar un `.git` a cualquier profundidad:
-    dentro del sandbox basta un chmod para volver a verlos. No sigue enlaces
-    simbólicos: Seatbelt compara la ruta real, y el destino de un enlace dentro
-    de la carpeta ya se recorre por su propia ruta.
+    - anclados: directorios cuyo renombrado sacaría de la protección un `.git` o una carpeta de
+      instrucciones anidados; se protegen uno a uno.
+    - sellados: subárboles que no se pudieron comprobar, donde no se renombra ni borra ningún
+      directorio. Son los directorios ilegibles, que pueden ocultar un `.git` a cualquier
+      profundidad (dentro del sandbox basta un chmod para volver a verlos), y, si el árbol supera
+      `limit` entradas, las carpetas de primer nivel que quedaron a medias.
+    - instrucciones: las `.alfalfa`, `.agents`, `.claude` y `.codex` halladas, sin resolver.
+    - entera: ni la propia carpeta se pudo listar, o quedaron a medias demasiados subárboles; se
+      sella toda.
+
+    Las carpetas de primer nivel se recorren por turnos, un directorio cada una, para que una
+    enorme (dependencias, compilados) no agote el tope antes de terminar las pequeñas. No sigue
+    enlaces simbólicos: Seatbelt compara la ruta real, y el destino de un enlace dentro de la
+    carpeta ya se recorre por su propia ruta.
     """
     limit = SCAN_LIMIT if limit is None else limit
-    protected, sealed, pending, seen = set(), set(), [workspace], 0
-    while pending:
-        current = pending.pop()
+    nombres = {ruta_comparable(n) for n in PROTECTED_METADATA}
+    anclados, sellados, instrucciones, vistas = set(), set(), set(), 0
+
+    def listar(carpeta):
+        """Subcarpetas por recorrer, o None si el tope se agotó a mitad."""
+        nonlocal vistas
+        hijas = []
         try:
-            with os.scandir(current) as entries:
-                for entry in entries:
-                    seen += 1
-                    if seen > limit:
+            with os.scandir(carpeta) as entradas:
+                for entrada in entradas:
+                    vistas += 1
+                    if vistas > limit:
                         return None
-                    if entry.name.casefold() in {n.casefold() for n in PROTECTED_METADATA}:
-                        protected.update(_ancestors(current, workspace))
-                    elif entry.is_dir(follow_symlinks=False):
-                        pending.append(entry.path)
+                    nombre = ruta_comparable(entrada.name)
+                    if nombre in nombres:
+                        anclados.update(_ancestors(carpeta, workspace))
+                        if nombre != '.git':
+                            instrucciones.add(entrada.path)
+                    elif entrada.is_dir(follow_symlinks=False):
+                        hijas.append(entrada.path)
         except OSError:
-            protected.update(_ancestors(current, workspace))
-            sealed.add(current)
+            anclados.update(_ancestors(carpeta, workspace))
+            sellados.add(carpeta)
+        return hijas
+
+    primeras = listar(workspace)
+    if primeras is None:
+        return [], [], sorted(instrucciones), True
+    colas, agotado = {p: deque([p]) for p in primeras}, False
+    while colas and not agotado:
+        for primera in list(colas):
+            hijas = listar(colas[primera].popleft())
+            if hijas is None:
+                agotado = True
+                break
+            colas[primera].extend(hijas)
+            if not colas[primera]:
+                del colas[primera]
+    if agotado:
+        if len(colas) > MAX_SEALED:
+            return [], [], sorted(instrucciones), True
+        sellados.update(colas)
     # Lo que ya cubre un subárbol sellado no necesita su propia regla.
-    sealed = {p for p in sealed if not any(o != p and _contains(o, p) for o in sealed)}
-    protected = {p for p in protected if not any(_contains(o, p) for o in sealed)}
-    return sorted(protected), sorted(sealed)
+    sellados = {p for p in sellados if not any(o != p and _contains(o, p) for o in sellados)}
+    anclados = {p for p in anclados if not any(_contains(o, p) for o in sellados)}
+    return sorted(anclados), sorted(sellados), sorted(instrucciones), False
+
+
+def nested_metadata_ancestors(workspace, limit=None):
+    """(directorios, subárboles) de `workspace` cuyo renombrado sacaría un `.git` anidado de la
+    protección, o None si hay que sellar la carpeta entera. Ver recorrer_carpeta_de_trabajo."""
+    anclados, sellados, _, entera = recorrer_carpeta_de_trabajo(workspace, limit)
+    return None if entera else (anclados, sellados)
 
 
 class SeatbeltSandbox:
@@ -278,10 +324,17 @@ class SeatbeltSandbox:
         # de un `.git` (p. ej. `.git/hooks`), no lo cubriría y un hook escrito aquí correría fuera
         # del sandbox en el siguiente commit. Esa carpeta no se abre para escribir.
         # En APFS sin distinción de mayúsculas `.GIT` es el mismo `.git`.
-        protegidos = {nombre.casefold() for nombre in PROTECTED_METADATA}
-        if any(parte.casefold() in protegidos for parte in Path(root).parts + Path(str(self.root)).parts):
+        partes = [parte.casefold() for parte in Path(root).parts + Path(str(self.root)).parts]
+        if '.git' in partes:
             raise SandboxUnavailable('La carpeta de trabajo está dentro de un .git; no se abre para escribir: '
                                      + root)
+        # Dentro de una carpeta de instrucciones sólo se abre un proyecto con su propio `.git` (los
+        # worktrees de `.claude/worktrees`): ahí el arnés lee las instrucciones de ese proyecto, no
+        # las de la carpeta que lo contiene. Cualquier otra subcarpeta suya sigue sin abrirse.
+        dentro = [nombre for nombre in PROTECTED_METADATA if nombre.casefold() in partes]
+        if dentro and not os.path.lexists(os.path.join(root, '.git')):
+            raise SandboxUnavailable('La carpeta de trabajo está dentro de ' + dentro[0]
+                                     + '; no se abre para escribir: ' + root)
         roots = [root]
         home = os.path.realpath(str(self.home or Path.home()))
         tmpdir = self.tmpdir if self.tmpdir is not None else os.environ.get('TMPDIR')
@@ -301,15 +354,13 @@ class SeatbeltSandbox:
     def policy(self):
         """(texto de la política, [(clave, ruta)]) en el orden de Codex."""
         roots = self.writable_roots()
-        comprobar_enlaces_del_hogar(self.protegidas)
-        from ..complementos.rutas_habilidades import carpetas_descubiertas
-        try:
-            habilidades = carpetas_descubiertas(roots[0], HOME_SCAN_LIMIT)
-        except (OSError, ValueError, RuntimeError) as exc:
-            raise SandboxUnavailable('No se pudieron comprobar las carpetas de habilidades del proyecto.') from exc
-        protegidas = hogares_protegidos((*self.protegidas, *habilidades))
-        comprobar_enlaces_del_hogar(protegidas)
         workspace = roots[0]
+        # Un recorrido por orden. Lo que no alcanza a ver (ilegible o por encima del tope) queda
+        # sellado en vez de dejar la orden sin sandbox: pedir salir de él a cada orden protege menos.
+        nested, subtrees, instrucciones, entera = recorrer_carpeta_de_trabajo(workspace)
+        # Incluye habilidades de futuros cwd y los destinos de enlaces ya existentes.
+        protegidas = hogares_protegidos((*self.protegidas, *instrucciones))
+        comprobar_enlaces_del_hogar(protegidas)
         protected = [_policy_regex(rx) for name in PROTECTED_METADATA
                      for rx in (git_regexes(workspace) if name == '.git'
                                 else [protected_metadata_name_regex(workspace, name)])]
@@ -329,12 +380,11 @@ class SeatbeltSandbox:
                 components.append(subpath)
         # Renombrar un antecesor movería un .git fuera de la expresión anclada a
         # la carpeta: hacia /private/tmp, por ejemplo, donde ya sería escribible.
-        scan = nested_metadata_ancestors(workspace)
-        if scan is None:
+        if entera:
             nested, sealed = [], ['WRITABLE_ROOT_0']
         else:
-            nested, sealed = scan[0], []
-            for index, path in enumerate(scan[1]):
+            sealed = []
+            for index, path in enumerate(subtrees):
                 key = 'SEALED_SUBTREE_' + str(index)
                 params.append((key, path))
                 sealed.append(key)
