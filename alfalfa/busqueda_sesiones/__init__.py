@@ -106,7 +106,7 @@ def fijar_alcance(valor):
     if valor not in ALCANCES:
         raise ValueError('Alcance desconocido: usa carpeta o todas.')
     from ..proveedores import configuracion
-    datos = configuracion.leer()
+    datos = configuracion.leer(para_cambiar=True)
     if valor == 'carpeta':
         datos.pop(SECCION, None)
     else:

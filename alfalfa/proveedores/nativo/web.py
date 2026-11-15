@@ -76,7 +76,7 @@ def disponible():
 
 def configurar(nuevo_modo=None, url=None):
     """Guarda el modo y, si se da, la URL de SearXNG (`-` la quita) en `proveedores.json`."""
-    datos = configuracion.leer()
+    datos = configuracion.leer(para_cambiar=True)
     seccion = _seccion()
     if nuevo_modo is not None:
         if nuevo_modo not in MODOS:
