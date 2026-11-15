@@ -154,15 +154,19 @@ class OnRequestPolicy:
         escalated, network, justification = request_options(args)
         runtime = tools.runtime
         ruled, rule_text, equipo = self._rules(argv)
-        danger = dangerous_command_match(argv)
-        if ruled == 'permitida':
-            # El usuario la permitió de forma explícita: no se pregunta como peligrosa.
+        danger = peligrosa = dangerous_command_match(argv)
+        if ruled == 'permitida' and self.reglas.cubre_toda(argv):
+            # El usuario permitió la orden entera: dentro del sandbox no se pregunta como peligrosa.
+            # Si la regla sólo cubre un trozo de la línea (`git status; rm -rf src`), sí.
             danger = None
         attempt = uuid4().hex[:16]
         reasons, failure = [], None
         command, label = list(argv), 'none'
         from . import sesion
-        bypass = bool(self.reglas) and not escalated and ruled == 'permitida' and self.reglas.fuera_del_sandbox(argv)
+        # Lo peligroso no sale del sandbox sin preguntar aunque lo permita una regla: el patrón es un
+        # prefijo, y `rm -rf build` también casa `rm -rf build /`.
+        bypass = (bool(self.reglas) and not escalated and not peligrosa and ruled == 'permitida'
+                  and self.reglas.fuera_del_sandbox(argv))
         if bypass:
             from ..contenido_externo import contaminada
             if contaminada(runtime):
