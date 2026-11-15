@@ -164,3 +164,80 @@ def test_cli_stdio_e_instrucciones(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
     assert '--sin-firma' in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- un `git` que no es el del sistema
+MARCA = 'ejecutado.txt'
+
+
+def _git_falso(carpeta):
+    """Lo que puede traer un repositorio: un ejecutable llamado `git` que deja una marca al correr."""
+    carpeta.mkdir(parents=True, exist_ok=True)
+    falso = carpeta / 'git'
+    falso.write_text('#!/bin/sh\necho "$*" >> "' + str(carpeta.parent / MARCA) + '"\necho "git version 2.99.0"\n')
+    falso.chmod(0o755)
+    return falso
+
+
+@pytest.mark.parametrize('forma', ['tools/git', './tools/git', 'absoluta', 'enlace'])
+def test_un_git_del_proyecto_no_se_ejecuta_para_firmar(tmp_path, monkeypatch, forma):
+    monkeypatch.setattr(firma, '_versiones', {})
+    proyecto = tmp_path / 'proyecto'
+    falso = _git_falso(proyecto / 'tools')
+    monkeypatch.chdir(proyecto)
+    if forma == 'enlace':
+        # Un enlace fuera del proyecto que apunta dentro: cuenta el destino real.
+        (tmp_path / 'fuera').mkdir()
+        (tmp_path / 'fuera' / 'git').symlink_to(falso)
+    programa = {'absoluta': str(falso), 'enlace': str(tmp_path / 'fuera' / 'git')}.get(forma, forma)
+    argv = [programa, 'commit', '-m', 'Arreglo']
+    assert firmar(argv, FIRMA, proyecto) is argv
+    assert not (proyecto / MARCA).exists()
+
+
+def test_un_git_del_proyecto_delante_en_el_path_tampoco(tmp_path, monkeypatch):
+    monkeypatch.setattr(firma, '_versiones', {})
+    proyecto = tmp_path / 'proyecto'
+    _git_falso(proyecto / 'tools')
+    monkeypatch.chdir(proyecto)
+    monkeypatch.setenv('PATH', str(proyecto / 'tools') + ':/usr/bin:/bin')
+    argv = ['git', 'commit', '-m', 'Arreglo']
+    assert firmar(argv, FIRMA, proyecto) is argv
+    assert not (proyecto / MARCA).exists()
+
+
+def test_run_command_no_ejecuta_el_git_del_proyecto_antes_del_permiso(tmp_path, monkeypatch):
+    """La vía real: el modelo pide `tools/git commit` y la persona lo rechaza. Antes, para decidir
+    la firma, `tools/git --version` ya había corrido fuera del sandbox y con todo el entorno."""
+    monkeypatch.setattr(firma, '_versiones', {})
+    proyecto = tmp_path / 'proyecto'
+    falso = _git_falso(proyecto / 'tools')
+    monkeypatch.chdir(proyecto)
+    pedidos = []
+
+    async def approve(args):
+        pedidos.append(list(args['argv']))
+        raise ValueError('Comando rechazado; no se ejecutó.')
+
+    runtime = SimpleNamespace(task={'cwd': str(proyecto)}, manager=SimpleNamespace(firma=Firma()), excluded_tools=(),
+                              tool_specs=ON_REQUEST_TOOLS, state={}, command_policy=None, approve=approve)
+    for programa in ('tools/git', str(falso)):
+        with pytest.raises(ValueError, match='rechazado'):
+            asyncio.run(WorkspaceTools(runtime)._call(
+                'run_command', {'argv': [programa, 'commit', '-m', 'Arreglo'], 'purpose': 'Guardar'}))
+    assert pedidos == [['tools/git', 'commit', '-m', 'Arreglo'], [str(falso), 'commit', '-m', 'Arreglo']]
+    assert not (proyecto / MARCA).exists()
+
+
+@pytest.mark.skipif(shutil.which('git') is None, reason='requiere git')
+def test_el_git_del_sistema_se_sigue_firmando_aunque_el_proyecto_traiga_otro(tmp_path, monkeypatch):
+    monkeypatch.setattr(firma, '_versiones', {})
+    proyecto = tmp_path / 'proyecto'
+    _git_falso(proyecto / 'tools')
+    monkeypatch.chdir(proyecto)
+    git = shutil.which('git')
+    if not firma._admite_trailer(git, proyecto):
+        pytest.skip('git anterior a 2.32')
+    assert firmar(['git', 'commit', '-m', 'x'], FIRMA, proyecto) == ['git', 'commit', '--trailer', FIRMA, '-m', 'x']
+    assert firmar([git, 'commit', '-m', 'x'], FIRMA, proyecto) == [git, 'commit', '--trailer', FIRMA, '-m', 'x']
+    assert not (proyecto / MARCA).exists()
