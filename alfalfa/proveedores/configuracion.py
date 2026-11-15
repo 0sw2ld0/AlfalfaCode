@@ -36,13 +36,36 @@ def ruta():
     return Path(casa).expanduser().absolute() / ARCHIVO
 
 
-def leer():
-    """El contenido, o {} si no hay archivo o no se entiende."""
+class ConfiguracionIlegible(ValueError):
+    """proveedores.json existe pero no se entiende: no se sobrescribe."""
+
+
+def leer(para_cambiar=False):
+    """El contenido, o {} si no hay archivo o no se entiende.
+
+    Con `para_cambiar`, un archivo que existe y no se entiende (una coma de más al editarlo a mano) es
+    un error: antes se leía como vacío y la orden siguiente lo reescribía con sólo su cambio, y se
+    perdían el proveedor por defecto y las URL.
+    """
+    destino = ruta()
     try:
-        valor = json.loads(ruta().read_text(encoding='utf-8'))
-    except (OSError, ValueError):
+        valor = json.loads(destino.read_text(encoding='utf-8'))
+    except FileNotFoundError:
         return {}
-    return valor if isinstance(valor, dict) else {}
+    except (OSError, ValueError) as exc:
+        if para_cambiar:
+            raise ConfiguracionIlegible(_ilegible(destino, exc)) from exc
+        return {}
+    if not isinstance(valor, dict):
+        if para_cambiar:
+            raise ConfiguracionIlegible(_ilegible(destino, 'no es un objeto JSON'))
+        return {}
+    return valor
+
+
+def _ilegible(destino, motivo):
+    return (str(destino) + ' no se entiende (' + str(motivo) + '). No lo sobrescribo para no perder el proveedor '
+            'por defecto ni las URL: arréglalo a mano o bórralo, y vuelve a intentarlo.')
 
 
 def _sin_secretos(valor):
@@ -81,7 +104,7 @@ def por_defecto():
 
 def cambiar(proveedor, campo, valor):
     """Fija `proveedor.campo` (o `por_defecto` con proveedor None) y lo guarda."""
-    datos = leer()
+    datos = leer(para_cambiar=True)
     if proveedor is None:
         if not (isinstance(valor, str) and es_prefijo(valor)):
             raise ValueError('Proveedor desconocido: ' + str(valor))
