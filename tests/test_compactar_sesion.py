@@ -226,7 +226,7 @@ def test_execvp_sin_archivo_no_es_bloqueo_del_sandbox():
     assert is_likely_sandbox_denied('seatbelt', 71,
                                     aggregated="sandbox-exec: execvp() of 'x' failed: Operation not permitted")
     assert is_likely_sandbox_denied('seatbelt', 1, aggregated='sandbox-exec: sandbox_apply: Operation not permitted')
-    assert is_likely_sandbox_denied('seatbelt', 1, aggregated=falta + '\nerror: Permission denied')
+    assert is_likely_sandbox_denied('seatbelt', 1, aggregated=falta + '\nerror: Operation not permitted')
 
 
 @pytest.mark.parametrize('escrito, esperado', [

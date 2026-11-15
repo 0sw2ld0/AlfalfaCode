@@ -233,7 +233,7 @@ def test_un_reintento_sin_sandbox_que_funciona_no_deja_el_turno_bloqueado(motor)
         dentro, = [f for f in rt.state['unresolved_records'].values() if f.get('repetida_sin_sandbox')]
         assert dentro['repetida_sin_sandbox'] == resultado['operation_id']
         # Si el reintento también falla, su propia incidencia sí bloquea.
-        malo = PY + ['import sys; print("Permission denied"); sys.exit(1)']
+        malo = PY + ['import sys; print("Operation not permitted"); sys.exit(1)']
         llamar(Respuesta(reintento='si'), argv=malo)
         assert len(rt.state['unresolved']) == 1
     finally:

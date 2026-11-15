@@ -326,7 +326,8 @@ def test_real_approved_retry_runs_exact_command_once_and_links_attempts(session,
     rt, root, call, spawned = session
     target = outside_home / 'fuera.txt'
     # Falla también sin sandbox con una palabra indicadora: no debe haber un segundo reintento.
-    argv = PY + ['import sys; open(sys.argv[1], "w").write("x"); print("Permission denied"); sys.exit(1)', str(target)]
+    argv = PY + ['import sys; open(sys.argv[1], "w").write("x"); print("Operation not permitted"); sys.exit(1)',
+                 str(target)]
     recorder = Recorder(reintento='yes')
     result = call(recorder, argv=argv)
     assert [c['motivo'] for c in recorder.calls] == ['reintento']
