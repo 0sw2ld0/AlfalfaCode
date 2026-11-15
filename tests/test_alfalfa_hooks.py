@@ -14,7 +14,6 @@ import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
-from uuid import uuid4
 
 import pytest
 
@@ -601,8 +600,8 @@ def test_variables_del_complemento(tmp_path):
 
 
 @macos
-def test_sandbox_impide_escribir_fuera_proteger_git_y_usar_la_red(tmp_path, monkeypatch):
-    fuera = Path.home() / ('.alfalfa-hook-prueba-' + uuid4().hex[:8])
+def test_sandbox_impide_escribir_fuera_proteger_git_y_usar_la_red(tmp_path, monkeypatch, fuera_del_sandbox):
+    fuera = fuera_del_sandbox / 'f'  # corto: el texto del hook se recorta en la conversación
     servidor = socket.socket()
     servidor.bind(('127.0.0.1', 0))
     servidor.listen(1)

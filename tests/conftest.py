@@ -91,6 +91,25 @@ def _sin_agentes_del_usuario(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(subagentes, 'CASA', tmp_path_factory.mktemp('casa-agentes'))
 
 
+@pytest.fixture
+def fuera_del_sandbox():
+    """Una carpeta vacía en la casa real del usuario (no la de $HOME), fuera de $TMPDIR, /private/tmp y
+    la carpeta de trabajo: el sandbox no deja escribir ahí. Si también la casa cuelga de un temporal,
+    no hay dónde probarlo y la prueba se salta con el motivo."""
+    import shutil
+    from pathlib import Path
+
+    from tests.casa import base_fuera_del_sandbox
+    base = base_fuera_del_sandbox()
+    if base is None:
+        pytest.skip('la casa del usuario cuelga de una carpeta temporal: no hay un sitio fuera del sandbox')
+    ruta = Path(tempfile.mkdtemp(prefix='alfalfa-prueba ', dir=base))
+    try:
+        yield ruta
+    finally:
+        shutil.rmtree(ruta, ignore_errors=True)
+
+
 @pytest.fixture(autouse=True)
 def _sin_configuraciones_ajenas_del_usuario(tmp_path_factory, monkeypatch):
     """~/.codex/config.toml, ~/.config/opencode y ~/.claude/commands de quien corre la suite no entran."""

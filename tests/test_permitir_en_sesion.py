@@ -218,11 +218,10 @@ def test_el_transporte_solo_concede_la_sesion_si_se_ofrecio():
 
 
 @real
-def test_un_reintento_sin_sandbox_que_funciona_no_deja_el_turno_bloqueado(motor):
+def test_un_reintento_sin_sandbox_que_funciona_no_deja_el_turno_bloqueado(motor, fuera_del_sandbox):
     import shutil
-    import tempfile
     rt, llamar, lanzadas, eventos = motor
-    fuera = Path(tempfile.mkdtemp(prefix='alfalfa-sesion-prueba ', dir=Path.home() / 'Library' / 'Caches'))
+    fuera = fuera_del_sandbox
     try:
         destino = fuera / 'abierto.txt'
         # Dentro del sandbox no puede escribir fuera de la carpeta; fuera, sí.
