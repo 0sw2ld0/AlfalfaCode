@@ -513,6 +513,11 @@ class TerminalManager:
             self.equipo.comprobar_modelo(cambios.get('model', self.task['model']))
             self.equipo.comprobar_modo(cambios.get('modo', self.task['modo']))
         self.task.update(cambios)
+        if 'modo' in cambios and getattr(self, 'subagentes', None) is not None:
+            # Los subagentes ya lanzados copiaron el modo al nacer: sin esto, al pasar de Automático a
+            # Manual sus órdenes seguían corriendo sin preguntar.
+            for sub in self.subagentes.agentes.values():
+                sub.task['modo'] = self.task['modo']
 
     def anunciar_equipo(self):
         if self.auditoria_equipo:
