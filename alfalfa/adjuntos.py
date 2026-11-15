@@ -363,7 +363,8 @@ def tokens(mensajes):
 
 def _envolver(n, ficha, texto):
     nombre = ficha.get('nombre') or 'archivo'
-    texto = texto.replace('</contenido_adjunto>', '</contenido_adjunto​>')
+    from .marcas import neutralizar
+    texto = neutralizar(texto, 'contenido_adjunto')
     detalle = NOMBRE_TIPO.get(ficha.get('tipo'), 'archivo')
     if ficha.get('paginas'):
         detalle += f", {ficha['paginas']} páginas"

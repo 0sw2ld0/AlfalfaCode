@@ -57,8 +57,11 @@ class Instrucciones:
 
     def texto(self):
         """legacy_text de Codex: usuario, separador y las del proyecto en orden."""
+        from ..marcas import neutralizar_separador
         partes = [self.usuario] if self.usuario else []
-        proyecto = '\n\n'.join(texto for _, texto in self.proyecto)
+        # El separador real es uno: el AGENTS.md de un repositorio no puede escribir otro y fingir que
+        # lo de después son instrucciones del usuario.
+        proyecto = '\n\n'.join(neutralizar_separador(texto, SEPARADOR) for _, texto in self.proyecto)
         if partes and proyecto:
             return partes[0] + SEPARADOR + proyecto
         return partes[0] if partes else proyecto
