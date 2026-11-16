@@ -354,26 +354,40 @@ inglés a cualquier profundidad (`texto`→`text`, `estado`→`status`, `coste_s
 `desglose`→`breakdown`…; la tabla completa está en `alfalfa/pacai/nombres.py`), y lo mismo el bloque
 `payload.alfalfa` que llevan `approval_request` (`purpose`, `justification`, `reasons`, `unsandboxed`…),
 `plan_updated` (`explanation`), `usage` (`turn_tokens`, `total_tokens`), `error` (`reason`, `rejected`) y `close`
-(`status`, `exit_code`, `tokens`, `cost`). Sólo cambian las claves: los **valores** (estados, modos, textos) son los
-de AlfalfaCode, p. ej. `{"type":"alfalfa.budget","payload":{"session":{"spent":1.2,"cap":5},"warning":"sesion"}}`.
-Un cliente ignora los tipos y campos que no conozca. Las extensiones sólo se envían si el cliente declaró `alfalfa`
+(`status`, `exit_code`, `tokens`, `cost`). También los **valores enumerados**, los que una máquina compara, van en
+inglés y `snake_case`, p. ej. `{"type":"alfalfa.budget","payload":{"session":{"spent":1.2,"cap":5},"warning":"session"}}`.
+Los textos para personas (mensajes, resúmenes, errores legibles) y los nombres propios (herramientas, modelos,
+tipos de subagente como `explorador`, ids) no se traducen. Los más usados:
+
+| Campo | Valores |
+|---|---|
+| `status` | subagentes: `working`, `completed`, `failed`, `closed`, `interrupted`; cola de encargos: `ready`, `running`, `pausing`, `paused`, `completed`, `cancelled` (cada encargo: `pending`, `running`, `cancelled`, `interrupted`…); revisión de código: `available`, `reviewing`, `completed`, `failed`, `no_budget`…; compactación: `in_progress`, `done`, `failed` |
+| `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
+| `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
+| `warning`, `exhausted` | `session`, `month` |
+| `kind`, `store`, `scope`, `origin`, `action`, `step`, `phase` | `memory`/`skill`; `user`/`project`/`environment`; `folder`, `all`…; `agent`, `external`…; `create`, `restore`…; `undo`/`redo`; `start`/`end` |
+
+La tabla completa (y la de las claves) está en `alfalfa/pacai/nombres.py`; una prueba recorre el código y falla si
+aparece un valor enumerado sin traducir. El `reason` propio de un `approval_request` también va en inglés
+(`alfalfa.edit`, `alfalfa.browser`, `alfalfa.swift_diagnostics`…). Un cliente ignora los tipos y campos que no conozca. Las extensiones sólo se envían si el cliente declaró `alfalfa`
 en su `hello`. `--stdio` v2 no cambia.
 
 ### Órdenes de AlfalfaCode (extensión `alfalfa`)
 
-Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente, con los campos en inglés
-(el agente los devuelve a v2 antes de dárselos al motor):
+Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente, con los campos y los valores
+en inglés (el agente los devuelve a v2 antes de dárselos al motor). Un valor enumerado desconocido (también el de
+v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen, y no llega al motor:
 
 | Mensaje (campos) | Hace lo de v2 |
 |---|---|
-| `alfalfa.set_settings` (`model`, `effort`, `mode`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
+| `alfalfa.set_settings` (`model`, `effort`, `mode`: `auto`, `manual`, `accept_edits`, `plan` o `bypass_permissions`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
 | `alfalfa.compact` (`instructions`), `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
-| `alfalfa.set_context_mode` (`mode`: `ahorro` o `completo`) | `contexto` |
+| `alfalfa.set_context_mode` (`mode`: `saving` o `full`) | `contexto` (`ahorro`, `completo`) |
 | `alfalfa.set_budget` (`session`, `month`, en dólares) | `presupuesto` (`sesion`, `mes`) |
 | `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` (`active`) | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` (`activo`) |
 | `alfalfa.resolve_learning` (`id`, `apply`), `alfalfa.review_code` (`turn`, `model`), `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
 | `alfalfa.export_browser_test` (`id`, `path`), `alfalfa.stop_process` (`id`) | `exportar_prueba_navegador`, `detener_proceso` |
-| `alfalfa.jobs_command` (`action`, `jobs`, `mode`, `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
+| `alfalfa.jobs_command` (`action`: `prepare`, `start`, `pause`, `stop` o `cancel`; `jobs`; `mode`: `serial` o `parallel`; `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
 | `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
 
 ### Reglas que PACAI exige
@@ -398,8 +412,15 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
   `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.
 - **Herramientas del cliente.** El navegador de la app (`--navegador`) es la herramienta `browser` que el cliente
   declara en `hello.client_tools`: el agente emite `tool_start` con `side: "client"` y el cliente contesta con
-  `tool_end` y `reply_to`. El cuerpo de su respuesta va en un bloque `structured` con los campos de
-  `navegador_respuesta` de v2 (`ok`, `resultado`, `error`, `permiso`). Sin esa declaración, el motor recibe un «no».
+  `tool_end` y `reply_to`. Sus argumentos son la petición del navegador de la app en inglés: `action` (`open`,
+  `read`, `click`, `type`, `scroll`, `screenshot`, `eval`, `handoff`, `wait`, `key`, `hover`, `state`, `upload`,
+  `download`, `console`, `network`, `viewport`, `cancel_site`, `resume_site`), `target`, `text`, `submit`, `clear`,
+  `mode` (`text` o `tree`), `direction` (`up`, `down`, `left`, `right`), `granted` (`form`, `password`,
+  `download`), `sites`, `timeout_ms`… El cuerpo de su respuesta va en un bloque `structured`: `ok`, `result`
+  (`url`, `tree`, `truncated`, `screenshot`, `consumed_visit`…), `error` y `permission` (`type`: `site`, `form`,
+  `password` o `download`; `started`, `url`, `token`, `detail`). El agente lo devuelve a los nombres de v2 para el
+  motor; la tabla está en `alfalfa/pacai/nombres.py` (`NAVEGADOR_CAMPOS`, `NAVEGADOR_VALORES`). Sin esa
+  declaración, el motor recibe un «no».
   Si la ejecución termina o se interrumpe con la herramienta abierta, el agente la cancela con `tool_end`
   `cancelled` sin `reply_to` (el motor recibe un «no»); lo que el cliente mande después se ignora sin error.
 - **Ejecución en cierre.** Tras un `cancelled` del agente (una aprobación o una herramienta del cliente), esa

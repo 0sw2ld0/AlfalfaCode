@@ -694,8 +694,8 @@ async def test_el_navegador_de_la_app_es_una_herramienta_del_cliente_y_su_respue
     assert len(inicio) == 1
     p = inicio[0]['payload']
     assert p['side'] == 'client' and p['name'] == 'browser' and p['run_id'] == run
-    assert p['arguments'] == {'accion': 'abrir', 'url': 'http://localhost:3000'}
-    cuerpo = {'ok': True, 'resultado': {'t': 'x'}}
+    assert p['arguments'] == {'action': 'open', 'url': 'http://localhost:3000'}
+    cuerpo = {'ok': True, 'result': {'t': 'x'}}
     c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'success', 'output': [
         {'type': 'structured', 'schema': 'urn:alfalfa:browser-response', 'data': cuerpo}]}, reply_to=inicio[0]['id'])
     assert futuro.result() == {'tipo': 'navegador_respuesta', 'id': 'n1', 'ok': True, 'resultado': {'t': 'x'}}
@@ -837,7 +837,7 @@ async def test_quitar_o_enviar_ahora_una_entrada_que_espera_su_ejecucion():
     assert tipos(quitado) == ['alfalfa.dequeued'] and quitado[0]['payload'] == {'id': segundo, 'removed': True}
     assert [i for i, _ in c.t._cola] == [tercero]
     nunca = c.enviar('alfalfa.dequeue', {'id': 'nunca-llego'})
-    assert nunca[0]['payload'] == {'id': 'nunca-llego', 'removed': False, 'reason': 'desconocido'}
+    assert nunca[0]['payload'] == {'id': 'nunca-llego', 'removed': False, 'reason': 'unknown'}
     c.t.interrumpir_turno = Mock(return_value=True)
     c.enviar('alfalfa.send_now', {'id': tercero})
     assert c.t.inbox and c.t.inbox[0].id == tercero and not c.t._cola

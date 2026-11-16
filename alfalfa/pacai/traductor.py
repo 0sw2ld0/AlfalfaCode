@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from .jcs import digest
-from .nombres import TIPOS, en_ingles
+from .nombres import TIPOS, en_ingles, peticion_del_navegador, razon
 from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
@@ -47,9 +47,6 @@ RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'f
 # `motivo` de un permiso v2 → `reason` de PACAI (§4.5). Los demás van como `alfalfa.<motivo>` si se negoció.
 RAZON_DE = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outside_sandbox',
             'reintento': 'sandbox_denied_retry', 'regla': 'policy', 'modo': 'policy'}
-# Los demás motivos de AlfalfaCode, con nombre en inglés: `alfalfa.<nombre>` si se negoció la extensión.
-RAZON_PROPIA = {'navegador': 'browser', 'edicion': 'edit', 'contenido_externo': 'external_content',
-                'aprendizaje': 'learning'}
 # Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` (en inglés) si se negoció la extensión.
 PERMISO_EXTRA = ('argv', 'proposito', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo')
@@ -579,7 +576,7 @@ class Traductor:
             return 'outside_sandbox'
         if motivo in RAZON_DE:
             return RAZON_DE[motivo]
-        propia = RAZON_PROPIA.get(motivo, str(motivo or ''))
+        propia = razon(str(motivo or ''))
         if 'alfalfa' in self.extensiones and re.fullmatch(r'[a-z][a-z0-9_]*', propia):
             return 'alfalfa.' + propia
         return 'policy'
@@ -630,7 +627,9 @@ class Traductor:
                 self.al_rechazar_navegador(ident, 'El cliente PACAI no declaró la herramienta «' + NAVEGADOR
                                            + '» o no hay una ejecución activa.')
             return []
-        args = _json_seguro({k: v for k, v in campos.items() if k not in ('version', 'tipo', 'id')}) or {}
+        # Los argumentos de la herramienta del cliente, en inglés (`action: "open"`…); el motor sigue hablando v2.
+        args = _json_seguro(peticion_del_navegador({k: v for k, v in campos.items()
+                                                    if k not in ('version', 'tipo', 'id')})) or {}
         m = self._msg('tool_start', {'run_id': self.raiz, 'name': NAVEGADOR, 'arguments': args, 'side': 'client',
                                      'title': 'Navegador: ' + str(accion)[:100]})
         self.herramientas[m['id']] = Herramienta(m['id'], self.raiz, NAVEGADOR, args, lado='client', v2id=ident)

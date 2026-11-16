@@ -83,7 +83,7 @@ def test_un_ejemplo_entero_de_la_extension():
     c.t.emit('presupuesto', sesion={'gastado': 1.0, 'tope': 5}, aviso='sesion')
     c.t.emit('quitado_de_cola', id='c1', quitado=True)
     assert [(m['type'], m['payload']) for m in c.drenar()] == [
-        ('alfalfa.budget', {'session': {'spent': 1.0, 'cap': 5}, 'warning': 'sesion'}),
+        ('alfalfa.budget', {'session': {'spent': 1.0, 'cap': 5}, 'warning': 'session'}),
         ('alfalfa.dequeued', {'id': 'c1', 'removed': True})]
 
 
@@ -98,7 +98,7 @@ async def test_el_bloque_alfalfa_del_nucleo_va_en_ingles():
     peticion = c.del_agente('approval_request')[-1]
     assert peticion['payload']['alfalfa'] == {'argv': ['rm', 'x'], 'purpose': 'Borrar', 'justification': 'Limpia'}
     c.t.emit('error', texto='Sin visión', motivo='sin_vision', rechazado={'texto': 'hola'})
-    assert c.del_agente('error')[-1]['payload']['alfalfa'] == {'reason': 'sin_vision', 'rejected': {'text': 'hola'}}
+    assert c.del_agente('error')[-1]['payload']['alfalfa'] == {'reason': 'no_vision', 'rejected': {'text': 'hola'}}
     tarea.cancel()
     c.t.emit('permiso_resuelto', id='x', aprobado=False)
     await cerrar(c, 'cortado')
@@ -115,7 +115,7 @@ def asyncio_tarea(c, args):
     ('set_settings', {'model': 'm', 'effort': 'high', 'mode': 'auto'},
      {'tipo': 'ajustes', 'modelo': 'm', 'esfuerzo': 'high', 'modo': 'auto'}),
     ('compact', {'instructions': 'breve'}, {'tipo': 'compactar', 'instrucciones': 'breve'}),
-    ('set_context_mode', {'mode': 'ahorro'}, {'tipo': 'contexto', 'modo': 'ahorro'}),
+    ('set_context_mode', {'mode': 'saving'}, {'tipo': 'contexto', 'modo': 'ahorro'}),
     ('set_budget', {'session': 5, 'month': None}, {'tipo': 'presupuesto', 'sesion': 5, 'mes': None}),
     ('set_keep_awake', {'active': False}, {'tipo': 'mantener_despierto', 'activo': False}),
     ('set_diagnostics', {'active': True}, {'tipo': 'diagnosticos', 'activo': True}),
@@ -125,8 +125,8 @@ def asyncio_tarea(c, args):
     ('review_code', {'turn': 't1', 'model': 'm'}, {'tipo': 'revisar_codigo', 'turno': 't1', 'modelo': 'm'}),
     ('export_browser_test', {'id': 'f' * 32, 'path': 'prueba'},
      {'tipo': 'exportar_prueba_navegador', 'id': 'f' * 32, 'ruta': 'prueba'}),
-    ('jobs_command', {'action': 'prepare', 'jobs': ['a'], 'mode': 'serie', 'parallel': 1},
-     {'tipo': 'encargos', 'accion': 'prepare', 'encargos': ['a'], 'modo': 'serie', 'paralelos': 1}),
+    ('jobs_command', {'action': 'prepare', 'jobs': ['a'], 'mode': 'serial', 'parallel': 1},
+     {'tipo': 'encargos', 'accion': 'preparar', 'encargos': ['a'], 'modo': 'serie', 'paralelos': 1}),
     ('stop_process', {'id': 'p1'}, {'tipo': 'detener_proceso', 'id': 'p1'}),
 ])
 def test_las_ordenes_del_cliente_llevan_campos_en_ingles_y_llegan_al_motor_en_v2(monkeypatch, orden, payload, v2):
