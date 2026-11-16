@@ -184,6 +184,18 @@ def test_un_subagente_en_segundo_plano_cierra_su_herramienta_en_el_acto_y_su_rai
     assert problemas(p.log) == []
 
 
+def test_un_cliente_que_encadena_tras_el_hello_no_tiene_que_esperar(proceso):
+    p = proceso('plain')
+    p.enviar('hello', dict(versions=['0.3'], profiles=['work'], extensions=['alfalfa']))
+    entrada = p.entrada('Hola sin esperar')             # sin esperar a session_started (§4.1)
+    run = p.tipo('run_started')
+    assert run['payload'] == {'input_id': entrada['id']}
+    assert [m['type'] for m in p.del_agente()][:2] == ['hello', 'session_started']
+    p.tipo('run_finished')
+    p.terminar()
+    assert problemas(p.log) == []
+
+
 def test_negar_el_permiso_no_ejecuta_la_orden(proceso, tmp_path):
     p = proceso()
     p.saludar()

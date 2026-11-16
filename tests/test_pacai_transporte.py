@@ -8,7 +8,17 @@ import pytest
 
 from alfalfa.pacai.transporte import COMANDOS
 from alfalfa.stdio import Transport
-from tests.pacai_comun import SESION, Cliente, RelojFalso, abrir, cerrar, fin_de_herramienta, herramienta, reposo
+from tests.pacai_comun import (
+    SESION,
+    Cliente,
+    RelojFalso,
+    abrir,
+    cerrar,
+    fin_de_herramienta,
+    herramienta,
+    problemas,
+    reposo,
+)
 
 
 def tipos(mensajes):
@@ -78,9 +88,26 @@ def test_una_sesion_se_negocia_una_sola_vez():
 
 def test_antes_del_saludo_solo_se_admiten_hello_error_close_y_heartbeat():
     c = Cliente()
-    assert codigo(c.entrada()) == 'invalid_message'
+    error = c.entrada()
+    assert codigo(error) == 'invalid_message' and 'antes del hello' in error[0]['payload']['message']
     assert c.enviar('heartbeat', {'last_seq': 0}) == []
     assert c.enviar('error', {'code': 'x', 'message': 'y'}) == []
+
+
+async def test_lo_encadenado_tras_el_hello_se_procesa_con_las_reglas_de_la_sesion_negociada():
+    c = Cliente(extensiones=())
+    hola = c.mensaje('hello', dict(c.hello))
+    entrada = c.mensaje('input', {'blocks': [{'type': 'text', 'text': 'sin esperar'}]})
+    ajena = c.mensaje('alfalfa.compact', {})
+    for m in (hola, entrada, ajena):                     # sin esperar a session_started
+        c.log.append(m)
+        c.t.receive(json.dumps(m))
+    respuesta = c.drenar()
+    assert tipos(respuesta) == ['hello', 'session_started', 'error']
+    assert respuesta[2]['payload']['code'] == 'not_negotiated' and respuesta[2]['payload']['ref'] == ajena['id']
+    assert (await asyncio.wait_for(c.t.next_message(), 1)).id == entrada['id']
+    # El único fallo de la transcripción es del cliente: mandó una extensión que no negoció.
+    assert [p.split(': ', 1)[1] for p in problemas(c.log)] == ['extensión alfalfa no negociada']
 
 
 def test_sin_saludo_el_fin_del_motor_cuenta_sus_errores_y_cierra():

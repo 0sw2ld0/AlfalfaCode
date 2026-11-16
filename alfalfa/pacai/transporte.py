@@ -362,7 +362,9 @@ class TransportePacai(Transport):
         if tipo in MESSAGE_TYPES and lado not in (None, 'client'):
             return self._error('invalid_message', tipo + ' sólo lo envía el agente.', ref)
         if not self.empezado and tipo not in ('hello', 'error', 'close', 'heartbeat'):
-            return self._error('invalid_message', tipo + ' antes de session_started.', ref)
+            # Antes de su `hello` el cliente sólo puede mandar error, close y heartbeat (§4.1). Lo que encadena justo
+            # después del `hello` sí vale: el `hello` se negocia en el acto y lo siguiente ya llega con sesión.
+            return self._error('invalid_message', tipo + ' antes del hello del cliente.', ref)
         if self.empezado and m['session'] != self.emisor.sesion:
             return self._error('invalid_message', 'La sesión no es la de este proceso.', ref)
         manejador = getattr(self, '_c_' + tipo, None) if tipo in MESSAGE_TYPES else None
