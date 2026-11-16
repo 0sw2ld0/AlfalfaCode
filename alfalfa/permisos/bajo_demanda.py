@@ -17,7 +17,10 @@ intento, cuando la orden
 Las reglas del usuario (arnes/reglas, al estilo de execpolicy) mandan antes:
 `prohibida` no ejecuta la orden, `preguntar` pide permiso aunque la orden fuera
 normal, y `permitida` quita la pregunta de orden peligrosa, pero nunca el
-sandbox, la red ni la salida del sandbox, que siguen su camino.
+sandbox, la red ni la salida del sandbox, que siguen su camino. Sólo una regla
+`permitida` con `con_red` quita la pregunta de red (la orden sigue en el sandbox) y
+sólo una con `fuera_del_sandbox`, la de salir; ninguna de las dos en una orden peligrosa
+ni tras leer contenido externo.
 
 Sólo TerminalManager activa esta política; los agentes del integrador conservan su
 aprobación de siempre.
@@ -82,6 +85,9 @@ def lectura_de_red(argv, runtime=None):
 USE_DEFAULT = 'use_default'
 # Lo que devuelve la aprobación con «No volver a preguntar por órdenes que empiecen por …».
 SIEMPRE = 'siempre'
+# Lo que concede esa regla (`prefijo_alcance` del permiso): salir del sandbox, la red dentro del
+# sandbox o sólo quitar la pregunta del modo (la orden sigue en el sandbox, sin red).
+ALCANCE_SIN_SANDBOX, ALCANCE_RED, ALCANCE_SANDBOX = 'sin_sandbox', 'red', 'sandbox'
 REQUIRE_ESCALATED = 'require_escalated'
 JUSTIFICATION_MIN = 10
 JUSTIFICATION_MAX = 500
@@ -200,7 +206,12 @@ class OnRequestPolicy:
                 reasons.append(SALIR)
                 runtime.manager.event(runtime.task, 'system', 'Sandbox Seatbelt no disponible: ' + failure)
             if network and not lectura_de_red(argv, runtime):
-                reasons.append(RED)
+                if label == 'seatbelt' and self._red_por_regla(runtime, argv, ruled, peligrosa):
+                    # «No volver a preguntar» en una tarjeta de red: la red, y nada más, sin tarjeta.
+                    runtime.manager.event(runtime.task, 'system', 'Red permitida siempre por ' + str(rule_text)
+                                          + ': ' + shlex.join(argv)[:300] + ' (en el sandbox)')
+                else:
+                    reasons.append(RED)
         # Fuera del sandbox (el reintento) vale lo que se ve sin él; dentro y sin red, sólo lo que
         # de verdad puede hacer daño ahí (permisos/peligrosos.py, `dentro_del_sandbox`).
         danger_fuera = danger
@@ -256,6 +267,15 @@ class OnRequestPolicy:
             evidencia.repetida_sin_sandbox(result.get('operation_id'), again.get('operation_id'))
         return again
 
+    def _red_por_regla(self, runtime, argv, ruled, peligrosa):
+        """¿Quita una regla `con_red` la pregunta de red de esta orden? Como la salida del sandbox
+        por regla: nunca en una orden peligrosa, con una regla más estricta ni tras leer contenido
+        externo. Sólo cuenta dentro del sandbox: salir sigue preguntando."""
+        if not self.reglas or ruled != 'permitida' or peligrosa or not self.reglas.con_red(argv):
+            return False
+        from ..contenido_externo import contaminada
+        return not contaminada(runtime)
+
     @staticmethod
     def _annotate(runtime, result, **fields):
         """Añade al registro ya guardado del intento lo que se supo después.
@@ -310,19 +330,24 @@ class OnRequestPolicy:
         if para_sesion:
             request['para_sesion'] = True
         prefijo = None
-        # La tarjeta del modo Manual (sólo esa: dentro del sandbox, sin red ni peligro) también lo
-        # ofrece; la regla que guarda quita la pregunta del modo y la orden sigue en el sandbox.
+        # Las tarjetas de dentro del sandbox también lo ofrecen, cada una con su alcance: la del
+        # modo Manual (sin red ni peligro) guarda una regla que sólo quita la pregunta del modo, y
+        # la de red (sin peligro), una que además deja la red abierta. Ninguna saca del sandbox.
         from .modos import MOTIVO_MODO
         solo_modo = list(reasons) == [MOTIVO_MODO]
-        if ((unsandboxed or solo_modo) and para_sesion and not origenes and reglas is not None
-                and not reglas.evaluar(list(argv)).coincidencias):
+        solo_red = list(reasons) == [RED]
+        if ((unsandboxed or solo_modo or solo_red) and para_sesion and not origenes and reglas is not None
+                and not dangerous_command_match(argv)
+                and OnRequestPolicy._sin_regla_que_decida(reglas, argv, solo_red)):
             # «No volver a preguntar por órdenes que empiecen por …», como el
             # ApprovedExecpolicyAmendment de Codex: nunca tras contenido externo, en órdenes
             # peligrosas, con una regla que ya decide ni con prefijos que lo permitirían todo.
             from ..reglas import prefijo_para_siempre
-            prefijo = prefijo_para_siempre(args.get('prefix_rule'), argv)
+            prefijo = prefijo_para_siempre(args.get('prefix_rule'), argv, dentro_del_sandbox=not unsandboxed)
             if prefijo:
                 request['prefijo'] = prefijo
+                request['prefijo_alcance'] = ALCANCE_SIN_SANDBOX if unsandboxed else (
+                    ALCANCE_RED if solo_red else ALCANCE_SANDBOX)
         if justification:
             request['justificacion'] = justification
         if previous:
@@ -355,11 +380,23 @@ class OnRequestPolicy:
         if para_sesion and respuesta == sesion.SESION:
             sesion.recordar(runtime.task, [clave])
         if prefijo and respuesta == SIEMPRE:
-            OnRequestPolicy._guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=not unsandboxed)
+            OnRequestPolicy._guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=not unsandboxed,
+                                             con_red=request['prefijo_alcance'] == ALCANCE_RED)
         return respuesta
 
     @staticmethod
-    def _guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=False):
+    def _sin_regla_que_decida(reglas, argv, solo_red):
+        """Ninguna regla casa la orden. En la tarjeta de red basta con que no case ninguna más estricta
+        que `permitida`: la regla del modo Manual (`npm install` dentro del sandbox, sin red) no quita la
+        pregunta de red, y sin esto esa tarjeta nunca podía ofrecer «No volver a preguntar»."""
+        evaluacion = reglas.evaluar(list(argv))
+        if solo_red:
+            from ..reglas import PERMITIDA
+            return evaluacion.decision in (None, PERMITIDA) and not evaluacion.no_analizable
+        return not evaluacion.coincidencias
+
+    @staticmethod
+    def _guardar_siempre(runtime, reglas, prefijo, argv, dentro_del_sandbox=False, con_red=False):
         """Escribe la regla en `$ALFALFA_HOME/reglas.toml` y la aplica ya a esta sesión y sus
         subagentes, que comparten el mismo objeto de reglas. Si no se puede guardar, la orden
         aprobada se ejecuta igual y se avisa."""
@@ -373,12 +410,13 @@ class OnRequestPolicy:
                 raise ReglasInvalidas('no hay carpeta de AlfalfaCode')
             nuevas = guardar_para_siempre(home, prefijo, 'Aprobada con «No volver a preguntar» el '
                                           + time.strftime('%Y-%m-%d') + ' (' + shlex.join(argv)[:120] + ').',
-                                          dentro_del_sandbox=dentro_del_sandbox)
+                                          dentro_del_sandbox=dentro_del_sandbox, con_red=con_red)
         except (ReglasInvalidas, OSError) as exc:
             runtime.manager.event(runtime.task, 'system', 'No se pudo guardar «No volver a preguntar» por «'
                                   + texto + '»: ' + str(exc)[:200] + '. Esta vez se ejecuta igual.')
             return
         reglas.reglas.append(nuevas.reglas[-1])
         runtime.manager.event(runtime.task, 'system', 'Ya no se preguntará por las órdenes que empiecen por «'
-                              + texto + ('»: siguen dentro del sandbox, sin red.' if dentro_del_sandbox
+                              + texto + ('»: siguen dentro del sandbox, con red.' if con_red
+                                         else '»: siguen dentro del sandbox, sin red.' if dentro_del_sandbox
                                          else '»: corren fuera del sandbox.') + ' Se quita en reglas.toml.')
