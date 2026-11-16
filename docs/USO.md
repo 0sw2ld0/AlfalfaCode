@@ -953,6 +953,13 @@ variable de entorno donde va:
 | OpenCode Zen | `OPENCODE_API_KEY` |
 | otro compatible del catálogo | la que dice `alfalfa --proveedores --json` (`variable`) |
 
+Para **Ollama Cloud**, además de la clave, apunta Ollama a la nube una vez, porque en un
+servidor no hay Ollama local y el motor lo busca en `http://127.0.0.1:11434`:
+
+```bash
+alfalfa --fijar-url ollama https://ollama.com
+```
+
 Por SSH, se exporta en la sesión antes de usar `alfalfa`. En Ubuntu, con un espacio
 delante, bash no la guarda en el historial:
 
