@@ -152,7 +152,8 @@ async def test_el_estado_de_la_herramienta_sigue_la_clasificacion_del_motor(resu
 async def test_la_salida_enorme_de_una_herramienta_se_recorta_y_un_fin_sin_inicio_se_ignora():
     c = Cliente()
     await abrir(c)
-    assert fin_de_herramienta(c, 'read_file', {'content': 'x'}) == []
+    # Un fin sin inicio no es un `tool_end`; el evento de v2 sólo va en la extensión.
+    assert [m['type'] for m in fin_de_herramienta(c, 'read_file', {'content': 'x'})] == ['alfalfa.notice']
     herramienta(c, 'read_file', {'path': 'a'})
     fin = fin_de_herramienta(c, 'read_file', {'content': 'y' * 200000})
     assert len(fin[0]['payload']['output'][0]['text']) == 60000
@@ -291,8 +292,9 @@ async def test_fin_cierra_lo_que_siga_abierto_y_manda_close():
     herramienta(c, 'run_command', {'argv': ['sleep', '9'], 'purpose': 'x'})
     c.t.emit('fin', estado='interrupted', resumen='Cierre forzado del motor.', codigo_salida=130, tokens=3)
     cierre = c.drenar()
-    assert [m['type'] for m in cierre] == ['alfalfa.closing', 'tool_end', 'run_finished', 'close']
-    fin = cierre[2]
+    # El turno no lo cerró el motor (no hubo `turno_terminado`): no hay `alfalfa.closing`.
+    assert [m['type'] for m in cierre] == ['tool_end', 'run_finished', 'close']
+    fin = cierre[1]
     assert fin['payload'] == {'run_id': run, 'outcome': 'interrupted'}
     cierre_sesion = cierre[-1]
     assert cierre_sesion['payload']['reason'] == 'Cierre forzado del motor.'
@@ -400,7 +402,9 @@ async def test_sin_ejecucion_raiz_no_nacen_subejecuciones():
     c.t.emit('subagentes', subagentes=subagentes(('a1', 'A', 'general', 'trabajando', '')))
     assert [m['type'] for m in c.drenar()] == ['alfalfa.subagents']
     c.t.emit('subagente_evento', agente='a1', rol='agent', texto='hola', hora=1.0)
-    assert c.drenar() == []
+    # Sin subejecución el paso del subagente no se pierde: va entero en la extensión.
+    assert [(m['type'], m['payload']) for m in c.drenar()] == [
+        ('alfalfa.subagent_event', {'agent': 'a1', 'role': 'agent', 'text': 'hola', 'time': 1.0})]
 
 
 # -- ejecución en cierre (§4.2, 0.3) ---------------------------------------
@@ -480,8 +484,10 @@ async def test_interrumpir_un_subagente_cancela_la_herramienta_que_lo_espera_y_l
     cierres = [m['payload'] for m in cierre if m['type'] in ('run_finished', 'tool_end')]
     assert cierres == [{'run_id': sub['id'], 'outcome': 'interrupted'},
                        {'tool_call_id': lanzar['id'], 'status': 'cancelled'}]
-    # El fin que el motor manda luego por esa herramienta ya no sale, y la madre sigue trabajando.
-    assert fin_de_herramienta(c, 'spawn_agent', {'agent': 'a2', 'status': 'cerrado'}) == []
+    # El fin que el motor manda luego por esa herramienta ya no es un `tool_end` (sólo el aviso de la extensión), y
+    # la madre sigue trabajando.
+    assert [m['type'] for m in fin_de_herramienta(c, 'spawn_agent', {'agent': 'a2', 'status': 'cerrado'})] == [
+        'alfalfa.notice']
     c.t.emit('evento', rol='agent', texto='Sigo yo', hora=2.0)
     assert 'message_start' in [m['type'] for m in c.drenar()]
     await cerrar(c)

@@ -48,9 +48,11 @@ RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'f
 RAZON_DE = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outside_sandbox',
             'reintento': 'sandbox_denied_retry', 'regla': 'policy', 'modo': 'policy'}
 # Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` (en inglés) si se negoció la extensión.
-PERMISO_EXTRA = ('argv', 'proposito', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
+# `motivo` es el principal: `reason` junta varios (`regla` y `modo` son `policy`). `para_sesion` dice si v2 ofrecía
+# «en esta sesión» (un permiso de sitio también ofrece `session`).
+PERMISO_EXTRA = ('argv', 'proposito', 'motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo',
-                 'prefijo_alcance')
+                 'prefijo_alcance', 'para_sesion')
 CODIGOS_DE_ERROR = {'Línea demasiado larga.': 'message_too_large', 'Se requiere UTF-8.': 'invalid_message'}
 
 
@@ -89,6 +91,7 @@ class Aprobacion:
     expira: datetime | None          # sin `expires`, no caduca
     sitio: bool = False               # v2 pide `sitio` (una_vez|sesion|proyecto) en vez de `sesion`
     estado: str = 'pending'           # pending, approved, denied, expired, cancelled
+    siempre: bool = False             # v2 ofrece «No volver a preguntar» (`prefijo`): `alfalfa.scope` `always`
 
 
 def _json_seguro(valor: Any) -> dict | None:
@@ -247,9 +250,11 @@ class Traductor:
         """Activa y sin estar en cierre: puede empezar trabajo nuevo (mensajes, herramientas, aprobaciones…)."""
         return self._activa(run_id) and not self.ejecuciones[run_id].cerrando
 
-    def _cancelar_aprobacion(self, a: Aprobacion, h: Herramienta | None = None) -> list[dict]:
+    def _cancelar_aprobacion(self, a: Aprobacion, h: Herramienta | None = None,
+                             motivo: str | None = None) -> list[dict]:
         """La ejecución termina o se interrumpe con la petición sin contestar: `approval_result` `cancelled` del
-        agente (§4.5), y la ejecución entra en cierre. Su herramienta se cerrará con `cancelled`."""
+        agente (§4.5), y la ejecución entra en cierre. Su herramienta se cerrará con `cancelled`. `motivo`: el de v2
+        («Turno interrumpido», «Sesión interrumpida»…), en `reason`."""
         a.estado = 'cancelled'
         self.permisos.pop(a.v2id, None)
         if a.run_id in self.ejecuciones:
@@ -257,7 +262,8 @@ class Traductor:
         h = h or self.herramientas.get(a.tool_call_id)
         if h is not None:
             h.cancelada = True
-        return [self._msg('approval_result', {'decision': 'cancelled'}, reply_to=a.id)]
+        return [self._msg('approval_result', {'decision': 'cancelled', **({'reason': motivo[:500]} if motivo else {})},
+                          reply_to=a.id)]
 
     # -- entrada principal -------------------------------------------------
     def evento(self, tipo: str, campos: dict) -> list[dict]:
@@ -284,7 +290,8 @@ class Traductor:
             salida += self._cerrar(tc, estado)
         return salida
 
-    def _cerrar(self, tc: str, estado: str, salida: list | None = None, resumen: str | None = None) -> list[dict]:
+    def _cerrar(self, tc: str, estado: str, salida: list | None = None, resumen: str | None = None,
+                extra: dict | None = None) -> list[dict]:
         h = self.herramientas.pop(tc)
         mensajes: list[dict] = []
         for a in list(self.aprobaciones.values()):
@@ -297,6 +304,8 @@ class Traductor:
             payload['output'] = salida
         if resumen:
             payload['summary'] = resumen[:300]
+        if extra and not h.cancelada:
+            payload.update(self._alfalfa(extra))
         if h.lado == 'client':
             return mensajes + self._cancelar_del_cliente(h)
         return mensajes + [self._msg('tool_end', payload)]
@@ -330,8 +339,12 @@ class Traductor:
             salida += self._cerrar(lanzadora.id, 'cancelled')
         return salida
 
-    def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
-        """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`."""
+    def cerrar_turno(self, campos: dict, diff: str | dict | None = None, turno: bool = True) -> list[dict]:
+        """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`.
+
+        Con la extensión, `alfalfa.closing` lleva el `turno_terminado` entero (estado exacto, código de salida, tokens
+        y coste de la sesión, cierre…): un cliente rehace con él lo que v2 contaba. `turno=False` cuando no lo cerró
+        el motor (`fin` con el turno abierto): entonces no hay `turno_terminado` que contar."""
         if self.raiz is None:
             return []
         raiz = self.raiz
@@ -353,11 +366,19 @@ class Traductor:
             if archivos:
                 salida.append(self._msg('diff_updated', {'run_id': raiz, 'files': archivos,
                                                          **({'patch': parche} if parche else {})}))
-        resto = {k: campos[k] for k in ('turno', 'cierre', 'cache', 'resumen') if k in campos}
-        salida += self._ext('closing', {'run_id': raiz, **resto}) if resto else []
+        if turno:
+            salida += self._ext('closing', {'run_id': raiz, **{k: v for k, v in campos.items() if k != 'version'}})
         salida += self._terminar(raiz, resultado, str(campos.get('resumen') or ''))
         self.raiz = None
         return salida
+
+    def terminar_trabajo(self, resultado: str, detalle: str | None = None) -> list[dict]:
+        """Cierra la ejecución de un trabajo fuera de un turno (una prueba del navegador, una cola de encargos):
+        no hubo `turno_terminado`, así que no hay uso, cambios ni `alfalfa.closing`."""
+        if self.raiz is None:
+            return []
+        raiz, self.raiz = self.raiz, None
+        return self._terminar(raiz, resultado, detalle)
 
     def _alfalfa(self, datos: dict) -> dict:
         return {'alfalfa': en_ingles(datos)} if datos and 'alfalfa' in self.extensiones else {}
@@ -369,20 +390,28 @@ class Traductor:
         """`fin` → se cierra lo que siga abierto (como interrumpido) y llega el `close` del agente."""
         salida: list[dict] = []
         if self.raiz is not None:
-            salida += self.cerrar_turno({'estado': 'interrupted', 'resumen': campos.get('resumen', '')})
-        extra = {k: campos[k] for k in ('estado', 'codigo_salida', 'tokens', 'coste') if k in campos}
+            salida += self.cerrar_turno({'estado': 'interrupted', 'resumen': campos.get('resumen', '')}, turno=False)
+        extra = {k: v for k, v in campos.items() if k != 'version'}           # el `fin` de v2 entero
         salida.append(self._msg('close', {'reason': str(campos.get('resumen') or campos.get('estado') or ''),
                                           **self._alfalfa(extra)}))
         return salida
 
     # -- mensajes (§4.3) ---------------------------------------------------
-    def _mensaje(self, run_id: str, rol: str, texto: str) -> list[dict]:
+    def _aviso(self, aviso: tuple[str, dict] | None, por_defecto: dict) -> list[dict]:
+        """Lo que no cabe en una ejecución abierta va como extensión: `aviso` es (tipo, campos de v2)."""
+        nombre, campos = aviso if aviso is not None else ('notice', por_defecto)
+        return self._ext(nombre, campos)
+
+    def _mensaje(self, run_id: str, rol: str, texto: str, extra: dict | None = None,
+                 aviso: tuple[str, dict] | None = None) -> list[dict]:
+        """`extra`: lo de v2 que el núcleo no lleva (el `turno`), en `payload.alfalfa` del `message_start`."""
         if not texto:
             return []
         if not self._abierta(run_id):
             # En cierre no empieza un mensaje nuevo (§4.2): lo que diga el motor va como aviso de la extensión.
-            return self._ext('notice', {'run_id': run_id, 'role': rol, 'text': texto})
-        inicio = self._msg('message_start', {'run_id': run_id, 'role': rol})
+            return self._aviso(aviso, {'run_id': run_id, 'role': rol, 'text': texto})
+        inicio = self._msg('message_start', {'run_id': run_id, 'role': rol,
+                                             **self._alfalfa({k: v for k, v in (extra or {}).items() if v})})
         salida = [inicio]
         for n in range(0, len(texto), TROZO):
             salida.append(self._msg('message_delta', {'message_id': inicio['id'],
@@ -393,28 +422,38 @@ class Traductor:
     def _v2_evento(self, campos: dict) -> list[dict]:
         rol, texto = campos.get('rol'), campos.get('texto')
         texto = texto if isinstance(texto, str) else ''
+        propio = {k: v for k, v in campos.items() if k not in ('version', '_argumentos')}
         if rol == 'user':
-            return []                  # el cliente ya lo mandó él: PACAI no lo devuelve
+            # El cliente ya lo mandó él: el núcleo no lo devuelve. La extensión avisa de cuándo entró en la
+            # conversación (en el turno en curso o al abrir el siguiente), con el id del `input`.
+            return self._ext('user_message', {'text': texto, **({'input_id': campos['id_cola']}
+                                                                if campos.get('id_cola') else {}),
+                                              **({'turn': campos['turno']} if campos.get('turno') else {})})
         if rol == 'tool':
             datos = campos.get('herramienta')
+            extra = {'text': texto, 'tool': datos, 'turn': campos.get('turno')}
             if isinstance(datos, dict) and datos.get('fase') == 'inicio':
-                return self._tool_start(self.raiz, texto, datos, campos.get('_argumentos'))
+                return self._tool_start(self.raiz, texto, datos, campos.get('_argumentos'), extra, ('notice', propio))
             if isinstance(datos, dict) and datos.get('fase') == 'fin':
-                return self._tool_end(self.raiz, datos, texto)
-            return []
-        propio = {k: v for k, v in campos.items() if k not in ('version', '_argumentos')}
+                return self._tool_end(self.raiz, datos, texto, extra, ('notice', propio))
+            return self._ext('notice', propio)
+        extra = {'turn': campos.get('turno')}
         if rol in ('agent', 'assistant') and self._activa(self.raiz):
-            return self._mensaje(self.raiz, 'assistant', texto)
+            return self._mensaje(self.raiz, 'assistant', texto, extra, ('notice', dict(propio, run_id=self.raiz)))
         if rol == 'system' and self._activa(self.raiz) and 'compactacion' not in campos and 'tarifa' not in campos:
-            return self._mensaje(self.raiz, 'system', texto)
+            return self._mensaje(self.raiz, 'system', texto, extra, ('notice', dict(propio, run_id=self.raiz)))
         return self._ext('notice', propio)
 
     # -- herramientas (§4.4) -----------------------------------------------
-    def _tool_start(self, run_id: str | None, texto: str, datos: dict, argumentos: Any = None) -> list[dict]:
+    def _tool_start(self, run_id: str | None, texto: str, datos: dict, argumentos: Any = None,
+                    extra: dict | None = None, aviso: tuple[str, dict] | None = None) -> list[dict]:
         """`argumentos`: los de la llamada del modelo, ya sin secretos (`Transport.argumentos_herramienta`). Sin
-        ellos (o si no son un objeto JSON) se sacan, como antes, del texto del evento."""
+        ellos (o si no son un objeto JSON) se sacan, como antes, del texto del evento.
+
+        `extra`: lo de v2 que el núcleo no lleva (el texto del evento, `herramienta` entera y el `turno`), en
+        `payload.alfalfa`. `aviso`: sin ejecución abierta, el evento de v2 sale así, en la extensión."""
         if not self._abierta(run_id):
-            return []                    # sin `tool_start`, su fin tampoco sale
+            return self._ext(*aviso) if aviso is not None else []     # sin `tool_start`, su fin tampoco sale
         nombre = str(datos.get('nombre') or 'tool')
         reales = _json_seguro(argumentos) if isinstance(argumentos, dict) else None
         if reales is not None:
@@ -434,22 +473,32 @@ class Traductor:
         aprobada = next((a for n, g, a in self.de_sesion if n == nombre and g == d), None)
         if aprobada and not recortados:          # una llamada truncada no reutiliza una aprobación `session`
             payload['approval_id'] = aprobada
+        payload.update(self._alfalfa({k: v for k, v in (extra or {}).items() if v}))
         m = self._msg('tool_start', payload)
         self.herramientas[m['id']] = Herramienta(m['id'], run_id, nombre, args, truncada=recortados)
         return [m]
 
-    def _tool_end(self, run_id: str | None, datos: dict, texto: str) -> list[dict]:
+    def _tool_end(self, run_id: str | None, datos: dict, texto: str, extra: dict | None = None,
+                  aviso: tuple[str, dict] | None = None) -> list[dict]:
         nombre = str(datos.get('nombre') or '')
+        # Un fin sin herramienta abierta (ya cerrada aquí, cortada con el turno anterior o sin inicio) no es un
+        # `tool_end` del núcleo; el evento de v2 sale en la extensión, porque la app lo enseña («Resultado
+        # incierto…» de una orden cortada, el fin de un subagente interrumpido).
         if self.fines_ignorados.get((run_id, nombre)):
             self.fines_ignorados[(run_id, nombre)] -= 1
-            return []
+            return self._ext(*aviso) if aviso is not None else []
         tc = next((t for t, h in self.herramientas.items()
                    if h.run_id == run_id and h.nombre == nombre and h.lado == 'agent'), None)
         if tc is None:
-            return []
+            return self._ext(*aviso) if aviso is not None else []
         estado = 'error' if _fallo(datos) else 'success'
         cuerpo = texto.split('\n', 1)[1] if '\n' in texto else ''
         salida = [{'type': 'text', 'text': cuerpo[:MAX_SALIDA]}] if cuerpo else None
+        extra = {k: v for k, v in (extra or {}).items() if v and k != 'text'}
+        # El texto de v2 es «nombre\nresultado»: el cliente lo rehace con `name` y `output`. Sólo va aparte si no
+        # tiene esa forma (una salida recortada se queda recortada: no se manda dos veces).
+        if texto.split('\n', 1)[0] != nombre or ('\n' in texto and not cuerpo):
+            extra['text'] = texto[:MAX_SALIDA]
         resumen = None
         if estado == 'error' and cuerpo:
             try:
@@ -459,7 +508,7 @@ class Traductor:
             resumen = error if isinstance(error, str) else None
         if estado == 'success' and nombre in EDITORES:
             self.hay_cambios = True
-        return self._cerrar(tc, estado, salida, resumen)
+        return self._cerrar(tc, estado, salida, resumen, extra)
 
     # -- subagentes = subejecuciones (§4.9) --------------------------------
     def _subejecucion(self, ident: str, nombre: str = 'subagent', descripcion: str = '') -> list[dict]:
@@ -469,7 +518,8 @@ class Traductor:
         agente = {'name': nombre or 'subagent', **({'description': descripcion[:200]} if descripcion else {})}
         lanzadora = self._lanzadora(ident)
         m = self._msg('run_started', {'parent_run_id': self.raiz, 'agent': agente,
-                                      **({'tool_call_id': lanzadora.id} if lanzadora else {})})
+                                      **({'tool_call_id': lanzadora.id} if lanzadora else {}),
+                                      **self._alfalfa({'agent': ident})})      # el id del subagente (aN)
         self.ejecuciones[m['id']] = Ejecucion(m['id'], agente=ident, tool_call_id=lanzadora.id if lanzadora else None)
         self.subagentes[ident] = m['id']
         return [m]
@@ -504,17 +554,18 @@ class Traductor:
         ident = str(campos.get('agente') or '')
         salida = self._subejecucion(ident)
         run_id = self.subagentes.get(ident)
-        if not self._activa(run_id):
-            return salida
         rol, texto = campos.get('rol'), str(campos.get('texto') or '')
+        # Lo que no cabe en su subejecución (no hay una abierta, o es un rol que el núcleo no tiene) no se pierde.
+        aviso = ('subagent_event', {k: v for k, v in campos.items() if k not in ('version', '_argumentos')})
+        if not self._activa(run_id) or rol not in ('tool', 'agent', 'assistant', 'system'):
+            return salida + self._ext(*aviso)
         if rol == 'tool' and texto.startswith('Inicio '):
             nombre = texto[len('Inicio '):].split(' · ', 1)[0]
-            return salida + self._tool_start(run_id, texto, {'nombre': nombre}, campos.get('_argumentos'))
+            return salida + self._tool_start(run_id, texto, {'nombre': nombre}, campos.get('_argumentos'),
+                                             {'text': texto}, aviso)
         if rol == 'tool':
-            return salida + self._tool_end(run_id, {'nombre': texto.split('\n', 1)[0]}, texto)
-        if rol in ('agent', 'assistant', 'system'):
-            return salida + self._mensaje(run_id, 'system' if rol == 'system' else 'assistant', texto)
-        return salida
+            return salida + self._tool_end(run_id, {'nombre': texto.split('\n', 1)[0]}, texto, None, aviso)
+        return salida + self._mensaje(run_id, 'system' if rol == 'system' else 'assistant', texto, None, aviso)
 
     # -- aprobaciones (§4.5) -----------------------------------------------
     def _herramienta_del_permiso(self, run_id: str, argv: Any) -> Herramienta | None:
@@ -546,7 +597,8 @@ class Traductor:
             args = {'argv': tachar(argv), 'purpose': proposito[:500]}
             inicio = self._msg('tool_start', {'run_id': run_id, 'name': SINTETICA,
                                               'arguments': _json_seguro(args) or {}, 'side': 'agent',
-                                              'title': proposito[:200] or 'Permiso'})
+                                              'title': proposito[:200] or 'Permiso',
+                                              **self._alfalfa({'synthetic': True})})   # no es del motor
             herramienta = Herramienta(inicio['id'], run_id, SINTETICA, inicio['payload']['arguments'], sintetica=True)
             self.herramientas[inicio['id']] = herramienta
             salida.append(inicio)
@@ -556,14 +608,23 @@ class Traductor:
             'arguments': herramienta.argumentos, 'digest': digest(herramienta.argumentos),
             'reason': self._razon(campos), 'scopes': scopes,
             **({'expires': en_segundos(self.reloj(), self.caducidad)} if self.caducidad else {}),
-            **self._alfalfa({k: campos[k] for k in PERMISO_EXTRA if campos.get(k)})})
+            **self._extra_del_permiso(campos)})
         self.aprobaciones[peticion['id']] = Aprobacion(
             peticion['id'], str(campos.get('id')), run_id, herramienta.id, herramienta.nombre,
             peticion['payload']['digest'], scopes,
             self._instante(peticion['payload']['expires']) if 'expires' in peticion['payload'] else None,
-            sitio=isinstance(campos.get('sitio'), dict))
+            sitio=isinstance(campos.get('sitio'), dict), siempre=bool(campos.get('prefijo')))
         self.permisos[str(campos.get('id'))] = peticion['id']
         return salida + [peticion]
+
+    def _extra_del_permiso(self, campos: dict) -> dict:
+        """Lo de v2 que el núcleo no lleva, en `payload.alfalfa`. Los argumentos de una herramienta MCP son del
+        servidor, no de AlfalfaCode: van tal cual (sus claves no se traducen)."""
+        extra = self._alfalfa({k: campos[k] for k in PERMISO_EXTRA if campos.get(k)})
+        mcp = campos.get('mcp')
+        if extra and isinstance(mcp, dict) and 'argumentos' in mcp and isinstance(extra['alfalfa'].get('mcp'), dict):
+            extra['alfalfa']['mcp']['arguments'] = mcp['argumentos']
+        return extra
 
     @staticmethod
     def _instante(texto: str) -> datetime:
@@ -596,7 +657,7 @@ class Traductor:
             a.estado = 'approved'
         elif a.estado == 'pending':
             # El cliente no contestó: lo negó la interrupción, el fin del turno o el cierre de la sesión.
-            salida += self._cancelar_aprobacion(a)
+            salida += self._cancelar_aprobacion(a, motivo=str(campos.get('motivo') or '') or None)
         if campos.get('aprobado') and (campos.get('sesion') or campos.get('sitio') == 'sesion'):
             self.de_sesion.append((a.nombre, a.digest, a.id))
         h = self.herramientas.get(a.tool_call_id)
@@ -661,9 +722,10 @@ class Traductor:
             payload['context_tokens'] = campos['tokens']
         if isinstance(campos.get('limite'), int) and campos['limite'] > 0:
             payload['context_limit'] = campos['limite']
-        extra = {k: v for k, v in campos.items() if k not in ('version', 'tokens', 'limite')}
         salida = [self._msg('usage', payload)] if len(payload) > (1 if 'run_id' in payload else 0) else []
-        return salida + (self._ext('context', {k: v for k, v in campos.items() if k != 'version'}) if extra else [])
+        # Con la extensión, el `contexto` entero va siempre en `alfalfa.context`: así el cliente lo tiene en un
+        # solo mensaje, traiga o no detalle (sin él, el núcleo ya basta).
+        return salida + self._ext('context', {k: v for k, v in campos.items() if k != 'version'})
 
     def _v2_uso_sesion(self, campos: dict) -> list[dict]:
         payload: dict[str, Any] = {}

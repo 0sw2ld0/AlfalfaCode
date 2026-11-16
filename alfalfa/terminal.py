@@ -1532,10 +1532,11 @@ def main(argv=None):
         except (ValueError, OSError) as exc:
             print('AlfalfaCode · Error: ' + str(exc), file=sys.stderr)
             return 1
+    # `--cola-encargos` sin archivo sí vale: abre la sesión de una cola, que el cliente prepara con sus mensajes.
     if args.pacai and (args.stdio or args.encargo or args.bifurcar or args.imagen or args.archivo
-                       or args.cola_encargos is not None):
-        parser.error('--pacai no se combina con --stdio, un encargo, --bifurcar, adjuntos ni --cola-encargos: '
-                     'la entrada llega como mensajes `input`')
+                       or args.cola_encargos):
+        parser.error('--pacai no se combina con --stdio, un encargo, --bifurcar, adjuntos ni un archivo de '
+                     '--cola-encargos: la entrada llega como mensajes `input`')
     if args.caducidad_aprobacion is not None and not args.pacai:
         parser.error('--caducidad-aprobacion sólo vale con --pacai')
     if args.pacai:
@@ -1544,7 +1545,7 @@ def main(argv=None):
             caducidad_de(args.caducidad_aprobacion)
         except ValueError as exc:
             parser.error(str(exc))
-    if args.cola_encargos == '' and not args.stdio and not args.reanudar:
+    if args.cola_encargos == '' and not args.stdio and not args.pacai and not args.reanudar:
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):
         parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni adjuntos')

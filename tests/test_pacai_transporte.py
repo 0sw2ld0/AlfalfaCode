@@ -461,7 +461,9 @@ async def test_eof_o_cerrar_la_sesion_niegan_lo_pendiente_y_nada_se_ejecuta():
         await asyncio.wait_for(tarea, 1)
     # La ejecución termina con la petición sin contestar: el agente la cancela antes de cerrar su herramienta.
     cancelada = c.del_agente('approval_result')
-    assert [(m['payload'], m['reply_to']) for m in cancelada] == [({'decision': 'cancelled'}, peticion['id'])]
+    # El motivo de v2 va en `reason` («Sesión interrumpida»): la tarjeta de la app lo enseña.
+    assert [(m['payload'], m['reply_to']) for m in cancelada] == [
+        ({'decision': 'cancelled', 'reason': 'Sesión interrumpida'}, peticion['id'])]
     fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
     assert c.del_agente('tool_end')[-1]['payload']['status'] == 'cancelled'
     await cerrar(c, 'interrupted')
@@ -584,7 +586,7 @@ async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herra
     finales = c.del_agente()[-6:]
     assert [m['type'] for m in c.del_agente() if m['type'] in ('approval_result', 'tool_end', 'run_finished')] == \
         ['approval_result', 'tool_end', 'run_finished']
-    assert c.del_agente('approval_result')[0]['payload'] == {'decision': 'cancelled'}
+    assert c.del_agente('approval_result')[0]['payload'] == {'decision': 'cancelled', 'reason': 'Turno interrumpido'}
     assert c.del_agente('tool_end')[-1]['payload'] == {'tool_call_id': peticion['payload']['tool_call_id'],
                                                        'status': 'cancelled'}
     assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}

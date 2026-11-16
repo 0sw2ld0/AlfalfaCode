@@ -96,7 +96,8 @@ async def test_el_bloque_alfalfa_del_nucleo_va_en_ingles():
     plan, *_ = c.del_agente('plan_updated')
     assert plan['payload']['alfalfa'] == {'explanation': 'Voy por partes'}
     peticion = c.del_agente('approval_request')[-1]
-    assert peticion['payload']['alfalfa'] == {'argv': ['rm', 'x'], 'purpose': 'Borrar', 'justification': 'Limpia'}
+    assert peticion['payload']['alfalfa'] == {'argv': ['rm', 'x'], 'purpose': 'Borrar', 'justification': 'Limpia',
+                                              'reason': 'dangerous'}
     c.t.emit('error', texto='Sin visión', motivo='sin_vision', rechazado={'texto': 'hola'})
     assert c.del_agente('error')[-1]['payload']['alfalfa'] == {'reason': 'no_vision', 'rejected': {'text': 'hola'}}
     tarea.cancel()

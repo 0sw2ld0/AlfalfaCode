@@ -11,7 +11,13 @@ Lo que PACAI exige y v2 no hacía:
 - una sola ejecución raíz activa: un `input` `new_run` que llega con una en curso espera a que termine;
 - aprobaciones sin plazo por defecto; con `--caducidad-aprobacion`, pasado `expires` el agente declara `expired`;
 - EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`), y el
-  traductor lo cuenta con `approval_result` `cancelled`; las herramientas del cliente abiertas se cancelan.
+  traductor lo cuenta con `approval_result` `cancelled`; las herramientas del cliente abiertas se cancelan;
+- el trabajo que pide permisos fuera de un turno (guardar una prueba del navegador, una cola de encargos) necesita una
+  ejecución: el cliente lo pide con un `input` de un bloque `structured` (`TRABAJOS`) y la ejecución dura lo que él.
+
+Con la extensión `alfalfa`, el `payload.alfalfa` de un `input` admite `redirect: false` (un `steer` que entra en el
+turno en curso sin cortar la respuesta, como un `mensaje` de v2), `echo: false` (el turno que abre no devuelve el
+mensaje, como el encargo de la orden) y `continue: true` (reanudar sin mensaje, como `--reanudar` sin encargo).
 """
 from __future__ import annotations
 
@@ -26,7 +32,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from .. import __version__
-from ..stdio import MAX_ID_EN_COLA, MAX_MENSAJE, Transport
+from ..stdio import CONTINUAR_ENCARGO, MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
 from .nombres import de_la_orden, respuesta_del_navegador
 from .sobre import Emisor, ahora, nueva_sesion
@@ -50,8 +56,11 @@ COMANDOS = {
     'set_budget': 'presupuesto', 'set_diagnostics': 'diagnosticos', 'set_swift_diagnostics': 'diagnosticos_swift',
     'set_signing': 'firma', 'resolve_learning': 'aprendizaje', 'review_code': 'revisar_codigo',
     'cancel_code_review': 'cancelar_revision_codigo', 'export_browser_test': 'exportar_prueba_navegador',
-    'jobs_command': 'encargos', 'stop_process': 'detener_proceso',
+    'jobs_command': 'encargos', 'stop_process': 'detener_proceso', 'redirect': 'redirigir',
 }
+# Lo que el cliente pide con un `input` de un bloque `structured` (`schema` → orden de v2): trabajo fuera de un turno
+# que puede pedir permisos. Si el motor lo pone en marcha, abre una ejecución raíz que dura lo que él.
+TRABAJOS = {'alfalfa.export_browser_test': 'exportar_prueba_navegador', 'alfalfa.jobs_command': 'encargos'}
 
 
 def caducidad_de(valor: Any = None) -> float | None:
@@ -98,6 +107,8 @@ class TransportePacai(Transport):
         self._ultima_entrada: str | None = None
         self._argumentos: tuple[str, Any] | None = None   # los de la herramienta cuyo evento de inicio viene ahora
         self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
+        self._trabajo: asyncio.Future | None = None      # el trabajo (`TRABAJOS`) cuya ejecución está abierta
+        self._siguiente: str | None = None               # la entrada del turno que espera a que se cierre el anterior
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -107,9 +118,20 @@ class TransportePacai(Transport):
         """El motor va a empezar un turno: es la ejecución raíz que abre el `input` que lo trajo."""
         if not self.empezado or self.cerrado or self.t is None:
             return
+        if self._trabajo is not None:
+            self._fin_del_trabajo(self._trabajo)        # el motor lo paró para atender el mensaje (como en v2)
         entrada = getattr(prompt, 'id', None) or self._ultima_entrada
         if entrada is None:
             return
+        if self._cerrando is not None:
+            # El turno anterior aún se está cerrando (su diff): éste se abre después, en `antes_del_turno`. Pasa
+            # cuando el motor ya tenía el mensaje (un `steer` que no llegó a leer, «Enviar ahora»).
+            self._siguiente = entrada
+            return
+        self._abrir_turno(entrada)
+
+    def _abrir_turno(self, entrada: str) -> None:
+        self._ocupado = True
         self._enviar_todo(self.t.empezar_turno(entrada))
 
     def argumentos_herramienta(self, nombre, argumentos) -> None:
@@ -128,7 +150,15 @@ class TransportePacai(Transport):
         return dict(campos, _argumentos=argumentos) if es_inicio and campos.get('rol') == 'tool' else campos
 
     async def antes_del_turno(self) -> None:
-        """Con el perfil `work`, el punto de partida del diff de la ejecución con git (por si no hay instantáneas)."""
+        """Con el perfil `work`, el punto de partida del diff de la ejecución con git (por si no hay instantáneas).
+
+        Antes, si el turno anterior aún se estaba cerrando, se espera: su `run_finished` sale antes que el
+        `run_started` de éste (§4.2) y su diff no se calcula con el punto de partida del nuevo."""
+        if self._cerrando is not None:
+            await asyncio.shield(self._cerrando)
+        if self._siguiente is not None and not self.cerrado:
+            entrada, self._siguiente = self._siguiente, None
+            self._abrir_turno(entrada)
         self._olvidar_partida()
         if self.t is None or not self.t.trabajo or self.manager is None:
             return
@@ -440,23 +470,63 @@ class TransportePacai(Transport):
         for tipo, campos in retenidos:
             self.emit(tipo, **campos)
 
-    def _texto_de(self, m: dict) -> str | None:
-        """El texto de los bloques de un `input`; None (y un error ya enviado) si no se puede."""
-        bloques = m['payload']['blocks']
-        if any(b.get('type') != 'text' for b in bloques):
-            self._error('invalid_message', 'Este agente sólo admite bloques de texto en un input.', m['id'])
-            return None
-        texto = '\n\n'.join(b['text'] for b in bloques if b.get('text'))
-        if not texto.strip() or len(texto) > MAX_MENSAJE or len(m['id']) > MAX_ID_EN_COLA:
-            self._error('invalid_message', 'El input debe ser texto no vacío de hasta ' + str(MAX_MENSAJE)
-                        + ' caracteres, con un id de hasta ' + str(MAX_ID_EN_COLA) + '.', m['id'])
-            return None
-        return texto
+    def _propio(self, payload: dict) -> dict:
+        """El `payload.alfalfa` de un mensaje del cliente, si se negoció la extensión; si no, nada."""
+        datos = payload.get('alfalfa')
+        return datos if isinstance(datos, dict) and self.t is not None and 'alfalfa' in self.t.extensiones else {}
 
-    def _entregar(self, ident: str, texto: str, redirigir: bool = False) -> None:
+    @staticmethod
+    def _ruta_de(bloque: dict) -> str | None:
+        """La ruta de un bloque `file` con `url` `file://` y ruta absoluta; None si no la tiene."""
+        from urllib.parse import unquote, urlsplit
+        url = bloque.get('url')
+        if not isinstance(url, str) or not url.startswith('file://'):
+            return None
+        partes = urlsplit(url)
+        ruta = unquote(partes.path)
+        return ruta if partes.netloc in ('', 'localhost') and os.path.isabs(ruta) else None
+
+    def _entrada_de(self, m: dict) -> tuple[str, list[str], list[str]] | None:
+        """El texto, las imágenes y los archivos de los bloques de un `input`; None (y un error ya enviado) si no se
+        puede. Un bloque `file` es una ruta del Mac (`url` `file://`): con `media_type` `image/*` va como imagen y si
+        no, como archivo (PDF, texto, código…), igual que `imagenes` y `archivos` de v2."""
+        textos, imagenes, archivos = [], [], []
+        for bloque in m['payload']['blocks']:
+            if bloque.get('type') == 'text':
+                textos.append(bloque['text'])
+            elif bloque.get('type') == 'file' and self._ruta_de(bloque) is not None:
+                destino = imagenes if str(bloque.get('media_type') or '').startswith('image/') else archivos
+                destino.append(self._ruta_de(bloque))
+            else:
+                self._error('invalid_message', 'Este agente sólo admite bloques text y bloques file con una url '
+                            'file:// absoluta en un input.', m['id'])
+                return None
+        texto = '\n\n'.join(t for t in textos if t)
+        # Con adjuntos el texto puede ir vacío: el motor pone «Mira la imagen adjunta.» o «Lee el archivo adjunto.».
+        if (not texto.strip() and not (imagenes or archivos)) or len(texto) > MAX_MENSAJE \
+                or len(m['id']) > MAX_ID_EN_COLA:
+            self._error('invalid_message', 'El input debe ser texto no vacío (o llevar adjuntos) de hasta '
+                        + str(MAX_MENSAJE) + ' caracteres, con un id de hasta ' + str(MAX_ID_EN_COLA) + '.', m['id'])
+            return None
+        return texto, imagenes, archivos
+
+    def _entregar(self, ident: str, texto: str, imagenes=(), archivos=(), redirigir: bool = False,
+                  eco: bool = True) -> None:
+        previo = self._ocupado
         self._ocupado = True
         self._ultima_entrada = ident
-        super().receive(json.dumps({'tipo': 'mensaje', 'texto': texto, 'id': ident}))
+        orden: dict[str, Any] = {'tipo': 'mensaje', 'texto': texto, 'id': ident}
+        if imagenes:
+            orden['imagenes'] = list(imagenes)
+        if archivos:
+            orden['archivos'] = list(archivos)
+        super().receive(json.dumps(orden))
+        entregado = next((x for x in self.inbox if getattr(x, 'id', None) == ident), None)
+        if entregado is None:
+            self._ocupado = previo           # el motor no lo admitió (ya dijo por qué): no hay ejecución que esperar
+            return
+        if not eco:
+            entregado.sin_eco = True
         if redirigir:
             super().receive('{"tipo":"redirigir"}')
 
@@ -464,28 +534,75 @@ class TransportePacai(Transport):
         """Termina la ejecución raíz: pasa la siguiente entrada en cola, si la hay."""
         self._ocupado = False
         if self._cola and not self.stopped:
-            ident, texto = self._cola.popleft()
-            self._entregar(ident, texto)
+            ident, (texto, imagenes, archivos, eco) = self._cola.popleft()
+            self._entregar(ident, texto, imagenes, archivos, eco=eco)
 
     def _c_input(self, m):
-        texto = self._texto_de(m)
-        if texto is None:
-            return
         p = m['payload']
+        propio = self._propio(p)
+        if any(b.get('type') == 'structured' for b in p['blocks']):
+            return self._pedir_trabajo(m)
+        if propio.get('continue') is True:
+            if p['blocks']:
+                return self._error('invalid_message', 'Un input con alfalfa.continue no lleva bloques.', m['id'])
+            entrada, eco = (CONTINUAR_ENCARGO, [], []), False
+        else:
+            entrada, eco = self._entrada_de(m), propio.get('echo') is not False
+            if entrada is None:
+                return
+        texto, imagenes, archivos = entrada
         if p.get('mode') == 'steer':
             run_id = p.get('run_id')
             if run_id == self.t.raiz and self.t.raiz is not None:
-                return self._entregar(m['id'], texto, redirigir=True)
+                # Por defecto corta la respuesta en curso para leerlo ya («Redirigir»); con `redirect: false` entra en
+                # la siguiente inferencia del turno, como un `mensaje` de v2 con un turno en marcha.
+                return self._entregar(m['id'], texto, imagenes, archivos, redirigir=propio.get('redirect') is not False,
+                                      eco=eco)
             ejecucion = self.t.ejecuciones.get(run_id)
             if ejecucion is not None and ejecucion.activa and ejecucion.agente is not None:
                 return self._al_subagente(ejecucion.agente, texto)
             if ejecucion is None:
                 return self._error('unknown_run', 'No existe esa ejecución.', m['id'])
             # Ya terminó: se trata como new_run (§4.2).
-        if self._ocupado or self._cerrando is not None or self._cola:
-            self._cola.append((m['id'], texto))
+        if (self._ocupado and self._trabajo is None) or self._cerrando is not None or self._cola:
+            self._cola.append((m['id'], (texto, imagenes, archivos, eco)))
         else:
-            self._entregar(m['id'], texto)
+            # Con un trabajo en marcha el mensaje pasa: el motor lo para antes de abrir el turno, como en v2.
+            self._entregar(m['id'], texto, imagenes, archivos, eco=eco)
+
+    # -- trabajo fuera de un turno (`TRABAJOS`) ------------------------------
+    def _pedir_trabajo(self, m: dict) -> None:
+        """Un `input` con un bloque `structured` de `TRABAJOS`: la orden llega al motor y, si pone el trabajo en marcha
+        sin otra ejecución abierta, ese `input` abre la ejecución en la que pide sus permisos."""
+        bloques = m['payload']['blocks']
+        esquema = bloques[0].get('schema') if len(bloques) == 1 else None
+        if esquema not in TRABAJOS or 'alfalfa' not in self.t.extensiones:
+            return self._error('invalid_message', 'Un input con un bloque structured sólo vale para '
+                               + ', '.join(sorted(TRABAJOS)) + ', solo y con la extensión alfalfa.', m['id'])
+        try:
+            orden = de_la_orden(bloques[0]['data'], esquema.partition('.')[2])
+        except ValueError as exc:
+            return self._error('invalid_message', str(exc), m['id'])
+        libre = not self._ocupado and self._cerrando is None and self.t.raiz is None
+        super().receive(json.dumps(dict(orden, tipo=TRABAJOS[esquema])))
+        tarea = (self.exportacion if esquema == 'alfalfa.export_browser_test'
+                 else getattr(self.cola_encargos, 'worker', None))
+        if not libre or tarea is None or tarea.done():
+            return                                         # no empezó nada (el motor ya dijo por qué), o no cabe
+        self._enviar_todo(self.t.empezar_turno(m['id']))
+        self._ocupado, self._trabajo = True, tarea
+        tarea.add_done_callback(self._fin_del_trabajo)
+
+    def _fin_del_trabajo(self, tarea: asyncio.Future) -> None:
+        if self._trabajo is not tarea:
+            return
+        self._trabajo = None
+        if not self.cerrado and self.t is not None:
+            fallo = None if tarea.cancelled() or not tarea.done() else tarea.exception()
+            resultado = 'interrupted' if tarea.cancelled() or not tarea.done() else 'failed' if fallo else 'success'
+            self._enviar_todo(self.t.terminar_trabajo(resultado, str(fallo or '') or None))
+            self._olvidar_resueltas()
+        self._liberar()
 
     def _al_subagente(self, agente: str, texto: str) -> None:
         if self.manager is None:
@@ -505,6 +622,7 @@ class TransportePacai(Transport):
 
     def _c_approval_result(self, m):
         p, ref = m['payload'], m['reply_to']
+        propio = self._propio(p).get('scope')
         a = self.t.aprobacion(ref)
         if a is None or (a.estado not in ('pending', 'expired', 'cancelled')):
             return self._error('unknown_approval', 'No hay una petición pendiente con ese reply_to.', m['id'])
@@ -515,8 +633,18 @@ class TransportePacai(Transport):
             return self._error('invalid_message', 'Sólo el agente declara expired.', m['id'])
         if decision == 'approved' and alcance not in a.scopes:
             return self._error('invalid_message', 'El alcance ' + str(alcance) + ' no se ofreció.', m['id'])
+        # Lo que v2 tiene y el núcleo no, en `payload.alfalfa.scope`: «No volver a preguntar» (`always`, si la
+        # petición traía `prefix`) y el permiso de un sitio para todo el proyecto (`project`).
+        if decision == 'approved' and propio is not None and not ((propio == 'always' and a.siempre)
+                                                                  or (propio == 'project' and a.sitio)):
+            return self._error('invalid_message', 'El alcance alfalfa.scope ' + str(propio)[:40] + ' no se ofreció.',
+                               m['id'])
         orden: dict[str, Any] = {'tipo': 'permiso', 'id': a.v2id, 'aprobado': decision == 'approved'}
-        if decision == 'approved' and alcance == 'session':
+        if decision == 'approved' and propio == 'always':
+            orden['siempre'] = True
+        elif decision == 'approved' and propio == 'project':
+            orden['sitio'] = 'proyecto'
+        elif decision == 'approved' and alcance == 'session':
             orden['sitio' if a.sitio else 'sesion'] = 'sesion' if a.sitio else True
         elif decision == 'approved' and a.sitio:
             orden['sitio'] = 'una_vez'
@@ -542,15 +670,21 @@ class TransportePacai(Transport):
 
     @staticmethod
     def _respuesta_del_navegador(p: dict) -> dict:
-        """`navegador_respuesta` de v2 a partir del `tool_end` del cliente: un bloque `structured` lleva el cuerpo."""
+        """`navegador_respuesta` de v2 a partir del `tool_end` del cliente: un bloque `structured` lleva el cuerpo.
+
+        También con `status: error`: la app contesta así cuando espera un permiso de la persona (`permission`:
+        formulario, contraseña, descarga o sitio) o cuando falla con resultado parcial, y el motor los necesita."""
         bloques = p.get('output') or []
         datos = next((respuesta_del_navegador(b['data']) for b in bloques if b.get('type') == 'structured'), None)
         texto = '\n'.join(b['text'] for b in bloques if b.get('type') == 'text' and b.get('text'))
-        if p['status'] == 'success':
-            if isinstance(datos, dict):
-                return {'ok': True, **datos}
-            return {'ok': True, 'resultado': {'texto': texto} if texto else {}}
         error = p.get('summary') or texto or ('cancelada' if p['status'] == 'cancelled' else 'error')
+        if isinstance(datos, dict):
+            respuesta = {**datos, 'ok': p['status'] == 'success'}
+            if not respuesta['ok'] and 'error' not in respuesta and 'permiso' not in respuesta:
+                respuesta['error'] = str(error)[:1000]
+            return respuesta
+        if p['status'] == 'success':
+            return {'ok': True, 'resultado': {'texto': texto} if texto else {}}
         return {'ok': False, 'error': str(error)[:1000]}
 
     def _rechazar_navegador(self, ident: str, texto: str) -> None:
@@ -587,9 +721,9 @@ class TransportePacai(Transport):
         super().receive(json.dumps({'tipo': 'quitar_de_cola', 'id': ident}))
 
     def _enviar_ahora(self, ident) -> None:
-        for n, (propio, texto) in enumerate(self._cola):
+        for n, (propio, (texto, imagenes, archivos, eco)) in enumerate(self._cola):
             if propio == ident:
                 del self._cola[n]
-                self._entregar(propio, texto)
+                self._entregar(propio, texto, imagenes, archivos, eco=eco)
                 return super().receive(json.dumps({'tipo': 'enviar_ahora', 'id': ident}))
         super().receive(json.dumps({'tipo': 'enviar_ahora', 'id': ident}))
