@@ -10,6 +10,10 @@ servicio guarda su parte pública. Cada petición va firmada con
 por el ayudante `firmante.swift` (Python no puede usar el Secure Enclave). Cada
 respuesta trae el % usado de la cuota del mes, que la app enseña en una barra.
 
+Fuera de macOS (un servidor Linux) no hay Secure Enclave: `FirmanteArchivo` guarda una
+clave P-256 en un archivo y firma igual (la pública en X9.63, la firma en DER), así que
+el servicio no distingue. Sin Llavero, el código llega en `ALFALFA_CODIGO`.
+
 La URL del servicio no viene en el repositorio: va dentro del código que se
 reparte, `CUY-XXXX-XXXX-XXXX@servicio.example.com`, y se guarda al activarlo.
 Al servicio sólo le llega la parte `CUY-…`. También se puede fijar a mano con
@@ -18,6 +22,7 @@ Al servicio sólo le llega la parte `CUY-…`. También se puede fijar a mano co
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -25,6 +30,7 @@ import platform
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -183,6 +189,121 @@ class Firmante:
         return self._leer(salida, errores)['firma']
 
 
+CARPETA_FIRMA = 'firma'
+
+
+def _cripto():
+    """La firma P-256 de `cryptography` (llega con `mcp`, por `pyjwt[crypto]`)."""
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+    except ImportError:
+        raise ErrorDeAlfalfa('Para firmar fuera del Mac falta la librería cryptography '
+                             '(pip install cryptography).') from None
+    return ec, hashes, serialization
+
+
+class FirmanteArchivo:
+    """Fuera de macOS, donde no hay Secure Enclave: una clave P-256 en un archivo.
+
+    Firma como el ayudante de Swift (pública en X9.63, firma ECDSA-SHA256 en DER, ambas en
+    base64), así que el servicio no distingue. La clave se crea al activar en
+    `$ALFALFA_HOME/firma/clave.pem` (carpeta 0700, archivo 0600): va en su propia carpeta para
+    que el sandbox de Linux se la pueda tapar entera a las órdenes del agente.
+
+    `ALFALFA_FIRMA_CLAVE` apunta a otra ya creada, que sólo se lee: por ejemplo la que systemd
+    deja descifrada con `LoadCredentialEncrypted=` para un servicio desatendido (docs/USO.md).
+    """
+
+    def __init__(self, hogar=None):
+        self.hogar = Path(hogar) if hogar else _hogar()
+
+    @property
+    def externa(self):
+        valor = os.environ.get('ALFALFA_FIRMA_CLAVE')
+        return Path(valor).expanduser() if valor else None
+
+    @property
+    def clave(self):
+        return self.externa or self.hogar / CARPETA_FIRMA / 'clave.pem'
+
+    def tiene_clave(self):
+        return self.clave.is_file()
+
+    def _cargar(self, crear):
+        ec, _hashes, serialization = _cripto()
+        ruta = self.clave
+        try:
+            datos = ruta.read_bytes()
+        except FileNotFoundError:
+            if self.externa:
+                raise ErrorDeAlfalfa('No está la clave de firma que dice ALFALFA_FIRMA_CLAVE: ' + str(ruta)
+                                     + '.') from None
+            if not crear:
+                raise ErrorDeAlfalfa('Falta la clave de firma de este equipo (' + str(ruta) + '): activa el '
+                                     'código con `alfalfa --activar-codigo`.') from None
+            return self._crear(ruta)
+        except OSError as exc:
+            raise ErrorDeAlfalfa('No se pudo leer la clave de firma (' + str(ruta) + '): '
+                                 + (exc.strerror or str(exc)) + '.') from None
+        try:
+            clave = serialization.load_pem_private_key(datos, password=None)
+        except (ValueError, TypeError):
+            clave = None
+        if not isinstance(clave, ec.EllipticCurvePrivateKey) or clave.curve.name != 'secp256r1':
+            raise ErrorDeAlfalfa('La clave de firma ' + str(ruta) + ' no se entiende (tiene que ser una '
+                                 'P-256 en PEM, sin contraseña). No la toco: si el código está activado con '
+                                 'ella, el servicio sólo acepta esa.')
+        return clave
+
+    def _crear(self, ruta):
+        ec, _hashes, serialization = _cripto()
+        ruta.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(ruta.parent, 0o700)
+        clave = ec.generate_private_key(ec.SECP256R1())
+        pem = clave.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                  serialization.NoEncryption())
+        temporal = ruta.with_name(ruta.name + '.' + str(os.getpid()) + '.tmp')
+        descriptor = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(descriptor, 'wb') as archivo:
+                archivo.write(pem)
+                archivo.flush()
+                os.fsync(archivo.fileno())
+            # Entera o nada, y sin pisar la de otra activación a la vez: gana la primera.
+            os.link(temporal, ruta)
+        except FileExistsError:
+            return self._cargar(crear=False)
+        finally:
+            temporal.unlink(missing_ok=True)
+        return clave
+
+    def publica(self):
+        """La clave pública de este equipo (la crea la primera vez)."""
+        _ec, _hashes, serialization = _cripto()
+        crudo = self._cargar(crear=True).public_key().public_bytes(serialization.Encoding.X962,
+                                                                   serialization.PublicFormat.UncompressedPoint)
+        return base64.b64encode(crudo).decode()
+
+    def firmar(self, datos):
+        ec, hashes, _serialization = _cripto()
+        return base64.b64encode(self._cargar(crear=False).sign(datos, ec.ECDSA(hashes.SHA256()))).decode()
+
+    async def firmar_async(self, datos):
+        return self.firmar(datos)  # milisegundos y sin proceso aparte: no hace falta otro hilo
+
+
+def firmante_de_este_equipo(hogar=None):
+    """El Secure Enclave en el Mac; fuera de macOS, la clave en un archivo."""
+    if sys.platform == 'darwin':
+        return Firmante(hogar)
+    return FirmanteArchivo(hogar)
+
+
+def este_equipo():
+    return 'este Mac' if sys.platform == 'darwin' else 'este equipo'
+
+
 def cabeceras(codigo, firma_de, metodo, ruta, cuerpo):
     """Las cabeceras firmadas de una petición; `firma_de(datos)` devuelve la firma en base64."""
     marca, nonce = int(time.time()), secrets.token_hex(12)
@@ -272,7 +393,7 @@ class Alfalfa(Proveedor):
     @property
     def firmante(self):
         if self._firmante is None:
-            self._firmante = Firmante()
+            self._firmante = firmante_de_este_equipo()
         return self._firmante
 
     def url(self):
@@ -300,10 +421,11 @@ class Alfalfa(Proveedor):
             return ('cuota del mes agotada (o el servicio llegó a su tope de hoy); se renueva sola; '
                     'no se reintenta.')
         if estado == 403:
-            return ('el código de cortesía no vale en este Mac (revocado, caducado, en pausa o activado '
-                    'en otro); revísalo en Proveedores; no se reintenta.')
+            return ('el código de cortesía no vale en ' + este_equipo() + ' (revocado, caducado, en pausa o '
+                    'activado en otro); revísalo en Proveedores; no se reintenta.')
         if estado == 401:
-            return 'falta activar el código o la hora de este Mac no coincide con la del servicio; no se reintenta.'
+            return ('falta activar el código o la hora de ' + este_equipo() + ' no coincide con la del servicio; '
+                    'no se reintenta.')
         return super().accion(clas, error_text)
 
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
@@ -345,10 +467,13 @@ class Alfalfa(Proveedor):
         return _cuotas(self._pedir('GET', '/cuota')) or []
 
     def activar(self, codigo):
-        """Ata el código a este Mac y lo guarda en el Llavero. Devuelve lo que dice el servicio.
+        """Ata el código a este equipo y lo guarda en el Llavero. Devuelve lo que dice el servicio.
 
         Si el código trae su servicio (`CUY-…@servicio`), se activa ahí y esa dirección queda
         guardada en `proveedores.json`, pero sólo cuando el servicio acepta el código.
+
+        Fuera de macOS no hay Llavero: el código queda activado igual y la respuesta trae
+        `variable: ALFALFA_CODIGO`, la variable de entorno donde va.
         """
         from . import configuracion, llavero
         codigo, servicio = separar(codigo)
@@ -359,17 +484,23 @@ class Alfalfa(Proveedor):
                             codigo=codigo, url=servicio)
         if servicio:
             configuracion.cambiar('alfalfa', 'url', servicio)
-        llavero.guardar('alfalfa', codigo)
+        extra = {}
+        try:
+            llavero.guardar('alfalfa', codigo)
+        except llavero.LlaveroNoDisponible:
+            if sys.platform == 'darwin':
+                raise  # en el Mac es un fallo del Llavero de verdad
+            extra['variable'] = 'ALFALFA_CODIGO'
         return {'nombre': valor.get('nombre'), 'caduca': valor.get('caduca'),
                 'modelos': [m.get('name') for m in valor.get('modelos') or []],
-                'cuotas': _cuotas(valor) or []}
+                'cuotas': _cuotas(valor) or [], **extra}
 
     def estado(self):
         from .. import ajustes
         return dict(super().estado(), url=ajustes.alfalfa_servicio_url(), clave=bool(self.codigo()))
 
     def reportar(self, texto, contacto=None, registro=None):
-        """Manda un reporte de error al servicio Alfalfa, firmado si este Mac tiene un código activado.
+        """Manda un reporte de error al servicio Alfalfa, firmado si este equipo tiene un código activado.
 
         Devuelve `{enviado, id, soporte, motivo}`. Si no hay servicio, o no lo acepta (por ejemplo,
         429 por demasiados reportes), `enviado` es False y quien llama ofrece escribir a `soporte`.

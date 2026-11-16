@@ -10,7 +10,7 @@
     alfalfa --conectar openrouter [--json]    conecta OpenRouter en el navegador (OAuth), sin pegar la clave
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
-    alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este Mac
+    alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este equipo
     alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
     alfalfa --buscador [MODO] [--json]        buscador web: auto, ollama, searxng o apagado
     alfalfa --fijar-searxng URL               SearXNG del modo searxng («-» vuelve a la de CuySearch Manager)
@@ -69,10 +69,14 @@ def orden(args, entrada=None):
                 codigo = input('Código de cortesía (CUY-…@servicio): ')
             else:
                 codigo = entrada.readline()
+            from .alfalfa import este_equipo
             hecho = Alfalfa().activar(codigo)
-            _salida({'tipo': 'activado', 'servicio': 'alfalfa', **hecho}, como_json,
-                    'Código activado en este Mac' + (' para ' + hecho['nombre'] if hecho.get('nombre') else '')
-                    + '. Modelos: ' + ', '.join(hecho['modelos']) + '.')
+            texto = ('Código activado en ' + este_equipo() + (' para ' + hecho['nombre'] if hecho.get('nombre') else '')
+                     + '. Modelos: ' + ', '.join(hecho['modelos']) + '.')
+            if hecho.get('variable'):
+                texto += ('\nAquí no hay Llavero: para usarlo, pon el código (sin lo que va tras la arroba) en la '
+                          'variable de entorno ' + hecho['variable'] + ' (docs/USO.md).')
+            _salida({'tipo': 'activado', 'servicio': 'alfalfa', **hecho}, como_json, texto)
             return 0
         if getattr(args, 'cuota', False):
             from .alfalfa import Alfalfa
@@ -289,7 +293,7 @@ def argumentos(grupo):
     grupo.add_argument('--conectar', metavar='PROVEEDOR', choices=('openrouter',),
                        help='Conectar OpenRouter en el navegador (OAuth), sin pegar la clave, y usar sus gratis')
     grupo.add_argument('--activar-codigo', action='store_true',
-                       help='Atar a este Mac el código de cortesía que llega por la entrada estándar')
+                       help='Atar a este equipo el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
     from .nativo.web import MODOS
     grupo.add_argument('--buscador', nargs='?', const='', choices=('',) + MODOS, metavar='MODO',

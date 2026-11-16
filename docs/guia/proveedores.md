@@ -53,7 +53,7 @@ Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección d
 servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
 
 ```bash
-alfalfa --activar-codigo     # pide el CUY-…@servicio y lo ata a este Mac
+alfalfa --activar-codigo     # pide el CUY-…@servicio y lo ata a este equipo
 alfalfa --cuota              # % usado este mes
 ```
 

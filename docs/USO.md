@@ -231,6 +231,25 @@ El código de cortesía queda atado a este Mac: `--activar-codigo` crea una clav
 el Secure Enclave (`alfalfa/proveedores/firmante.swift`, compilado con `swiftc` la
 primera vez) y cada petición al servicio va firmada con ella.
 
+Fuera de macOS (un servidor Linux) no hay Secure Enclave ni Llavero. `--activar-codigo`
+crea una clave P-256 en `~/.alfalfa/firma/clave.pem` (carpeta 0700, archivo 0600) y firma
+con el mismo formato, así que el servicio no distingue. Después pide el código en la
+variable `ALFALFA_CODIGO`: es el `CUY-…` sin lo que va tras la arroba, porque la dirección
+del servicio ya queda en `proveedores.json`.
+
+```bash
+printf '%s\n' 'CUY-XXXX-XXXX-XXXX@servicio.example.com' | alfalfa --activar-codigo
+ export ALFALFA_CODIGO='CUY-XXXX-XXXX-XXXX'
+alfalfa --cuota
+```
+
+Esa clave es un archivo, no un chip: quien la copie puede usar el código hasta que lo anules
+en el servicio. Por eso va en su propia carpeta, para que el sandbox se la tape a las
+órdenes del agente. Para un servicio desatendido de systemd, la clave puede ir cifrada con
+`systemd-creds encrypt` y llegar con `LoadCredentialEncrypted=alfalfa-firma:…`. En ese caso
+`ALFALFA_FIRMA_CLAVE=%d/alfalfa-firma` le dice al motor dónde la dejó systemd, y el motor
+solo la lee.
+
 Las sesiones se ordenan por fecha descendente; una sesión ilegible se identifica
 con `estado: "corrupta"` y campos desconocidos nulos. Ollama inaccesible produce
 error JSON y código 1. Estas consultas no emiten `fin` (no ejecutan sesiones).
