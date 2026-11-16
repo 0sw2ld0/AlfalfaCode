@@ -7,7 +7,8 @@ carpeta privada de la sesión (`archivos/`), sin seguir enlaces simbólicos, y e
 su texto una sola vez:
 
 - texto y código, tal cual (UTF-8, o Latin-1 si no lo es);
-- PDF, con PDFKit de macOS desde JXA (`osascript -l JavaScript`), sin dependencias;
+- PDF, con PDFKit de macOS desde JXA (`osascript -l JavaScript`), sin dependencias, y en
+  Linux con pdftotext de poppler-utils si está en el PATH, aislado y sin red (alfalfa.aisladas);
 - Word (.docx) y Excel (.xlsx), leyendo su XML con la biblioteca estándar.
 
 Al modelo le llega, según lo que admita: un PDF como bloque de documento (Claude API
@@ -25,6 +26,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
@@ -43,6 +45,12 @@ MAX_PAGINAS_NATIVO = 100
 # Unos tokens por página de un PDF enviado como documento (texto más la imagen de la página).
 TOKENS_POR_PAGINA = 2000
 MAX_DESCOMPRIMIDO = 64 * 1024 * 1024
+# En Linux el texto de un PDF lo saca pdftotext, que no es obligatorio: sin él, el PDF sólo llega a los
+# modelos que leen PDF.
+INSTALAR_POPPLER = 'sudo apt install poppler-utils'
+# Lo que se lee de pdftotext: MAX_TEXTO caracteres de hasta 4 bytes; con más, se corta y se dice.
+MAX_SALIDA_PDF = MAX_TEXTO * 4
+PLAZO_PDF = 120
 TEXTO = {
     'txt', 'text', 'md', 'markdown', 'rst', 'adoc', 'org', 'tex', 'log', 'csv', 'tsv', 'json', 'jsonl', 'ndjson',
     'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'xml', 'html', 'htm', 'css', 'scss', 'less', 'svg',
@@ -246,9 +254,16 @@ def _texto_plano(datos):
 
 
 def _texto_pdf(copia):
-    """([texto por página], páginas) con PDFKit; ArchivoInvalido si no se puede."""
-    if not shutil.which('osascript'):
-        raise ArchivoInvalido('no se pudo extraer el texto: hace falta macOS (PDFKit)')
+    """([texto por página], páginas) con PDFKit en macOS o con poppler-utils en Linux; ArchivoInvalido si
+    no se puede."""
+    if shutil.which('osascript'):
+        return _texto_pdfkit(copia)
+    if sys.platform.startswith('linux'):
+        return _texto_poppler(copia)
+    raise ArchivoInvalido('no se pudo extraer el texto: hace falta macOS (PDFKit) o Linux con poppler-utils')
+
+
+def _texto_pdfkit(copia):
     try:
         r = subprocess.run(['osascript', '-l', 'JavaScript', '-e', _PDF_JXA, str(copia), str(MAX_TEXTO)],
                            capture_output=True, text=True, timeout=120)
@@ -266,6 +281,55 @@ def _texto_pdf(copia):
         exc.paginas, exc.sin_documento = paginas, True
         raise exc
     return [str(p) for p in datos['texto']], paginas
+
+
+def _texto_poppler(copia):
+    """Con pdftotext, aislado y sin red: una página por salto de página (\\f) de su salida. Si la salida
+    pasa del tope, se queda lo leído y el total de páginas lo dice pdfinfo."""
+    from .aisladas import Cortada, correr
+    from .seatbelt import SandboxUnavailable
+    pdftotext = shutil.which('pdftotext')
+    if not pdftotext:
+        raise ArchivoInvalido('no se pudo extraer el texto: falta pdftotext (' + INSTALAR_POPPLER + ')')
+    cortada = False
+    try:
+        codigo, salida, error = correr([pdftotext, '-enc', 'UTF-8', '-eol', 'unix', str(copia), '-'],
+                                       tope=MAX_SALIDA_PDF, plazo=PLAZO_PDF)
+    except Cortada as exc:
+        codigo, salida, error, cortada = 0, exc.salida, '', True
+    except SandboxUnavailable as exc:
+        # El PDF puede estar bien: sigue yendo como documento a los modelos que lo leen.
+        raise ArchivoInvalido('no se pudo extraer el texto: pdftotext sólo corre en el sandbox y no arrancó ('
+                              + str(exc)[:300] + ')') from None
+    except TimeoutError:
+        raise ArchivoInvalido('pdftotext tardó demasiado en leerlo') from None
+    if codigo == 3:
+        raise ArchivoInvalido('el PDF no permite copiar su texto')
+    if codigo != 0:
+        cifrado = 'password' in error.lower()
+        exc = ArchivoInvalido('está protegido con contraseña' if cifrado
+                              else 'pdftotext no pudo abrirlo (puede estar dañado)')
+        exc.paginas, exc.sin_documento = None, True
+        raise exc
+    paginas = salida.decode('utf-8', errors='replace').split('\f')
+    if paginas and not paginas[-1]:
+        paginas.pop()  # cada página acaba en \f
+    return paginas, _paginas_pdfinfo(copia) if cortada else len(paginas)
+
+
+def _paginas_pdfinfo(copia):
+    """Páginas del PDF según pdfinfo, aislado como pdftotext; None si no se sabe."""
+    from .aisladas import Cortada, correr
+    from .seatbelt import SandboxUnavailable
+    pdfinfo = shutil.which('pdfinfo')
+    if not pdfinfo:
+        return None
+    try:
+        codigo, salida, _ = correr([pdfinfo, str(copia)], tope=65536, plazo=PLAZO_PDF)
+    except (Cortada, SandboxUnavailable, TimeoutError):
+        return None
+    total = re.search(rb'^Pages:\s+(\d+)\s*$', salida, re.MULTILINE)
+    return int(total.group(1)) if codigo == 0 and total else None
 
 
 def _miembro(archivo, nombre):

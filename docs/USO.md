@@ -847,11 +847,12 @@ Linux. Está probado en Ubuntu 24.04 con Python 3.12. En Windows, con WSL2 (más
 
 ### Linux: instalar
 
-Hace falta Python 3.11 o posterior, git y bubblewrap. Con pipx:
+Hace falta Python 3.11 o posterior, git y bubblewrap; poppler-utils es opcional y sirve
+para leer el texto de los PDF adjuntos (más abajo). Con pipx:
 
 ```bash
 sudo apt update
-sudo apt install -y pipx git bubblewrap
+sudo apt install -y pipx git bubblewrap poppler-utils
 pipx ensurepath
 pipx install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.22"
 ```
@@ -929,8 +930,11 @@ Diferencias con el Mac, porque un montaje sólo protege lo que existe al lanzar 
 - Cada orden tiene su propio espacio de procesos: lo que deja en segundo plano con `&`
   muere con ella, y las órdenes mueren con AlfalfaCode. Para dejar un servidor abierto
   entre turnos está `run_command` en segundo plano, como en el Mac.
-- Sin macOS no hay PDFKit, sips ni sourcekit-lsp aislado: un PDF sólo llega a los modelos
-  que leen PDF, las imágenes grandes no se reducen y no hay diagnósticos de Swift.
+- El texto de un PDF adjunto lo saca `pdftotext`, de poppler-utils, dentro de bubblewrap y
+  sin red, en lugar de PDFKit. Sin poppler-utils, o si bwrap no arranca, un PDF sólo llega
+  a los modelos que leen PDF.
+- Sin sips las imágenes grandes no se reducen, y sin macOS no hay sourcekit-lsp aislado ni
+  diagnósticos de Swift.
 
 ### Linux: claves
 
