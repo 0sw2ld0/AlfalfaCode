@@ -114,6 +114,7 @@ def servicio(monkeypatch):
     falso = Servicio()
     firmante = FirmanteDePrueba()
     monkeypatch.setattr(alfalfa, 'Firmante', lambda *a, **k: firmante)
+    monkeypatch.setattr(alfalfa, 'FirmanteArchivo', lambda *a, **k: firmante)  # en Linux
     monkeypatch.setattr(alfalfa, 'cliente_de_lista',
                         lambda: httpx.Client(transport=httpx.MockTransport(falso)))
     real = alfalfa.Transporte.__init__
