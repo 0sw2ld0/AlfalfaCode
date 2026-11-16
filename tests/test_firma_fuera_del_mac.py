@@ -154,3 +154,14 @@ def test_los_avisos_del_servicio_no_hablan_del_mac_fuera_de_el(linux):
     for estado in (401, 403):
         texto = p.accion({'status_code': estado}, '')
         assert 'este equipo' in texto and 'Mac' not in texto
+
+
+def test_sin_alfalfa_codigo_se_dice_la_variable(sin_llavero, monkeypatch):
+    proveedores.obtener('alfalfa').activar(CODIGO + '@alfalfa.example.com:8444')
+    monkeypatch.delenv('ALFALFA_CODIGO', raising=False)
+    p = proveedores.obtener('alfalfa')
+    with pytest.raises(alfalfa.ErrorDeAlfalfa, match='ALFALFA_CODIGO'):
+        p.cuota()
+    with pytest.raises(alfalfa.ErrorDeAlfalfa, match='ALFALFA_CODIGO'):
+        p.cliente(10)
+    assert sin_llavero.vistas == ['/activar']

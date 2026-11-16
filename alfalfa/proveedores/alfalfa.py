@@ -304,6 +304,13 @@ def este_equipo():
     return 'este Mac' if sys.platform == 'darwin' else 'este equipo'
 
 
+def falta_codigo():
+    if sys.platform == 'darwin':
+        return 'Falta el código de cortesía: actívalo en Proveedores.'
+    return ('Falta el código de cortesía: ponlo en la variable de entorno ALFALFA_CODIGO (si aún no está '
+            'activado en este equipo, antes `alfalfa --activar-codigo`).')
+
+
 def cabeceras(codigo, firma_de, metodo, ruta, cuerpo):
     """Las cabeceras firmadas de una petición; `firma_de(datos)` devuelve la firma en base64."""
     marca, nonce = int(time.time()), secrets.token_hex(12)
@@ -431,7 +438,7 @@ class Alfalfa(Proveedor):
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         codigo = self.codigo()
         if not codigo:
-            raise ErrorDeAlfalfa('Falta el código de cortesía: actívalo en Proveedores.')
+            raise ErrorDeAlfalfa(falta_codigo())
         return httpx.AsyncClient(base_url=self.url(), timeout=timeout, trust_env=False,
                                  transport=Transporte(codigo, self.firmante, tarea, al_cambiar_cuota))
 
@@ -439,6 +446,8 @@ class Alfalfa(Proveedor):
 
     def _pedir(self, metodo, ruta, cuerpo=None, codigo=None, url=None):
         codigo = codigo or self.codigo()
+        if not codigo:
+            raise ErrorDeAlfalfa(falta_codigo())
         datos = json.dumps(cuerpo, ensure_ascii=False).encode() if cuerpo is not None else b''
         encabezados = cabeceras(codigo, self.firmante.firmar, metodo, ruta, datos)
         encabezados['Content-Type'] = 'application/json'
