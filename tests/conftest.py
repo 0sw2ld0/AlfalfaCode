@@ -36,6 +36,26 @@ preparar()
 
 
 @pytest.fixture(autouse=True)
+def _nunca_el_hogar_real(monkeypatch):
+    """Ninguna prueba crea carpetas en el ~/.alfalfa de verdad: un TerminalManager sin `home=` dejaba sesiones
+    «Cola de encargos» de cada pasada en la app de quien corría la suite. Falla en el acto y dice dónde."""
+    from pathlib import Path
+
+    import tests.casa as casa
+    from alfalfa import terminal
+    original = terminal.private_directory
+
+    def vigilado(path):
+        ruta = Path(path).resolve()
+        for hogar in casa.hogares_reales():
+            if ruta == hogar or hogar in ruta.parents:
+                raise AssertionError('Esta prueba iba a escribir en el hogar real de AlfalfaCode (' + str(ruta)
+                                     + '). Dale un hogar temporal: home=tmp_path / "hogar" o ALFALFA_HOME.')
+        return original(path)
+    monkeypatch.setattr(terminal, 'private_directory', vigilado)
+
+
+@pytest.fixture(autouse=True)
 def _sin_llavero_ni_proveedores_del_usuario(tmp_path_factory, monkeypatch):
     """Ni el Llavero real ni el proveedores.json de quien corre la suite entran."""
     from alfalfa.proveedores import configuracion, llavero

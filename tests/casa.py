@@ -26,6 +26,17 @@ def bajo_temporales(ruta):
     return any(real == r or real.startswith(r.rstrip('/') + '/') for r in raices)
 
 
+# $HOME al importar, antes de que ninguna prueba lo cambie: las que lo apuntan a un temporal para probar el hogar
+# por defecto sí pueden escribir en ese `~/.alfalfa`, que no es el de verdad.
+_HOME_AL_EMPEZAR = os.path.expanduser('~')
+
+
+def hogares_reales():
+    """El `~/.alfalfa` de verdad de quien corre la suite (por la base de usuarios y por su $HOME): una prueba nunca
+    debe crear nada ahí. Las sesiones que dejaba una prueba sin `home=` salían en la barra lateral de la app."""
+    return {(casa_real() / '.alfalfa').resolve(), (Path(_HOME_AL_EMPEZAR) / '.alfalfa').resolve()}
+
+
 def base_fuera_del_sandbox():
     """~/Library/Caches de la casa real (o la casa), o None si también cuelga de un temporal."""
     casa = casa_real()
