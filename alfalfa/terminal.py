@@ -1442,7 +1442,7 @@ def main(argv=None):
                              '`hello` del cliente y el primer mensaje llega como `input`')
     parser.add_argument('--caducidad-aprobacion', metavar='SEGUNDOS',
                         help='Con --pacai: cuánto espera una aprobación antes de darse por caducada (por defecto, '
-                             'un día; también ALFALFA_CADUCIDAD_APROBACION)')
+                             'no caduca; también ALFALFA_CADUCIDAD_APROBACION)')
     parser.add_argument('--cola-encargos', nargs='?', const='', metavar='JSON',
                         help='Ejecutar una cola desde un archivo JSON; sin archivo, reanudar la cola de '
                              '--reanudar ID o preparar una cola desde la app con --stdio')

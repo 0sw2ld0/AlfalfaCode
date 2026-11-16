@@ -39,7 +39,7 @@ EXTENSIONES = ('alfalfa',)
 MAX_BYTES = 1024 * 1024
 # Segundos que el cierre de un turno espera a que el cliente cierre sus herramientas abiertas (§4.4).
 GRACIA_CLIENTE = 3.0
-# Variable de entorno con los segundos que espera una aprobación (por defecto, `CADUCIDAD_APROBACION`: un día).
+# Variable de entorno con los segundos que espera una aprobación (por defecto no caduca: `CADUCIDAD_APROBACION`).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
 CADUCIDAD_MAXIMA = 365 * 24 * 3600
 # Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Sus campos van en inglés
@@ -54,14 +54,14 @@ COMANDOS = {
 }
 
 
-def caducidad_de(valor: Any = None) -> float:
-    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`, si no un
-    día. Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
+def caducidad_de(valor: Any = None) -> float | None:
+    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`; sin
+    ninguno, None (no caduca). Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
     origen = '--caducidad-aprobacion'
     if valor is None:
         valor, origen = os.environ.get(ENTORNO_CADUCIDAD), ENTORNO_CADUCIDAD
     if valor is None or (isinstance(valor, str) and not valor.strip()):
-        return float(CADUCIDAD_APROBACION)
+        return CADUCIDAD_APROBACION
     try:
         segundos = float(valor)
     except (TypeError, ValueError):
@@ -72,11 +72,14 @@ def caducidad_de(valor: Any = None) -> float:
     return segundos
 
 
+_DEL_ENTORNO = object()
+
+
 class TransportePacai(Transport):
-    def __init__(self, output, *, caducidad: float | None = None, reloj: Callable[[], datetime] = ahora,
+    def __init__(self, output, *, caducidad: Any = _DEL_ENTORNO, reloj: Callable[[], datetime] = ahora,
                  gracia_cliente: float = GRACIA_CLIENTE):
         super().__init__(output)
-        self.caducidad = caducidad_de() if caducidad is None else caducidad
+        self.caducidad = caducidad_de() if caducidad is _DEL_ENTORNO else caducidad
         self.reloj, self.gracia_cliente = reloj, gracia_cliente
         self.emisor = Emisor('agent', nueva_sesion(), reloj=reloj)
         self.t: Traductor | None = None
@@ -245,8 +248,8 @@ class TransportePacai(Transport):
 
     def _vigilar_caducidad(self, request_id: str) -> None:
         a = self.t.aprobacion(request_id)
-        if a is None:
-            return
+        if a is None or a.expira is None:
+            return                                       # sin `expires` no hay temporizador
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -256,7 +259,7 @@ class TransportePacai(Transport):
 
     def _olvidar_resueltas(self) -> None:
         """Una petición ya resuelta (por el cliente, la interrupción, el cierre o el fin de su ejecución) no espera
-        a su `expires`: con una caducidad de un día, su temporizador no debe seguir vivo."""
+        a su `expires`: su temporizador no debe seguir vivo."""
         for request_id in list(self._temporizadores):
             a = self.t.aprobacion(request_id) if self.t else None
             if a is None or a.estado != 'pending':
@@ -265,7 +268,7 @@ class TransportePacai(Transport):
     def _caducar(self, request_id: str) -> None:
         self._temporizadores.pop(request_id, None)
         a = self.t.aprobacion(request_id) if self.t else None
-        if a is None or a.estado != 'pending' or self.cerrado:
+        if a is None or a.estado != 'pending' or self.cerrado or a.expira is None:
             return
         if self.reloj() < a.expira:                      # nunca antes de `expires`
             self._vigilar_caducidad(request_id)
@@ -509,7 +512,7 @@ class TransportePacai(Transport):
         a = self.t.aprobacion(ref)
         if a is None or (a.estado not in ('pending', 'expired', 'cancelled')):
             return self._error('unknown_approval', 'No hay una petición pendiente con ese reply_to.', m['id'])
-        if a.estado in ('expired', 'cancelled') or self.reloj() >= a.expira:
+        if a.estado in ('expired', 'cancelled') or (a.expira is not None and self.reloj() >= a.expira):
             return                                        # tarde: no cuenta como aprobación (§4.5)
         decision, alcance = p['decision'], p.get('scope')
         if decision not in ('approved', 'denied'):

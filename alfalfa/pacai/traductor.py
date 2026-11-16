@@ -21,11 +21,10 @@ from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
-# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5): PACAI 0.2 obliga a mandar
-# `expires`, así que no puede no caducar; un día deja al usuario volver a su mesa (y responder al día siguiente)
-# sin que una petición olvidada quede abierta para siempre. `ALFALFA_CADUCIDAD_APROBACION` o
-# `--caducidad-aprobacion` la cambian.
-CADUCIDAD_APROBACION = 24 * 3600
+# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5). Por defecto ninguno: en la 0.3
+# `expires` es opcional y, como en Claude Code, ACP y Codex, una petición espera hasta que el usuario conteste o el
+# agente la cancele. `ALFALFA_CADUCIDAD_APROBACION` o `--caducidad-aprobacion` le ponen plazo.
+CADUCIDAD_APROBACION: float | None = None
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
@@ -80,7 +79,7 @@ class Aprobacion:
     nombre: str
     digest: str
     scopes: list[str]
-    expira: datetime
+    expira: datetime | None          # sin `expires`, no caduca
     sitio: bool = False               # v2 pide `sitio` (una_vez|sesion|proyecto) en vez de `sesion`
     estado: str = 'pending'           # pending, approved, denied, expired, cancelled
 
@@ -190,7 +189,7 @@ def _fallo(datos: dict) -> bool:
 
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
-                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+                 caducidad: float | None = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
                  max_argumentos: int = MAX_ARGUMENTOS):
         self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
@@ -498,11 +497,12 @@ class Traductor:
             'run_id': run_id, 'tool_call_id': herramienta.id, 'name': herramienta.nombre,
             'arguments': herramienta.argumentos, 'digest': digest(herramienta.argumentos),
             'reason': self._razon(campos), 'scopes': scopes,
-            'expires': en_segundos(self.reloj(), self.caducidad),
+            **({'expires': en_segundos(self.reloj(), self.caducidad)} if self.caducidad else {}),
             **self._alfalfa({k: campos[k] for k in PERMISO_EXTRA if campos.get(k)})})
         self.aprobaciones[peticion['id']] = Aprobacion(
             peticion['id'], str(campos.get('id')), run_id, herramienta.id, herramienta.nombre,
-            peticion['payload']['digest'], scopes, self._instante(peticion['payload']['expires']),
+            peticion['payload']['digest'], scopes,
+            self._instante(peticion['payload']['expires']) if 'expires' in peticion['payload'] else None,
             sitio=isinstance(campos.get('sitio'), dict))
         self.permisos[str(campos.get('id'))] = peticion['id']
         return salida + [peticion]
@@ -549,8 +549,8 @@ class Traductor:
     def caducar(self, request_id: str) -> list[dict]:
         """El agente declara caducada una petición sin respuesta (§4.5). Nunca antes de `expires`."""
         a = self.aprobaciones.get(request_id)
-        if a is None or a.estado != 'pending':
-            return []
+        if a is None or a.estado != 'pending' or a.expira is None:
+            return []                    # sin `expires` nunca hay `expired`
         a.estado = 'expired'
         salida = [self._msg('approval_result', {'decision': 'expired'}, reply_to=request_id)]
         self.permisos.pop(a.v2id, None)

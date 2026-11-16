@@ -324,7 +324,7 @@ async def test_la_peticion_lleva_el_digest_de_los_argumentos_y_sus_campos_obliga
     p = peticion['payload']
     assert p['run_id'] == run and p['tool_call_id'] == inicio['id'] and p['name'] == 'run_command'
     assert p['arguments'] == inicio['payload']['arguments'] and p['digest'] == digest(p['arguments'])
-    assert p['reason'] == 'dangerous' and p['scopes'] == ['once'] and p['expires'] > peticion['time']
+    assert p['reason'] == 'dangerous' and p['scopes'] == ['once'] and 'expires' not in p
     assert p['alfalfa']['purpose'] == 'p' and p['alfalfa']['justification'] == 'Borra archivos'
     responder(c, peticion)
     assert await asyncio.wait_for(tarea, 1) is None
@@ -493,27 +493,28 @@ def _segundos_hasta(peticion):
     return (b - a).total_seconds()
 
 
-async def test_por_defecto_una_aprobacion_espera_un_dia_y_no_caduca_antes():
+async def test_por_defecto_una_aprobacion_no_lleva_expires_y_nunca_caduca():
     reloj = RelojFalso()
     c = Cliente(reloj=reloj)
     await abrir(c)
     tarea, peticion = await pedir(c)
-    assert _segundos_hasta(peticion) == 24 * 3600
-    reloj.avanzar(3 * 3600)                               # tres horas después sigue esperando al usuario
+    assert 'expires' not in peticion['payload'] and c.t._temporizadores == {}
+    reloj.avanzar(30 * 24 * 3600)                         # un mes después sigue esperando al usuario
     c.t._caducar(peticion['id'])
+    assert c.t.t.caducar(peticion['id']) == []            # sin `expires`, nunca `expired`
     assert c.drenar() == [] and not tarea.done()
     responder(c, peticion)
     assert await asyncio.wait_for(tarea, 1) is None
     c.t._cerrar_sesion()
 
 
-@pytest.mark.parametrize('valor, segundos', [('90', 90), ('3600.5', 3600.5), ('', 24 * 3600)])
+@pytest.mark.parametrize('valor, segundos', [('90', 90), ('3600.5', 3600.5), ('', None)])
 async def test_la_caducidad_se_cambia_con_alfalfa_caducidad_aprobacion(monkeypatch, valor, segundos):
     monkeypatch.setenv('ALFALFA_CADUCIDAD_APROBACION', valor)
     c = Cliente(reloj=RelojFalso())
     await abrir(c)
     tarea, peticion = await pedir(c)
-    assert _segundos_hasta(peticion) == segundos
+    assert (_segundos_hasta(peticion) if 'expires' in peticion['payload'] else None) == segundos
     tarea.cancel()
     c.t._cerrar_sesion()
 
@@ -538,7 +539,7 @@ def test_la_opcion_de_caducidad_se_valida_y_solo_vale_con_pacai(argumentos, caps
 
 
 async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herramienta_y_olvida_su_plazo():
-    c = Cliente()
+    c = Cliente(caducidad=3600)
     run = await abrir(c)
     tarea, peticion = await pedir(c)
     assert peticion['id'] in c.t._temporizadores
