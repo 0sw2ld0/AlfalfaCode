@@ -1,22 +1,71 @@
 """Imágenes adjuntas como en Codex y órdenes de la app sobre sesiones guardadas."""
 import asyncio
 import base64
+import importlib.util
 import io
 import json
 import shutil
-import subprocess
+import struct
+import sys
+import zlib
 from pathlib import Path
 
 import pytest
 
-from alfalfa import imagenes
+from alfalfa import aisladas, imagenes
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.seatbelt import SandboxUnavailable
 from alfalfa.stdio import Transport, sessions
 from alfalfa.terminal import TerminalManager, main
+from tests.sandbox_del_sistema import motivo_sin_sandbox
 
 # PNG de 1×1.
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5E'
                        'rkJggg==')
+
+
+def _sin_pillow_aislado():
+    """None si aquí Pillow mide y reduce, aislado en bwrap: Linux con Pillow y con el sandbox en pie."""
+    if not sys.platform.startswith('linux'):
+        return 'Pillow sólo se usa en Linux; en macOS lo hace sips'
+    if importlib.util.find_spec('PIL') is None:
+        return 'sin Pillow: pip install pillow'
+    return motivo_sin_sandbox()
+
+
+SIN_PILLOW = _sin_pillow_aislado()
+CON_PILLOW = pytest.mark.skipif(SIN_PILLOW is not None, reason=str(SIN_PILLOW))
+# Mide, reduce y convierte sips en macOS y Pillow en Linux.
+SIN_LECTOR = None if shutil.which('sips') else SIN_PILLOW
+CON_LECTOR = pytest.mark.skipif(SIN_LECTOR is not None, reason=str(SIN_LECTOR))
+
+
+def _trozo(tipo, datos):
+    return struct.pack('>I', len(datos)) + tipo + datos + struct.pack('>I', zlib.crc32(tipo + datos))
+
+
+def _png(ruta, ancho, alto):
+    """Un PNG gris de ancho × alto hecho a mano, sin sips ni Pillow."""
+    filas = (b'\x00' + b'\x80' * ancho) * alto
+    ruta.write_bytes(b'\x89PNG\r\n\x1a\n' + _trozo(b'IHDR', struct.pack('>IIBBBBB', ancho, alto, 8, 0, 0, 0, 0))
+                     + _trozo(b'IDAT', zlib.compress(filas, 1)) + _trozo(b'IEND', b''))
+    return ruta
+
+
+def _medidas_png(ruta):
+    datos = Path(ruta).read_bytes()
+    assert datos[:8] == b'\x89PNG\r\n\x1a\n' and datos[12:16] == b'IHDR'
+    return struct.unpack('>II', datos[16:24])
+
+
+def _bmp(ruta, ancho, alto):
+    """Un BMP de 24 bits hecho a mano: Ollama no lo lee y se convierte a PNG."""
+    fila = b'\x20\x40\x80' * ancho
+    fila += b'\x00' * (-len(fila) % 4)
+    pixeles = fila * alto
+    cabecera = struct.pack('<IiiHHIIiiII', 40, ancho, alto, 1, 24, 0, len(pixeles), 2835, 2835, 0, 0)
+    ruta.write_bytes(b'BM' + struct.pack('<IHHI', 54 + len(pixeles), 0, 0, 54) + cabecera + pixeles)
+    return ruta
 
 
 @pytest.fixture
@@ -52,15 +101,82 @@ def test_rechaza_lo_que_no_es_una_imagen(tmp_path, nombre, error):
         imagenes.validar('relativa.png')
 
 
-@pytest.mark.skipif(shutil.which('sips') is None,
-                    reason='mide y reduce con sips, que sólo trae macOS; sin él las imágenes se copian sin reducir')
+@CON_LECTOR
 def test_reduce_las_grandes_y_no_amplia_las_pequenas(tmp_path, foto):
-    grande = tmp_path / 'grande.png'
-    subprocess.run(['sips', '-z', '3000', '4000', str(foto), '--out', str(grande)], check=True, capture_output=True)
+    grande = _png(tmp_path / 'grande.png', 3000, 4000)
     copia = imagenes.preparar(grande, tmp_path / 'copias')
-    assert max(imagenes._dimensiones(copia)) == 2048
+    assert _medidas_png(copia) == (1536, 2048)
     pequeña = imagenes.preparar(foto, tmp_path / 'copias')
     assert pequeña.read_bytes() == PNG
+
+
+@CON_LECTOR
+def test_convierte_a_png_lo_que_ollama_no_lee(tmp_path):
+    copia = imagenes.preparar(_bmp(tmp_path / 'esquema.bmp', 40, 30), tmp_path / 'copias')
+    assert copia.suffix == '.png' and _medidas_png(copia) == (40, 30)
+
+
+@CON_PILLOW
+def test_pillow_no_descomprime_una_bomba_y_la_manda_tal_cual(tmp_path, monkeypatch):
+    monkeypatch.setattr(imagenes, 'MAX_PIXELES', 1_000_000)
+    grande = _png(tmp_path / 'grande.png', 3000, 4000)
+    assert imagenes.preparar(grande, tmp_path / 'copias').read_bytes() == grande.read_bytes()
+    with pytest.raises(imagenes.ImagenInvalida, match='No se pudo convertir esquema.bmp a PNG: Pillow no pudo'):
+        imagenes.preparar(_bmp(tmp_path / 'esquema.bmp', 2000, 1000), tmp_path / 'copias')
+
+
+@CON_PILLOW
+def test_pillow_gira_la_foto_segun_su_exif(tmp_path):
+    from PIL import Image
+    foto = tmp_path / 'movil.jpg'
+    exif = Image.Exif()
+    exif[0x0112] = 6  # girada 90°: se ve vertical
+    Image.new('RGB', (3000, 1000), 'white').save(foto, exif=exif)
+    with Image.open(imagenes.preparar(foto, tmp_path / 'copias')) as copia:
+        assert copia.format == 'JPEG' and copia.size == (683, 2048)
+
+
+@pytest.fixture
+def linux_sin_sips(monkeypatch):
+    """El camino de Linux aunque sea macOS: sin sips, con Pillow, y aisladas.correr con la respuesta dada."""
+    monkeypatch.setattr(imagenes.shutil, 'which', lambda nombre: None)
+    monkeypatch.setattr(imagenes.sys, 'platform', 'linux')
+    monkeypatch.setattr(imagenes, '_hay_pillow', lambda: True)
+    llamadas, respuesta = [], {}
+
+    def correr(argv, *, tope, plazo):
+        llamadas.append(argv)
+        if isinstance(respuesta['valor'], Exception):
+            raise respuesta['valor']
+        return respuesta['valor']
+
+    monkeypatch.setattr(aisladas, 'correr', correr)
+    return llamadas, respuesta
+
+
+def test_en_linux_pillow_corre_aislado_y_solo_cambia_lo_que_hace_falta(tmp_path, foto, linux_sin_sips):
+    llamadas, respuesta = linux_sin_sips
+    respuesta['valor'] = (0, b'', '')
+    assert imagenes.preparar(foto, tmp_path / 'copias').read_bytes() == PNG  # nada por stdout: tal cual
+    argv = llamadas[0]
+    assert argv[:3] == [sys.executable, '-I', '-c'] and argv[3] == imagenes._PILLOW
+    assert argv[4:] == [str(foto.resolve()), 'PNG', '2048', str(imagenes.MAX_PIXELES)]
+    respuesta['valor'] = (0, b'\x89PNG reducida', '')
+    copia = imagenes.preparar(_bmp(tmp_path / 'esquema.bmp', 4, 4), tmp_path / 'copias')
+    assert copia.suffix == '.png' and copia.read_bytes() == b'\x89PNG reducida'
+    assert copia.stat().st_mode & 0o777 == 0o600 and not list((tmp_path / 'copias').glob('*.tmp'))
+
+
+def test_en_linux_sin_sandbox_o_sin_pillow_va_tal_cual_o_se_dice(tmp_path, foto, linux_sin_sips, monkeypatch):
+    llamadas, respuesta = linux_sin_sips
+    respuesta['valor'] = SandboxUnavailable('bwrap: setting up uid map: Permission denied')
+    assert imagenes.preparar(foto, tmp_path / 'copias').read_bytes() == PNG
+    with pytest.raises(imagenes.ImagenInvalida, match='sandbox.*uid map'):
+        imagenes.preparar(_bmp(tmp_path / 'esquema.bmp', 4, 4), tmp_path / 'copias')
+    monkeypatch.setattr(imagenes, '_hay_pillow', lambda: False)
+    with pytest.raises(imagenes.ImagenInvalida, match='falta Pillow'):
+        imagenes.preparar(_bmp(tmp_path / 'otro.bmp', 5, 5), tmp_path / 'copias')
+    assert len(llamadas) == 2
 
 
 def test_el_mensaje_lleva_la_imagen_en_base64_a_ollama(m, foto, monkeypatch):
