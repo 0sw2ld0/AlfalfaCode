@@ -402,3 +402,33 @@ async def test_sin_ejecucion_raiz_no_nacen_subejecuciones():
     assert [m['type'] for m in c.drenar()] == ['alfalfa.subagents']
     c.t.emit('subagente_evento', agente='a1', rol='agent', texto='hola', hora=1.0)
     assert c.drenar() == []
+
+
+# -- ejecución en cierre (§4.2, 0.3) ---------------------------------------
+async def test_una_ejecucion_en_cierre_no_empieza_trabajo_nuevo_pero_informa_y_termina():
+    import asyncio
+    c = Cliente(herramientas=('browser',))
+    run = await abrir(c)
+    herramienta(c, 'run_command', {'argv': ['rm', 'x'], 'purpose': 'p'})
+    tarea = asyncio.create_task(c.t.approval('.', False)(dict(argv=['rm', 'x'], purpose='p')))
+    await asyncio.sleep(0.02)
+    c.t.stop()                                             # cancela la petición: la ejecución entra en cierre
+    await asyncio.gather(tarea, return_exceptions=True)
+    c.drenar()
+    antes = len(c.log)
+    c.t.emit('evento', rol='agent', texto='Sigo con otra cosa', hora=1.0)
+    herramienta(c, 'read_file', {'path': 'a.py'})
+    fin_de_herramienta(c, 'read_file', {'content': 'x'})
+    otra = asyncio.create_task(c.t.approval('.', False)(dict(argv=['ls'], purpose='otra')))
+    await asyncio.sleep(0.02)
+    c.t.emit('subagentes', subagentes=[{'id': 'a1', 'nombre': 'B', 'tipo': 'general', 'estado': 'trabajando'}])
+    c.t.emit('plan', pasos=[{'paso': 'x', 'estado': 'completed'}])
+    c.drenar()
+    nuevos = c.log[antes:]
+    assert not {'message_start', 'tool_start', 'approval_request', 'run_started'} & set(m['type'] for m in nuevos)
+    assert 'plan_updated' in [m['type'] for m in nuevos]       # informar sí vale
+    with pytest.raises(ValueError):
+        await asyncio.wait_for(otra, 1)                    # lo que pide permiso en cierre se niega
+    await cerrar(c, 'interrupted')
+    assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
+    c.comprobar()

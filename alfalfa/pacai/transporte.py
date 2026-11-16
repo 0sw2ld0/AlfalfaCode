@@ -507,9 +507,9 @@ class TransportePacai(Transport):
     def _c_approval_result(self, m):
         p, ref = m['payload'], m['reply_to']
         a = self.t.aprobacion(ref)
-        if a is None or (a.estado not in ('pending', 'expired')):
+        if a is None or (a.estado not in ('pending', 'expired', 'cancelled')):
             return self._error('unknown_approval', 'No hay una petición pendiente con ese reply_to.', m['id'])
-        if a.estado == 'expired' or self.reloj() >= a.expira:
+        if a.estado in ('expired', 'cancelled') or self.reloj() >= a.expira:
             return                                        # tarde: no cuenta como aprobación (§4.5)
         decision, alcance = p['decision'], p.get('scope')
         if decision not in ('approved', 'denied'):

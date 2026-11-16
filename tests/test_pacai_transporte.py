@@ -428,12 +428,15 @@ async def test_una_politica_que_resuelve_en_el_acto_no_molesta_al_cliente():
 async def test_eof_o_cerrar_la_sesion_niegan_lo_pendiente_y_nada_se_ejecuta():
     c = Cliente()
     await abrir(c)
-    tarea, _ = await pedir(c)
+    tarea, peticion = await pedir(c)
     c.t.stop()                                           # lo que hace el lector al llegar a EOF
     with pytest.raises(ValueError, match='rechazado'):
         await asyncio.wait_for(tarea, 1)
-    assert 'approval_result' not in tipos(c.del_agente())
+    # La ejecución termina con la petición sin contestar: el agente la cancela antes de cerrar su herramienta.
+    cancelada = c.del_agente('approval_result')
+    assert [(m['payload'], m['reply_to']) for m in cancelada] == [({'decision': 'cancelled'}, peticion['id'])]
     fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
+    assert c.del_agente('tool_end')[-1]['payload']['status'] == 'cancelled'
     await cerrar(c, 'interrupted')
     c.comprobar()
 
@@ -543,14 +546,22 @@ async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herra
     c.enviar('interrupt', {'run_id': run})
     with pytest.raises((ValueError, asyncio.CancelledError)):
         await asyncio.wait_for(tarea, 1)
-    assert c.t.t.aprobacion(peticion['id']).estado == 'denied'
+    assert c.t.t.aprobacion(peticion['id']).estado == 'cancelled'
     assert c.t._temporizadores == {}                      # nada queda esperando a su `expires`
+    # El motor aún cuenta que la orden se rechazó y dice algo: la herramienta sale `cancelled` y el texto,
+    # como aviso (la ejecución está en cierre y no empieza mensajes nuevos).
+    fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
+    c.t.emit('evento', rol='agent', texto='Me detengo.', hora=3.0)
     await cerrar(c, 'cortado')
+    finales = c.del_agente()[-6:]
+    assert [m['type'] for m in c.del_agente() if m['type'] in ('approval_result', 'tool_end', 'run_finished')] == \
+        ['approval_result', 'tool_end', 'run_finished']
+    assert c.del_agente('approval_result')[0]['payload'] == {'decision': 'cancelled'}
     assert c.del_agente('tool_end')[-1]['payload'] == {'tool_call_id': peticion['payload']['tool_call_id'],
                                                        'status': 'cancelled'}
     assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
-    assert 'approval_result' not in tipos(c.del_agente())       # el agente sólo declara `expired`, y no lo era
-    assert codigo(responder(c, peticion)) == 'unknown_approval'  # un sí tardío no vale como aprobación
+    assert 'message_start' not in tipos(finales) and 'alfalfa.notice' in tipos(finales)
+    assert responder(c, peticion) == []                   # un sí tardío se ignora: no vale como aprobación
     c.comprobar()
 
 
@@ -561,7 +572,7 @@ async def test_cerrar_la_sesion_con_una_aprobacion_pendiente_la_niega_y_olvida_s
     c.t.stop()
     with pytest.raises(ValueError, match='rechazado'):
         await asyncio.wait_for(tarea, 1)
-    assert c.t.t.aprobacion(peticion['id']).estado == 'denied' and c.t._temporizadores == {}
+    assert c.t.t.aprobacion(peticion['id']).estado == 'cancelled' and c.t._temporizadores == {}
 
 
 async def test_un_permiso_que_ninguna_herramienta_abierta_explica_abre_la_suya():
