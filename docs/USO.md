@@ -95,8 +95,11 @@ ignora y el permiso sigue siendo válido): `motivo` (`peligroso`, `red`,
 principal primero), `justificacion` (la que declaró el modelo), `regla` (la
 regla peligrosa que coincidió), `intento` (identificador de este intento),
 `reintento_de` (el intento fallido que se repetiría), `red: true`,
-`sin_sandbox` (por qué se saldría del sandbox) y `fallo_sandbox` (error de
-Seatbelt cuando no arrancó). Los resultados de herramientas añaden `sandbox`
+`sin_sandbox` (por qué se saldría del sandbox), `fallo_sandbox` (error de
+Seatbelt cuando no arrancó), `prefijo` (se puede contestar `"siempre":true`: «No
+volver a preguntar por órdenes que empiecen por …») y `prefijo_alcance` (lo que
+concede esa regla: `sin_sandbox`, `red` o `sandbox`; ver «No volver a preguntar»
+más abajo). Los resultados de herramientas añaden `sandbox`
 (`seatbelt` o `none`), `intento`, `permisos`, `red` y, tras un bloqueo,
 `denegacion_probable`, `reintento` o `intento_previo`. Cancelación, Ctrl-C y EOF niegan
 pendientes, interrumpen el motor, terminan los grupos de procesos y guardan el
@@ -365,6 +368,7 @@ tipos de subagente como `explorador`, ids) no se traducen. Los más usados:
 | `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
 | `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
 | `warning`, `exhausted` | `session`, `month` |
+| `prefix_scope` | lo que concede «No volver a preguntar» (`prefix`) en un `approval_request`: `outside_sandbox`, `network`, `sandbox` |
 | `kind`, `store`, `scope`, `origin`, `action`, `step`, `phase` | `memory`/`skill`; `user`/`project`/`environment`; `folder`, `all`…; `agent`, `external`…; `create`, `restore`…; `undo`/`redo`; `start`/`end` |
 
 La tabla completa (y la de las claves) está en `alfalfa/pacai/nombres.py`; una prueba recorre el código y falla si
@@ -486,6 +490,37 @@ cuatro:
 | `red` | El modelo declara `needs_network: true`. | Esa orden corre con la variante de red de Seatbelt. Las restricciones de escritura y de `.git` no cambian. |
 | `salir_sandbox` | El modelo pide `sandbox_permissions: "require_escalated"` con una `justification` de 10 a 500 caracteres. Sin justificación válida se rechaza antes de preguntar. También cuando Seatbelt falta o no arranca. | Ejecutar esa orden **sin sandbox**, con los permisos del usuario y con red. |
 | `reintento` | Un intento en el sandbox falló y parece una denegación: código distinto de 0 y una palabra indicadora (`operation not permitted`, `permission denied`, `read-only file system`, `sandbox`…) en la salida. Se revisan las palabras antes que los códigos 2, 126 y 127, como en `denial.rs`. Un fallo ordinario, un plazo vencido o una salida excesiva no lo provocan. | Repetir **una vez** y sin sandbox exactamente el mismo argv. El intento fallido queda registrado con su resultado; el nuevo lleva `reintento_de` y nunca vuelve a reintentarse. |
+
+### No volver a preguntar
+
+Algunas tarjetas ofrecen además «No volver a preguntar por órdenes que empiecen
+por …» (`prefijo` en el evento `permiso`, `a` en la terminal). Elegirlo guarda una
+regla `permitida` en `~/.alfalfa/reglas.toml` (o `$ALFALFA_HOME/reglas.toml`) con
+ese prefijo, que vale para todas las sesiones. Lo que concede depende de la tarjeta
+(`prefijo_alcance`):
+
+| Tarjeta | Regla que guarda | Qué deja hacer sin preguntar |
+|---|---|---|
+| `salir_sandbox` o `reintento` | `fuera_del_sandbox = true` (`sin_sandbox`) | Ejecutar esas órdenes **sin sandbox**, con red. |
+| `red` | `con_red = true` (`red`) | Usar la red **dentro** del sandbox. La escritura sigue limitada y no permite salir del sandbox: si la orden pide `require_escalated`, se pregunta. |
+| `modo` (Manual y Aceptar ediciones) | sin más (`sandbox`) | Quitar la pregunta del modo. La orden sigue en el sandbox y sin red. |
+
+El prefijo lo propone el modelo (`prefix_rule`). Si no lo propone, para git se
+ofrece la suborden (`git push`). En las tarjetas de red y de modo, también la de
+`npm`, `pnpm`, `yarn`, `pip`, `pip3`, `uv`, `cargo`, `go`, `make`, `gem`, `bundle`,
+`poetry`, `composer`, `mvn`, `gradle`, `dotnet` y `mix` (`npm install`, `make test`).
+La regla casa el prefijo tal cual: el programa por su nombre o por una ruta del
+sistema, nunca `tools/npm`, `./npm` ni detrás de `env`, `sudo` u otro envoltorio.
+Nunca se ofrece en una orden peligrosa, tras leer contenido externo ni si una regla
+que pregunta o prohíbe casa la orden, y nunca prefijos que lo permitirían todo
+(`bash -lc`, `python3`, `git`, `npm run`, `npm exec`, `pnpm dlx`, `uv run`…). Esas
+reglas tampoco valen después: una orden peligrosa, una regla que pregunta o prohíbe
+y el contenido externo siguen preguntando aunque la regla case.
+
+La tarjeta de edición del modo Manual (`edicion`) no lo ofrece: una regla de
+`reglas.toml` vale en todas las carpetas y casa órdenes, no archivos. Para no
+preguntar por las ediciones está el modo «Aceptar ediciones», y «Permitir en esta
+sesión» para esos archivos.
 
 La clasificación de órdenes peligrosas es un port POSIX de
 `is_dangerous_command.rs` (`permisos/peligrosos.py`), y la de denegaciones, de
