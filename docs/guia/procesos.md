@@ -5,7 +5,24 @@ se lanza con `run_command` y `background: true`, como los «background terminals
 de Codex: a los ~10 s el agente recibe su id (`p1`) y lo que lleva escrito, el
 turno sigue y el programa queda abierto aunque el turno acabe. `command_status`
 le enseña al agente la salida nueva, si terminó y con qué código, y lo detiene
-con `stop: true`. La salida va a `sesiones/ID/procesos/p1.log`.
+con `stop: true`.
+
+La salida (stdout y stderr juntos, en el orden en que se escribieron) la lee el
+arnés por una tubería y la guarda en `sesiones/ID/procesos/p1.log` con un tope de
+1 MB por proceso: al pasarlo se queda con la segunda mitad, lo último, y el
+archivo empieza con «[… N bytes anteriores recortados]». Un `npm run dev` o un
+`tail -f` de horas ya no llena el disco, y el proceso nunca se bloquea porque
+nadie mire su salida. Si lo que el agente pide con `command_status` ya se
+recortó, la salida nueva empieza con esa misma marca.
+
+El registro de un proceso vivo no se borra nunca. El de uno terminado se guarda
+mientras `command_status` lo puede pedir: con la sesión abierta y entre los 16
+terminados más recientes (a uno más viejo, `command_status` contesta que su
+salida ya se borró). Al cerrar la sesión se borran todos, porque al reanudarla
+los ids vuelven a empezar en `p1`. Si el arnés muere de golpe (`kill -9`, un
+apagón), al volver a abrir la sesión se cierran los procesos que dejó vivos,
+anotados en `procesos/grupos.json`, y se borran sus registros; mientras tanto,
+uno que siga escribiendo recibe SIGPIPE, porque ya nadie lee su tubería.
 
 Una orden normal que pasa de su plazo (120 s o `timeout_seconds`), como un
 `swift build -c release` largo, tampoco se corta: pasa a segundo plano con lo que
