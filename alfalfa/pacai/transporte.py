@@ -235,11 +235,13 @@ class TransportePacai(Transport):
         campos = self._diferidos.pop(ident, None)
         if campos is None or self.cerrado:
             return
+        self.t.motivo_rechazo = None
         mensajes = self.t.permiso(campos)
         if mensajes is None:
-            # Sin ejecución a la que atribuirlo (p. ej. guardar una prueba del navegador entre turnos): se niega.
+            # Sin ejecución a la que atribuirlo (p. ej. guardar una prueba del navegador entre turnos), en cierre o
+            # con los argumentos truncados: se niega.
             if ident in self.pending:
-                self.resolve(ident, False, 'Sin ejecución activa')
+                self.resolve(ident, False, self.t.motivo_rechazo or 'Sin ejecución activa')
             return
         self._enviar_todo(mensajes)
 

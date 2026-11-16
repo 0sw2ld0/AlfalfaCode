@@ -894,5 +894,8 @@ async def test_los_secretos_declarados_no_salen_y_el_digest_sigue_cuadrando_con_
     await asyncio.wait_for(tarea, 1)
     fin_de_herramienta(c, 'run_command', {'output': secreto})
     await cerrar(c)
-    assert secreto not in c.salida.getvalue() and '[REDACTADO]' in c.salida.getvalue()
+    assert secreto not in c.salida.getvalue()
+    # En los argumentos el secreto sale tachado como manda PACAI 0.3; en el texto, como en v2.
+    assert c.del_agente('tool_start')[0]['payload']['arguments']['argv'] == ['curl', '-H', 'x: [redacted]']
+    assert '[REDACTADO]' in c.salida.getvalue()
     c.comprobar()                                       # el digest corresponde a los argumentos ya redactados

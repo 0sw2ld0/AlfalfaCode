@@ -30,6 +30,10 @@ NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
 MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)
 RECORTADO = '… [recortado]'
+# Cómo se tacha un secreto en los argumentos de una herramienta del agente (§4.4): siempre igual, para que el digest
+# de lo que viaja cuadre. AlfalfaCode lo redacta como «[REDACTADO]» (v2, registros); en PACAI sale así.
+TACHADO = '[redacted]'
+REDACTADO = '[REDACTADO]'
 MAX_SALIDA = 60000            # caracteres de la salida de una herramienta en un `tool_end`
 EDITORES = frozenset({'write_file', 'edit_file', 'apply_patch'})
 SINTETICA = 'request_permission'
@@ -63,6 +67,7 @@ class Herramienta:
     sintetica: bool = False          # la abrió un permiso que ninguna herramienta abierta explicaba
     cancelada: bool = False          # su aprobación se canceló: su `tool_end` es `cancelled` (§4.5)
     subagente: str | None = None     # el subagente (aN) que lanzó, si es un `spawn_agent` o un `send_input`
+    truncada: bool = False           # sus argumentos van acortados (`truncated`): no se puede aprobar (§4.4)
 
 
 @dataclass
@@ -98,12 +103,23 @@ def _json_seguro(valor: Any) -> dict | None:
     return copia if isinstance(copia, dict) else None
 
 
-def argumentos_de(texto: str, datos: dict | None) -> dict:
-    """Los argumentos de una herramienta a partir de su evento v2 de inicio.
+def tachar(valor: Any) -> Any:
+    """Los secretos ya redactados por AlfalfaCode, con la marca de PACAI (`"[redacted]"`); claves y estructura igual."""
+    if isinstance(valor, str):
+        return valor.replace(REDACTADO, TACHADO)
+    if isinstance(valor, list):
+        return [tachar(v) for v in valor]
+    if isinstance(valor, dict):
+        return {k: tachar(v) for k, v in valor.items()}
+    return valor
 
-    El motor escribe `Inicio <nombre> · <argumentos>` con los argumentos ya sin secretos y recortados a 1000
-    caracteres. Si caben, son un literal de Python y valen tal cual; si no, se rehace lo que enseña la app
-    (orden, carpeta, archivos) y se avisa con `truncated`.
+
+def argumentos_de(texto: str, datos: dict | None) -> tuple[dict, bool]:
+    """Los argumentos de una herramienta a partir de su evento v2 de inicio, y si están acortados.
+
+    Sólo se usa cuando el motor no dio los argumentos estructurados. Escribe `Inicio <nombre> · <argumentos>` con
+    los argumentos ya sin secretos y recortados a 1000 caracteres. Si caben, son un literal de Python y valen tal
+    cual; si no, se rehace lo que enseña la app (orden, carpeta, archivos) y se avisa con `truncated`.
     """
     cuerpo = texto.split(' · ', 1)[1] if texto.startswith('Inicio ') and ' · ' in texto else ''
     if cuerpo:
@@ -113,13 +129,13 @@ def argumentos_de(texto: str, datos: dict | None) -> dict:
             valor = None
         limpio = _json_seguro(valor) if isinstance(valor, dict) else None
         if limpio is not None:
-            return limpio
+            return limpio, False
     datos = datos or {}
-    args: dict[str, Any] = {'truncated': True}
+    args: dict[str, Any] = {}
     for origen, destino in (('orden', 'command'), ('cwd', 'cwd'), ('objetivo', 'target'), ('objetivos', 'targets')):
         if datos.get(origen):
             args[destino] = datos[origen]
-    return args
+    return args, True
 
 
 def _tamano(valor: Any) -> int:
@@ -208,6 +224,7 @@ class Traductor:
         self.de_sesion: list[tuple[str, str, str]] = []     # (nombre, digest, approval_id) con alcance session
         self.hay_cambios = False
         self.clientes_cancelados: set[str] = set()          # herramientas del cliente que el agente canceló
+        self.motivo_rechazo: str | None = None              # por qué `permiso` devolvió None, si no es lo de siempre
         self.fines_ignorados: dict[tuple[str, str], int] = {}  # (run_id, nombre): fines del motor ya cerrados aquí
         # Quien conteste a v2 cuando PACAI no puede (navegador no declarado o cancelado): (id v2, texto).
         self.al_rechazar_navegador: Callable[[str, str], None] | None = None
@@ -402,11 +419,11 @@ class Traductor:
             return []                    # sin `tool_start`, su fin tampoco sale
         nombre = str(datos.get('nombre') or 'tool')
         reales = _json_seguro(argumentos) if isinstance(argumentos, dict) else None
-        recortados = False
         if reales is not None:
-            args, recortados = recortar_argumentos(reales, self.max_argumentos)
+            args, recortados = recortar_argumentos(tachar(reales), self.max_argumentos)
         else:
-            args = argumentos_de(texto, datos)
+            args, recortados = argumentos_de(texto, datos)
+            args = tachar(args)
         payload: dict[str, Any] = {'run_id': run_id, 'name': nombre, 'arguments': args, 'side': 'agent'}
         # Lo legible va aparte (como `title` de ACP): la descripción que enseña la app o, sin ella, el texto de
         # siempre del motor.
@@ -414,13 +431,13 @@ class Traductor:
         if legible:
             payload['title'] = str(legible)[:200]
         if recortados:
-            payload.update(self._alfalfa({'arguments_truncated': True}))
+            payload['truncated'] = True
         d = digest(args)
         aprobada = next((a for n, g, a in self.de_sesion if n == nombre and g == d), None)
-        if aprobada:
+        if aprobada and not recortados:          # una llamada truncada no reutiliza una aprobación `session`
             payload['approval_id'] = aprobada
         m = self._msg('tool_start', payload)
-        self.herramientas[m['id']] = Herramienta(m['id'], run_id, nombre, args)
+        self.herramientas[m['id']] = Herramienta(m['id'], run_id, nombre, args, truncada=recortados)
         return [m]
 
     def _tool_end(self, run_id: str | None, datos: dict, texto: str) -> list[dict]:
@@ -504,9 +521,10 @@ class Traductor:
     # -- aprobaciones (§4.5) -----------------------------------------------
     def _herramienta_del_permiso(self, run_id: str, argv: Any) -> Herramienta | None:
         abiertas = [h for h in self.herramientas.values() if h.run_id == run_id and h.lado == 'agent']
+        argv = tachar(argv)
         for h in reversed(abiertas):
             propio = h.argumentos.get('argv')
-            if propio is None or propio == argv:
+            if h.truncada or propio is None or propio == argv:
                 return h
         return None
 
@@ -522,8 +540,12 @@ class Traductor:
         argv = campos.get('argv')
         salida: list[dict] = []
         herramienta = self._herramienta_del_permiso(run_id, argv)
+        if herramienta is not None and herramienta.truncada:
+            # Nadie puede aprobar lo que no ve entero (§4.4): se niega y la herramienta termina en `error`.
+            self.motivo_rechazo = 'Los argumentos no caben enteros en el mensaje y no se pueden aprobar.'
+            return None
         if herramienta is None:
-            args = {'argv': argv, 'purpose': proposito[:500]}
+            args = {'argv': tachar(argv), 'purpose': proposito[:500]}
             inicio = self._msg('tool_start', {'run_id': run_id, 'name': SINTETICA,
                                               'arguments': _json_seguro(args) or {}, 'side': 'agent',
                                               'title': proposito[:200] or 'Permiso'})

@@ -101,21 +101,20 @@ async def test_el_cierre_lleva_el_uso_del_turno_y_su_resumen_en_la_extension():
 # -- herramientas (§4.4) ---------------------------------------------------
 def test_los_argumentos_salen_del_literal_que_escribe_el_motor():
     args = {'path': 'a.py', 'old': "it's", 'n': 3, 'ok': True, 'nada': None}
-    assert argumentos_de('Inicio edit_file · ' + str(args), {}) == args
+    assert argumentos_de('Inicio edit_file · ' + str(args), {}) == (args, False)
 
 
 def test_si_el_literal_se_recorto_se_rehacen_los_datos_de_la_app():
     datos = datos_de_inicio('run_command', {'argv': ['git', 'status'], 'purpose': 'Ver', 'cwd': 'sub'})
     largo = 'Inicio run_command · ' + str({'argv': ['git', 'status'], 'x': 'y' * 2000})[:1000]
-    assert argumentos_de(largo, datos) == {'truncated': True, 'command': datos['orden'], 'cwd': 'sub'}
+    assert argumentos_de(largo, datos) == ({'command': datos['orden'], 'cwd': 'sub'}, True)
 
 
 def test_lo_que_no_es_json_no_se_cuela_en_los_argumentos():
-    assert argumentos_de('Inicio t · ' + str({'a': float('nan')}), {'objetivo': 'x'}) == \
-        {'truncated': True, 'target': 'x'}
-    assert argumentos_de('Inicio t · ' + str({1: 'a'}), {}) == {'1': 'a'}     # las claves de JSON son texto
-    assert argumentos_de('Inicio t · [1, 2]', {}) == {'truncated': True}      # no es un objeto
-    assert argumentos_de('Inicio t · ' + str({'a': (1, 2)}), {}) == {'a': [1, 2]}
+    assert argumentos_de('Inicio t · ' + str({'a': float('nan')}), {'objetivo': 'x'}) == ({'target': 'x'}, True)
+    assert argumentos_de('Inicio t · ' + str({1: 'a'}), {}) == ({'1': 'a'}, False)    # las claves de JSON son texto
+    assert argumentos_de('Inicio t · [1, 2]', {}) == ({}, True)                        # no es un objeto
+    assert argumentos_de('Inicio t · ' + str({'a': (1, 2)}), {}) == ({'a': [1, 2]}, False)
 
 
 async def test_una_herramienta_del_agente_tiene_su_inicio_y_su_fin():
