@@ -580,3 +580,48 @@ def test_real_la_clave_de_systemd_no_llega_a_la_orden(tmp_path, monkeypatch):
     monkeypatch.setenv('CREDENTIALS_DIRECTORY', str(propia))
     code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(propia / 'ollama')], ws)
     assert code != 0 and 'sk-ollama-propia' not in output, output
+
+
+def _clave_de_firma():
+    """La clave de firma del código de cortesía donde la crea `--activar-codigo` fuera del Mac."""
+    from alfalfa.proveedores import configuracion
+    from alfalfa.proveedores.alfalfa import CARPETA_FIRMA
+    carpeta = configuracion.ruta().parent / CARPETA_FIRMA
+    carpeta.mkdir(mode=0o700, parents=True)
+    clave = carpeta / 'clave.pem'
+    clave.write_text('-----BEGIN PRIVATE KEY-----\nsecreta-de-firma\n')
+    clave.chmod(0o600)
+    return carpeta, clave
+
+
+def test_la_clave_de_firma_queda_tapada(tmp_path, monkeypatch):
+    monkeypatch.setattr(bw, 'CREDENCIALES', ())
+    monkeypatch.delenv('CREDENTIALS_DIRECTORY', raising=False)
+    monkeypatch.delenv('XDG_RUNTIME_DIR', raising=False)
+    monkeypatch.delenv('ALFALFA_FIRMA_CLAVE', raising=False)
+    carpeta, _ = _clave_de_firma()
+    args = BwrapSandbox(str(tmp_path)).montajes()
+    real = os.path.realpath(carpeta)
+    i = args.index('--tmpfs')
+    assert args[i - 2:i + 4] == ['--perms', '0555', '--tmpfs', real, '--remount-ro', real]
+    # Una clave fuera de esa carpeta (ALFALFA_FIRMA_CLAVE) se tapa con /dev/null.
+    otra = tmp_path / 'otra.pem'
+    otra.write_text('x')
+    monkeypatch.setenv('ALFALFA_FIRMA_CLAVE', str(otra))
+    args = BwrapSandbox(str(tmp_path)).montajes()
+    assert args[args.index(os.path.realpath(otra)) - 2:][:3] == ['--ro-bind', '/dev/null', os.path.realpath(otra)]
+
+
+@real
+def test_real_una_orden_no_lee_la_clave_de_firma(tmp_path, monkeypatch):
+    monkeypatch.delenv('ALFALFA_FIRMA_CLAVE', raising=False)
+    _, clave = _clave_de_firma()
+    externa = tmp_path / 'firma-externa.pem'
+    externa.write_text('secreta-externa')
+    ws = tmp_path / 'ws'
+    ws.mkdir()
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(clave)], ws)
+    assert code != 0 and 'secreta-de-firma' not in output, output
+    monkeypatch.setenv('ALFALFA_FIRMA_CLAVE', str(externa))
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(externa)], ws)
+    assert 'secreta-externa' not in output, output

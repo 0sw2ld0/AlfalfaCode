@@ -886,7 +886,8 @@ bubblewrap (`bwrap`), con la misma política que Seatbelt en el Mac:
   de la sesión;
 - sin capacidades, también si AlfalfaCode corre como root, y con su propio espacio de
   procesos: no ve el entorno de AlfalfaCode, donde están las claves. Las credenciales de
-  systemd (`/run/credentials`) también quedan vacías dentro.
+  systemd (`/run/credentials`) y la clave de firma del código de cortesía
+  (`~/.alfalfa/firma`) también quedan vacías dentro.
 
 Si `bwrap` falta o no arranca, cada orden pide el permiso «SIN SANDBOX», como en el Mac
 cuando falla Seatbelt.
@@ -1045,6 +1046,29 @@ MemoryMax=600M
 MemorySwapMax=1G
 Nice=10
 ```
+
+Con el **código de cortesía** en lugar de una clave de proveedor, el servidor no guarda
+ninguna clave de pago y el gasto tiene el tope del código. Actívalo una vez como `alfalfa`
+(el párrafo «Fuera de macOS…» del control por JSONL), cifra la clave de firma y el código,
+y dale al servicio las dos credenciales:
+
+```bash
+sudo systemd-creds encrypt --name=alfalfa-firma /home/alfalfa/.alfalfa/firma/clave.pem /etc/credstore.encrypted/alfalfa-firma
+```
+
+```bash
+systemd-ask-password -n 'Código CUY:' | sudo systemd-creds encrypt --name=alfalfa-codigo - /etc/credstore.encrypted/alfalfa-codigo
+```
+
+```ini
+LoadCredentialEncrypted=alfalfa-firma:/etc/credstore.encrypted/alfalfa-firma
+LoadCredentialEncrypted=alfalfa-codigo:/etc/credstore.encrypted/alfalfa-codigo
+Environment=ALFALFA_FIRMA_CLAVE=%d/alfalfa-firma
+ExecStart=/bin/sh -c 'ALFALFA_CODIGO="$$(cat "$$CREDENTIALS_DIRECTORY/alfalfa-codigo")" exec /home/alfalfa/.local/bin/alfalfa --modelo alfalfa/<modelo> "…"'
+```
+
+La carpeta `~/.alfalfa/firma` y el archivo de `ALFALFA_FIRMA_CLAVE` también quedan vacíos
+dentro del sandbox.
 
 En lugar de cron, un temporizador, `/etc/systemd/system/alfalfa-encargo.timer`. Con
 cron la clave tendría que estar en claro en el crontab o en un archivo:

@@ -27,7 +27,8 @@ PROCEDENCIA.md de esta carpeta): reescrito en Python, sin código copiado.
   como en Seatbelt, y la política on-request lo reconoce como denegación. `network=True` quita las
   dos cosas: es la red completa.
 - Las credenciales de systemd (`/run/credentials`, donde `LoadCredentialEncrypted=` deja descifrada la
-  clave del servicio) quedan vacías dentro del sandbox.
+  clave del servicio) y la clave de firma del código de cortesía (`$ALFALFA_HOME/firma`) quedan vacías
+  dentro del sandbox.
 - Sin capacidades (`--cap-drop ALL`, también si el arnés corre como root), en su propia sesión, con
   sus propios espacios de nombres de usuario, procesos e IPC, y sin poder crear más espacios de usuario
   cuando bwrap lo admite (`--disable-userns`, desde 0.8). Muere con el arnés (`--die-with-parent`),
@@ -102,6 +103,25 @@ def carpetas_de_credenciales():
         if os.path.isdir(real) and not any(_contains(o, real) for o in carpetas):
             carpetas = [o for o in carpetas if not _contains(real, o)] + [real]
     return carpetas
+
+
+def secretos():
+    """(carpetas, archivos) que las órdenes no deben leer: las credenciales de systemd y la clave de firma del
+    código de cortesía, que da acceso a su cuota. Ésta vive en `$ALFALFA_HOME/firma/` o donde diga
+    ALFALFA_FIRMA_CLAVE (proveedores/alfalfa.py)."""
+    from ..proveedores import configuracion
+    from ..proveedores.alfalfa import CARPETA_FIRMA
+    carpetas = carpetas_de_credenciales()
+    firma = os.path.realpath(configuracion.ruta().parent / CARPETA_FIRMA)
+    if os.path.isdir(firma) and not any(_contains(c, firma) for c in carpetas):
+        carpetas.append(firma)
+    archivos = []
+    externa = os.environ.get('ALFALFA_FIRMA_CLAVE')
+    if externa:
+        real = os.path.realpath(os.path.expanduser(externa))
+        if os.path.isfile(real) and not any(_contains(c, real) for c in carpetas):
+            archivos.append(real)
+    return carpetas, archivos
 
 
 # ------------------------------------------------------------------ seccomp
@@ -300,9 +320,12 @@ class BwrapSandbox:
         for hogar in sorted(hogares, key=_profundidad):
             if os.path.lexists(hogar):
                 args += ['--ro-bind', hogar, hogar]
-        for carpeta in carpetas_de_credenciales():
-            # Una clave de systemd-creds no llega a las órdenes: AlfalfaCode ya la leyó al arrancar.
+        carpetas, archivos = secretos()
+        for carpeta in carpetas:
+            # Una clave de systemd-creds o la de firma no llega a las órdenes: AlfalfaCode ya la leyó al arrancar.
             args += ['--perms', '0555', '--tmpfs', carpeta, '--remount-ro', carpeta]
+        for archivo in archivos:
+            args += ['--ro-bind', '/dev/null', archivo]
         args += ['--cap-drop', 'ALL']
         return args
 
