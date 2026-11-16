@@ -76,7 +76,7 @@ class PuntoDePartida:
         try:
             indice = temporal / 'partida'
             if propio.is_file():
-                shutil.copyfile(propio, indice)       # sólo se lee el del usuario
+                _copiar_indice(propio, indice)        # sólo se lee el del usuario
             return cls(carpeta, temporal, _arbol(carpeta, indice))
         except (ErrorGit, OSError):
             shutil.rmtree(temporal, ignore_errors=True)
@@ -87,7 +87,7 @@ class PuntoDePartida:
         desde el punto de partida; None si nada cambió o git falla."""
         try:
             indice = self.temporal / 'final'
-            shutil.copyfile(self.temporal / 'partida', indice)
+            _copiar_indice(self.temporal / 'partida', indice)
             arbol = _arbol(self.carpeta, indice)
             if arbol == self.arbol:
                 return None
@@ -102,6 +102,16 @@ class PuntoDePartida:
 
     def olvidar(self) -> None:
         shutil.rmtree(self.temporal, ignore_errors=True)
+
+
+def _copiar_indice(origen: Path, destino: Path) -> None:
+    """Copia un índice conservando su hora de modificación.
+
+    Git confía en el `stat` de cada entrada salvo en las «racy»: las que cambiaron en el mismo segundo que se
+    escribió el índice, que reconoce comparando con la hora del propio archivo del índice. Una copia con la hora de
+    ahora las hace pasar por seguras, y un cambio del mismo tamaño en ese segundo se daría por intacto.
+    """
+    shutil.copy2(origen, destino)
 
 
 def _arbol(carpeta: Path, indice: Path) -> str:
