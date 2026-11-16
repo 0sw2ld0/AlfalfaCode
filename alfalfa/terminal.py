@@ -1339,6 +1339,8 @@ async def execute(args):
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
+                              # Limpiar sólo abre la sesión de la cola: no hace falta un mensaje nuevo.
+                              wait=getattr(args, 'limpiar_worktrees', False),
                               budget=getattr(args, 'presupuesto', None),
                               monthly_budget=getattr(args, 'presupuesto_mes', None),
                               diagnosticos=diagnostics(args), firma=signature(args),
@@ -1353,6 +1355,9 @@ async def execute(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, current.cancel)
     try:
+        if getattr(args, 'limpiar_worktrees', False):
+            print(await manager.cola_encargos.limpiar(), flush=True)
+            return 0
         if cola is not None:
             print('AlfalfaCode · Sesión de la cola: ' + manager.task['id'], flush=True)
             if cola:
@@ -1446,6 +1451,9 @@ def main(argv=None):
     parser.add_argument('--cola-encargos', nargs='?', const='', metavar='JSON',
                         help='Ejecutar una cola desde un archivo JSON; sin archivo, reanudar la cola de '
                              '--reanudar ID o preparar una cola desde la app con --stdio')
+    parser.add_argument('--limpiar-worktrees', action='store_true',
+                        help='Con --reanudar ID de una cola en paralelo: quitar los worktrees y ramas que ya no '
+                             'guardan trabajo sin integrar, sin ejecutar ningún encargo')
     parser.add_argument('--navegador', action='store_true',
                         help='Con --stdio o --pacai: la app ofrece su navegador propio (herramientas browser_*)')
     parser.add_argument('--motor-navegador', choices=('webkit', 'cuybrowser'),
@@ -1538,6 +1546,10 @@ def main(argv=None):
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):
         parser.error('--cola-encargos no se combina con un encargo, --bifurcar ni adjuntos')
+    if args.limpiar_worktrees and (not args.reanudar or args.stdio or args.pacai or args.encargo or args.bifurcar
+                                   or args.imagen or args.archivo or args.cola_encargos):
+        parser.error('--limpiar-worktrees necesita --reanudar ID de la cola y no se combina con --stdio, '
+                     '--pacai, un encargo, --bifurcar, adjuntos ni un archivo de cola')
     if args.navegador_sitios:
         from .navegador_sitios_orden import orden
         return orden(args, home_dir())

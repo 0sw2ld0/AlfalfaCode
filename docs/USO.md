@@ -361,7 +361,7 @@ tipos de subagente como `explorador`, ids) no se traducen. Los más usados:
 
 | Campo | Valores |
 |---|---|
-| `status` | subagentes: `working`, `completed`, `failed`, `closed`, `interrupted`; cola de encargos: `ready`, `running`, `pausing`, `paused`, `completed`, `cancelled` (cada encargo: `pending`, `running`, `cancelled`, `interrupted`…); revisión de código: `available`, `reviewing`, `completed`, `failed`, `no_budget`…; compactación: `in_progress`, `done`, `failed` |
+| `status` | subagentes: `working`, `completed`, `failed`, `closed`, `interrupted`; cola de encargos: `ready`, `running`, `pausing`, `paused`, `completed`, `cancelled` (cada encargo: `pending`, `running`, `cancelled`, `interrupted`…; su `cleanup`: `removed`, `kept`, `branch_kept`); revisión de código: `available`, `reviewing`, `completed`, `failed`, `no_budget`…; compactación: `in_progress`, `done`, `failed` |
 | `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
 | `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
 | `warning`, `exhausted` | `session`, `month` |
@@ -387,7 +387,7 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
 | `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` (`active`) | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` (`activo`) |
 | `alfalfa.resolve_learning` (`id`, `apply`), `alfalfa.review_code` (`turn`, `model`), `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
 | `alfalfa.export_browser_test` (`id`, `path`), `alfalfa.stop_process` (`id`) | `exportar_prueba_navegador`, `detener_proceso` |
-| `alfalfa.jobs_command` (`action`: `prepare`, `start`, `pause`, `stop` o `cancel`; `jobs`; `mode`: `serial` o `parallel`; `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
+| `alfalfa.jobs_command` (`action`: `prepare`, `start`, `pause`, `stop`, `cancel` o `clean`; `jobs`; `mode`: `serial` o `parallel`; `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
 | `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
 
 ### Reglas que PACAI exige
@@ -620,8 +620,40 @@ no se mezcla con los mensajes que se dejan mientras el agente está respondiendo
 La tarjeta muestra el estado y la actividad de cada tarea, permite abrir su
 sesión y ofrece el informe cuando termina. El resumen conjunto queda al final
 de la conversación, con las rutas y ramas de los resultados. Los worktrees
-permanecen en el directorio hermano de `$ALFALFA_HOME`, con sufijo `-worktrees`
-(`~/.alfalfa-worktrees` por defecto). La cola no los borra, fusiona ni publica.
+se crean en el directorio hermano de `$ALFALFA_HOME`, con sufijo `-worktrees`
+(`~/.alfalfa-worktrees` por defecto), en ramas `alfalfa/cola-<cola>-<encargo>`.
+La cola nunca fusiona ni publica nada.
+
+**Limpieza de los worktrees.** La cola quita un worktree y su rama sólo si no
+guardan trabajo que no esté ya en otro sitio. Tienen que cumplirse todas estas
+condiciones:
+
+- el encargo terminó y la cola ya no lo va a reanudar: en una cola terminada o
+  cancelada, todos; en una pausada, sólo los terminados (al reanudar se saltan);
+- el worktree no tiene cambios sin confirmar ni archivos nuevos sin seguimiento
+  (los ignorados por `.gitignore`, como compilaciones o `node_modules`, se borran
+  con la carpeta), sigue en su rama y no está bloqueado con `git worktree lock`;
+- la rama no tiene commits propios: todos están ya en el punto del que salió, en
+  la rama base (la que tenía el proyecto al empezar la cola) o en la rama actual
+  del proyecto.
+
+Si algo no se cumple, se conserva y la cola dice por qué («tiene 3 commits sin
+integrar en main», «tiene 2 cambios sin confirmar»…). Nunca usa `--force` ni
+`git branch -D`: Git vuelve a comprobarlo al quitar y, si se niega, también se
+conserva. Si borraste a mano la carpeta de un worktree, se quita sólo su registro
+en Git (como `git worktree prune`, pero sin tocar otros worktrees tuyos) y la rama
+sigue la misma regla. El repositorio del proyecto no cambia: ni su rama, ni su
+HEAD, ni su índice.
+
+La limpieza se hace al terminar o detener la cola, al cancelarla, al reabrir la
+sesión de la cola (por si integraste ramas desde entonces) y con la orden
+explícita. El resumen final y un aviso en la conversación dicen qué se quitó y
+qué se conserva; en
+`--stdio` v2 cada encargo lleva `limpieza` (`estado`: `quitado`, `conservado` o
+`rama_conservada`; `motivo`). La orden explícita es `{"tipo": "encargos",
+"accion": "limpiar"}` por `--stdio` (`alfalfa.jobs_command` con `action: "clean"`
+por PACAI) o, en la CLI, `alfalfa --reanudar ID --limpiar-worktrees`, que no
+ejecuta ningún encargo.
 
 Las tareas heredan modelo, esfuerzo y modo de permisos de la sesión que preparó la cola,
 comparten su presupuesto de sesión y mes y siguen mostrando los permisos que

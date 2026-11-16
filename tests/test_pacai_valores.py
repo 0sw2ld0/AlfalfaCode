@@ -235,6 +235,7 @@ def test_un_valor_desconocido_en_una_orden_es_un_error_claro_y_no_llega_al_motor
     ('set_settings', {'mode': 'bypass_permissions'}, {'tipo': 'ajustes', 'modo': 'omitir'}),
     ('set_context_mode', {'mode': 'full'}, {'tipo': 'contexto', 'modo': 'completo'}),
     ('jobs_command', {'action': 'pause'}, {'tipo': 'encargos', 'accion': 'pausar'}),
+    ('jobs_command', {'action': 'clean'}, {'tipo': 'encargos', 'accion': 'limpiar'}),
 ])
 def test_los_valores_de_una_orden_vuelven_a_v2(monkeypatch, orden, payload, v2):
     c = Cliente()
