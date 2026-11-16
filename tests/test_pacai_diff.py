@@ -1,6 +1,7 @@
 """`diff_updated` sin instantáneas de deshacer: el diff de la ejecución sale de git, sin tocar el índice, la rama ni
 el árbol del usuario, respetando `.gitignore` y sin archivos nuevos enormes. Fuera de un repo git, no hay diff."""
 import subprocess
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -60,6 +61,38 @@ def test_el_diff_de_git_cuenta_solo_lo_que_cambio_la_ejecucion_y_no_toca_nada_de
     assert estado_del_usuario(repo)[:3] == antes[:3]                   # índice, rama y HEAD intactos
     assert estado_del_usuario(repo) == durante                          # ni `git status` cambia por el diff
     assert not partida.temporal.exists()
+
+
+def _al_principio_de_un_segundo():
+    while time.time() % 1 > 0.3:
+        time.sleep(0.01)
+
+
+def test_un_cambio_del_mismo_tamano_en_el_mismo_segundo_cuenta(repo):
+    """«Racy git»: si el diff se calcula en un segundo posterior, un cambio del mismo tamaño hecho en el mismo
+    segundo que la foto no debe pasar por intacto. Hacía fallar a veces la prueba de arriba en la suite."""
+    _al_principio_de_un_segundo()
+    (repo / 'a.py').write_text('uno\ndos\ntres\ncinco\n')
+    partida = PuntoDePartida.tomar(repo)
+    (repo / 'a.py').write_text('uno\nDOS\ntres\ncinco\n')            # mismo tamaño, mismo segundo
+    time.sleep(1.1)
+    diff = partida.diff()
+    partida.olvidar()
+    assert diff is not None and [f['path'] for f in diff['files']] == ['a.py'], diff
+
+
+def test_un_cambio_previo_del_mismo_tamano_no_se_atribuye_a_la_ejecucion(repo):
+    """Lo mismo con el índice del usuario: un cambio suyo de antes de la ejecución, del mismo tamaño y en el mismo
+    segundo que su `git add`, ya estaba; la ejecución no lo hizo."""
+    _al_principio_de_un_segundo()
+    git(repo, 'add', 'a.py')
+    (repo / 'a.py').write_text('uno\nDOS\ntres\ncuatro\n')           # mismo tamaño que lo añadido
+    time.sleep(1.1)
+    partida = PuntoDePartida.tomar(repo)
+    (repo / 'nuevo.md').write_text('hola\n')
+    diff = partida.diff()
+    partida.olvidar()
+    assert diff is not None and [f['path'] for f in diff['files']] == ['nuevo.md'], diff
 
 
 def test_en_una_subcarpeta_el_diff_es_de_esa_carpeta_con_rutas_relativas(repo):
