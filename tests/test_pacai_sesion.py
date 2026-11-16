@@ -1,5 +1,5 @@
 """`alfalfa --pacai` de verdad: un proceso aparte con el motor de producción, la inferencia sustituida y un cliente
-PACAI por stdin y stdout. Cada transcripción pasa el esquema y las reglas de sesión de PACAI 0.2."""
+PACAI por stdin y stdout. Cada transcripción pasa el esquema y las reglas de sesión de PACAI 0.3."""
 import json
 import os
 import queue
@@ -57,7 +57,7 @@ class Proceso:
 
     def enviar(self, tipo, payload=None, **sobre):
         self.seq += 1
-        m = dict(pacai='0.2', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
+        m = dict(pacai='0.3', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
                  time='2026-11-15T10:00:00Z', payload=payload or {}, **sobre)
         self.log.append(m)
         self.proc.stdin.write(json.dumps(m) + '\n')
@@ -81,7 +81,7 @@ class Proceso:
         return self.hasta(lambda m: m['type'] == tipo)
 
     def saludar(self, **cambios):
-        self.enviar('hello', dict(versions=['0.2'], profiles=['work'], extensions=['alfalfa'], **cambios))
+        self.enviar('hello', dict(versions=['0.3'], profiles=['work'], extensions=['alfalfa'], **cambios))
         return self.tipo('session_started')
 
     def entrada(self, texto, **payload):
@@ -255,7 +255,7 @@ def test_interrupt_corta_la_ejecucion_cierra_la_herramienta_y_la_sesion_sigue(pr
 def test_un_cliente_que_manda_basura_recibe_errores_y_la_sesion_sigue(proceso):
     p = proceso('plain')
     p.saludar()
-    p.proc.stdin.write('no es json\n{"pacai":"0.2"}\n')
+    p.proc.stdin.write('no es json\n{"pacai":"0.3"}\n')
     p.proc.stdin.flush()
     assert p.tipo('error')['payload']['code'] == 'invalid_message'
     assert p.tipo('error')['payload']['code'] == 'invalid_message'

@@ -1438,7 +1438,7 @@ def main(argv=None):
                              '(también ALFALFA_FIRMA=0)')
     parser.add_argument('--stdio', action='store_true')
     parser.add_argument('--pacai', action='store_true',
-                        help='Hablar PACAI 0.2 por stdio (JSONL) en lugar de --stdio v2: la sesión se abre con el '
+                        help='Hablar PACAI 0.3 por stdio (JSONL) en lugar de --stdio v2: la sesión se abre con el '
                              '`hello` del cliente y el primer mensaje llega como `input`')
     parser.add_argument('--caducidad-aprobacion', metavar='SEGUNDOS',
                         help='Con --pacai: cuánto espera una aprobación antes de darse por caducada (por defecto, '

@@ -1,4 +1,4 @@
-"""PACAI 0.2 (Protocol for Agent Communication And Interfaces) en AlfalfaCode: `alfalfa --pacai`.
+"""PACAI 0.3 (Protocol for Agent Communication And Interfaces) en AlfalfaCode: `alfalfa --pacai`.
 
 AlfalfaCode es el agente; el cliente es la app, un widget o un terminal. Este paquete tiene lo mínimo del protocolo
 (el sobre y la numeración `seq`, los ids, el esquema y las reglas de sesión) y dos piezas propias:

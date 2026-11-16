@@ -1,4 +1,4 @@
-"""`alfalfa --pacai`: el `Transport` de `--stdio` v2 hablando PACAI 0.2 por stdio (§5.1).
+"""`alfalfa --pacai`: el `Transport` de `--stdio` v2 hablando PACAI 0.3 por stdio (§5.1).
 
 El motor sigue siendo el mismo (`stdio.run`): este transporte recibe sus eventos v2 y los traduce con `Traductor`, y
 traduce a órdenes v2 lo que llega del cliente. stdout lleva sólo mensajes PACAI, uno por línea; los registros van
@@ -82,6 +82,7 @@ class TransportePacai(Transport):
         self.t: Traductor | None = None
         self.empezado = False
         self.cerrado = False
+        self.sin_sesion = False                          # la negociación falló: lo que llegue se descarta
         self.manager = None
         self.max_bytes = MAX_BYTES
         self.client_seq = 0
@@ -330,7 +331,7 @@ class TransportePacai(Transport):
         self._enviar(previo.error(codigo, mensaje, ref))
 
     def receive(self, line):
-        if self.cerrado:
+        if self.cerrado or self.sin_sesion:
             return
         try:
             m = json.loads(line)
@@ -338,6 +339,8 @@ class TransportePacai(Transport):
             return self._error('invalid_message', 'La línea no es JSON.')
         if not isinstance(m, dict):
             return self._error('invalid_message', 'Un mensaje PACAI es un objeto JSON.')
+        if self._sin_version_comun(m):
+            return
         ref = m.get('id') if isinstance(m.get('id'), str) and len(m['id']) >= 8 else None
         previo = self.vistos.get(ref) if ref else None
         if previo is not None:
@@ -378,6 +381,25 @@ class TransportePacai(Transport):
             return self._extension(m)
         return self._error('invalid_message', 'Tipo desconocido: ' + tipo, ref)
 
+    def _sin_version_comun(self, m: dict) -> bool:
+        """Un `hello` de un cliente que no ofrece esta versión (p. ej. uno de la 0.2, con su sobre `"pacai": "0.2"`
+        que el esquema de la 0.3 no admite) recibe `version_incompatible` y se cierra (§4.1), no `invalid_message`."""
+        versiones = m.get('payload', {}).get('versions') if isinstance(m.get('payload'), dict) else None
+        if (self.empezado or m.get('type') != 'hello' or m.get('sender') != 'client'
+                or not isinstance(versiones, list) or VERSION in versiones):
+            return False
+        if isinstance(m.get('session'), str) and len(m['session']) >= 16:
+            self.emisor.sesion = m['session']
+        ref = m.get('id') if isinstance(m.get('id'), str) and len(m['id']) >= 8 else None
+        self._error('version_incompatible', 'Sólo se admite PACAI ' + VERSION + '.', ref)
+        self._negociacion_fallida()
+        return True
+
+    def _negociacion_fallida(self) -> None:
+        """Sin sesión no se contesta nada más: lo encadenado tras el `hello` se descarta sin respuesta (§4.1)."""
+        self.sin_sesion = True
+        self.stop()
+
     def _c_heartbeat(self, m):
         pass
 
@@ -395,10 +417,7 @@ class TransportePacai(Transport):
         if 'resume_after_seq' in p:
             # La reanudación en red queda fuera: este proceso no retiene una sesión anterior.
             self._error('retention_expired', 'Este agente no retiene sesiones para reanudar.', m['id'])
-            return self.stop()
-        if VERSION not in p['versions']:
-            self._error('version_incompatible', 'Sólo se admite PACAI ' + VERSION + '.', m['id'])
-            return self.stop()
+            return self._negociacion_fallida()
         perfiles = [x for x in p.get('profiles', []) if x in PERFILES]
         extensiones = [x for x in p.get('extensions', []) if x in EXTENSIONES]
         limite = (p.get('limits') or {}).get('max_message_bytes')

@@ -1,0 +1,5 @@
+{"x_motivo": "input antes del hello del cliente"}
+{"pacai": "0.3", "id": "m_00000001", "type": "input", "session": "s_ejemplo_0123456789abcdef", "sender": "client", "seq": 1, "time": "2026-11-12T10:00:01Z", "payload": {"blocks": [{"type": "text", "text": "Hola."}]}}
+{"pacai": "0.3", "id": "m_00000002", "type": "hello", "session": "s_ejemplo_0123456789abcdef", "sender": "client", "seq": 2, "time": "2026-11-12T10:00:02Z", "payload": {"versions": ["0.3"], "profiles": [], "extensions": []}}
+{"pacai": "0.3", "id": "m_00000003", "type": "hello", "session": "s_ejemplo_0123456789abcdef", "sender": "agent", "seq": 1, "time": "2026-11-12T10:00:03Z", "payload": {"versions": ["0.3"], "profiles": [], "extensions": []}}
+{"pacai": "0.3", "id": "m_00000004", "type": "session_started", "session": "s_ejemplo_0123456789abcdef", "sender": "agent", "seq": 2, "time": "2026-11-12T10:00:04Z", "payload": {"version": "0.3", "profiles": [], "extensions": [], "agent": {"name": "ejemplo", "version": "0.0.1"}}, "reply_to": "m_00000002"}

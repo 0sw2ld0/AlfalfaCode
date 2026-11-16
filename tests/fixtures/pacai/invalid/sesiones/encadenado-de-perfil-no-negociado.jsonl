@@ -1,0 +1,5 @@
+{"x_motivo": "perfil shared_state no negociado"}
+{"pacai": "0.3", "id": "m_00000001", "type": "hello", "session": "s_ejemplo_0123456789abcdef", "sender": "client", "seq": 1, "time": "2026-11-12T10:00:01Z", "payload": {"versions": ["0.3"], "profiles": ["shared_state"]}}
+{"pacai": "0.3", "id": "m_00000002", "type": "state_delta", "session": "s_ejemplo_0123456789abcdef", "sender": "client", "seq": 2, "time": "2026-11-12T10:00:02Z", "payload": {"patch": [{"op": "add", "path": "/client/surface", "value": "widget"}]}}
+{"pacai": "0.3", "id": "m_00000003", "type": "hello", "session": "s_ejemplo_0123456789abcdef", "sender": "agent", "seq": 1, "time": "2026-11-12T10:00:03Z", "payload": {"versions": ["0.3"], "profiles": []}}
+{"pacai": "0.3", "id": "m_00000004", "type": "session_started", "session": "s_ejemplo_0123456789abcdef", "sender": "agent", "seq": 2, "time": "2026-11-12T10:00:04Z", "payload": {"version": "0.3", "profiles": [], "extensions": []}, "reply_to": "m_00000001"}

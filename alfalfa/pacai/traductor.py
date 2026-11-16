@@ -1,4 +1,4 @@
-"""De los eventos de `--stdio` v2 a mensajes PACAI 0.2 (anexo A de la especificación).
+"""De los eventos de `--stdio` v2 a mensajes PACAI 0.3 (anexo A de la especificación).
 
 `Traductor` no hace entrada y salida ni espera nada: recibe un evento v2 (`tipo` y campos) y devuelve la lista
 de mensajes PACAI que le corresponden, ya con su `seq`, su `id` y su hora. Lleva el estado que PACAI exige y v2

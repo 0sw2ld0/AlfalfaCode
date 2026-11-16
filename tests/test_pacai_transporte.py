@@ -31,10 +31,10 @@ def test_el_saludo_negocia_y_suelta_lo_que_el_motor_dijo_mientras_tanto():
     assert tipos(salida) == ['hello', 'session_started', 'alfalfa.session', 'alfalfa.budget']
     hola, empezada = salida[0], salida[1]
     assert hola['sender'] == 'agent' and hola['session'] == SESION and hola['seq'] == 1
-    assert hola['payload']['versions'] == ['0.2'] and hola['payload']['profiles'] == ['work']
+    assert hola['payload']['versions'] == ['0.3'] and hola['payload']['profiles'] == ['work']
     assert hola['payload']['extensions'] == ['alfalfa'] and hola['payload']['implementation']['name'] == 'alfalfa'
     assert empezada['reply_to'] == c.ultimo['id'] and empezada['session'] == SESION
-    assert empezada['payload']['version'] == '0.2'
+    assert empezada['payload']['version'] == '0.3'
     assert empezada['payload']['profiles'] == ['work'] and empezada['payload']['extensions'] == ['alfalfa']
     assert empezada['payload']['agent']['name'] == 'alfalfa'
     c.comprobar()
@@ -51,6 +51,16 @@ def test_sin_version_comun_el_agente_responde_version_incompatible_y_cierra():
     c = Cliente()
     assert codigo(c.saludar(versions=['9.9', '0.1'])) == 'version_incompatible'
     assert c.t.stopped and not c.t.empezado
+
+
+def test_un_cliente_de_la_0_2_recibe_version_incompatible_y_lo_encadenado_se_descarta():
+    c = Cliente()
+    hola = dict(c.mensaje('hello', dict(c.hello, versions=['0.2'])), pacai='0.2')
+    assert codigo(c.crudo(hola)) == 'version_incompatible'
+    assert c.t.stopped and not c.t.empezado
+    # Lo que el cliente encadenó tras su `hello` no recibe respuesta: no hay sesión (§4.1).
+    assert c.crudo(dict(c.mensaje('input', {'blocks': [{'type': 'text', 'text': 'hola'}]}), pacai='0.2')) == []
+    assert c.enviar('input', {'blocks': [{'type': 'text', 'text': 'hola'}]}) == []
 
 
 def test_reanudar_no_esta_soportado_y_se_dice():
@@ -93,7 +103,7 @@ def malos(c):
     return {
         'no es JSON': ('esto no es json', 'invalid_message'),
         'no es un objeto': ('[1, 2]', 'invalid_message'),
-        'sin campos': ({'pacai': '0.2'}, 'invalid_message'),
+        'sin campos': ({'pacai': '0.3'}, 'invalid_message'),
         'versión rara': (dict(base, pacai='9'), 'invalid_message'),
         'del lado del agente': (dict(base, sender='agent'), 'invalid_message'),
         'otra sesión': (dict(base, session='s_otra_0123456789abcdef'), 'invalid_message'),
@@ -823,7 +833,7 @@ async def test_stdout_lleva_solo_mensajes_pacai_y_con_seq_correlativa():
     await cerrar(c)
     lineas = c.salida.getvalue().splitlines()
     mensajes = [json.loads(linea) for linea in lineas]               # todas son JSON
-    assert all(m['pacai'] == '0.2' and m['sender'] == 'agent' for m in mensajes)
+    assert all(m['pacai'] == '0.3' and m['sender'] == 'agent' for m in mensajes)
     assert [m['seq'] for m in mensajes] == list(range(1, len(mensajes) + 1))
     assert all('\n' not in linea for linea in lineas)
     c.comprobar()

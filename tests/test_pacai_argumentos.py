@@ -121,7 +121,7 @@ def test_los_eventos_v2_de_una_llamada_no_cambian(tmp_path):
 
 
 def _mensaje(seq, tipo, payload, **sobre):
-    return dict(pacai='0.2', id='c_%08d' % seq, type=tipo, session=SESION_PACAI, sender='client', seq=seq,
+    return dict(pacai='0.3', id='c_%08d' % seq, type=tipo, session=SESION_PACAI, sender='client', seq=seq,
                 time='2026-11-15T10:00:00Z', payload=payload, **sobre)
 
 
@@ -129,7 +129,7 @@ def sesion_pacai(tmp_path, *opciones):
     """Una sesión real de `alfalfa --pacai`: saludo, un `input`, aprobar lo que pida y EOF tras la ejecución.
     Devuelve la transcripción de los dos lados."""
     proc = _lanzar(tmp_path, '--pacai', *opciones)
-    enviados = [_mensaje(1, 'hello', {'versions': ['0.2'], 'profiles': ['work'], 'extensions': ['alfalfa']})]
+    enviados = [_mensaje(1, 'hello', {'versions': ['0.3'], 'profiles': ['work'], 'extensions': ['alfalfa']})]
     proc.stdin.write(json.dumps(enviados[0]) + '\n')
     proc.stdin.flush()
 
