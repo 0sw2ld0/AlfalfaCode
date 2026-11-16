@@ -15,11 +15,11 @@ from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
 
 
-async def tarjeta(proyecto, desde_cola, peticion, respuesta):
+async def tarjeta(proyecto, hogar, desde_cola, peticion, respuesta):
     salida = io.StringIO()
     padre = Transport(salida)
     manager = TerminalManager('Cola de encargos', model='ollama/demo', transport=padre, read_only=True,
-                              cwd=proyecto, reglas_equipo=None)
+                              cwd=proyecto, home=hogar, reglas_equipo=None)
     try:
         manager.cola_encargos.preparar(['encargo uno'])
         ident = manager.task['cola_encargos']['encargos'][0]['id']
@@ -49,6 +49,9 @@ SITIO = dict(argv=['open', 'https://ejemplo.test'], purpose='Abrir', motivo='red
 ])
 def test_la_respuesta_resuelve_la_tarjeta_tambien_en_la_cola(tmp_path, monkeypatch, desde_cola, peticion,
                                                              respuesta, esperado):
-    monkeypatch.chdir(tmp_path)
-    resultado, errores, sigue = asyncio.run(tarjeta(tmp_path, desde_cola, peticion, respuesta))
+    proyecto = tmp_path / 'proyecto'
+    proyecto.mkdir()
+    monkeypatch.chdir(proyecto)
+    # Hogar temporal: sin él, cada pasada dejaba 8 sesiones «Cola de encargos» en el ~/.alfalfa de verdad.
+    resultado, errores, sigue = asyncio.run(tarjeta(proyecto, tmp_path / 'hogar', desde_cola, peticion, respuesta))
     assert resultado == esperado and not errores and not sigue
