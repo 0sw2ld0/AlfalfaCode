@@ -98,7 +98,11 @@ def test_carpeta_sin_git_vuelve_al_codigo_de_antes_del_mensaje(entorno):
                                                                          ('nuevo/mod.py', 'borrar')}
     paso = deshacer.deshacer(hogar, sesion.task, sesion.estado, t2, vista=vista)
     assert (cwd / 'app.py').read_text() == 'print(2)\n'
-    assert not (cwd / 'nuevo').exists(), 'la carpeta que creó el turno se va con su archivo'
+    if hasattr(os.lstat(cwd), 'st_birthtime'):
+        assert not (cwd / 'nuevo').exists(), 'la carpeta que creó el turno se va con su archivo'
+    else:
+        # Sin fecha de creación (Linux) no se sabe si la carpeta ya estaba: se deja, vacía.
+        assert not any((cwd / 'nuevo').iterdir())
     assert sorted(paso['restaurados']) == ['app.py', 'nuevo/mod.py']
     # La evidencia: nuevas huellas para lo restaurado y ninguna comprobación vigente.
     assert sesion.estado['changes'][-1]['via'] == 'deshacer'

@@ -157,6 +157,7 @@ def test_mas_de_100_paginas_va_como_texto(tmp_path, informe, monkeypatch):
     assert '150 páginas' in adjuntos.aviso_de_coste([ficha])
 
 
+@CON_PDFKIT  # sin un modelo que lea PDF, el texto se extrae con PDFKit
 def test_el_runtime_guarda_la_ficha_y_marca_contenido_externo(m, informe):
     rt = NativeRuntime(m, m.task)
     rt.user_message(adjuntos.con_etiquetas('Resume', [str(informe)]))

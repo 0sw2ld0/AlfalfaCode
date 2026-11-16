@@ -7,6 +7,7 @@ cat .gitignore o rg -n hola preguntaban cada vez.
 """
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 
@@ -76,7 +77,13 @@ PREGUNTAN = [
 ]
 
 
-@pytest.mark.parametrize('argv', LEEN, ids=' '.join)
+def _instalada(argv):
+    """`solo_lectura` sólo da por buena una orden que está en el PATH: rg y file faltan en muchos Linux."""
+    return pytest.param(argv, id=' '.join(argv), marks=pytest.mark.skipif(
+        shutil.which(argv[0]) is None, reason=argv[0] + ' no está instalado en este sistema'))
+
+
+@pytest.mark.parametrize('argv', [_instalada(argv) for argv in LEEN])
 def test_estas_solo_leen(proyecto, argv):
     assert solo_lectura(argv, str(proyecto)) is True
 
