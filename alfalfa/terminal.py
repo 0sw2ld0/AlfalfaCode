@@ -586,6 +586,16 @@ class TerminalManager:
         """Evento de una herramienta con su descripción (`herramienta`)."""
         self.event(task, 'tool', text, herramienta=datos if isinstance(datos, dict) else None)
 
+    def tool_arguments(self, task, nombre, argumentos):
+        """Los argumentos de la llamada que va a empezar, sin secretos, para el transporte (`--pacai` los manda en
+        su `tool_start`; v2 no los usa). Llega justo antes de su `tool_event`."""
+        if not self.transport:
+            return
+        argumentos = self.transport.clean(argumentos)
+        if getattr(self, 'mcp', None) is not None:
+            argumentos = self.mcp.limpiar(argumentos)
+        self.transport.argumentos_herramienta(str(nombre), argumentos)
+
     def plan(self, task, pasos, explicacion=None):
         """`plan`: la lista de tareas del agente, como la de Codex; la app la enseña."""
         if self.transport:
@@ -1430,6 +1440,9 @@ def main(argv=None):
     parser.add_argument('--pacai', action='store_true',
                         help='Hablar PACAI 0.2 por stdio (JSONL) en lugar de --stdio v2: la sesión se abre con el '
                              '`hello` del cliente y el primer mensaje llega como `input`')
+    parser.add_argument('--caducidad-aprobacion', metavar='SEGUNDOS',
+                        help='Con --pacai: cuánto espera una aprobación antes de darse por caducada (por defecto, '
+                             'un día; también ALFALFA_CADUCIDAD_APROBACION)')
     parser.add_argument('--cola-encargos', nargs='?', const='', metavar='JSON',
                         help='Ejecutar una cola desde un archivo JSON; sin archivo, reanudar la cola de '
                              '--reanudar ID o preparar una cola desde la app con --stdio')
@@ -1513,6 +1526,14 @@ def main(argv=None):
                        or args.cola_encargos is not None):
         parser.error('--pacai no se combina con --stdio, un encargo, --bifurcar, adjuntos ni --cola-encargos: '
                      'la entrada llega como mensajes `input`')
+    if args.caducidad_aprobacion is not None and not args.pacai:
+        parser.error('--caducidad-aprobacion sólo vale con --pacai')
+    if args.pacai:
+        from .pacai.transporte import caducidad_de
+        try:
+            caducidad_de(args.caducidad_aprobacion)
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.cola_encargos == '' and not args.stdio and not args.reanudar:
         parser.error('--cola-encargos necesita un archivo JSON o --reanudar ID')
     if args.cola_encargos is not None and (args.encargo or args.bifurcar or args.imagen or args.archivo):

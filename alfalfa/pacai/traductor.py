@@ -4,7 +4,7 @@
 de mensajes PACAI que le corresponden, ya con su `seq`, su `id` y su hora. Lleva el estado que PACAI exige y v2
 no tiene: ejecuciones (raíz y subejecuciones), herramientas abiertas, aprobaciones pendientes y su digest.
 
-Lo que el núcleo no cubre va como extensión `alfalfa.*` (§8), con los campos de v2 tal cual dentro del payload.
+Lo que el núcleo no cubre va como extensión `alfalfa.*` (§8), con los campos de v2 en inglés (`nombres.py`).
 """
 from __future__ import annotations
 
@@ -16,15 +16,21 @@ from datetime import datetime
 from typing import Any, Callable
 
 from .jcs import digest
+from .nombres import TIPOS, en_ingles
 from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
-# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5).
-CADUCIDAD_APROBACION = 600
+# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5): PACAI 0.2 obliga a mandar
+# `expires`, así que no puede no caducar; un día deja al usuario volver a su mesa (y responder al día siguiente)
+# sin que una petición olvidada quede abierta para siempre. `ALFALFA_CADUCIDAD_APROBACION` o
+# `--caducidad-aprobacion` la cambian.
+CADUCIDAD_APROBACION = 24 * 3600
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
+MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)
+RECORTADO = '… [recortado]'
 MAX_SALIDA = 60000            # caracteres de la salida de una herramienta en un `tool_end`
 EDITORES = frozenset({'write_file', 'edit_file', 'apply_patch'})
 SINTETICA = 'request_permission'
@@ -32,20 +38,14 @@ SINTETICA = 'request_permission'
 TERMINADOS = frozenset({'terminado', 'fallido', 'cerrado', 'interrumpido'})
 RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'failed', 'cortado': 'interrupted',
                       'interrupted': 'interrupted'}
-# Eventos v2 de AlfalfaCode sin equivalente en el núcleo → tipo de la extensión (el resto: `alfalfa.<tipo v2>`).
-EXTENSION_DE = {
-    'sesion': 'session', 'presupuesto': 'budget', 'procesos': 'processes', 'despierto': 'awake', 'cuota': 'quota',
-    'preparando': 'preparing', 'revision_codigo': 'code_review', 'encargos': 'jobs',
-    'aprendizaje_propuesto': 'learning_proposed', 'aprendizaje_resuelto': 'learning_resolved',
-    'quitado_de_cola': 'dequeued', 'sesion_cambiada': 'session_changed',
-}
+# Eventos v2 de AlfalfaCode sin equivalente en el núcleo → tipo de la extensión: `nombres.TIPOS`.
 # `motivo` de un permiso v2 → `reason` de PACAI (§4.5). Los demás van como `alfalfa.<motivo>` si se negoció.
 RAZON_DE = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outside_sandbox',
             'reintento': 'sandbox_denied_retry', 'regla': 'policy', 'modo': 'policy'}
 # Los demás motivos de AlfalfaCode, con nombre en inglés: `alfalfa.<nombre>` si se negoció la extensión.
 RAZON_PROPIA = {'navegador': 'browser', 'edicion': 'edit', 'contenido_externo': 'external_content',
                 'aprendizaje': 'learning'}
-# Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` si se negoció la extensión.
+# Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` (en inglés) si se negoció la extensión.
 PERMISO_EXTRA = ('argv', 'proposito', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo')
 CODIGOS_DE_ERROR = {'Línea demasiado larga.': 'message_too_large', 'Se requiere UTF-8.': 'invalid_message'}
@@ -117,6 +117,37 @@ def argumentos_de(texto: str, datos: dict | None) -> dict:
     return args
 
 
+def _tamano(valor: Any) -> int:
+    return len(json.dumps(valor, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+
+
+def recortar_argumentos(args: dict, limite: int) -> tuple[dict, bool]:
+    """Los argumentos tal cual si caben en `limite` bytes; si no, una copia con los textos más largos recortados
+    (acaban en «… [recortado]») y True. Si ni así caben, se quedan los campos que no son texto largo."""
+    if _tamano(args) <= limite:
+        return args, False
+    copia = json.loads(json.dumps(args))
+    for _ in range(200):
+        cadenas: list[tuple[Any, Any]] = []
+        pendientes = [copia]
+        while pendientes:
+            actual = pendientes.pop()
+            for clave, hijo in (actual.items() if isinstance(actual, dict) else enumerate(actual)):
+                if isinstance(hijo, str) and len(hijo) > 200:
+                    cadenas.append((actual, clave))
+                elif isinstance(hijo, (dict, list)):
+                    pendientes.append(hijo)
+        if not cadenas:
+            break
+        contenedor, clave = max(cadenas, key=lambda par: len(par[0][par[1]]))
+        texto = contenedor[clave].removesuffix(RECORTADO)
+        contenedor[clave] = texto[:len(texto) // 2] + RECORTADO
+        if _tamano(copia) <= limite:
+            return copia, True
+    resto = {k: v for k, v in copia.items() if _tamano(v) <= 1000}
+    return (resto if _tamano(resto) <= limite else {}), True
+
+
 def archivos_del_diff(parche: str) -> list[dict]:
     """`path`, `added` y `removed` de cada archivo de un diff unificado.
 
@@ -157,8 +188,9 @@ def _fallo(datos: dict) -> bool:
 
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
-                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora):
-        self.emisor, self.reloj = emisor, reloj
+                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+                 max_argumentos: int = MAX_ARGUMENTOS):
+        self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
         self.herramientas_cliente = set(herramientas_cliente)
         self.caducidad = caducidad
@@ -181,7 +213,7 @@ class Traductor:
     def _ext(self, nombre: str, payload: dict) -> list[dict]:
         if 'alfalfa' not in self.extensiones:
             return []
-        return [self.emisor.mensaje('alfalfa.' + nombre, payload)]
+        return [self.emisor.mensaje('alfalfa.' + nombre, en_ingles(payload))]
 
     def _msg(self, tipo: str, payload: dict, reply_to: str | None = None) -> dict:
         return self.emisor.mensaje(tipo, payload, reply_to=reply_to)
@@ -195,7 +227,7 @@ class Traductor:
         manejador = getattr(self, '_v2_' + tipo, None)
         if manejador is not None:
             return manejador(campos)
-        return self._ext(EXTENSION_DE.get(tipo, tipo), {k: v for k, v in campos.items() if k != 'version'})
+        return self._ext(TIPOS.get(tipo, tipo), {k: v for k, v in campos.items() if k != 'version'})
 
     # -- ejecuciones (§4.2) ------------------------------------------------
     def empezar_turno(self, input_id: str) -> list[dict]:
@@ -242,7 +274,7 @@ class Traductor:
     def herramientas_del_cliente_abiertas(self) -> list[str]:
         return [t for t, h in self.herramientas.items() if h.lado == 'client']
 
-    def cerrar_turno(self, campos: dict, diff: str | None = None) -> list[dict]:
+    def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
         """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`."""
         if self.raiz is None:
             return []
@@ -259,9 +291,12 @@ class Traductor:
             extra = {'turn_tokens': campos['tokens_turno']} if isinstance(campos.get('tokens_turno'), int) else {}
             salida.append(self._msg('usage', {'run_id': raiz, **uso, **self._alfalfa(extra)}))
         if self.trabajo and diff:
-            archivos = archivos_del_diff(diff)
+            # Un diff unificado (instantáneas) o ya contado (`diff_git`: `files` y quizá `patch`).
+            archivos, parche = (diff.get('files'), diff.get('patch')) if isinstance(diff, dict) else \
+                (archivos_del_diff(diff), diff)
             if archivos:
-                salida.append(self._msg('diff_updated', {'run_id': raiz, 'files': archivos, 'patch': diff}))
+                salida.append(self._msg('diff_updated', {'run_id': raiz, 'files': archivos,
+                                                         **({'patch': parche} if parche else {})}))
         resto = {k: campos[k] for k in ('turno', 'cierre', 'cache', 'resumen') if k in campos}
         salida += self._ext('closing', {'run_id': raiz, **resto}) if resto else []
         salida += self._terminar(raiz, resultado, str(campos.get('resumen') or ''))
@@ -269,7 +304,7 @@ class Traductor:
         return salida
 
     def _alfalfa(self, datos: dict) -> dict:
-        return {'alfalfa': datos} if datos and 'alfalfa' in self.extensiones else {}
+        return {'alfalfa': en_ingles(datos)} if datos and 'alfalfa' in self.extensiones else {}
 
     def _v2_turno_terminado(self, campos: dict) -> list[dict]:
         return self.cerrar_turno(campos)
@@ -304,11 +339,11 @@ class Traductor:
         if rol == 'tool':
             datos = campos.get('herramienta')
             if isinstance(datos, dict) and datos.get('fase') == 'inicio':
-                return self._tool_start(self.raiz, texto, datos)
+                return self._tool_start(self.raiz, texto, datos, campos.get('_argumentos'))
             if isinstance(datos, dict) and datos.get('fase') == 'fin':
                 return self._tool_end(self.raiz, datos, texto)
             return []
-        propio = {k: v for k, v in campos.items() if k != 'version'}
+        propio = {k: v for k, v in campos.items() if k not in ('version', '_argumentos')}
         if rol in ('agent', 'assistant') and self._activa(self.raiz):
             return self._mensaje(self.raiz, 'assistant', texto)
         if rol == 'system' and self._activa(self.raiz) and 'compactacion' not in campos and 'tarifa' not in campos:
@@ -316,14 +351,26 @@ class Traductor:
         return self._ext('notice', propio)
 
     # -- herramientas (§4.4) -----------------------------------------------
-    def _tool_start(self, run_id: str | None, texto: str, datos: dict) -> list[dict]:
+    def _tool_start(self, run_id: str | None, texto: str, datos: dict, argumentos: Any = None) -> list[dict]:
+        """`argumentos`: los de la llamada del modelo, ya sin secretos (`Transport.argumentos_herramienta`). Sin
+        ellos (o si no son un objeto JSON) se sacan, como antes, del texto del evento."""
         if not self._activa(run_id):
             return []
         nombre = str(datos.get('nombre') or 'tool')
-        args = argumentos_de(texto, datos)
+        reales = _json_seguro(argumentos) if isinstance(argumentos, dict) else None
+        recortados = False
+        if reales is not None:
+            args, recortados = recortar_argumentos(reales, self.max_argumentos)
+        else:
+            args = argumentos_de(texto, datos)
         payload: dict[str, Any] = {'run_id': run_id, 'name': nombre, 'arguments': args, 'side': 'agent'}
-        if datos.get('descripcion'):
-            payload['title'] = str(datos['descripcion'])[:200]
+        # Lo legible va aparte (como `title` de ACP): la descripción que enseña la app o, sin ella, el texto de
+        # siempre del motor.
+        legible = datos.get('descripcion') or (texto.split(' · ', 1)[1] if ' · ' in texto else '')
+        if legible:
+            payload['title'] = str(legible)[:200]
+        if recortados:
+            payload.update(self._alfalfa({'arguments_truncated': True}))
         d = digest(args)
         aprobada = next((a for n, g, a in self.de_sesion if n == nombre and g == d), None)
         if aprobada:
@@ -386,7 +433,7 @@ class Traductor:
         rol, texto = campos.get('rol'), str(campos.get('texto') or '')
         if rol == 'tool' and texto.startswith('Inicio '):
             nombre = texto[len('Inicio '):].split(' · ', 1)[0]
-            return salida + self._tool_start(run_id, texto, {'nombre': nombre})
+            return salida + self._tool_start(run_id, texto, {'nombre': nombre}, campos.get('_argumentos'))
         if rol == 'tool':
             return salida + self._tool_end(run_id, {'nombre': texto.split('\n', 1)[0]}, texto)
         if rol in ('agent', 'assistant', 'system'):

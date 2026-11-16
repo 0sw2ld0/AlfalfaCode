@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 import sys
 import traceback
 from collections import deque
@@ -25,11 +26,12 @@ from typing import Any, Callable
 from .. import __version__
 from ..stdio import MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
+from .nombres import de_la_orden
 from .sobre import Emisor, ahora, nueva_sesion
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
 
-__all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS']
+__all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS', 'caducidad_de', 'ENTORNO_CADUCIDAD']
 
 NOMBRE = 'alfalfa'
 PERFILES = ('work',)
@@ -37,7 +39,11 @@ EXTENSIONES = ('alfalfa',)
 MAX_BYTES = 1024 * 1024
 # Segundos que el cierre de un turno espera a que el cliente cierre sus herramientas abiertas (§4.4).
 GRACIA_CLIENTE = 3.0
-# Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Los campos son los de v2.
+# Variable de entorno con los segundos que espera una aprobación (por defecto, `CADUCIDAD_APROBACION`: un día).
+ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
+CADUCIDAD_MAXIMA = 365 * 24 * 3600
+# Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Sus campos van en inglés
+# (`nombres.ORDEN` los devuelve a v2).
 COMANDOS = {
     'set_settings': 'ajustes', 'compact': 'compactar', 'set_context_mode': 'contexto',
     'continue_in_new_session': 'continuar_en_nueva', 'set_keep_awake': 'mantener_despierto',
@@ -48,11 +54,30 @@ COMANDOS = {
 }
 
 
+def caducidad_de(valor: Any = None) -> float:
+    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`, si no un
+    día. Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
+    origen = '--caducidad-aprobacion'
+    if valor is None:
+        valor, origen = os.environ.get(ENTORNO_CADUCIDAD), ENTORNO_CADUCIDAD
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        return float(CADUCIDAD_APROBACION)
+    try:
+        segundos = float(valor)
+    except (TypeError, ValueError):
+        segundos = -1.0
+    if not 0 < segundos <= CADUCIDAD_MAXIMA:
+        raise ValueError(origen + ' necesita un número de segundos mayor que 0 y de hasta '
+                         + str(CADUCIDAD_MAXIMA) + ' (un año); llegó «' + str(valor)[:40] + '».')
+    return segundos
+
+
 class TransportePacai(Transport):
-    def __init__(self, output, *, caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+    def __init__(self, output, *, caducidad: float | None = None, reloj: Callable[[], datetime] = ahora,
                  gracia_cliente: float = GRACIA_CLIENTE):
         super().__init__(output)
-        self.caducidad, self.reloj, self.gracia_cliente = caducidad, reloj, gracia_cliente
+        self.caducidad = caducidad_de() if caducidad is None else caducidad
+        self.reloj, self.gracia_cliente = reloj, gracia_cliente
         self.emisor = Emisor('agent', nueva_sesion(), reloj=reloj)
         self.t: Traductor | None = None
         self.empezado = False
@@ -68,6 +93,8 @@ class TransportePacai(Transport):
         self._ocupado = False                            # hay una entrada en manos del motor hasta que cierra su turno
         self._cola: deque[tuple[str, str]] = deque()     # `new_run` que esperan a la ejecución en curso
         self._ultima_entrada: str | None = None
+        self._argumentos: tuple[str, Any] | None = None   # los de la herramienta cuyo evento de inicio viene ahora
+        self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -82,11 +109,45 @@ class TransportePacai(Transport):
             return
         self._enviar_todo(self.t.empezar_turno(entrada))
 
+    def argumentos_herramienta(self, nombre, argumentos) -> None:
+        self._argumentos = (nombre, argumentos)
+
+    def _con_argumentos(self, tipo: str, campos: dict) -> dict:
+        """El evento de inicio de una herramienta se lleva sus argumentos estructurados (`_argumentos`), que el
+        motor dio justo antes; cualquier otro evento los descarta."""
+        if tipo not in ('evento', 'subagente_evento') or self._argumentos is None:
+            return campos
+        (nombre, argumentos), self._argumentos = self._argumentos, None
+        datos = campos.get('herramienta')
+        es_inicio = (isinstance(datos, dict) and datos.get('fase') == 'inicio' and datos.get('nombre') == nombre
+                     if tipo == 'evento'
+                     else str(campos.get('texto') or '').startswith('Inicio ' + nombre + ' · '))
+        return dict(campos, _argumentos=argumentos) if es_inicio and campos.get('rol') == 'tool' else campos
+
+    async def antes_del_turno(self) -> None:
+        """Con el perfil `work`, el punto de partida del diff de la ejecución con git (por si no hay instantáneas)."""
+        self._olvidar_partida()
+        if self.t is None or not self.t.trabajo or self.manager is None:
+            return
+        cwd = (getattr(self.manager, 'task', None) or {}).get('cwd')
+        if not cwd:
+            return
+        from .diff_git import PuntoDePartida
+        try:
+            self._partida = await asyncio.to_thread(PuntoDePartida.tomar, cwd)
+        except Exception:  # noqa: BLE001 - sin punto de partida sólo falta el diff
+            traceback.print_exc(file=sys.stderr)
+
+    def _olvidar_partida(self) -> None:
+        if self._partida is not None:
+            self._partida.olvidar()
+            self._partida = None
+
     # -- salida: eventos v2 → mensajes PACAI -------------------------------
     def emit(self, tipo, **campos):
         if getattr(self, 'salida_rota', False) or self.cerrado:
             return
-        campos = self.clean(campos)
+        campos = self._con_argumentos(tipo, self.clean(campos))
         if not self.empezado:
             if tipo == 'fin':
                 self._fin_sin_saludo(campos)
@@ -114,6 +175,7 @@ class TransportePacai(Transport):
             self._cerrar_sesion()
         else:
             self._enviar_todo(self.t.evento(tipo, campos))
+        self._olvidar_resueltas()
 
     def _enviar_todo(self, mensajes: list[dict]) -> None:
         for m in mensajes:
@@ -191,6 +253,14 @@ class TransportePacai(Transport):
         espera = max(0.0, (a.expira - self.reloj()).total_seconds()) + 0.05
         self._temporizadores[request_id] = loop.call_later(espera, self._caducar, request_id)
 
+    def _olvidar_resueltas(self) -> None:
+        """Una petición ya resuelta (por el cliente, la interrupción, el cierre o el fin de su ejecución) no espera
+        a su `expires`: con una caducidad de un día, su temporizador no debe seguir vivo."""
+        for request_id in list(self._temporizadores):
+            a = self.t.aprobacion(request_id) if self.t else None
+            if a is None or a.estado != 'pending':
+                self._temporizadores.pop(request_id).cancel()
+
     def _caducar(self, request_id: str) -> None:
         self._temporizadores.pop(request_id, None)
         a = self.t.aprobacion(request_id) if self.t else None
@@ -214,11 +284,14 @@ class TransportePacai(Transport):
                 self._enviar(self.t.error('alfalfa.client_tool_unanswered',
                                           'El cliente no cerró su herramienta antes de terminar la ejecución.', tc))
             diff = await asyncio.to_thread(self._diff_del_turno) if self.t.trabajo and self.t.hay_cambios else None
+            if not diff and self.t.trabajo and self._partida is not None:
+                diff = await asyncio.to_thread(self._partida.diff)        # sin instantáneas: el de git
             self._enviar_todo(self.t.cerrar_turno(campos, diff))
         except Exception:  # noqa: BLE001 - la ejecución se cierra pase lo que pase (§4.2)
             traceback.print_exc(file=sys.stderr)
             self._enviar_todo(self.t.cerrar_turno(campos))
         finally:
+            self._olvidar_partida()
             self._cerrando = None
             self._liberar()
             retenidos, self._retenidos = self._retenidos, []
@@ -236,6 +309,7 @@ class TransportePacai(Transport):
 
     def _cerrar_sesion(self) -> None:
         self.cerrado = True
+        self._olvidar_partida()
         for temporizador in self._temporizadores.values():
             temporizador.cancel()
         self._temporizadores.clear()
@@ -330,9 +404,12 @@ class TransportePacai(Transport):
         limite = (p.get('limits') or {}).get('max_message_bytes')
         if isinstance(limite, int):
             self.max_bytes = min(limite, MAX_BYTES * 16)
+        # Los argumentos van en el `tool_start` y otra vez en su `approval_request`, con el resto del mensaje:
+        # una cuarta parte del máximo deja sitio a todo lo demás.
+        max_argumentos = max(1024, self.max_bytes // 4)
         herramientas = [h['name'] for h in p.get('client_tools', []) if isinstance(h, dict) and h.get('name')]
         self.t = Traductor(self.emisor, perfiles=perfiles, extensiones=extensiones, herramientas_cliente=herramientas,
-                           caducidad=self.caducidad, reloj=self.reloj)
+                           caducidad=self.caducidad, reloj=self.reloj, max_argumentos=max_argumentos)
         self.t.al_rechazar_navegador = self._rechazar_navegador
         agente = {'name': NOMBRE, 'version': __version__}
         self._enviar(self.emisor.mensaje('hello', {'versions': [VERSION], 'profiles': list(PERFILES),
@@ -426,6 +503,7 @@ class TransportePacai(Transport):
         elif decision == 'approved' and a.sitio:
             orden['sitio'] = 'una_vez'
         a.estado = 'approved' if decision == 'approved' else 'denied'
+        self._olvidar_resueltas()
         super().receive(json.dumps(orden))
 
     def _c_tool_end(self, m):
@@ -474,7 +552,7 @@ class TransportePacai(Transport):
         v2 = COMANDOS.get(nombre)
         if v2 is None:
             return self._error('invalid_message', 'Orden desconocida: ' + m['type'], m['id'])
-        super().receive(json.dumps(dict(p, tipo=v2)))
+        super().receive(json.dumps(dict(de_la_orden(p), tipo=v2)))
 
     def _quitar_de_cola(self, ident) -> None:
         """Quitar una entrada que aún espera su ejecución: en la cola de PACAI o, ya entregada, en la del motor."""

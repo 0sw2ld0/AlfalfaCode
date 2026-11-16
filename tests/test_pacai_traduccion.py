@@ -51,14 +51,14 @@ async def test_un_aviso_del_sistema_dentro_de_la_ejecucion_es_un_mensaje_system_
     c.t.emit('evento', rol='system', texto='Ya se está compactando la conversación.', hora=1.0)
     fuera = c.drenar()
     assert [m['type'] for m in fuera] == ['alfalfa.notice']
-    assert fuera[0]['payload']['texto'].startswith('Ya se está') and 'version' not in fuera[0]['payload']
+    assert fuera[0]['payload']['text'].startswith('Ya se está') and 'version' not in fuera[0]['payload']
     c.entrada()
     c.t.turno_empieza(EnCola('x', c.ultimo['id']))
     c.t.emit('evento', rol='system', texto='Hooks · aviso', hora=1.0)
     c.t.emit('evento', rol='system', texto='Conversación compactada', hora=1.0, compactacion={'antes': 9, 'despues': 3})
     c.drenar()
     assert c.log[-4]['payload']['role'] == 'system'
-    assert c.log[-1]['type'] == 'alfalfa.notice' and c.log[-1]['payload']['compactacion'] == {'antes': 9, 'despues': 3}
+    assert c.log[-1]['type'] == 'alfalfa.notice' and c.log[-1]['payload']['compaction'] == {'before': 9, 'after': 3}
     await cerrar(c)
     c.comprobar()
 
@@ -94,7 +94,7 @@ async def test_el_cierre_lleva_el_uso_del_turno_y_su_resumen_en_la_extension():
     assert uso['payload']['cost'] == {'amount': 0.0123, 'currency': 'USD'}
     assert uso['payload']['alfalfa'] == {'turn_tokens': 321}
     extra = next(m for m in cierre if m['type'] == 'alfalfa.closing')
-    assert extra['payload']['cierre'] == {'resumen': 'ok'} and extra['payload']['turno'] == 't1'
+    assert extra['payload']['closing'] == {'summary': 'ok'} and extra['payload']['turn'] == 't1'
     c.comprobar()
 
 
@@ -254,7 +254,7 @@ async def test_el_contexto_es_usage_y_el_detalle_va_en_la_extension():
     uso, extra = c.drenar()
     assert uso['type'] == 'usage' and uso['payload'] == {'run_id': run, 'context_tokens': 28400,
                                                          'context_limit': 262144}
-    assert extra['type'] == 'alfalfa.context' and extra['payload']['desglose'] == {'sistema': 10}
+    assert extra['type'] == 'alfalfa.context' and extra['payload']['breakdown'] == {'system': 10}
     c.t.emit('contexto', tokens=1, limite=0)         # un límite desconocido no es un límite válido
     assert c.drenar()[0]['payload'] == {'run_id': run, 'context_tokens': 1}
     c.t.emit('uso_sesion', tokens=500, coste=0.5)
@@ -282,7 +282,7 @@ async def test_los_errores_del_motor_son_error_con_codigo_propio_o_del_nucleo():
     uno, dos, tres = c.drenar()
     assert uno['payload']['code'] == 'alfalfa.engine_error' and uno['payload']['message'].startswith('No se pudo')
     assert dos['payload']['code'] == 'message_too_large'
-    assert tres['payload']['alfalfa'] == {'motivo': 'sin_vision', 'rechazado': {'texto': 'hola'}}
+    assert tres['payload']['alfalfa'] == {'reason': 'sin_vision', 'rejected': {'text': 'hola'}}
     c.comprobar()
 
 
@@ -297,7 +297,7 @@ async def test_fin_cierra_lo_que_siga_abierto_y_manda_close():
     assert fin['payload'] == {'run_id': run, 'outcome': 'interrupted'}
     cierre_sesion = cierre[-1]
     assert cierre_sesion['payload']['reason'] == 'Cierre forzado del motor.'
-    assert cierre_sesion['payload']['alfalfa']['codigo_salida'] == 130
+    assert cierre_sesion['payload']['alfalfa']['exit_code'] == 130
     # Tras close se descarta todo.
     c.t.emit('evento', rol='agent', texto='tarde', hora=1.0)
     assert c.drenar() == []

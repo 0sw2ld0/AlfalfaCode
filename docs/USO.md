@@ -295,6 +295,7 @@ PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común
 alfalfa --pacai                      # sesión nueva; el primer encargo llega como `input`
 alfalfa --pacai --reanudar ID        # abre una sesión guardada y espera un `input`
 alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramienta del cliente `browser`)
+alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, un día)
 ```
 
 `--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o `--cola-encargos`: la entrada
@@ -336,30 +337,39 @@ declare `versions` recibe el núcleo. Sin versión común, `error` `version_inco
 | `permiso_resuelto` | no sale (lo resolvió el cliente); si nadie contesta a tiempo, `approval_result` `expired` del agente |
 | `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el desglose, `alfalfa.context` |
 | `plan` | `plan_updated` (perfil `work`) |
-| cambios del turno (diff de la instantánea) | `diff_updated` (perfil `work`) |
+| cambios del turno (diff de la instantánea o, sin ella, de git) | `diff_updated` (perfil `work`) |
 | `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id`, sus mensajes, herramientas y aprobaciones con su propio `run_id` |
 | `navegador` / `navegador_respuesta` | `tool_start` con `side: "client"` (herramienta `browser`) / `tool_end` del cliente |
 | `error` | `error` (`code` `alfalfa.engine_error`, o `message_too_large`, `invalid_message`…) |
 | `fin` | `close` (el motivo en `reason`) |
 | `presupuesto`, `procesos`, `despierto`, `cuota`, `preparando`, `revision_codigo`, `encargos`, `aprendizaje_*`, `quitado_de_cola`, `sesion_cambiada`… | extensión `alfalfa.*` (`alfalfa.budget`, `alfalfa.processes`, `alfalfa.awake`, `alfalfa.quota`, `alfalfa.preparing`, `alfalfa.code_review`, `alfalfa.jobs`, `alfalfa.learning_proposed`…) |
 
-El payload de las extensiones `alfalfa.*` lleva los campos de v2 tal cual (`texto`, `tokens`, `estado`…); sólo los
-**tipos** están en inglés. Un cliente ignora los tipos que no conozca. Las extensiones sólo se envían si el cliente
-declaró `alfalfa` en su `hello`.
+La extensión habla como el núcleo: tipos **y campos** en inglés y `snake_case`. Cada campo de v2 pasa a su nombre
+inglés a cualquier profundidad (`texto`→`text`, `estado`→`status`, `coste_sesion`→`session_cost`,
+`desglose`→`breakdown`…; la tabla completa está en `alfalfa/pacai/nombres.py`), y lo mismo el bloque
+`payload.alfalfa` que llevan `approval_request` (`purpose`, `justification`, `reasons`, `unsandboxed`…),
+`plan_updated` (`explanation`), `usage` (`turn_tokens`, `total_tokens`), `error` (`reason`, `rejected`) y `close`
+(`status`, `exit_code`, `tokens`, `cost`). Sólo cambian las claves: los **valores** (estados, modos, textos) son los
+de AlfalfaCode, p. ej. `{"type":"alfalfa.budget","payload":{"session":{"spent":1.2,"cap":5},"warning":"sesion"}}`.
+Un cliente ignora los tipos y campos que no conozca. Las extensiones sólo se envían si el cliente declaró `alfalfa`
+en su `hello`. `--stdio` v2 no cambia.
 
 ### Órdenes de AlfalfaCode (extensión `alfalfa`)
 
-Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente. Sus campos son los de v2:
+Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente, con los campos en inglés
+(el agente los devuelve a v2 antes de dárselos al motor):
 
-| Mensaje | Hace lo de v2 |
+| Mensaje (campos) | Hace lo de v2 |
 |---|---|
-| `alfalfa.set_settings` | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
-| `alfalfa.compact`, `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
-| `alfalfa.set_context_mode`, `alfalfa.set_budget` | `contexto`, `presupuesto` |
-| `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` |
-| `alfalfa.resolve_learning`, `alfalfa.review_code`, `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
-| `alfalfa.export_browser_test`, `alfalfa.jobs_command`, `alfalfa.stop_process` | `exportar_prueba_navegador`, `encargos`, `detener_proceso` |
-| `alfalfa.dequeue`, `alfalfa.send_now` | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
+| `alfalfa.set_settings` (`model`, `effort`, `mode`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
+| `alfalfa.compact` (`instructions`), `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
+| `alfalfa.set_context_mode` (`mode`: `ahorro` o `completo`) | `contexto` |
+| `alfalfa.set_budget` (`session`, `month`, en dólares) | `presupuesto` (`sesion`, `mes`) |
+| `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` (`active`) | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` (`activo`) |
+| `alfalfa.resolve_learning` (`id`, `apply`), `alfalfa.review_code` (`turn`, `model`), `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
+| `alfalfa.export_browser_test` (`id`, `path`), `alfalfa.stop_process` (`id`) | `exportar_prueba_navegador`, `detener_proceso` |
+| `alfalfa.jobs_command` (`action`, `jobs`, `mode`, `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
+| `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
 
 ### Reglas que PACAI exige
 
@@ -369,7 +379,11 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
   subejecuciones. Una herramienta cortada por una interrupción se cierra con `tool_end` `cancelled`; la subejecución
   termina antes que su madre.
 - **Aprobaciones.** El `digest` es `sha256` de los argumentos canonizados (JCS, RFC 8785) y cubre los mismos
-  argumentos que el `tool_start`. Sin respuesta en 10 minutos (`expires`), el agente declara `expired` y no ejecuta.
+  argumentos que el `tool_start`. Sin respuesta a tiempo (`expires`), el agente declara `expired` y no ejecuta.
+  PACAI 0.2 obliga a poner un plazo: por defecto es **un día**, para que una petición espere al usuario como en
+  la app; `--caducidad-aprobacion SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` lo cambian (más de 0 y
+  hasta un año). Una interrupción, un `close` o EOF niegan lo pendiente en el acto: la herramienta se cierra con
+  `tool_end` `cancelled` (o `error`, si el motor llegó a contestar) y su plazo deja de contar.
   Una respuesta tardía, o un valor que no sea exactamente `approved` o `denied`, no vale. «Aprobar para la sesión»
   (`scope: "session"`) sólo cubre el mismo nombre y los mismos argumentos; cada repetición es un `tool_start` con
   `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.
@@ -385,14 +399,24 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
 ### Límites de esta primera versión
 
 - Los `input` admiten bloques de texto; `file` y `structured` se rechazan con `invalid_message`.
-- Los `arguments` de un `tool_start` son los que el motor muestra en su evento (`Inicio <herramienta> · …`, ya sin
-  secretos y recortados a 1000 caracteres); si no caben, llevan `truncated: true` con la orden, la carpeta y los
-  archivos.
+- Los `arguments` de un `tool_start` (y de su `approval_request`) son los argumentos JSON de la llamada del
+  modelo, completos y con los secretos tachados (`[REDACTADO]`), como los ve la app; lo legible va en `title` (la
+  descripción de la app). Si pasan de una cuarta parte de `max_message_bytes` (256 KiB por defecto), los textos
+  más largos se recortan (acaban en `… [recortado]`) y, con la extensión, el `tool_start` lleva
+  `payload.alfalfa.arguments_truncated: true`; el `digest` es el de lo que se envía. PACAI 0.2 no tiene un campo
+  `truncated` en el núcleo. `--stdio` v2 no cambia: su evento sigue llevando el texto `Inicio <herramienta> · …`.
 - Un permiso que llega fuera de una ejecución (guardar una prueba del navegador entre turnos, o un encargo de la
   cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
   seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
-- `diff_updated` sale al cerrar un turno que editó archivos y sólo con la instantánea de deshacer activa.
+- `diff_updated` sale al cerrar una ejecución que cambió archivos. Con la instantánea de deshacer, es su diff. Sin
+  ella (`ALFALFA_INSTANTANEAS=0`, o un turno que la instantánea no cubre) y en un repo git, lo calcula el propio
+  AlfalfaCode con git, no el agente (ni pasa por el sandbox ni pide permisos): al empezar la ejecución fija el punto
+  de partida con un índice temporal (`GIT_INDEX_FILE`, copiado del tuyo sólo para ir rápido) y `git write-tree`, y
+  al terminar lo compara con `git diff-tree`. No toca tu índice, tu rama ni tus archivos; sólo deja objetos sueltos
+  en `.git/objects` que `git gc` limpia. Cuenta sólo la carpeta de la sesión, respeta `.gitignore`, deja fuera los
+  archivos nuevos de más de 1 MiB, de un binario sólo dice que cambió, y con un parche de más de 200.000
+  caracteres manda la lista de archivos sin `patch`. Fuera de un repo git, sin instantánea no hay diff.
 
 ### Comprobarlo
 

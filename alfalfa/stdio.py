@@ -259,6 +259,14 @@ class Transport:
     def turno_empieza(self, prompt):
         """`run` va a abrir un turno con este mensaje. v2 no lo anuncia; `--pacai` abre su ejecución."""
 
+    async def antes_del_turno(self):
+        """Justo antes de que empiece el turno (tras `turno_empieza`). v2 no hace nada; `--pacai` fija el punto de
+        partida de su diff con git cuando no hay instantáneas."""
+
+    def argumentos_herramienta(self, nombre, argumentos):
+        """Los argumentos (ya sin secretos) de la herramienta cuyo evento de inicio viene ahora. v2 no los emite:
+        su evento lleva el texto de siempre; `--pacai` los pone en su `tool_start`."""
+
     def take_compact(self):
         pending, self.compact_pending = self.compact_pending, False
         return pending
@@ -947,6 +955,7 @@ async def run(args, transport):
                 manager.task['objective'] = _texto_escrito(prompt)[:2000] or OBJETIVO_PACAI
                 manager.save()
             transport.turno_empieza(prompt)
+            await transport.antes_del_turno()
             transport.worker = asyncio.create_task(manager.run(prompt, eco=eco))
             try:
                 code = await transport.worker
@@ -1383,8 +1392,8 @@ def check_command(argv):
 
 def entry(args):
     if getattr(args, 'pacai', False):
-        from .pacai.transporte import TransportePacai
-        transport = TransportePacai(sys.stdout)
+        from .pacai.transporte import TransportePacai, caducidad_de
+        transport = TransportePacai(sys.stdout, caducidad=caducidad_de(getattr(args, 'caducidad_aprobacion', None)))
     else:
         transport = Transport(sys.stdout)
     if getattr(args, 'complementos', False):

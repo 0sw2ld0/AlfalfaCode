@@ -2500,6 +2500,11 @@ class NativeRuntime:
                         # Lo que se escribe en un campo de contraseña no sale ni en la app ni en los eventos.
                         from ...navegador import para_mostrar
                         shown = para_mostrar(name, shown, getattr(self.manager, 'navegador', None))
+                    # Los argumentos tal cual (los que se muestran), para quien los quiera estructurados
+                    # (`--pacai`); el evento de siempre no cambia.
+                    argumentos = getattr(self.manager, 'tool_arguments', None)
+                    if argumentos is not None:
+                        argumentos(self.task, name, shown)
                     self._tool_event('Inicio '+str(name)+' · '+str(shown)[:1000], datos_de_inicio(name, shown))
                     self._llamada = call
                     try:
