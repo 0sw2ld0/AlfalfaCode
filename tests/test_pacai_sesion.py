@@ -34,11 +34,24 @@ async def inference(self, client, endpoint, payload, **kwargs):
         calls = [dict(function=dict(name='spawn_agent', arguments=dict(
             message='Revisa A', description='Revisor A', agent_type='explorador',
             **({'background': True} if sys.argv[1] == 'fondo' else {}))))]
+    if sys.argv[1] == 'completa':
+        # Lo que pide el último mensaje del usuario, si aún no tiene resultados: «uno» lanza un subagente en
+        # segundo plano y una orden que pide permiso; «dos» usa el navegador de la app (herramienta del cliente).
+        mensajes = self.state['messages']
+        ultimo = max(i for i, m in enumerate(mensajes) if m['role'] == 'user')
+        if not any(m['role'] == 'tool' for m in mensajes[ultimo:]):
+            if 'uno' in mensajes[ultimo]['content']:
+                calls = [dict(function=dict(name='spawn_agent', arguments=dict(
+                             message='Revisa A', description='Revisor A', agent_type='explorador', background=True))),
+                         dict(function=dict(name='run_command', arguments=dict(
+                             argv=[sys.executable, '-c', 'print(1)'], purpose='Probar', needs_network=True)))]
+            elif 'dos' in mensajes[ultimo]['content']:
+                calls = [dict(function=dict(name='browser_read', arguments=dict(mode='text')))]
     last = payload['messages'][-1]
     return dict(message=dict(role='assistant', content='' if calls else 'Hecho: ' + last['content'][:60],
                              tool_calls=calls), done=True, done_reason='stop', prompt_eval_count=1, eval_count=1)
 with patch.object(NativeRuntime, 'request', inference):
-    sys.exit(main(['--pacai']))
+    sys.exit(main(['--pacai'] + (['--navegador'] if sys.argv[1] == 'completa' else [])))
 '''
 
 
@@ -194,6 +207,46 @@ def test_un_cliente_que_encadena_tras_el_hello_no_tiene_que_esperar(proceso):
     p.tipo('run_finished')
     p.terminar()
     assert problemas(p.log) == []
+
+
+def test_una_sesion_0_3_con_cancelaciones_y_un_subagente_en_segundo_plano(proceso):
+    """Aprobación cancelada por una interrupción, subagente en segundo plano y herramienta del cliente cancelada.
+    Con `PACAI_TRANSCRIPCION=ruta` guarda la transcripción para `conformance/verificar.py`."""
+    p = proceso('completa')
+    p.saludar(client_tools=[{'name': 'browser', 'input_schema': {'type': 'object'}}])
+    p.entrada('uno')
+    raiz = p.tipo('run_started')
+    peticion = p.tipo('approval_request')
+    p.enviar('interrupt', {'run_id': raiz['id']})
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == raiz['id'])
+    p.entrada('dos')
+    segunda = p.tipo('run_started')
+    navegador = p.hasta(lambda m: m['type'] == 'tool_start' and m['payload']['side'] == 'client')
+    p.enviar('interrupt', {'run_id': segunda['id']})
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == segunda['id'])
+    p.terminar()
+    if os.environ.get('PACAI_TRANSCRIPCION'):
+        Path(os.environ['PACAI_TRANSCRIPCION']).write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n'
+                                                                   for m in p.log))
+    assert problemas(p.log) == []
+    agente = p.del_agente()
+    # La aprobación pendiente se cancela de forma explícita, antes del tool_end `cancelled` de su herramienta.
+    cancelada = next(m for m in agente if m['type'] == 'approval_result')
+    assert cancelada['payload'] == {'decision': 'cancelled'} and cancelada['reply_to'] == peticion['id']
+    fin_orden = next(m for m in agente if m['type'] == 'tool_end'
+                     and m['payload']['tool_call_id'] == peticion['payload']['tool_call_id'])
+    assert fin_orden['payload']['status'] == 'cancelled' and agente.index(cancelada) < agente.index(fin_orden)
+    # El subagente en segundo plano: su herramienta cierra `success` y él lleva su tool_call_id.
+    lanzar = next(m for m in agente if m['type'] == 'tool_start' and m['payload']['name'] == 'spawn_agent')
+    sub = next(m for m in agente if m['type'] == 'run_started' and 'parent_run_id' in m['payload'])
+    assert sub['payload']['tool_call_id'] == lanzar['id'] and sub['payload']['parent_run_id'] == raiz['id']
+    assert next(m for m in agente if m['type'] == 'tool_end' and m['payload']['tool_call_id'] == lanzar['id'])[
+        'payload']['status'] == 'success'
+    # La herramienta del cliente la cancela el agente, sin reply_to.
+    fin_cliente = next(m for m in agente if m['type'] == 'tool_end' and m['payload']['tool_call_id'] == navegador['id'])
+    assert fin_cliente['payload']['status'] == 'cancelled' and 'reply_to' not in fin_cliente
+    assert [m['payload']['outcome'] for m in agente if m['type'] == 'run_finished'
+            and m['payload']['run_id'] in (raiz['id'], segunda['id'])] == ['interrupted', 'interrupted']
 
 
 def test_negar_el_permiso_no_ejecuta_la_orden(proceso, tmp_path):

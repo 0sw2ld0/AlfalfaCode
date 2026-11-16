@@ -278,7 +278,7 @@ en worktrees utiliza el del repositorio compartido.
 
 ## Control con PACAI: `alfalfa --pacai`
 
-`alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.2 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor
+`alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.3 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor
 (TerminalManager y NativeRuntime): cambia sólo el idioma. `--stdio` v2 sigue igual y no se retira; la app de Mac
 y Chiyo siguen usándolo.
 
@@ -295,7 +295,7 @@ PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común
 alfalfa --pacai                      # sesión nueva; el primer encargo llega como `input`
 alfalfa --pacai --reanudar ID        # abre una sesión guardada y espera un `input`
 alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramienta del cliente `browser`)
-alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, un día)
+alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, no caducan)
 ```
 
 `--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o `--cola-encargos`: la entrada
@@ -303,23 +303,28 @@ llega siempre como mensajes. stdout lleva **sólo** mensajes PACAI, uno por lín
 Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos pendientes.
 
 ```jsonl
-{"pacai":"0.2","id":"c_1","type":"hello","session":"s_0123456789abcdef","sender":"client","seq":1,"time":"2026-11-15T10:00:00Z","payload":{"versions":["0.2"],"profiles":["work"],"extensions":["alfalfa"]}}
-{"pacai":"0.2","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.2"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.21"}}}
-{"pacai":"0.2","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.2","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.21"}}}
-{"pacai":"0.2","id":"c_2","type":"input","session":"s_0123456789abcdef","sender":"client","seq":2,"time":"…","payload":{"blocks":[{"type":"text","text":"Corrige el test de login"}]}}
-{"pacai":"0.2","id":"m_a3","type":"run_started","…":"…","payload":{"input_id":"c_2"}}
-{"pacai":"0.2","id":"m_a4","type":"tool_start","…":"…","payload":{"run_id":"m_a3","name":"run_command","arguments":{"argv":["pytest","-q"],"purpose":"Probar"},"side":"agent","title":"Ejecutar pytest -q"}}
-{"pacai":"0.2","id":"m_a5","type":"approval_request","…":"…","payload":{"run_id":"m_a3","tool_call_id":"m_a4","name":"run_command","arguments":{"…":"…"},"digest":"sha256:…","reason":"network","scopes":["once"],"expires":"…"}}
-{"pacai":"0.2","id":"c_3","type":"approval_result","reply_to":"m_a5","…":"…","payload":{"decision":"approved","scope":"once"}}
+{"pacai":"0.3","id":"c_1","type":"hello","session":"s_0123456789abcdef","sender":"client","seq":1,"time":"2026-11-15T10:00:00Z","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"]}}
+{"pacai":"0.3","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.21"}}}
+{"pacai":"0.3","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.21"}}}
+{"pacai":"0.3","id":"c_2","type":"input","session":"s_0123456789abcdef","sender":"client","seq":2,"time":"…","payload":{"blocks":[{"type":"text","text":"Corrige el test de login"}]}}
+{"pacai":"0.3","id":"m_a3","type":"run_started","…":"…","payload":{"input_id":"c_2"}}
+{"pacai":"0.3","id":"m_a4","type":"tool_start","…":"…","payload":{"run_id":"m_a3","name":"run_command","arguments":{"argv":["pytest","-q"],"purpose":"Probar"},"side":"agent","title":"Ejecutar pytest -q"}}
+{"pacai":"0.3","id":"m_a5","type":"approval_request","…":"…","payload":{"run_id":"m_a3","tool_call_id":"m_a4","name":"run_command","arguments":{"…":"…"},"digest":"sha256:…","reason":"network","scopes":["once"]}}
+{"pacai":"0.3","id":"c_3","type":"approval_result","reply_to":"m_a5","…":"…","payload":{"decision":"approved","scope":"once"}}
 ```
 
 La sesión negocia con el `hello` del cliente: el agente adopta su `session`, contesta con su propio `hello` y con
 `session_started` (con `reply_to`), y los perfiles y extensiones activos son la intersección. Un cliente que sólo
-declare `versions` recibe el núcleo. Sin versión común, `error` `version_incompatible` y cierre.
+declare `versions` recibe el núcleo. `--pacai` sólo habla la 0.3: un cliente que no la ofrezca (uno de la 0.2, por
+ejemplo) recibe `error` `version_incompatible`, se cierra y lo que encadenó tras su `hello` se descarta sin respuesta.
+
+El cliente **puede encadenar** mensajes justo tras su `hello`, sin esperar a `session_started`: se procesan en orden
+con las reglas de la sesión negociada (lo de un perfil o extensión que no quedó activo recibe `not_negotiated`).
+Lo que llega **antes** del `hello` es `invalid_message`.
 
 ### Correspondencia con `--stdio` v2
 
-| `--stdio` v2 | PACAI 0.2 |
+| `--stdio` v2 | PACAI 0.3 |
 |---|---|
 | `sesion` | `session_started` (`agent`); lo demás de la sesión, `alfalfa.session` |
 | entrada `mensaje` | `input` `new_run` (con una ejecución en curso **espera** a que acabe) |
@@ -332,13 +337,13 @@ declare `versions` recibe el núcleo. Sin versión común, `error` `version_inco
 | `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella, `alfalfa.notice` |
 | `evento` `user` | no sale: el cliente ya lo mandó |
 | `evento` `tool` (`herramienta.fase` `inicio`/`fin`) | `tool_start` / `tool_end` (`status` `success` o `error` según la clasificación del motor) |
-| `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes`, `expires`) |
+| `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes` y, si hay plazo, `expires`) |
 | entrada `permiso` | `approval_result` (`approved` o `denied`, `scope` `once` o `session`) |
-| `permiso_resuelto` | no sale (lo resolvió el cliente); si nadie contesta a tiempo, `approval_result` `expired` del agente |
+| `permiso_resuelto` | no sale si lo resolvió el cliente; si lo negó la interrupción o el fin de la ejecución, `approval_result` `cancelled` del agente; con plazo y sin respuesta, `expired` |
 | `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el desglose, `alfalfa.context` |
 | `plan` | `plan_updated` (perfil `work`) |
 | cambios del turno (diff de la instantánea o, sin ella, de git) | `diff_updated` (perfil `work`) |
-| `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id`, sus mensajes, herramientas y aprobaciones con su propio `run_id` |
+| `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id` y el `tool_call_id` del `spawn_agent` o `send_input` que lo lanzó; sus mensajes, herramientas y aprobaciones con su propio `run_id` |
 | `navegador` / `navegador_respuesta` | `tool_start` con `side: "client"` (herramienta `browser`) / `tool_end` del cliente |
 | `error` | `error` (`code` `alfalfa.engine_error`, o `message_too_large`, `invalid_message`…) |
 | `fin` | `close` (el motivo en `reason`) |
@@ -375,15 +380,19 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
 
 - **Una sola ejecución raíz activa.** Un `input` `new_run` con una en curso se encola y su `run_started` llega al
   cerrarse la anterior (en v2 un `mensaje` entraba en el turno en curso: eso es ahora `steer`).
-- **Toda ejecución se cierra con `run_finished`**, y no antes de que se cierren sus herramientas y sus
-  subejecuciones. Una herramienta cortada por una interrupción se cierra con `tool_end` `cancelled`; la subejecución
-  termina antes que su madre.
+- **Toda ejecución se cierra con `run_finished`**, y no antes de que se cierren sus herramientas, sus aprobaciones y
+  sus subejecuciones. Una herramienta cortada por una interrupción se cierra con `tool_end` `cancelled`.
+- **Subagentes.** Cada invocación es una subejecución con el `tool_call_id` de la herramienta que la lanzó
+  (`spawn_agent`, o `send_input` si lo relanza; sin él si el cliente le escribió con `steer`). Con
+  `background: true`, `spawn_agent` cierra `success` en el acto y el subagente sigue; la raíz lo espera antes de
+  su `run_finished` (el turno no se cierra con subagentes trabajando). Interrumpir un subagente cuya herramienta
+  sigue abierta cierra esa herramienta con `cancelled` y la madre sigue.
 - **Aprobaciones.** El `digest` es `sha256` de los argumentos canonizados (JCS, RFC 8785) y cubre los mismos
-  argumentos que el `tool_start`. Sin respuesta a tiempo (`expires`), el agente declara `expired` y no ejecuta.
-  PACAI 0.2 obliga a poner un plazo: por defecto es **un día**, para que una petición espere al usuario como en
-  la app; `--caducidad-aprobacion SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` lo cambian (más de 0 y
-  hasta un año). Una interrupción, un `close` o EOF niegan lo pendiente en el acto: la herramienta se cierra con
-  `tool_end` `cancelled` (o `error`, si el motor llegó a contestar) y su plazo deja de contar.
+  argumentos que el `tool_start`. **Por defecto no caducan**: no llevan `expires` y esperan al usuario, como en
+  Claude Code, ACP y Codex. `--caducidad-aprobacion SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` les ponen
+  plazo (más de 0 y hasta un año); pasado, el agente declara `expired` y no ejecuta. Sin `expires` nunca hay
+  `expired`. Si la ejecución termina o se interrumpe (también por `close` o EOF) con una petición sin contestar,
+  el agente la resuelve con `approval_result` `cancelled` antes del `tool_end` `cancelled` de su herramienta.
   Una respuesta tardía, o un valor que no sea exactamente `approved` o `denied`, no vale. «Aprobar para la sesión»
   (`scope: "session"`) sólo cubre el mismo nombre y los mismos argumentos; cada repetición es un `tool_start` con
   `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.
@@ -391,6 +400,12 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
   declara en `hello.client_tools`: el agente emite `tool_start` con `side: "client"` y el cliente contesta con
   `tool_end` y `reply_to`. El cuerpo de su respuesta va en un bloque `structured` con los campos de
   `navegador_respuesta` de v2 (`ok`, `resultado`, `error`, `permiso`). Sin esa declaración, el motor recibe un «no».
+  Si la ejecución termina o se interrumpe con la herramienta abierta, el agente la cancela con `tool_end`
+  `cancelled` sin `reply_to` (el motor recibe un «no»); lo que el cliente mande después se ignora sin error.
+- **Ejecución en cierre.** Tras un `cancelled` del agente (una aprobación o una herramienta del cliente), esa
+  ejecución no empieza nada nuevo: ni mensajes, ni herramientas, ni aprobaciones, ni subagentes. Sólo cierra lo
+  abierto, informa (`usage`, `plan_updated`, `diff_updated`) y termina; lo que diga aún el motor sale como
+  `alfalfa.notice`.
 - **Mensajes del cliente.** Se validan contra el esquema; un `seq` repetido o con huecos, un `id` repetido con otro
   contenido, un `approval_result` sin petición pendiente o una extensión no negociada reciben su `error`
   (`invalid_message`, `seq_unrecoverable`, `unknown_approval`, `not_negotiated`…) y la sesión sigue, salvo
@@ -400,16 +415,18 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
 
 - Los `input` admiten bloques de texto; `file` y `structured` se rechazan con `invalid_message`.
 - Los `arguments` de un `tool_start` (y de su `approval_request`) son los argumentos JSON de la llamada del
-  modelo, completos y con los secretos tachados (`[REDACTADO]`), como los ve la app; lo legible va en `title` (la
-  descripción de la app). Si pasan de una cuarta parte de `max_message_bytes` (256 KiB por defecto), los textos
-  más largos se recortan (acaban en `… [recortado]`) y, con la extensión, el `tool_start` lleva
-  `payload.alfalfa.arguments_truncated: true`; el `digest` es el de lo que se envía. PACAI 0.2 no tiene un campo
-  `truncated` en el núcleo. `--stdio` v2 no cambia: su evento sigue llevando el texto `Inicio <herramienta> · …`.
+  modelo, completos, con cada secreto tachado siempre como `"[redacted]"` (el `digest` es el de lo que viaja); lo
+  legible va en `title` (la descripción de la app). Si pasan de una cuarta parte de `max_message_bytes` (256 KiB por
+  defecto), los textos más largos se recortan (acaban en `… [recortado]`) y el `tool_start` lleva `truncated: true`.
+  Una llamada truncada no se puede aprobar: si necesita permiso, se niega y termina en `tool_end` `error`. Los
+  argumentos de una herramienta del cliente nunca se tachan ni se acortan. `--stdio` v2 no cambia: su evento sigue
+  llevando el texto `Inicio <herramienta> · …`.
 - Un permiso que llega fuera de una ejecución (guardar una prueba del navegador entre turnos, o un encargo de la
   cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
   seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
-- `diff_updated` sale al cerrar una ejecución que cambió archivos. Con la instantánea de deshacer, es su diff. Sin
+- `diff_updated` sale al cerrar una ejecución que cambió archivos, y es el **acumulado** de la ejecución (todo desde
+  su `run_started`; si hubiera varios, cada uno sustituye al anterior). Con la instantánea de deshacer, es su diff. Sin
   ella (`ALFALFA_INSTANTANEAS=0`, o un turno que la instantánea no cubre) y en un repo git, lo calcula el propio
   AlfalfaCode con git, no el agente (ni pasa por el sandbox ni pide permisos): al empezar la ejecución fija el punto
   de partida con un índice temporal (`GIT_INDEX_FILE`, copiado del tuyo sólo para ir rápido) y `git write-tree`, y

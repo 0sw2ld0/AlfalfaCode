@@ -6,10 +6,12 @@ a stderr.
 
 Lo que PACAI exige y v2 no hacía:
 
-- saludo y negociación antes de nada: lo que el motor emite mientras tanto espera;
+- saludo y negociación antes de nada (lo que el cliente encadena tras su `hello` vale; lo que el motor emite
+  mientras tanto espera);
 - una sola ejecución raíz activa: un `input` `new_run` que llega con una en curso espera a que termine;
-- aprobaciones con `expires`: sin respuesta a tiempo, el propio agente declara `expired` y no se ejecuta;
-- EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`).
+- aprobaciones sin plazo por defecto; con `--caducidad-aprobacion`, pasado `expires` el agente declara `expired`;
+- EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`), y el
+  traductor lo cuenta con `approval_result` `cancelled`; las herramientas del cliente abiertas se cancelan.
 """
 from __future__ import annotations
 
