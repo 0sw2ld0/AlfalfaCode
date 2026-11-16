@@ -1,7 +1,2 @@
-Revisión a fondo de AlfalfaCode, con más de 60 arreglos.
-Detener vuelve a funcionar siempre (a mitad de una tanda, al compactar, con una tarjeta abierta o en la cola) y deja la sesión lista para seguir. Un fallo inesperado o una respuesta cortada ya no cierran la sesión.
-Pregunta menos: en Manual y «Aceptar ediciones» las órdenes que solo leen no preguntan, una regla vale también tras un cd o con la carpeta escrita de otra forma, y las tarjetas de red y de modo ofrecen «No volver a preguntar».
-Más seguro: el modo automático ya no aprueba órdenes inseguras, los linters no reciben tus claves, se tapan más formas de clave y leer una web ya no puede acabar en un servicio de tu Mac.
-El sandbox aguanta proyectos grandes y carpetas ilegibles, y si un archivo protegido tiene un enlace duro te dice cuál y cómo arreglarlo.
-La salida de los procesos en segundo plano tiene un tope de 1 MB y se borra al cerrar la sesión, y la cola en paralelo quita los worktrees que ya no guardan trabajo.
-Nuevo: alfalfa --pacai, que habla el protocolo PACAI 0.3.
+La app habla con el motor por PACAI 0.3 (alfalfa --pacai). Por fuera se ve y funciona igual que antes.
+Si algo fallara con el protocolo nuevo, «defaults write com.cuycoders.alfalfacode ProtocoloMotor stdio» en la Terminal vuelve al de antes.
