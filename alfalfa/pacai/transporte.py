@@ -1,4 +1,4 @@
-"""`alfalfa --pacai`: el `Transport` de `--stdio` v2 hablando PACAI 0.2 por stdio (§5.1).
+"""`alfalfa --pacai`: el `Transport` de `--stdio` v2 hablando PACAI 0.3 por stdio (§5.1).
 
 El motor sigue siendo el mismo (`stdio.run`): este transporte recibe sus eventos v2 y los traduce con `Traductor`, y
 traduce a órdenes v2 lo que llega del cliente. stdout lleva sólo mensajes PACAI, uno por línea; los registros van
@@ -6,10 +6,12 @@ a stderr.
 
 Lo que PACAI exige y v2 no hacía:
 
-- saludo y negociación antes de nada: lo que el motor emite mientras tanto espera;
+- saludo y negociación antes de nada (lo que el cliente encadena tras su `hello` vale; lo que el motor emite
+  mientras tanto espera);
 - una sola ejecución raíz activa: un `input` `new_run` que llega con una en curso espera a que termine;
-- aprobaciones con `expires`: sin respuesta a tiempo, el propio agente declara `expired` y no se ejecuta;
-- EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`).
+- aprobaciones sin plazo por defecto; con `--caducidad-aprobacion`, pasado `expires` el agente declara `expired`;
+- EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`), y el
+  traductor lo cuenta con `approval_result` `cancelled`; las herramientas del cliente abiertas se cancelan.
 """
 from __future__ import annotations
 
@@ -37,9 +39,7 @@ NOMBRE = 'alfalfa'
 PERFILES = ('work',)
 EXTENSIONES = ('alfalfa',)
 MAX_BYTES = 1024 * 1024
-# Segundos que el cierre de un turno espera a que el cliente cierre sus herramientas abiertas (§4.4).
-GRACIA_CLIENTE = 3.0
-# Variable de entorno con los segundos que espera una aprobación (por defecto, `CADUCIDAD_APROBACION`: un día).
+# Variable de entorno con los segundos que espera una aprobación (por defecto no caduca: `CADUCIDAD_APROBACION`).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
 CADUCIDAD_MAXIMA = 365 * 24 * 3600
 # Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Sus campos van en inglés
@@ -54,14 +54,14 @@ COMANDOS = {
 }
 
 
-def caducidad_de(valor: Any = None) -> float:
-    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`, si no un
-    día. Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
+def caducidad_de(valor: Any = None) -> float | None:
+    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`; sin
+    ninguno, None (no caduca). Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
     origen = '--caducidad-aprobacion'
     if valor is None:
         valor, origen = os.environ.get(ENTORNO_CADUCIDAD), ENTORNO_CADUCIDAD
     if valor is None or (isinstance(valor, str) and not valor.strip()):
-        return float(CADUCIDAD_APROBACION)
+        return CADUCIDAD_APROBACION
     try:
         segundos = float(valor)
     except (TypeError, ValueError):
@@ -72,16 +72,19 @@ def caducidad_de(valor: Any = None) -> float:
     return segundos
 
 
+_DEL_ENTORNO = object()
+
+
 class TransportePacai(Transport):
-    def __init__(self, output, *, caducidad: float | None = None, reloj: Callable[[], datetime] = ahora,
-                 gracia_cliente: float = GRACIA_CLIENTE):
+    def __init__(self, output, *, caducidad: Any = _DEL_ENTORNO, reloj: Callable[[], datetime] = ahora):
         super().__init__(output)
-        self.caducidad = caducidad_de() if caducidad is None else caducidad
-        self.reloj, self.gracia_cliente = reloj, gracia_cliente
+        self.caducidad = caducidad_de() if caducidad is _DEL_ENTORNO else caducidad
+        self.reloj = reloj
         self.emisor = Emisor('agent', nueva_sesion(), reloj=reloj)
         self.t: Traductor | None = None
         self.empezado = False
         self.cerrado = False
+        self.sin_sesion = False                          # la negociación falló: lo que llegue se descarta
         self.manager = None
         self.max_bytes = MAX_BYTES
         self.client_seq = 0
@@ -234,18 +237,20 @@ class TransportePacai(Transport):
         campos = self._diferidos.pop(ident, None)
         if campos is None or self.cerrado:
             return
+        self.t.motivo_rechazo = None
         mensajes = self.t.permiso(campos)
         if mensajes is None:
-            # Sin ejecución a la que atribuirlo (p. ej. guardar una prueba del navegador entre turnos): se niega.
+            # Sin ejecución a la que atribuirlo (p. ej. guardar una prueba del navegador entre turnos), en cierre o
+            # con los argumentos truncados: se niega.
             if ident in self.pending:
-                self.resolve(ident, False, 'Sin ejecución activa')
+                self.resolve(ident, False, self.t.motivo_rechazo or 'Sin ejecución activa')
             return
         self._enviar_todo(mensajes)
 
     def _vigilar_caducidad(self, request_id: str) -> None:
         a = self.t.aprobacion(request_id)
-        if a is None:
-            return
+        if a is None or a.expira is None:
+            return                                       # sin `expires` no hay temporizador
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -255,7 +260,7 @@ class TransportePacai(Transport):
 
     def _olvidar_resueltas(self) -> None:
         """Una petición ya resuelta (por el cliente, la interrupción, el cierre o el fin de su ejecución) no espera
-        a su `expires`: con una caducidad de un día, su temporizador no debe seguir vivo."""
+        a su `expires`: su temporizador no debe seguir vivo."""
         for request_id in list(self._temporizadores):
             a = self.t.aprobacion(request_id) if self.t else None
             if a is None or a.estado != 'pending':
@@ -264,7 +269,7 @@ class TransportePacai(Transport):
     def _caducar(self, request_id: str) -> None:
         self._temporizadores.pop(request_id, None)
         a = self.t.aprobacion(request_id) if self.t else None
-        if a is None or a.estado != 'pending' or self.cerrado:
+        if a is None or a.estado != 'pending' or self.cerrado or a.expira is None:
             return
         if self.reloj() < a.expira:                      # nunca antes de `expires`
             self._vigilar_caducidad(request_id)
@@ -276,13 +281,6 @@ class TransportePacai(Transport):
     # -- cierre de un turno ------------------------------------------------
     async def _cerrar_turno(self, campos: dict) -> None:
         try:
-            limite = asyncio.get_running_loop().time() + self.gracia_cliente
-            while self.t.herramientas_del_cliente_abiertas() and asyncio.get_running_loop().time() < limite:
-                await asyncio.sleep(0.02)
-            for tc in self.t.herramientas_del_cliente_abiertas():
-                self.t.fin_de_herramienta_cliente(tc)
-                self._enviar(self.t.error('alfalfa.client_tool_unanswered',
-                                          'El cliente no cerró su herramienta antes de terminar la ejecución.', tc))
             diff = await asyncio.to_thread(self._diff_del_turno) if self.t.trabajo and self.t.hay_cambios else None
             if not diff and self.t.trabajo and self._partida is not None:
                 diff = await asyncio.to_thread(self._partida.diff)        # sin instantáneas: el de git
@@ -330,7 +328,7 @@ class TransportePacai(Transport):
         self._enviar(previo.error(codigo, mensaje, ref))
 
     def receive(self, line):
-        if self.cerrado:
+        if self.cerrado or self.sin_sesion:
             return
         try:
             m = json.loads(line)
@@ -338,6 +336,8 @@ class TransportePacai(Transport):
             return self._error('invalid_message', 'La línea no es JSON.')
         if not isinstance(m, dict):
             return self._error('invalid_message', 'Un mensaje PACAI es un objeto JSON.')
+        if self._sin_version_comun(m):
+            return
         ref = m.get('id') if isinstance(m.get('id'), str) and len(m['id']) >= 8 else None
         previo = self.vistos.get(ref) if ref else None
         if previo is not None:
@@ -366,7 +366,9 @@ class TransportePacai(Transport):
         if tipo in MESSAGE_TYPES and lado not in (None, 'client'):
             return self._error('invalid_message', tipo + ' sólo lo envía el agente.', ref)
         if not self.empezado and tipo not in ('hello', 'error', 'close', 'heartbeat'):
-            return self._error('invalid_message', tipo + ' antes de session_started.', ref)
+            # Antes de su `hello` el cliente sólo puede mandar error, close y heartbeat (§4.1). Lo que encadena justo
+            # después del `hello` sí vale: el `hello` se negocia en el acto y lo siguiente ya llega con sesión.
+            return self._error('invalid_message', tipo + ' antes del hello del cliente.', ref)
         if self.empezado and m['session'] != self.emisor.sesion:
             return self._error('invalid_message', 'La sesión no es la de este proceso.', ref)
         manejador = getattr(self, '_c_' + tipo, None) if tipo in MESSAGE_TYPES else None
@@ -377,6 +379,25 @@ class TransportePacai(Transport):
         if '.' in tipo:
             return self._extension(m)
         return self._error('invalid_message', 'Tipo desconocido: ' + tipo, ref)
+
+    def _sin_version_comun(self, m: dict) -> bool:
+        """Un `hello` de un cliente que no ofrece esta versión (p. ej. uno de la 0.2, con su sobre `"pacai": "0.2"`
+        que el esquema de la 0.3 no admite) recibe `version_incompatible` y se cierra (§4.1), no `invalid_message`."""
+        versiones = m.get('payload', {}).get('versions') if isinstance(m.get('payload'), dict) else None
+        if (self.empezado or m.get('type') != 'hello' or m.get('sender') != 'client'
+                or not isinstance(versiones, list) or VERSION in versiones):
+            return False
+        if isinstance(m.get('session'), str) and len(m['session']) >= 16:
+            self.emisor.sesion = m['session']
+        ref = m.get('id') if isinstance(m.get('id'), str) and len(m['id']) >= 8 else None
+        self._error('version_incompatible', 'Sólo se admite PACAI ' + VERSION + '.', ref)
+        self._negociacion_fallida()
+        return True
+
+    def _negociacion_fallida(self) -> None:
+        """Sin sesión no se contesta nada más: lo encadenado tras el `hello` se descarta sin respuesta (§4.1)."""
+        self.sin_sesion = True
+        self.stop()
 
     def _c_heartbeat(self, m):
         pass
@@ -395,10 +416,7 @@ class TransportePacai(Transport):
         if 'resume_after_seq' in p:
             # La reanudación en red queda fuera: este proceso no retiene una sesión anterior.
             self._error('retention_expired', 'Este agente no retiene sesiones para reanudar.', m['id'])
-            return self.stop()
-        if VERSION not in p['versions']:
-            self._error('version_incompatible', 'Sólo se admite PACAI ' + VERSION + '.', m['id'])
-            return self.stop()
+            return self._negociacion_fallida()
         perfiles = [x for x in p.get('profiles', []) if x in PERFILES]
         extensiones = [x for x in p.get('extensions', []) if x in EXTENSIONES]
         limite = (p.get('limits') or {}).get('max_message_bytes')
@@ -488,9 +506,9 @@ class TransportePacai(Transport):
     def _c_approval_result(self, m):
         p, ref = m['payload'], m['reply_to']
         a = self.t.aprobacion(ref)
-        if a is None or (a.estado not in ('pending', 'expired')):
+        if a is None or (a.estado not in ('pending', 'expired', 'cancelled')):
             return self._error('unknown_approval', 'No hay una petición pendiente con ese reply_to.', m['id'])
-        if a.estado == 'expired' or self.reloj() >= a.expira:
+        if a.estado in ('expired', 'cancelled') or (a.expira is not None and self.reloj() >= a.expira):
             return                                        # tarde: no cuenta como aprobación (§4.5)
         decision, alcance = p['decision'], p.get('scope')
         if decision not in ('approved', 'denied'):
@@ -509,6 +527,8 @@ class TransportePacai(Transport):
     def _c_tool_end(self, m):
         p = m['payload']
         tc = p['tool_call_id']
+        if tc in self.t.clientes_cancelados:
+            return                     # el agente ya la canceló: lo que llega tarde se ignora sin error (§4.4)
         if m.get('reply_to') != tc:
             return self._error('invalid_message', 'El tool_end del cliente responde con reply_to al tool_start.',
                                m['id'])

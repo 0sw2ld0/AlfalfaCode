@@ -1,4 +1,4 @@
-"""De los eventos de `--stdio` v2 a mensajes PACAI 0.2 (anexo A de la especificación).
+"""De los eventos de `--stdio` v2 a mensajes PACAI 0.3 (anexo A de la especificación).
 
 `Traductor` no hace entrada y salida ni espera nada: recibe un evento v2 (`tipo` y campos) y devuelve la lista
 de mensajes PACAI que le corresponden, ya con su `seq`, su `id` y su hora. Lleva el estado que PACAI exige y v2
@@ -21,19 +21,24 @@ from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
-# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5): PACAI 0.2 obliga a mandar
-# `expires`, así que no puede no caducar; un día deja al usuario volver a su mesa (y responder al día siguiente)
-# sin que una petición olvidada quede abierta para siempre. `ALFALFA_CADUCIDAD_APROBACION` o
-# `--caducidad-aprobacion` la cambian.
-CADUCIDAD_APROBACION = 24 * 3600
+# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5). Por defecto ninguno: en la 0.3
+# `expires` es opcional y, como en Claude Code, ACP y Codex, una petición espera hasta que el usuario conteste o el
+# agente la cancele. `ALFALFA_CADUCIDAD_APROBACION` o `--caducidad-aprobacion` le ponen plazo.
+CADUCIDAD_APROBACION: float | None = None
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
 MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)
 RECORTADO = '… [recortado]'
+# Cómo se tacha un secreto en los argumentos de una herramienta del agente (§4.4): siempre igual, para que el digest
+# de lo que viaja cuadre. AlfalfaCode lo redacta como «[REDACTADO]» (v2, registros); en PACAI sale así.
+TACHADO = '[redacted]'
+REDACTADO = '[REDACTADO]'
 MAX_SALIDA = 60000            # caracteres de la salida de una herramienta en un `tool_end`
 EDITORES = frozenset({'write_file', 'edit_file', 'apply_patch'})
 SINTETICA = 'request_permission'
+# Herramientas del motor que lanzan (o relanzan) un subagente: su `tool_start` va en el `run_started` (§4.9).
+LANZADORES = frozenset({'spawn_agent', 'send_input'})
 # Estados de un subagente (subagentes.py) con los que ya no trabaja.
 TERMINADOS = frozenset({'terminado', 'fallido', 'cerrado', 'interrumpido'})
 RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'failed', 'cortado': 'interrupted',
@@ -60,6 +65,9 @@ class Herramienta:
     lado: str = 'agent'
     v2id: str | None = None          # petición del navegador de la app (lado cliente)
     sintetica: bool = False          # la abrió un permiso que ninguna herramienta abierta explicaba
+    cancelada: bool = False          # su aprobación se canceló: su `tool_end` es `cancelled` (§4.5)
+    subagente: str | None = None     # el subagente (aN) que lanzó, si es un `spawn_agent` o un `send_input`
+    truncada: bool = False           # sus argumentos van acortados (`truncated`): no se puede aprobar (§4.4)
 
 
 @dataclass
@@ -67,6 +75,8 @@ class Ejecucion:
     run_id: str
     agente: str | None = None        # id del subagente en AlfalfaCode (aN); None en la raíz
     activa: bool = True
+    cerrando: bool = False           # el agente ya canceló algo suyo: no empieza trabajo nuevo (§4.2)
+    tool_call_id: str | None = None  # la herramienta de la madre que la lanzó
 
 
 @dataclass
@@ -78,9 +88,9 @@ class Aprobacion:
     nombre: str
     digest: str
     scopes: list[str]
-    expira: datetime
+    expira: datetime | None          # sin `expires`, no caduca
     sitio: bool = False               # v2 pide `sitio` (una_vez|sesion|proyecto) en vez de `sesion`
-    estado: str = 'pending'           # pending, approved, denied, expired
+    estado: str = 'pending'           # pending, approved, denied, expired, cancelled
 
 
 def _json_seguro(valor: Any) -> dict | None:
@@ -93,12 +103,23 @@ def _json_seguro(valor: Any) -> dict | None:
     return copia if isinstance(copia, dict) else None
 
 
-def argumentos_de(texto: str, datos: dict | None) -> dict:
-    """Los argumentos de una herramienta a partir de su evento v2 de inicio.
+def tachar(valor: Any) -> Any:
+    """Los secretos ya redactados por AlfalfaCode, con la marca de PACAI (`"[redacted]"`); claves y estructura igual."""
+    if isinstance(valor, str):
+        return valor.replace(REDACTADO, TACHADO)
+    if isinstance(valor, list):
+        return [tachar(v) for v in valor]
+    if isinstance(valor, dict):
+        return {k: tachar(v) for k, v in valor.items()}
+    return valor
 
-    El motor escribe `Inicio <nombre> · <argumentos>` con los argumentos ya sin secretos y recortados a 1000
-    caracteres. Si caben, son un literal de Python y valen tal cual; si no, se rehace lo que enseña la app
-    (orden, carpeta, archivos) y se avisa con `truncated`.
+
+def argumentos_de(texto: str, datos: dict | None) -> tuple[dict, bool]:
+    """Los argumentos de una herramienta a partir de su evento v2 de inicio, y si están acortados.
+
+    Sólo se usa cuando el motor no dio los argumentos estructurados. Escribe `Inicio <nombre> · <argumentos>` con
+    los argumentos ya sin secretos y recortados a 1000 caracteres. Si caben, son un literal de Python y valen tal
+    cual; si no, se rehace lo que enseña la app (orden, carpeta, archivos) y se avisa con `truncated`.
     """
     cuerpo = texto.split(' · ', 1)[1] if texto.startswith('Inicio ') and ' · ' in texto else ''
     if cuerpo:
@@ -108,13 +129,13 @@ def argumentos_de(texto: str, datos: dict | None) -> dict:
             valor = None
         limpio = _json_seguro(valor) if isinstance(valor, dict) else None
         if limpio is not None:
-            return limpio
+            return limpio, False
     datos = datos or {}
-    args: dict[str, Any] = {'truncated': True}
+    args: dict[str, Any] = {}
     for origen, destino in (('orden', 'command'), ('cwd', 'cwd'), ('objetivo', 'target'), ('objetivos', 'targets')):
         if datos.get(origen):
             args[destino] = datos[origen]
-    return args
+    return args, True
 
 
 def _tamano(valor: Any) -> int:
@@ -188,7 +209,7 @@ def _fallo(datos: dict) -> bool:
 
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
-                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+                 caducidad: float | None = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
                  max_argumentos: int = MAX_ARGUMENTOS):
         self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
@@ -202,7 +223,10 @@ class Traductor:
         self.permisos: dict[str, str] = {}                  # id del permiso v2 → id del approval_request
         self.de_sesion: list[tuple[str, str, str]] = []     # (nombre, digest, approval_id) con alcance session
         self.hay_cambios = False
-        # Quien conteste a v2 cuando PACAI no puede (navegador sin herramienta del cliente): (id v2, texto).
+        self.clientes_cancelados: set[str] = set()          # herramientas del cliente que el agente canceló
+        self.motivo_rechazo: str | None = None              # por qué `permiso` devolvió None, si no es lo de siempre
+        self.fines_ignorados: dict[tuple[str, str], int] = {}  # (run_id, nombre): fines del motor ya cerrados aquí
+        # Quien conteste a v2 cuando PACAI no puede (navegador no declarado o cancelado): (id v2, texto).
         self.al_rechazar_navegador: Callable[[str, str], None] | None = None
 
     # -- utilidades --------------------------------------------------------
@@ -220,6 +244,22 @@ class Traductor:
 
     def _activa(self, run_id: str | None) -> bool:
         return run_id is not None and run_id in self.ejecuciones and self.ejecuciones[run_id].activa
+
+    def _abierta(self, run_id: str | None) -> bool:
+        """Activa y sin estar en cierre: puede empezar trabajo nuevo (mensajes, herramientas, aprobaciones…)."""
+        return self._activa(run_id) and not self.ejecuciones[run_id].cerrando
+
+    def _cancelar_aprobacion(self, a: Aprobacion, h: Herramienta | None = None) -> list[dict]:
+        """La ejecución termina o se interrumpe con la petición sin contestar: `approval_result` `cancelled` del
+        agente (§4.5), y la ejecución entra en cierre. Su herramienta se cerrará con `cancelled`."""
+        a.estado = 'cancelled'
+        self.permisos.pop(a.v2id, None)
+        if a.run_id in self.ejecuciones:
+            self.ejecuciones[a.run_id].cerrando = True
+        h = h or self.herramientas.get(a.tool_call_id)
+        if h is not None:
+            h.cancelada = True
+        return [self._msg('approval_result', {'decision': 'cancelled'}, reply_to=a.id)]
 
     # -- entrada principal -------------------------------------------------
     def evento(self, tipo: str, campos: dict) -> list[dict]:
@@ -239,25 +279,39 @@ class Traductor:
         return [m]
 
     def _cerrar_herramientas(self, run_id: str, estado: str = 'cancelled') -> list[dict]:
-        """Cierra las herramientas del agente que siguen abiertas en una ejecución (las del cliente las cierra él)."""
+        """Cierra lo que sigue abierto en una ejecución que termina: las del agente y, con `tool_end` `cancelled` sin
+        `reply_to`, las del cliente (§4.4)."""
         salida = []
-        for tc in [t for t, h in self.herramientas.items() if h.run_id == run_id and h.lado == 'agent']:
+        for tc in [t for t, h in self.herramientas.items() if h.run_id == run_id]:
             salida += self._cerrar(tc, estado)
         return salida
 
     def _cerrar(self, tc: str, estado: str, salida: list | None = None, resumen: str | None = None) -> list[dict]:
         h = self.herramientas.pop(tc)
-        for a in self.aprobaciones.values():
+        mensajes: list[dict] = []
+        for a in list(self.aprobaciones.values()):
             if a.tool_call_id == tc and a.estado == 'pending':
-                a.estado = 'denied'
+                mensajes += self._cancelar_aprobacion(a, h)       # antes que su `tool_end` (§4.5)
+        if h.cancelada:
+            estado, salida, resumen = 'cancelled', None, None
         payload: dict[str, Any] = {'tool_call_id': tc, 'status': estado}
         if salida:
             payload['output'] = salida
         if resumen:
             payload['summary'] = resumen[:300]
         if h.lado == 'client':
-            return []
-        return [self._msg('tool_end', payload)]
+            return mensajes + self._cancelar_del_cliente(h)
+        return mensajes + [self._msg('tool_end', payload)]
+
+    def _cancelar_del_cliente(self, h: Herramienta) -> list[dict]:
+        """El agente cancela una herramienta del cliente que sigue abierta al terminar su ejecución (§4.4): la
+        ejecución entra en cierre, el motor recibe un «no» y el `tool_end` tardío del cliente se ignorará."""
+        self.clientes_cancelados.add(h.id)
+        if h.run_id in self.ejecuciones:
+            self.ejecuciones[h.run_id].cerrando = True
+        if self.al_rechazar_navegador is not None and h.v2id is not None:
+            self.al_rechazar_navegador(h.v2id, 'La ejecución terminó y se canceló la herramienta del cliente.')
+        return [self._msg('tool_end', {'tool_call_id': h.id, 'status': 'cancelled'})]
 
     def _terminar(self, run_id: str, resultado: str, detalle: str | None = None) -> list[dict]:
         ej = self.ejecuciones[run_id]
@@ -269,10 +323,14 @@ class Traductor:
         ej.activa = False
         if ej.agente is not None and self.subagentes.get(ej.agente) == run_id:
             del self.subagentes[ej.agente]
+        lanzadora = self.herramientas.get(ej.tool_call_id) if ej.tool_call_id else None
+        if resultado == 'interrupted' and lanzadora is not None:
+            # La madre recibe el `tool_end` `cancelled` de la herramienta que lanzó al subagente y sigue (§4.6);
+            # el fin que el motor mande luego por ella ya no sale. Si ya terminó (segundo plano), nada que cerrar.
+            clave = (lanzadora.run_id, lanzadora.nombre)
+            self.fines_ignorados[clave] = self.fines_ignorados.get(clave, 0) + 1
+            salida += self._cerrar(lanzadora.id, 'cancelled')
         return salida
-
-    def herramientas_del_cliente_abiertas(self) -> list[str]:
-        return [t for t, h in self.herramientas.items() if h.lado == 'client']
 
     def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
         """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`."""
@@ -323,6 +381,9 @@ class Traductor:
     def _mensaje(self, run_id: str, rol: str, texto: str) -> list[dict]:
         if not texto:
             return []
+        if not self._abierta(run_id):
+            # En cierre no empieza un mensaje nuevo (§4.2): lo que diga el motor va como aviso de la extensión.
+            return self._ext('notice', {'run_id': run_id, 'role': rol, 'text': texto})
         inicio = self._msg('message_start', {'run_id': run_id, 'role': rol})
         salida = [inicio]
         for n in range(0, len(texto), TROZO):
@@ -354,15 +415,15 @@ class Traductor:
     def _tool_start(self, run_id: str | None, texto: str, datos: dict, argumentos: Any = None) -> list[dict]:
         """`argumentos`: los de la llamada del modelo, ya sin secretos (`Transport.argumentos_herramienta`). Sin
         ellos (o si no son un objeto JSON) se sacan, como antes, del texto del evento."""
-        if not self._activa(run_id):
-            return []
+        if not self._abierta(run_id):
+            return []                    # sin `tool_start`, su fin tampoco sale
         nombre = str(datos.get('nombre') or 'tool')
         reales = _json_seguro(argumentos) if isinstance(argumentos, dict) else None
-        recortados = False
         if reales is not None:
-            args, recortados = recortar_argumentos(reales, self.max_argumentos)
+            args, recortados = recortar_argumentos(tachar(reales), self.max_argumentos)
         else:
-            args = argumentos_de(texto, datos)
+            args, recortados = argumentos_de(texto, datos)
+            args = tachar(args)
         payload: dict[str, Any] = {'run_id': run_id, 'name': nombre, 'arguments': args, 'side': 'agent'}
         # Lo legible va aparte (como `title` de ACP): la descripción que enseña la app o, sin ella, el texto de
         # siempre del motor.
@@ -370,17 +431,20 @@ class Traductor:
         if legible:
             payload['title'] = str(legible)[:200]
         if recortados:
-            payload.update(self._alfalfa({'arguments_truncated': True}))
+            payload['truncated'] = True
         d = digest(args)
         aprobada = next((a for n, g, a in self.de_sesion if n == nombre and g == d), None)
-        if aprobada:
+        if aprobada and not recortados:          # una llamada truncada no reutiliza una aprobación `session`
             payload['approval_id'] = aprobada
         m = self._msg('tool_start', payload)
-        self.herramientas[m['id']] = Herramienta(m['id'], run_id, nombre, args)
+        self.herramientas[m['id']] = Herramienta(m['id'], run_id, nombre, args, truncada=recortados)
         return [m]
 
     def _tool_end(self, run_id: str | None, datos: dict, texto: str) -> list[dict]:
         nombre = str(datos.get('nombre') or '')
+        if self.fines_ignorados.get((run_id, nombre)):
+            self.fines_ignorados[(run_id, nombre)] -= 1
+            return []
         tc = next((t for t, h in self.herramientas.items()
                    if h.run_id == run_id and h.nombre == nombre and h.lado == 'agent'), None)
         if tc is None:
@@ -401,14 +465,28 @@ class Traductor:
 
     # -- subagentes = subejecuciones (§4.9) --------------------------------
     def _subejecucion(self, ident: str, nombre: str = 'subagent', descripcion: str = '') -> list[dict]:
-        """Abre la subejecución de un subagente si no tiene una activa."""
-        if self._activa(self.subagentes.get(ident)) or not self._activa(self.raiz):
+        """Abre la subejecución de un subagente si no tiene una activa (nunca en una raíz en cierre)."""
+        if self._activa(self.subagentes.get(ident)) or not self._abierta(self.raiz):
             return []
         agente = {'name': nombre or 'subagent', **({'description': descripcion[:200]} if descripcion else {})}
-        m = self._msg('run_started', {'parent_run_id': self.raiz, 'agent': agente})
-        self.ejecuciones[m['id']] = Ejecucion(m['id'], agente=ident)
+        lanzadora = self._lanzadora(ident)
+        m = self._msg('run_started', {'parent_run_id': self.raiz, 'agent': agente,
+                                      **({'tool_call_id': lanzadora.id} if lanzadora else {})})
+        self.ejecuciones[m['id']] = Ejecucion(m['id'], agente=ident, tool_call_id=lanzadora.id if lanzadora else None)
         self.subagentes[ident] = m['id']
         return [m]
+
+    def _lanzadora(self, ident: str) -> Herramienta | None:
+        """La herramienta abierta de la raíz que lanza este subagente: un `spawn_agent` aún sin subagente, o un
+        `send_input` a él. Sin ninguna (el cliente le escribió con `steer`), la subejecución no lleva `tool_call_id`."""
+        for h in reversed(list(self.herramientas.values())):
+            if h.run_id != self.raiz or h.lado != 'agent' or h.nombre not in LANZADORES or h.subagente is not None:
+                continue
+            destino = h.argumentos.get('agent')
+            if h.nombre == 'spawn_agent' or destino in (None, ident):
+                h.subagente = ident
+                return h
+        return None
 
     def _v2_subagentes(self, campos: dict) -> list[dict]:
         salida: list[dict] = []
@@ -443,9 +521,10 @@ class Traductor:
     # -- aprobaciones (§4.5) -----------------------------------------------
     def _herramienta_del_permiso(self, run_id: str, argv: Any) -> Herramienta | None:
         abiertas = [h for h in self.herramientas.values() if h.run_id == run_id and h.lado == 'agent']
+        argv = tachar(argv)
         for h in reversed(abiertas):
             propio = h.argumentos.get('argv')
-            if propio is None or propio == argv:
+            if h.truncada or propio is None or propio == argv:
                 return h
         return None
 
@@ -456,13 +535,17 @@ class Traductor:
         run_id = self.subagentes.get(sub.group(1)) if sub else None
         if not self._activa(run_id):
             run_id = self.raiz
-        if not self._activa(run_id):
-            return None
+        if not self._abierta(run_id):
+            return None                  # sin ejecución, o en cierre: no se pregunta (§4.2)
         argv = campos.get('argv')
         salida: list[dict] = []
         herramienta = self._herramienta_del_permiso(run_id, argv)
+        if herramienta is not None and herramienta.truncada:
+            # Nadie puede aprobar lo que no ve entero (§4.4): se niega y la herramienta termina en `error`.
+            self.motivo_rechazo = 'Los argumentos no caben enteros en el mensaje y no se pueden aprobar.'
+            return None
         if herramienta is None:
-            args = {'argv': argv, 'purpose': proposito[:500]}
+            args = {'argv': tachar(argv), 'purpose': proposito[:500]}
             inicio = self._msg('tool_start', {'run_id': run_id, 'name': SINTETICA,
                                               'arguments': _json_seguro(args) or {}, 'side': 'agent',
                                               'title': proposito[:200] or 'Permiso'})
@@ -474,11 +557,12 @@ class Traductor:
             'run_id': run_id, 'tool_call_id': herramienta.id, 'name': herramienta.nombre,
             'arguments': herramienta.argumentos, 'digest': digest(herramienta.argumentos),
             'reason': self._razon(campos), 'scopes': scopes,
-            'expires': en_segundos(self.reloj(), self.caducidad),
+            **({'expires': en_segundos(self.reloj(), self.caducidad)} if self.caducidad else {}),
             **self._alfalfa({k: campos[k] for k in PERMISO_EXTRA if campos.get(k)})})
         self.aprobaciones[peticion['id']] = Aprobacion(
             peticion['id'], str(campos.get('id')), run_id, herramienta.id, herramienta.nombre,
-            peticion['payload']['digest'], scopes, self._instante(peticion['payload']['expires']),
+            peticion['payload']['digest'], scopes,
+            self._instante(peticion['payload']['expires']) if 'expires' in peticion['payload'] else None,
             sitio=isinstance(campos.get('sitio'), dict))
         self.permisos[str(campos.get('id'))] = peticion['id']
         return salida + [peticion]
@@ -509,20 +593,24 @@ class Traductor:
         a = self.aprobaciones.get(peticion) if peticion else None
         if a is None:
             return []
-        if a.estado == 'pending':
-            a.estado = 'approved' if campos.get('aprobado') else 'denied'
+        salida: list[dict] = []
+        if a.estado == 'pending' and campos.get('aprobado'):
+            a.estado = 'approved'
+        elif a.estado == 'pending':
+            # El cliente no contestó: lo negó la interrupción, el fin del turno o el cierre de la sesión.
+            salida += self._cancelar_aprobacion(a)
         if campos.get('aprobado') and (campos.get('sesion') or campos.get('sitio') == 'sesion'):
             self.de_sesion.append((a.nombre, a.digest, a.id))
         h = self.herramientas.get(a.tool_call_id)
         if h is not None and h.sintetica:
-            return self._cerrar(h.id, 'success' if campos.get('aprobado') else 'error')
-        return []
+            return salida + self._cerrar(h.id, 'success' if campos.get('aprobado') else 'error')
+        return salida
 
     def caducar(self, request_id: str) -> list[dict]:
         """El agente declara caducada una petición sin respuesta (§4.5). Nunca antes de `expires`."""
         a = self.aprobaciones.get(request_id)
-        if a is None or a.estado != 'pending':
-            return []
+        if a is None or a.estado != 'pending' or a.expira is None:
+            return []                    # sin `expires` nunca hay `expired`
         a.estado = 'expired'
         salida = [self._msg('approval_result', {'decision': 'expired'}, reply_to=request_id)]
         self.permisos.pop(a.v2id, None)
@@ -537,7 +625,7 @@ class Traductor:
         if accion == 'cancelar_relevo':
             tc = next((t for t, h in self.herramientas.items() if h.v2id == ident), None)
             return self._ext('browser_cancel', {'tool_call_id': tc}) if tc else []
-        if NAVEGADOR not in self.herramientas_cliente or not self._activa(self.raiz):
+        if NAVEGADOR not in self.herramientas_cliente or not self._abierta(self.raiz):
             if self.al_rechazar_navegador is not None:
                 self.al_rechazar_navegador(ident, 'El cliente PACAI no declaró la herramienta «' + NAVEGADOR
                                            + '» o no hay una ejecución activa.')

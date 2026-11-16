@@ -1,8 +1,8 @@
-"""Tablas del catálogo de mensajes de PACAI 0.2 (§4).
+"""Tablas del catálogo de mensajes de PACAI 0.3 (§4).
 
 Derivado del SDK de Python de PACAI (Apache-2.0); ver NOTICE y LICENSE en esta carpeta.
 """
-VERSION = '0.2'
+VERSION = '0.3'
 
 # Quién puede enviar cada tipo del núcleo y de los perfiles; None = ambos.
 SENDER_OF = {

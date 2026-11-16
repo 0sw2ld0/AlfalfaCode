@@ -1,5 +1,5 @@
 """`alfalfa --pacai` de verdad: un proceso aparte con el motor de producción, la inferencia sustituida y un cliente
-PACAI por stdin y stdout. Cada transcripción pasa el esquema y las reglas de sesión de PACAI 0.2."""
+PACAI por stdin y stdout. Cada transcripción pasa el esquema y las reglas de sesión de PACAI 0.3."""
 import json
 import os
 import queue
@@ -30,14 +30,28 @@ async def inference(self, client, endpoint, payload, **kwargs):
     if sys.argv[1] == 'tool' and not any(m['role'] == 'tool' for m in self.state['messages']):
         calls = [dict(function=dict(name='run_command', arguments=dict(
             argv=[sys.executable, '-c', 'print(1)'], purpose='Probar', needs_network=True)))]
-    if sys.argv[1] == 'sub' and not any(m['role'] == 'tool' for m in self.state['messages']):
+    if sys.argv[1] in ('sub', 'fondo') and not any(m['role'] == 'tool' for m in self.state['messages']):
         calls = [dict(function=dict(name='spawn_agent', arguments=dict(
-            message='Revisa A', description='Revisor A', agent_type='explorador')))]
+            message='Revisa A', description='Revisor A', agent_type='explorador',
+            **({'background': True} if sys.argv[1] == 'fondo' else {}))))]
+    if sys.argv[1] == 'completa':
+        # Lo que pide el último mensaje del usuario, si aún no tiene resultados: «uno» lanza un subagente en
+        # segundo plano y una orden que pide permiso; «dos» usa el navegador de la app (herramienta del cliente).
+        mensajes = self.state['messages']
+        ultimo = max(i for i, m in enumerate(mensajes) if m['role'] == 'user')
+        if not any(m['role'] == 'tool' for m in mensajes[ultimo:]):
+            if 'uno' in mensajes[ultimo]['content']:
+                calls = [dict(function=dict(name='spawn_agent', arguments=dict(
+                             message='Revisa A', description='Revisor A', agent_type='explorador', background=True))),
+                         dict(function=dict(name='run_command', arguments=dict(
+                             argv=[sys.executable, '-c', 'print(1)'], purpose='Probar', needs_network=True)))]
+            elif 'dos' in mensajes[ultimo]['content']:
+                calls = [dict(function=dict(name='browser_read', arguments=dict(mode='text')))]
     last = payload['messages'][-1]
     return dict(message=dict(role='assistant', content='' if calls else 'Hecho: ' + last['content'][:60],
                              tool_calls=calls), done=True, done_reason='stop', prompt_eval_count=1, eval_count=1)
 with patch.object(NativeRuntime, 'request', inference):
-    sys.exit(main(['--pacai']))
+    sys.exit(main(['--pacai'] + (['--navegador'] if sys.argv[1] == 'completa' else [])))
 '''
 
 
@@ -57,7 +71,7 @@ class Proceso:
 
     def enviar(self, tipo, payload=None, **sobre):
         self.seq += 1
-        m = dict(pacai='0.2', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
+        m = dict(pacai='0.3', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
                  time='2026-11-15T10:00:00Z', payload=payload or {}, **sobre)
         self.log.append(m)
         self.proc.stdin.write(json.dumps(m) + '\n')
@@ -81,7 +95,7 @@ class Proceso:
         return self.hasta(lambda m: m['type'] == tipo)
 
     def saludar(self, **cambios):
-        self.enviar('hello', dict(versions=['0.2'], profiles=['work'], extensions=['alfalfa'], **cambios))
+        self.enviar('hello', dict(versions=['0.3'], profiles=['work'], extensions=['alfalfa'], **cambios))
         return self.tipo('session_started')
 
     def entrada(self, texto, **payload):
@@ -152,12 +166,87 @@ def test_un_subagente_es_una_subejecucion_que_termina_antes_que_su_madre(proceso
     sub = [m for m in p.del_agente('run_started') if 'parent_run_id' in m['payload']]
     assert len(sub) == 1 and sub[0]['payload']['parent_run_id'] == raiz['id']
     assert sub[0]['payload']['agent'] == {'name': 'explorador', 'description': 'Revisor A'}
+    lanzar = next(m for m in p.del_agente('tool_start') if m['payload']['name'] == 'spawn_agent')
+    assert sub[0]['payload']['tool_call_id'] == lanzar['id']          # lo lanzó esa herramienta (§4.9)
     cierres = [m['payload']['run_id'] for m in p.del_agente('run_finished')]
     assert cierres == [sub[0]['id'], raiz['id']]
     # Lo que dice el subagente lleva su propio run_id.
     suyos = [m for m in p.del_agente('message_start') if m['payload']['run_id'] == sub[0]['id']]
     assert len(suyos) == 1
     assert problemas(p.log) == []
+
+
+def test_un_subagente_en_segundo_plano_cierra_su_herramienta_en_el_acto_y_su_raiz_lo_espera(proceso):
+    p = proceso('fondo')
+    p.saludar()
+    p.entrada('Lanza un revisor en paralelo')
+    raiz = p.tipo('run_started')
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == raiz['id'])
+    p.terminar()
+    lanzar = next(m for m in p.del_agente('tool_start') if m['payload']['name'] == 'spawn_agent')
+    sub = next(m for m in p.del_agente('run_started') if 'parent_run_id' in m['payload'])
+    assert sub['payload']['tool_call_id'] == lanzar['id'] and sub['payload']['parent_run_id'] == raiz['id']
+    orden = [(m['type'], m['payload'].get('tool_call_id') or m['payload'].get('run_id')) for m in p.del_agente()
+             if m['type'] in ('tool_end', 'run_finished')]
+    # `spawn_agent` vuelve en el acto con el id del subagente: su `tool_end` llega antes que el fin del subagente,
+    # y la raíz no termina hasta que acaba él.
+    assert orden.index(('tool_end', lanzar['id'])) < orden.index(('run_finished', sub['id'])) \
+        < orden.index(('run_finished', raiz['id']))
+    assert next(m for m in p.del_agente('tool_end') if m['payload']['tool_call_id'] == lanzar['id'])[
+        'payload']['status'] == 'success'
+    assert problemas(p.log) == []
+
+
+def test_un_cliente_que_encadena_tras_el_hello_no_tiene_que_esperar(proceso):
+    p = proceso('plain')
+    p.enviar('hello', dict(versions=['0.3'], profiles=['work'], extensions=['alfalfa']))
+    entrada = p.entrada('Hola sin esperar')             # sin esperar a session_started (§4.1)
+    run = p.tipo('run_started')
+    assert run['payload'] == {'input_id': entrada['id']}
+    assert [m['type'] for m in p.del_agente()][:2] == ['hello', 'session_started']
+    p.tipo('run_finished')
+    p.terminar()
+    assert problemas(p.log) == []
+
+
+def test_una_sesion_0_3_con_cancelaciones_y_un_subagente_en_segundo_plano(proceso):
+    """Aprobación cancelada por una interrupción, subagente en segundo plano y herramienta del cliente cancelada.
+    Con `PACAI_TRANSCRIPCION=ruta` guarda la transcripción para `conformance/verificar.py`."""
+    p = proceso('completa')
+    p.saludar(client_tools=[{'name': 'browser', 'input_schema': {'type': 'object'}}])
+    p.entrada('uno')
+    raiz = p.tipo('run_started')
+    peticion = p.tipo('approval_request')
+    p.enviar('interrupt', {'run_id': raiz['id']})
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == raiz['id'])
+    p.entrada('dos')
+    segunda = p.tipo('run_started')
+    navegador = p.hasta(lambda m: m['type'] == 'tool_start' and m['payload']['side'] == 'client')
+    p.enviar('interrupt', {'run_id': segunda['id']})
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == segunda['id'])
+    p.terminar()
+    if os.environ.get('PACAI_TRANSCRIPCION'):
+        Path(os.environ['PACAI_TRANSCRIPCION']).write_text(''.join(json.dumps(m, ensure_ascii=False) + '\n'
+                                                                   for m in p.log))
+    assert problemas(p.log) == []
+    agente = p.del_agente()
+    # La aprobación pendiente se cancela de forma explícita, antes del tool_end `cancelled` de su herramienta.
+    cancelada = next(m for m in agente if m['type'] == 'approval_result')
+    assert cancelada['payload'] == {'decision': 'cancelled'} and cancelada['reply_to'] == peticion['id']
+    fin_orden = next(m for m in agente if m['type'] == 'tool_end'
+                     and m['payload']['tool_call_id'] == peticion['payload']['tool_call_id'])
+    assert fin_orden['payload']['status'] == 'cancelled' and agente.index(cancelada) < agente.index(fin_orden)
+    # El subagente en segundo plano: su herramienta cierra `success` y él lleva su tool_call_id.
+    lanzar = next(m for m in agente if m['type'] == 'tool_start' and m['payload']['name'] == 'spawn_agent')
+    sub = next(m for m in agente if m['type'] == 'run_started' and 'parent_run_id' in m['payload'])
+    assert sub['payload']['tool_call_id'] == lanzar['id'] and sub['payload']['parent_run_id'] == raiz['id']
+    assert next(m for m in agente if m['type'] == 'tool_end' and m['payload']['tool_call_id'] == lanzar['id'])[
+        'payload']['status'] == 'success'
+    # La herramienta del cliente la cancela el agente, sin reply_to.
+    fin_cliente = next(m for m in agente if m['type'] == 'tool_end' and m['payload']['tool_call_id'] == navegador['id'])
+    assert fin_cliente['payload']['status'] == 'cancelled' and 'reply_to' not in fin_cliente
+    assert [m['payload']['outcome'] for m in agente if m['type'] == 'run_finished'
+            and m['payload']['run_id'] in (raiz['id'], segunda['id'])] == ['interrupted', 'interrupted']
 
 
 def test_negar_el_permiso_no_ejecuta_la_orden(proceso, tmp_path):
@@ -255,7 +344,7 @@ def test_interrupt_corta_la_ejecucion_cierra_la_herramienta_y_la_sesion_sigue(pr
 def test_un_cliente_que_manda_basura_recibe_errores_y_la_sesion_sigue(proceso):
     p = proceso('plain')
     p.saludar()
-    p.proc.stdin.write('no es json\n{"pacai":"0.2"}\n')
+    p.proc.stdin.write('no es json\n{"pacai":"0.3"}\n')
     p.proc.stdin.flush()
     assert p.tipo('error')['payload']['code'] == 'invalid_message'
     assert p.tipo('error')['payload']['code'] == 'invalid_message'

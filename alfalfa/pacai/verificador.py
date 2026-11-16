@@ -1,5 +1,5 @@
 # Derivado del SDK de Python de PACAI (Apache-2.0); ver NOTICE y LICENSE en esta carpeta.
-"""Reglas de sesión de PACAI 0.2: lo que el esquema no puede ver.
+"""Reglas de sesión de PACAI 0.3: lo que el esquema no puede ver.
 
 ``Session`` sigue una sesión mensaje a mensaje, tal como la ve un extremo, y
 anota cada infracción. Es la misma lógica que usa ``conformance/verificar.py``.
@@ -26,6 +26,8 @@ __all__ = ['Session', 'RunInfo', 'ApprovalInfo']
 _ANSWERS = {'session_started': 'hello', 'approval_result': 'approval_request', 'snapshot': 'hello'}
 # Tipos que se pueden enviar antes de que la sesión empiece.
 _BEFORE_START = {'hello', 'session_started', 'error', 'close', 'heartbeat'}
+# Trabajo nuevo que una ejecución en cierre ya no admite (§4.2).
+_NEW_WORK = {'message_start', 'message_delta', 'tool_start', 'approval_request', 'expression'}
 
 
 def _instant(texto: Any) -> Any:
@@ -49,6 +51,7 @@ class RunInfo:
     parent_run_id: str | None = None
     tool_call_id: str | None = None
     active: bool = True
+    closing: bool = False           # tras un cancelled del agente (§4.2)
     outcome: str | None = None
     children: set[str] = field(default_factory=set)
     open_tools: set[str] = field(default_factory=set)
@@ -57,7 +60,7 @@ class RunInfo:
 @dataclass
 class ApprovalInfo:
     request: Mapping[str, Any]
-    state: str = 'pending'          # pending, approved, denied, expired
+    state: str = 'pending'          # pending, approved, denied, expired, cancelled
     scope: str | None = None
 
 
@@ -83,6 +86,10 @@ class Session:
         self.approvals_by_tool: dict[str, list[str]] = {}
         self.inputs: set[str] = set()
         self.client_tools: set[str] = set()
+        self.cancelled_client_tools: set[str] = set()   # el agente las canceló (§4.4)
+        self.client_ended_tools: set[str] = set()       # el cliente envió su tool_end
+        self._client_hello = False
+        self._pipelined: list[tuple[str, str]] = []     # (dónde, tipo) del cliente antes de session_started
         self._resume_hello: str | None = None
         self._needs_snapshot = False
         self._count = 0
@@ -137,22 +144,47 @@ class Session:
         self._check_reply(t, emisor, ref, p, fallo)
         self.seen[mid] = m
 
+        encadenado = False
         if not self.started and t not in _BEFORE_START:
-            fallo(f'{t} antes de session_started')
-        if t in PROFILE_OF and PROFILE_OF[t] not in self.profiles:
-            fallo(f'perfil {PROFILE_OF[t]} no negociado')
-        if t and '.' in t and t.split('.')[0] not in self.extensions:
-            fallo(f'extensión {t.split(".")[0]} no negociada')
+            if emisor == 'client' and self._client_hello:
+                encadenado = True  # pipelining tras el hello del cliente (§4.1)
+                self._pipelined.append((donde, str(t)))
+            elif emisor == 'client':
+                fallo(f'{t} antes del hello del cliente')
+            else:
+                fallo(f'{t} antes de session_started')
+        if t == 'hello' and emisor == 'client':
+            self._client_hello = True
+        if not encadenado:
+            for texto in self._negotiation(t):
+                fallo(texto)
         if emisor == 'agent' and t in RUN_SCOPED and 'run_id' in p:
             info = self.runs.get(p['run_id'])
             if info is None or not info.active:
                 fallo(f'run_id {p["run_id"]} no es una ejecución activa')
+        if emisor == 'agent' and t in _NEW_WORK:
+            rid = p.get('run_id') if 'run_id' in p else self.messages.get(p.get('message_id'))
+            if rid in self.runs and self.runs[rid].closing:
+                fallo(f'{t} en la ejecución {rid}, que se está cerrando')
 
+        empezada = self.started
         manejador = getattr(self, '_on_' + str(t), None)
         if manejador is not None and '.' not in str(t):
             manejador(m, p, emisor, ref, fallo)
+        if self.started and not empezada:
+            # Lo encadenado se juzga con lo que se negoció (§4.1).
+            for lugar, tipo in self._pipelined:
+                nuevos += [f'{lugar}: {texto}' for texto in self._negotiation(tipo)]
+            self._pipelined = []
         self.problems += nuevos
         return nuevos
+
+    def _negotiation(self, t) -> list[str]:
+        if t in PROFILE_OF and PROFILE_OF[t] not in self.profiles:
+            return [f'perfil {PROFILE_OF[t]} no negociado']
+        if t and '.' in str(t) and str(t).split('.')[0] not in self.extensions:
+            return [f'extensión {str(t).split(".")[0]} no negociada']
+        return []
 
     def finish(self) -> list[str]:
         """Comprobaciones de final de sesión. Devuelve los problemas nuevos."""
@@ -191,7 +223,7 @@ class Session:
         if ref is None:
             return
         previo = self.seen.get(ref)
-        propio_permitido = t == 'approval_result' and p.get('decision') == 'expired'
+        propio_permitido = t == 'approval_result' and p.get('decision') in ('expired', 'cancelled')
         if previo is None:
             fallo('reply_to a un mensaje inexistente')
         elif previo.get('sender') == emisor and not propio_permitido:
@@ -243,6 +275,8 @@ class Session:
             if madre is None or not madre.active:
                 fallo('parent_run_id no es una ejecución activa')
             else:
+                if madre.closing:
+                    fallo('parent_run_id es una ejecución que se está cerrando')
                 madre.children.add(m['id'])
             if tc is not None and (self.tool_run.get(tc) != madre_id or tc in self.ended_tools):
                 fallo('tool_call_id no es una herramienta abierta de la ejecución madre')
@@ -301,19 +335,47 @@ class Session:
         if inicio is None:
             fallo('tool_end sin tool_start')
             return
-        if tc in self.ended_tools:
-            fallo('tool_end repetido')
-        elif emisor != inicio.get('side'):
-            fallo(f'lo cierra {emisor} y la herramienta es del lado {inicio.get("side")}')
-        elif emisor == 'client' and ref != tc:
+        lado, estado = inicio.get('side'), p.get('status')
+        if emisor == 'client' and ref != tc:
             fallo('el cliente debe responder con reply_to al tool_start')
-        if p.get('status') == 'success' and not self._approved(tc):
+        if tc in self.ended_tools:
+            if emisor == 'client' and tc in self.cancelled_client_tools:
+                return  # tardío o cruzado con el cancelled del agente: se ignora (§4.4)
+            if emisor == 'agent' and lado == 'client' and estado == 'cancelled' and tc in self.client_ended_tools \
+                    and tc not in self.cancelled_client_tools:
+                self._cancel_client_tool(tc)  # se cruza con el del cliente: vale el cancelled
+                return
+            fallo('tool_end repetido')
+            return
+        if emisor != lado:
+            if emisor == 'agent' and lado == 'client':
+                if estado != 'cancelled':
+                    fallo('el agente solo puede cerrar una herramienta del cliente con cancelled')
+                self._cancel_client_tool(tc)
+            else:
+                fallo(f'lo cierra {emisor} y la herramienta es del lado {lado}')
+        elif emisor == 'client':
+            self.client_ended_tools.add(tc)
+        pedidas = self.approvals_by_tool.get(tc)
+        ultima = self.approvals[pedidas[-1]].state if pedidas else None
+        if ultima == 'pending':
+            fallo('cierra la herramienta con su aprobación pendiente; antes va approval_result cancelled')
+        elif ultima == 'cancelled' and estado != 'cancelled':
+            fallo('una herramienta con la aprobación cancelada se cierra con cancelled')
+        if estado == 'success' and not self._approved(tc):
             fallo('herramienta ejecutada sin aprobación vigente')
-        if any(i.active and i.tool_call_id == tc for i in self.runs.values()):
-            fallo('la herramienta termina antes que su subejecución')
         self.ended_tools.add(tc)
         if self.tool_run.get(tc) in self.runs:
             self.runs[self.tool_run[tc]].open_tools.discard(tc)
+
+    def _cancel_client_tool(self, tc):
+        self.cancelled_client_tools.add(tc)
+        self._closing(self.tool_run.get(tc))
+
+    def _closing(self, run_id):
+        """La ejecución entra en cierre: ya no empieza trabajo nuevo (§4.2)."""
+        if run_id in self.runs:
+            self.runs[run_id].closing = True
 
     def _approved(self, tc) -> bool:
         """Sin approval_request no hay nada que comprobar; con ella, la última debe estar aprobada."""
@@ -324,7 +386,7 @@ class Session:
     def _on_approval_request(self, m, p, emisor, ref, fallo):
         if p.get('digest') != digest(p.get('arguments', {})):
             fallo('el digest no corresponde a los argumentos')
-        if not _before(m.get('time', ''), p.get('expires', '')):
+        if 'expires' in p and not _before(m.get('time', ''), p.get('expires', '')):
             fallo('la petición nace caducada')
         tc = p.get('tool_call_id')
         inicio = self.tools.get(tc)
@@ -332,6 +394,8 @@ class Session:
             fallo('approval_request de una herramienta que no está abierta')
         elif inicio.get('name') != p.get('name') or digest(inicio.get('arguments', {})) != p.get('digest'):
             fallo('approval_request no coincide con su tool_start')
+        elif inicio.get('truncated'):
+            fallo('approval_request de una llamada con truncated')
         self.approvals[m['id']] = ApprovalInfo(p)
         self.approvals_by_tool.setdefault(tc, []).append(m['id'])
 
@@ -339,14 +403,28 @@ class Session:
         a = self.approvals.get(ref)
         if a is None:
             return  # reply_to ya se marcó; el agente contestaría unknown_approval
+        decision, tc = p.get('decision'), a.request.get('tool_call_id')
         if a.state != 'pending':
-            # Un sí del cliente que llega tras el expired del agente se ignora (§4.5).
-            if not (a.state == 'expired' and emisor == 'client'):
-                fallo('aprobación ya resuelta')
+            # Un sí del cliente que llega tras el expired o el cancelled del agente se ignora (§4.5).
+            if a.state in ('expired', 'cancelled') and emisor == 'client':
+                return
+            # El cancelled del agente que se cruza con la respuesta del cliente vale más.
+            if emisor == 'agent' and decision == 'cancelled' and a.state in ('approved', 'denied') \
+                    and tc not in self.ended_tools:
+                a.state, a.scope = 'cancelled', None
+                self._closing(a.request.get('run_id'))
+                return
+            fallo('aprobación ya resuelta')
             return
-        caducada = not _before(m.get('time', ''), a.request.get('expires', ''))
+        caducada = 'expires' in a.request and not _before(m.get('time', ''), a.request.get('expires', ''))
         if emisor == 'agent':
-            if not caducada:
+            if decision == 'cancelled':
+                a.state = 'cancelled'
+                self._closing(a.request.get('run_id'))
+                return
+            if 'expires' not in a.request:
+                fallo('declara caducada una petición sin expires')
+            elif not caducada:
                 fallo('declara caducada una petición antes de expires')
             a.state = 'expired'
             return
@@ -354,10 +432,10 @@ class Session:
         if alcance and alcance not in a.request.get('scopes', []):
             fallo(f'alcance {alcance} no ofrecido')
             a.state = 'invalid'
-        elif p.get('decision') == 'approved' and caducada:
+        elif decision == 'approved' and caducada:
             a.state = 'expired'  # tarde: no cuenta como aprobación
         else:
-            a.state, a.scope = p.get('decision'), alcance
+            a.state, a.scope = decision, alcance
 
     # -- estado compartido (§7.2) ------------------------------------------
     def _on_state_delta(self, m, p, emisor, ref, fallo):

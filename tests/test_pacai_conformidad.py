@@ -1,4 +1,4 @@
-"""Conformidad con PACAI 0.2: los ejemplos del protocolo (tests/fixtures/pacai, Apache-2.0, sin tocar) y el digest.
+"""Conformidad con PACAI 0.3: los ejemplos del protocolo (tests/fixtures/pacai, Apache-2.0, sin tocar) y el digest.
 
 `valid/` debe pasar el esquema y las reglas de sesión; `invalid/mensajes.jsonl` debe fallar el esquema y cada
 sesión de `invalid/sesiones/` debe rechazarse por el motivo que dice su primera línea.

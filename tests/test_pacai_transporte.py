@@ -8,7 +8,17 @@ import pytest
 
 from alfalfa.pacai.transporte import COMANDOS
 from alfalfa.stdio import Transport
-from tests.pacai_comun import SESION, Cliente, RelojFalso, abrir, cerrar, fin_de_herramienta, herramienta, reposo
+from tests.pacai_comun import (
+    SESION,
+    Cliente,
+    RelojFalso,
+    abrir,
+    cerrar,
+    fin_de_herramienta,
+    herramienta,
+    problemas,
+    reposo,
+)
 
 
 def tipos(mensajes):
@@ -31,10 +41,10 @@ def test_el_saludo_negocia_y_suelta_lo_que_el_motor_dijo_mientras_tanto():
     assert tipos(salida) == ['hello', 'session_started', 'alfalfa.session', 'alfalfa.budget']
     hola, empezada = salida[0], salida[1]
     assert hola['sender'] == 'agent' and hola['session'] == SESION and hola['seq'] == 1
-    assert hola['payload']['versions'] == ['0.2'] and hola['payload']['profiles'] == ['work']
+    assert hola['payload']['versions'] == ['0.3'] and hola['payload']['profiles'] == ['work']
     assert hola['payload']['extensions'] == ['alfalfa'] and hola['payload']['implementation']['name'] == 'alfalfa'
     assert empezada['reply_to'] == c.ultimo['id'] and empezada['session'] == SESION
-    assert empezada['payload']['version'] == '0.2'
+    assert empezada['payload']['version'] == '0.3'
     assert empezada['payload']['profiles'] == ['work'] and empezada['payload']['extensions'] == ['alfalfa']
     assert empezada['payload']['agent']['name'] == 'alfalfa'
     c.comprobar()
@@ -53,6 +63,16 @@ def test_sin_version_comun_el_agente_responde_version_incompatible_y_cierra():
     assert c.t.stopped and not c.t.empezado
 
 
+def test_un_cliente_de_la_0_2_recibe_version_incompatible_y_lo_encadenado_se_descarta():
+    c = Cliente()
+    hola = dict(c.mensaje('hello', dict(c.hello, versions=['0.2'])), pacai='0.2')
+    assert codigo(c.crudo(hola)) == 'version_incompatible'
+    assert c.t.stopped and not c.t.empezado
+    # Lo que el cliente encadenó tras su `hello` no recibe respuesta: no hay sesión (§4.1).
+    assert c.crudo(dict(c.mensaje('input', {'blocks': [{'type': 'text', 'text': 'hola'}]}), pacai='0.2')) == []
+    assert c.enviar('input', {'blocks': [{'type': 'text', 'text': 'hola'}]}) == []
+
+
 def test_reanudar_no_esta_soportado_y_se_dice():
     c = Cliente()
     assert codigo(c.saludar(resume_after_seq=3)) == 'retention_expired'
@@ -68,9 +88,26 @@ def test_una_sesion_se_negocia_una_sola_vez():
 
 def test_antes_del_saludo_solo_se_admiten_hello_error_close_y_heartbeat():
     c = Cliente()
-    assert codigo(c.entrada()) == 'invalid_message'
+    error = c.entrada()
+    assert codigo(error) == 'invalid_message' and 'antes del hello' in error[0]['payload']['message']
     assert c.enviar('heartbeat', {'last_seq': 0}) == []
     assert c.enviar('error', {'code': 'x', 'message': 'y'}) == []
+
+
+async def test_lo_encadenado_tras_el_hello_se_procesa_con_las_reglas_de_la_sesion_negociada():
+    c = Cliente(extensiones=())
+    hola = c.mensaje('hello', dict(c.hello))
+    entrada = c.mensaje('input', {'blocks': [{'type': 'text', 'text': 'sin esperar'}]})
+    ajena = c.mensaje('alfalfa.compact', {})
+    for m in (hola, entrada, ajena):                     # sin esperar a session_started
+        c.log.append(m)
+        c.t.receive(json.dumps(m))
+    respuesta = c.drenar()
+    assert tipos(respuesta) == ['hello', 'session_started', 'error']
+    assert respuesta[2]['payload']['code'] == 'not_negotiated' and respuesta[2]['payload']['ref'] == ajena['id']
+    assert (await asyncio.wait_for(c.t.next_message(), 1)).id == entrada['id']
+    # El único fallo de la transcripción es del cliente: mandó una extensión que no negoció.
+    assert [p.split(': ', 1)[1] for p in problemas(c.log)] == ['extensión alfalfa no negociada']
 
 
 def test_sin_saludo_el_fin_del_motor_cuenta_sus_errores_y_cierra():
@@ -93,7 +130,7 @@ def malos(c):
     return {
         'no es JSON': ('esto no es json', 'invalid_message'),
         'no es un objeto': ('[1, 2]', 'invalid_message'),
-        'sin campos': ({'pacai': '0.2'}, 'invalid_message'),
+        'sin campos': ({'pacai': '0.3'}, 'invalid_message'),
         'versión rara': (dict(base, pacai='9'), 'invalid_message'),
         'del lado del agente': (dict(base, sender='agent'), 'invalid_message'),
         'otra sesión': (dict(base, session='s_otra_0123456789abcdef'), 'invalid_message'),
@@ -314,7 +351,7 @@ async def test_la_peticion_lleva_el_digest_de_los_argumentos_y_sus_campos_obliga
     p = peticion['payload']
     assert p['run_id'] == run and p['tool_call_id'] == inicio['id'] and p['name'] == 'run_command'
     assert p['arguments'] == inicio['payload']['arguments'] and p['digest'] == digest(p['arguments'])
-    assert p['reason'] == 'dangerous' and p['scopes'] == ['once'] and p['expires'] > peticion['time']
+    assert p['reason'] == 'dangerous' and p['scopes'] == ['once'] and 'expires' not in p
     assert p['alfalfa']['purpose'] == 'p' and p['alfalfa']['justification'] == 'Borra archivos'
     responder(c, peticion)
     assert await asyncio.wait_for(tarea, 1) is None
@@ -418,12 +455,15 @@ async def test_una_politica_que_resuelve_en_el_acto_no_molesta_al_cliente():
 async def test_eof_o_cerrar_la_sesion_niegan_lo_pendiente_y_nada_se_ejecuta():
     c = Cliente()
     await abrir(c)
-    tarea, _ = await pedir(c)
+    tarea, peticion = await pedir(c)
     c.t.stop()                                           # lo que hace el lector al llegar a EOF
     with pytest.raises(ValueError, match='rechazado'):
         await asyncio.wait_for(tarea, 1)
-    assert 'approval_result' not in tipos(c.del_agente())
+    # La ejecución termina con la petición sin contestar: el agente la cancela antes de cerrar su herramienta.
+    cancelada = c.del_agente('approval_result')
+    assert [(m['payload'], m['reply_to']) for m in cancelada] == [({'decision': 'cancelled'}, peticion['id'])]
     fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
+    assert c.del_agente('tool_end')[-1]['payload']['status'] == 'cancelled'
     await cerrar(c, 'interrupted')
     c.comprobar()
 
@@ -480,27 +520,28 @@ def _segundos_hasta(peticion):
     return (b - a).total_seconds()
 
 
-async def test_por_defecto_una_aprobacion_espera_un_dia_y_no_caduca_antes():
+async def test_por_defecto_una_aprobacion_no_lleva_expires_y_nunca_caduca():
     reloj = RelojFalso()
     c = Cliente(reloj=reloj)
     await abrir(c)
     tarea, peticion = await pedir(c)
-    assert _segundos_hasta(peticion) == 24 * 3600
-    reloj.avanzar(3 * 3600)                               # tres horas después sigue esperando al usuario
+    assert 'expires' not in peticion['payload'] and c.t._temporizadores == {}
+    reloj.avanzar(30 * 24 * 3600)                         # un mes después sigue esperando al usuario
     c.t._caducar(peticion['id'])
+    assert c.t.t.caducar(peticion['id']) == []            # sin `expires`, nunca `expired`
     assert c.drenar() == [] and not tarea.done()
     responder(c, peticion)
     assert await asyncio.wait_for(tarea, 1) is None
     c.t._cerrar_sesion()
 
 
-@pytest.mark.parametrize('valor, segundos', [('90', 90), ('3600.5', 3600.5), ('', 24 * 3600)])
+@pytest.mark.parametrize('valor, segundos', [('90', 90), ('3600.5', 3600.5), ('', None)])
 async def test_la_caducidad_se_cambia_con_alfalfa_caducidad_aprobacion(monkeypatch, valor, segundos):
     monkeypatch.setenv('ALFALFA_CADUCIDAD_APROBACION', valor)
     c = Cliente(reloj=RelojFalso())
     await abrir(c)
     tarea, peticion = await pedir(c)
-    assert _segundos_hasta(peticion) == segundos
+    assert (_segundos_hasta(peticion) if 'expires' in peticion['payload'] else None) == segundos
     tarea.cancel()
     c.t._cerrar_sesion()
 
@@ -525,7 +566,7 @@ def test_la_opcion_de_caducidad_se_valida_y_solo_vale_con_pacai(argumentos, caps
 
 
 async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herramienta_y_olvida_su_plazo():
-    c = Cliente()
+    c = Cliente(caducidad=3600)
     run = await abrir(c)
     tarea, peticion = await pedir(c)
     assert peticion['id'] in c.t._temporizadores
@@ -533,14 +574,22 @@ async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herra
     c.enviar('interrupt', {'run_id': run})
     with pytest.raises((ValueError, asyncio.CancelledError)):
         await asyncio.wait_for(tarea, 1)
-    assert c.t.t.aprobacion(peticion['id']).estado == 'denied'
+    assert c.t.t.aprobacion(peticion['id']).estado == 'cancelled'
     assert c.t._temporizadores == {}                      # nada queda esperando a su `expires`
+    # El motor aún cuenta que la orden se rechazó y dice algo: la herramienta sale `cancelled` y el texto,
+    # como aviso (la ejecución está en cierre y no empieza mensajes nuevos).
+    fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
+    c.t.emit('evento', rol='agent', texto='Me detengo.', hora=3.0)
     await cerrar(c, 'cortado')
+    finales = c.del_agente()[-6:]
+    assert [m['type'] for m in c.del_agente() if m['type'] in ('approval_result', 'tool_end', 'run_finished')] == \
+        ['approval_result', 'tool_end', 'run_finished']
+    assert c.del_agente('approval_result')[0]['payload'] == {'decision': 'cancelled'}
     assert c.del_agente('tool_end')[-1]['payload'] == {'tool_call_id': peticion['payload']['tool_call_id'],
                                                        'status': 'cancelled'}
     assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
-    assert 'approval_result' not in tipos(c.del_agente())       # el agente sólo declara `expired`, y no lo era
-    assert codigo(responder(c, peticion)) == 'unknown_approval'  # un sí tardío no vale como aprobación
+    assert 'message_start' not in tipos(finales) and 'alfalfa.notice' in tipos(finales)
+    assert responder(c, peticion) == []                   # un sí tardío se ignora: no vale como aprobación
     c.comprobar()
 
 
@@ -551,7 +600,7 @@ async def test_cerrar_la_sesion_con_una_aprobacion_pendiente_la_niega_y_olvida_s
     c.t.stop()
     with pytest.raises(ValueError, match='rechazado'):
         await asyncio.wait_for(tarea, 1)
-    assert c.t.t.aprobacion(peticion['id']).estado == 'denied' and c.t._temporizadores == {}
+    assert c.t.t.aprobacion(peticion['id']).estado == 'cancelled' and c.t._temporizadores == {}
 
 
 async def test_un_permiso_que_ninguna_herramienta_abierta_explica_abre_la_suya():
@@ -705,28 +754,29 @@ async def test_una_respuesta_tardia_del_navegador_se_descarta_sin_ruido():
     assert not futuro.done()
 
 
-async def test_el_turno_espera_a_que_el_cliente_cierre_su_herramienta_antes_de_terminar():
-    c = Cliente(herramientas=('browser',), gracia_cliente=2.0)
-    await abrir(c)
-    _, inicio = pedir_navegador(c)
-    c.t.emit('turno_terminado', estado='cortado', resumen='Detenido', codigo_salida=1, tokens=0)
-    await asyncio.sleep(0.1)
-    assert 'run_finished' not in tipos(c.del_agente())      # el run_finished espera al tool_end del cliente
-    c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'cancelled'}, reply_to=inicio[0]['id'])
-    await asyncio.sleep(0.1)
-    assert tipos(c.del_agente())[-1] == 'run_finished'
+async def test_al_terminar_la_ejecucion_el_agente_cancela_la_herramienta_del_cliente_y_el_motor_recibe_un_no():
+    c = Cliente(herramientas=('browser',))
+    run = await abrir(c)
+    futuro, inicio = pedir_navegador(c)
+    cierre = await cerrar(c, 'cortado')                  # sin esperar al cliente
+    assert tipos(cierre) == ['alfalfa.closing', 'tool_end', 'run_finished']
+    fin = cierre[1]
+    assert fin['payload'] == {'tool_call_id': inicio[0]['id'], 'status': 'cancelled'} and 'reply_to' not in fin
+    assert cierre[2]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
+    assert futuro.done() and futuro.result()['ok'] is False
+    # El resultado tardío del cliente se ignora: ni `unknown_tool_call` ni `invalid_message`.
+    assert c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'success'}, reply_to=inicio[0]['id']) == []
     c.comprobar()
 
 
-async def test_si_el_cliente_no_cierra_su_herramienta_el_turno_termina_igual_y_lo_dice():
-    c = Cliente(herramientas=('browser',), gracia_cliente=0.05)
-    run = await abrir(c)
+async def test_si_el_cliente_cierra_su_herramienta_a_tiempo_el_agente_no_la_cancela():
+    c = Cliente(herramientas=('browser',))
+    await abrir(c)
     _, inicio = pedir_navegador(c)
+    c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'success'}, reply_to=inicio[0]['id'])
     cierre = await cerrar(c)
-    assert tipos(cierre) == ['error', 'alfalfa.closing', 'run_finished']
-    assert cierre[0]['payload']['code'] == 'alfalfa.client_tool_unanswered'
-    assert cierre[0]['payload']['ref'] == inicio[0]['id']
-    assert cierre[2]['payload']['run_id'] == run
+    assert 'tool_end' not in tipos(cierre)
+    c.comprobar()
 
 
 async def test_cancelar_un_relevo_avisa_al_cliente_con_la_extension():
@@ -823,7 +873,7 @@ async def test_stdout_lleva_solo_mensajes_pacai_y_con_seq_correlativa():
     await cerrar(c)
     lineas = c.salida.getvalue().splitlines()
     mensajes = [json.loads(linea) for linea in lineas]               # todas son JSON
-    assert all(m['pacai'] == '0.2' and m['sender'] == 'agent' for m in mensajes)
+    assert all(m['pacai'] == '0.3' and m['sender'] == 'agent' for m in mensajes)
     assert [m['seq'] for m in mensajes] == list(range(1, len(mensajes) + 1))
     assert all('\n' not in linea for linea in lineas)
     c.comprobar()
@@ -844,5 +894,8 @@ async def test_los_secretos_declarados_no_salen_y_el_digest_sigue_cuadrando_con_
     await asyncio.wait_for(tarea, 1)
     fin_de_herramienta(c, 'run_command', {'output': secreto})
     await cerrar(c)
-    assert secreto not in c.salida.getvalue() and '[REDACTADO]' in c.salida.getvalue()
+    assert secreto not in c.salida.getvalue()
+    # En los argumentos el secreto sale tachado como manda PACAI 0.3; en el texto, como en v2.
+    assert c.del_agente('tool_start')[0]['payload']['arguments']['argv'] == ['curl', '-H', 'x: [redacted]']
+    assert '[REDACTADO]' in c.salida.getvalue()
     c.comprobar()                                       # el digest corresponde a los argumentos ya redactados

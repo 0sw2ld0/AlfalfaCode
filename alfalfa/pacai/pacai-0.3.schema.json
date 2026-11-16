@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "pacai-0.2.schema.json",
-  "title": "Mensaje PACAI 0.2",
+  "$id": "pacai-0.3.schema.json",
+  "title": "Mensaje PACAI 0.3",
   "type": "object",
   "required": [
     "pacai",
@@ -15,7 +15,7 @@
   ],
   "properties": {
     "pacai": {
-      "const": "0.2"
+      "const": "0.3"
     },
     "id": {
       "type": "string",
@@ -468,40 +468,71 @@
           "const": "tool_start"
         },
         "payload": {
-          "type": "object",
-          "properties": {
-            "run_id": {
-              "type": "string",
-              "minLength": 8
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "run_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "arguments": {
+                  "type": "object"
+                },
+                "side": {
+                  "enum": [
+                    "agent",
+                    "client"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "approval_id": {
+                  "type": "string",
+                  "minLength": 8
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "run_id",
+                "name",
+                "arguments",
+                "side"
+              ],
+              "additionalProperties": true
             },
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "arguments": {
-              "type": "object"
-            },
-            "side": {
-              "enum": [
-                "agent",
-                "client"
-              ]
-            },
-            "title": {
-              "type": "string"
-            },
-            "approval_id": {
-              "type": "string",
-              "minLength": 8
+            {
+              "if": {
+                "properties": {
+                  "truncated": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "truncated"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "side": {
+                    "const": "agent"
+                  }
+                },
+                "not": {
+                  "required": [
+                    "approval_id"
+                  ]
+                }
+              }
             }
-          },
-          "required": [
-            "run_id",
-            "name",
-            "arguments",
-            "side"
-          ],
-          "additionalProperties": true
+          ]
         },
         "sender": {
           "const": "agent"
@@ -615,8 +646,7 @@
             "arguments",
             "digest",
             "reason",
-            "scopes",
-            "expires"
+            "scopes"
           ],
           "additionalProperties": true
         },
@@ -639,7 +669,8 @@
                   "enum": [
                     "approved",
                     "denied",
-                    "expired"
+                    "expired",
+                    "cancelled"
                   ]
                 },
                 "scope": {
@@ -698,7 +729,10 @@
               "payload": {
                 "properties": {
                   "decision": {
-                    "const": "expired"
+                    "enum": [
+                      "expired",
+                      "cancelled"
+                    ]
                   }
                 }
               }

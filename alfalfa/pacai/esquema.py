@@ -1,4 +1,4 @@
-"""Validación de mensajes contra el esquema JSON de PACAI 0.2.
+"""Validación de mensajes contra el esquema JSON de PACAI 0.3.
 
 Derivado del SDK de Python de PACAI (Apache-2.0); ver NOTICE y LICENSE en esta carpeta.
 Usa `jsonschema`, que ya es dependencia de AlfalfaCode.
@@ -15,7 +15,7 @@ __all__ = ['esquema', 'validar', 'es_valido']
 
 @lru_cache(maxsize=1)
 def esquema() -> dict:
-    return json.loads((Path(__file__).with_name('pacai-0.2.schema.json')).read_text(encoding='utf-8'))
+    return json.loads((Path(__file__).with_name('pacai-0.3.schema.json')).read_text(encoding='utf-8'))
 
 
 @lru_cache(maxsize=1)

@@ -121,7 +121,7 @@ def test_los_eventos_v2_de_una_llamada_no_cambian(tmp_path):
 
 
 def _mensaje(seq, tipo, payload, **sobre):
-    return dict(pacai='0.2', id='c_%08d' % seq, type=tipo, session=SESION_PACAI, sender='client', seq=seq,
+    return dict(pacai='0.3', id='c_%08d' % seq, type=tipo, session=SESION_PACAI, sender='client', seq=seq,
                 time='2026-11-15T10:00:00Z', payload=payload, **sobre)
 
 
@@ -129,7 +129,7 @@ def sesion_pacai(tmp_path, *opciones):
     """Una sesión real de `alfalfa --pacai`: saludo, un `input`, aprobar lo que pida y EOF tras la ejecución.
     Devuelve la transcripción de los dos lados."""
     proc = _lanzar(tmp_path, '--pacai', *opciones)
-    enviados = [_mensaje(1, 'hello', {'versions': ['0.2'], 'profiles': ['work'], 'extensions': ['alfalfa']})]
+    enviados = [_mensaje(1, 'hello', {'versions': ['0.3'], 'profiles': ['work'], 'extensions': ['alfalfa']})]
     proc.stdin.write(json.dumps(enviados[0]) + '\n')
     proc.stdin.flush()
 
@@ -158,11 +158,11 @@ def test_los_argumentos_del_tool_start_son_los_de_la_llamada_sin_secretos(tmp_pa
     assert problemas(log) == []
     inicios = {m['payload']['name']: m for m in log if m['type'] == 'tool_start'}
     orden = inicios['run_command']['payload']
-    assert orden['arguments'] == {'argv': [sys.executable, '-c', 'print(len("' + LARGO + '"))', '[REDACTADO]'],
+    assert orden['arguments'] == {'argv': [sys.executable, '-c', 'print(len("' + LARGO + '"))', '[redacted]'],
                                   'purpose': 'Contar', 'description': 'Contar una cadena larga', 'needs_network': True}
     assert orden['title'] == 'Contar una cadena larga' and 'alfalfa' not in orden
     archivo = inicios['write_file']['payload']
-    assert archivo['arguments'] == {'path': 'largo.txt', 'content': CONTENIDO + '[REDACTADO]',
+    assert archivo['arguments'] == {'path': 'largo.txt', 'content': CONTENIDO + '[redacted]',
                                     'expected_sha256': 'NEW'}
     assert archivo['title'] == 'Crear largo.txt'
     # La aprobación cubre esos mismos argumentos, completos.
@@ -181,14 +181,14 @@ def test_unos_argumentos_que_no_caben_se_recortan_y_se_dice():
     args = {'path': 'a.txt', 'content': 'z' * 20000, 'otros': ['w' * 3000, 'corto']}
     inicio, = t._tool_start(t.raiz, 'Inicio write_file · …', {'nombre': 'write_file'}, args)
     p = inicio['payload']
-    assert len(json.dumps(p['arguments'])) <= 4000 and p['alfalfa'] == {'arguments_truncated': True}
+    assert len(json.dumps(p['arguments'])) <= 4000 and p['truncated'] is True and 'alfalfa' not in p
     assert p['arguments']['path'] == 'a.txt' and p['arguments']['otros'][1] == 'corto'
     assert p['arguments']['content'].startswith('zzz') and p['arguments']['content'].endswith('… [recortado]')
     assert args['content'] == 'z' * 20000                               # el original no se toca
-    # Sin la extensión, el recorte sólo se ve en el texto.
+    # `truncated` es del núcleo (0.3): sale también sin la extensión.
     sin = Traductor(Emisor('agent', SESION_PACAI), max_argumentos=4000)
     sin.empezar_turno('c_00000002')
-    assert 'alfalfa' not in sin._tool_start(sin.raiz, 'Inicio x · …', {'nombre': 'x'}, args)[0]['payload']
+    assert sin._tool_start(sin.raiz, 'Inicio x · …', {'nombre': 'x'}, args)[0]['payload']['truncated'] is True
 
 
 @pytest.mark.parametrize('args', [None, {'a': float('nan')}, ['no', 'es', 'un', 'objeto']])
@@ -217,3 +217,28 @@ async def test_los_argumentos_van_al_inicio_de_su_herramienta_tambien_en_un_suba
              herramienta={'nombre': 'edit_file', 'fase': 'inicio'})
     assert [m for m in c.drenar() if m['type'] == 'tool_start'][0]['payload']['arguments'] == {'path': 'c.py'}
     c.t._cerrar_sesion()
+
+
+async def test_una_llamada_truncada_no_se_puede_aprobar_y_termina_en_error():
+    import asyncio
+
+    from tests.pacai_comun import Cliente, cerrar, fin_de_herramienta, reposo
+    c = Cliente()
+    c.saludar(limits={'max_message_bytes': 4096})        # los argumentos caben en 1024 bytes
+    c.entrada('haz algo')
+    c.t.turno_empieza(await asyncio.wait_for(c.t.next_message(), 1))
+    args = {'argv': ['python3', '-c', 'x' * 3000], 'purpose': 'Larga'}
+    c.t.argumentos_herramienta('run_command', args)
+    c.t.emit('evento', rol='tool', texto='Inicio run_command · …', hora=1.0,
+             herramienta={'nombre': 'run_command', 'fase': 'inicio'})
+    inicio = [m for m in c.drenar() if m['type'] == 'tool_start'][0]
+    assert inicio['payload']['truncated'] is True
+    tarea = asyncio.create_task(c.t.approval('.', False)(dict(args)))
+    await reposo()
+    with pytest.raises(ValueError, match='rechazado'):
+        await asyncio.wait_for(tarea, 1)                 # se niega sin preguntar
+    assert not c.del_agente('approval_request')
+    fin = fin_de_herramienta(c, 'run_command', {'error': 'Comando rechazado; no se ejecutó.'})
+    assert fin[0]['payload']['status'] == 'error'
+    await cerrar(c, 'blocked', resumen='No se pudo aprobar')
+    c.comprobar()

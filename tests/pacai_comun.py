@@ -43,7 +43,7 @@ class Cliente:
         self.t = TransportePacai(self.salida, **({'caducidad': caducidad} if caducidad is not None else {}),
                                  **({'reloj': reloj} if reloj else {}), **opciones)
         self.log, self.seq, self._leidas = [], 0, 0
-        self.hello = dict(versions=['0.2'], profiles=list(perfiles), extensions=list(extensiones),
+        self.hello = dict(versions=['0.3'], profiles=list(perfiles), extensions=list(extensiones),
                           client_tools=[{'name': n, 'input_schema': {'type': 'object'}} for n in herramientas])
 
     def drenar(self):
@@ -55,7 +55,7 @@ class Cliente:
 
     def mensaje(self, tipo, payload=None, **sobre):
         self.seq += 1
-        return dict(pacai='0.2', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
+        return dict(pacai='0.3', id='c_%08d' % self.seq, type=tipo, session=SESION, sender='client', seq=self.seq,
                     time='2026-11-15T10:00:00Z', payload=payload or {}, **sobre)
 
     def crudo(self, mensaje):
