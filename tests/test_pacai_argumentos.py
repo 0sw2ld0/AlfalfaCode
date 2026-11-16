@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from alfalfa.pacai.jcs import digest
+from alfalfa.seatbelt import AISLADAS
 from tests.pacai_comun import SESION as SESION_PACAI
 from tests.pacai_comun import problemas
 
@@ -99,6 +100,9 @@ def _normalizar(valor, tmp_path):
         for real, marca in ((sys.executable, '<python>'), (str(tmp_path.resolve()), '<carpeta>'),
                             (str(tmp_path), '<carpeta>')):
             valor = valor.replace(real, marca)
+        # Seatbelt en macOS y bwrap en Linux: la misma orden en el sandbox del sistema.
+        for etiqueta in AISLADAS:
+            valor = valor.replace('"sandbox": "' + etiqueta + '"', '"sandbox": "<sandbox>"')
         return re.sub(r'("intento\\*": \\*")[0-9a-f]+', r'\1<intento>', valor)
     return valor
 

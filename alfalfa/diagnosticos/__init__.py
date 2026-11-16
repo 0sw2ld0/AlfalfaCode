@@ -368,20 +368,25 @@ def texto_de(d):
 
 
 class Sandbox:
-    """El prefijo de sandbox-exec del proyecto, calculado una vez por sesión. Sin sandbox no se lanza nada."""
+    """El prefijo del sandbox del proyecto (sandbox-exec en macOS, bwrap en Linux), calculado una vez por
+    sesión. Sin sandbox no se lanza nada."""
 
     def __init__(self, raiz, *, protegidas=()):
         self.raiz = str(raiz)
         self.protegidas = protegidas
         self._prefijo = None
-        self.disponible = sys.platform == 'darwin' and os.access('/usr/bin/sandbox-exec', os.X_OK)
+        if sys.platform == 'darwin':
+            self.disponible = os.access('/usr/bin/sandbox-exec', os.X_OK)
+        else:
+            from ..seatbelt.bwrap import BWRAP
+            self.disponible = sys.platform.startswith('linux') and os.access(BWRAP, os.X_OK)
 
     async def envolver(self, argv):
-        from ..seatbelt import SandboxUnavailable, SeatbeltSandbox
+        from ..seatbelt import SandboxUnavailable, nombre_del_sandbox, sandbox_del_sistema
         if not self.disponible:
-            raise SandboxUnavailable('no hay sandbox Seatbelt en este sistema')
+            raise SandboxUnavailable('no hay sandbox ' + nombre_del_sandbox() + ' en este sistema')
         if self._prefijo is None:
-            orden = await asyncio.to_thread(SeatbeltSandbox(
+            orden = await asyncio.to_thread(sandbox_del_sistema(
                 self.raiz, network=False, protegidas=self.protegidas).command_args, ['true'])
             self._prefijo = orden[:-1]
         return self._prefijo + list(argv)

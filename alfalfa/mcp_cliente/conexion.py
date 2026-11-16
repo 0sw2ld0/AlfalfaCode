@@ -14,7 +14,7 @@ termina como incierta. Nada aquí reintenta un tools/call.
 Entorno stdio: BASE_ENTORNO (la base del SDK, get_default_environment, más
 TMPDIR y LANG) y sólo las variables declaradas para ese servidor. El SDK añade
 su base a la que recibe; ninguna de las dos lleva la clave de Ollama.
-Lanzamiento: siempre dentro de SeatbeltSandbox (seatbelt/), con red sólo si la
+Lanzamiento: siempre dentro del sandbox del sistema (seatbelt/: Seatbelt o bwrap), con red sólo si la
 configuración del servidor dice red: true; sin sandbox no se inicia.
 HTTP: un httpx.AsyncClient propio sin variables de proxy (trust_env=False), sin
 seguir redirecciones (las cabeceras configuradas no viajan a otro destino) y
@@ -29,7 +29,7 @@ from datetime import timedelta
 
 import httpx
 
-from ..seatbelt import SandboxUnavailable, SeatbeltSandbox
+from ..seatbelt import SandboxUnavailable, nombre_del_sandbox, sandbox_del_sistema
 from .validacion import validador
 
 BASE_ENTORNO = ('HOME', 'LOGNAME', 'PATH', 'SHELL', 'TERM', 'USER', 'TMPDIR', 'LANG')
@@ -130,7 +130,8 @@ class Conexion:
 
     def _motivo(self, exc):
         if isinstance(exc, SandboxUnavailable):
-            return 'Sandbox Seatbelt no disponible; no se inicia sin aislamiento: ' + str(exc)[:300]
+            return ('Sandbox ' + nombre_del_sandbox() + ' no disponible; no se inicia sin aislamiento: '
+                    + str(exc)[:300])
         while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
             exc = exc.exceptions[0]
         return self.limpiar((type(exc).__name__ + ': ' + str(exc))[:300]).rstrip('.') + '.'
@@ -162,7 +163,7 @@ class Conexion:
         if self.servidor.transporte == 'stdio':
             from mcp.client.stdio import StdioServerParameters, stdio_client
             cwd = self.servidor.cwd or self.cwd
-            sandbox = SeatbeltSandbox(cwd, network=self.servidor.red, protegidas=self.protegidas)
+            sandbox = sandbox_del_sistema(cwd, network=self.servidor.red, protegidas=self.protegidas)
             orden = await sandbox.prepare([self.servidor.orden, *self.servidor.argumentos])
             # stderr del servidor a un tubo propio: nunca se copia en bruto a
             # registros ni eventos; sólo su cola, ya limpia, en un diagnóstico.

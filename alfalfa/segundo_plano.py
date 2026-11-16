@@ -58,6 +58,7 @@ from .procesos import (
     registro_de_grupo,
     senal_arbol,
 )
+from .seatbelt import AISLADAS
 
 ESPERA_INICIAL = 10.0   # segundos antes de devolver el control (yield_time_ms de Codex)
 MAX_ESPERA = 30         # lo que command_status puede esperar a que haya algo nuevo
@@ -225,7 +226,7 @@ class Proceso:
         ultimas = self.registro.cola(600).decode(errors='replace').splitlines()[-3:]
         return dict(id=self.id, argv=self.argv, cwd=self.cwd, proposito=self.purpose,
                     desde=self.desde, vivo=self.vivo, codigo=self.proc.returncode,
-                    sin_sandbox=self.sandbox != 'seatbelt', detenido=self.detenido, ultimas=ultimas)
+                    sin_sandbox=self.sandbox not in AISLADAS, detenido=self.detenido, ultimas=ultimas)
 
 
 class ProcesosEnSegundoPlano:

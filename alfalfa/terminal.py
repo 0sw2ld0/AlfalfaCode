@@ -27,7 +27,7 @@ from .permisos.terminal import TerminalApproval
 from .presupuesto import PresupuestoAgotado
 from .proveedores.nativo.herramientas import atomic_json
 from .proveedores.nativo.runtime import SIN_EFECTOS, NativeRuntime
-from .seatbelt import SeatbeltSandbox
+from .seatbelt import sandbox_del_sistema
 
 # Estado de una orden «incierta» cuyo aviso ya tuvo su turno: deja de frenar su repetición.
 CADUCADA = 'expired'
@@ -437,7 +437,7 @@ class TerminalManager:
             if not read_only:
                 motor = motor_de_sesion(base, self.task['cwd'],
                                         fuentes_complementos=self.complementos.fuentes_hooks(),
-                                        sandbox=lambda raiz: SeatbeltSandbox(
+                                        sandbox=lambda raiz: sandbox_del_sistema(
                                             raiz, network=False, protegidas=(base, *self.rutas_equipo)))
                 if motor.activo() or motor.diagnosticos:
                     self.hooks = HooksDeSesion(motor, self, self.task, reanudada=bool(resume))
@@ -818,8 +818,8 @@ class TerminalManager:
                                           'ALFALFA_SESION': self.task['id']},
                              # Red cerrada: sólo un permiso «red» de la política
                              # on-request abre la variante con red para ese intento.
-                             process_sandbox=SeatbeltSandbox(self.task['cwd'], network=False,
-                                                             protegidas=(self.home, *self.rutas_equipo)),
+                             process_sandbox=sandbox_del_sistema(self.task['cwd'], network=False,
+                                                                 protegidas=(self.home, *self.rutas_equipo)),
                              command_policy=OnRequestPolicy(self.reglas),
                              tolerant_edit=True, mcp=self.mcp, complementos=self.complementos,
                              project_docs=self.project_docs(), hooks=self.hooks,

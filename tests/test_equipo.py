@@ -239,7 +239,7 @@ async def test_preguntar_incluso_en_omitir_y_prohibicion_gana_a_permiso_personal
         finally:
             trabajo.cancel()
             await asyncio.gather(trabajo, return_exceptions=True)
-        assert resultado['exit_code'] == 0 and resultado['sandbox'] == 'seatbelt'
+        assert resultado['exit_code'] == 0 and resultado['sandbox'] == m.runtime().process_sandbox.etiqueta
         assert registros(m)[-1]['operacion'] == resultado['operation_id']
         assert not any(r['tipo'] == 'permiso_guardado' for r in registros(m))
 
@@ -278,7 +278,10 @@ def test_politica_congelada_archivo_protegido_y_reanudacion_revoca_permisos_ante
         rt = m.runtime()
         with pytest.raises(ValueError, match='configuración de equipo'):
             rt.tools.path(equipo.ORIGEN, escritura=True)
-        assert str(ruta) in dict(rt.process_sandbox.policy()[1]).values()
+        sandbox = rt.process_sandbox
+        # Seatbelt la nombra entre sus parámetros; bwrap, entre sus montajes de solo lectura.
+        protegidas = sandbox.montajes() if hasattr(sandbox, 'montajes') else dict(sandbox.policy()[1]).values()
+        assert str(ruta) in protegidas or os.path.realpath(ruta) in protegidas
         # Simula una edición del mantenedor fuera de AlfalfaCode.
         ruta.write_text(POLITICA.replace('sesion = 2', 'sesion = 1'))
         assert m.presupuesto.sesion == 2

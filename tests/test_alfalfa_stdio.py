@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from alfalfa.stdio import Transport, entry, sessions
+from tests.sandbox_del_sistema import procesos_con
 
 
 @pytest.mark.parametrize('answer', [True, False, 'true', 1, None])
@@ -53,8 +54,8 @@ from alfalfa.proveedores.nativo.runtime import NativeRuntime
 async def work(self, prompt):
     self.task['status'] = 'running'
     await self.tools.call('run_command', dict(argv=[sys.executable, '-c',
-        "import os,time; open('child.pid','w').write(str(os.getpid())); time.sleep(120)"], purpose='test',
-        needs_network=True))
+        "import os,time; open('child.pid','w').write(str(os.getpid())); time.sleep(120)",
+        str(Path(self.task['cwd']) / 'child.pid')], purpose='test', needs_network=True))
     await asyncio.sleep(120)
 with patch.object(NativeRuntime, 'run', work):
     sys.exit(main(['--stdio', 'test']))
@@ -98,9 +99,14 @@ with patch.object(NativeRuntime, 'run', work):
         task = json.loads(next((tmp_path / 'home').rglob('task.json')).read_text())
         assert task['status'] == 'interrupted'
         if phase == 'command':
-            pid = int((tmp_path / 'child.pid').read_text())
-            with pytest.raises(ProcessLookupError):
-                os.kill(pid, 0)
+            # Con bwrap el pid que anota la orden es el de dentro del sandbox: se busca desde fuera por la
+            # ruta de su archivo, que lleva entre sus argumentos.
+            import time
+            marca = str(tmp_path / 'child.pid')
+            deadline = time.monotonic() + 10
+            while procesos_con(marca) and time.monotonic() < deadline:
+                time.sleep(.05)
+            assert procesos_con(marca) == []
         else:
             assert not (tmp_path / 'child.pid').exists()
             assert any(r['tipo'] == 'permiso_resuelto' and not r['aprobado'] for r in rows)

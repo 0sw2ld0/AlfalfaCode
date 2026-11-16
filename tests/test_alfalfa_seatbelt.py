@@ -111,7 +111,8 @@ def test_terminal_manager_enables_closed_sandbox_and_integrator_default_is_untou
     m, root = manager(tmp_path, monkeypatch)
     try:
         rt = m.runtime()
-        assert isinstance(rt.process_sandbox, SeatbeltSandbox)
+        # Seatbelt en macOS y bwrap en Linux (test_bwrap.py), con la misma interfaz.
+        assert type(rt.process_sandbox) is type(seatbelt.sandbox_del_sistema(str(root)))
         assert rt.process_sandbox.network is False
         assert rt.process_sandbox.root == str(root.resolve())
         assert NativeRuntime(m, dict(m.task, id='otra')).process_sandbox is None
@@ -333,7 +334,7 @@ def test_missing_sandbox_exec_never_falls_back_silently(tmp_path, monkeypatch, a
     assert policy.calls[0]['purpose'] == 'Crear marca'
     assert policy.calls[0]['argv'] == ['touch', 'marca']
     events = (m.directory / (m.task['id'] + '.jsonl')).read_text()
-    assert 'Sandbox Seatbelt no disponible' in events
+    assert 'Sandbox ' + seatbelt.nombre_del_sandbox() + ' no disponible' in events
 
 
 def test_failed_sandbox_start_asks_and_explicit_yes_runs_unsandboxed(tmp_path, monkeypatch):
@@ -345,8 +346,9 @@ def test_failed_sandbox_start_asks_and_explicit_yes_runs_unsandboxed(tmp_path, m
     assert (root / 'marca').exists()
     assert 'código 65' in policy.calls[0]['sin_sandbox'] and 'sandbox_apply' in policy.calls[0]['sin_sandbox']
     assert len(policy.calls) == 1
-    # Sólo la sonda pasó por el falso sandbox-exec; la orden salió tras el sí explícito.
-    assert spawned[0][0] == str(fake) and spawned[0][-1] == '/usr/bin/true'
+    # Sólo la sonda pasó por el falso sandbox-exec; la orden salió tras el sí explícito. (En Linux el
+    # lanzador de bwrap es /bin/sh, que pasa el filtro de red y ejecuta el falso.)
+    assert str(fake) in spawned[0] and spawned[0][-1] == '/usr/bin/true'
     assert spawned[-1] == ['touch', 'marca']
 
 

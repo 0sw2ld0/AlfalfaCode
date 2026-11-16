@@ -448,7 +448,7 @@ class Subagentes:
         from .permisos import modos
         from .permisos.bajo_demanda import OnRequestPolicy
         from .proveedores.nativo.runtime import NativeRuntime
-        from .seatbelt import SeatbeltSandbox
+        from .seatbelt import sandbox_del_sistema
         gestor = self.gestor
         hijo = _GestorDeSubagente(gestor, sub, self.avisar)
         solo_lee = (tipo['solo_lectura'] or gestor.read_only
@@ -477,8 +477,8 @@ class Subagentes:
                            process_env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.fsmonitor',
                                         'GIT_CONFIG_VALUE_0': 'false', 'PYTHONDONTWRITEBYTECODE': '1',
                                         'ALFALFA_SESION': sub.task['id']},
-                           process_sandbox=SeatbeltSandbox(sub.task['cwd'], network=False,
-                                                           protegidas=(gestor.home, *gestor.rutas_equipo)),
+                           process_sandbox=sandbox_del_sistema(sub.task['cwd'], network=False,
+                                                               protegidas=(gestor.home, *gestor.rutas_equipo)),
                            command_policy=OnRequestPolicy(gestor.reglas), tolerant_edit=True,
                            complementos=gestor.complementos, project_docs=gestor.project_docs(),
                            compaction='codex', compact_limit=gestor.compact_limit)

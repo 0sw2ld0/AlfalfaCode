@@ -91,3 +91,26 @@ Las diferencias intencionales están documentadas en la cabecera de cada módulo
 4. Sólo POSIX: no se portan PowerShell/Windows ni el caso SIGSYS de seccomp.
 5. En `denial.rs`, un código de salida ausente no es una denegación. NativeRuntime mezcla
    stderr en stdout, y la terminal pasa esa salida como agregada.
+
+## Sandbox de Linux (bubblewrap)
+
+`bwrap.py` expresa la misma política con montajes de bubblewrap. Sigue el diseño de
+`codex-rs/linux-sandbox/src/bwrap.rs` (orden de los montajes: `--ro-bind / /`, las raíces
+escribibles con `--bind` y lo protegido con `--ro-bind` después; espacios de nombres de
+usuario, procesos e IPC propios, `--unshare-net`, `--new-session`, `--die-with-parent` y
+`--cap-drop ALL`). Es una reescritura en Python, sin código copiado; se cita aquí por el
+diseño. Modificado para AlfalfaCode en noviembre de 2026:
+
+1. `.git` no se monta entero de solo lectura: como en Seatbelt, el propio `.git` queda fijado
+   como punto de montaje (no se renombra ni se borra) y sólo sus `hooks` y `config*` (también
+   los de `modules/` y el `config.worktree` de cada worktree) son de solo lectura. Si falta
+   `hooks` o `config`, se crean vacíos antes de lanzar la orden. No hay marcadores que se
+   borren después.
+2. Los antecesores de cada `.git` o carpeta de instrucciones anidados, del hogar y de la carpeta
+   de trabajo dentro de otra raíz se fijan con un `--bind` sobre sí mismos. Un directorio
+   ilegible queda de solo lectura entero.
+3. La red se corta además con un filtro seccomp propio (BPF clásico generado en Python, para
+   x86_64 y aarch64) que niega `socket()`, incluidos los sockets Unix, e `io_uring_setup()`
+   con EPERM. Llega a bwrap por `--seccomp` desde un memfd sellado del arnés.
+4. `--disable-userns` cuando el bwrap instalado lo admite (0.8 o posterior).
+5. Las diferencias con Seatbelt que imponen los montajes están en la cabecera de `bwrap.py`.

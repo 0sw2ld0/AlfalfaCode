@@ -70,6 +70,29 @@ class SandboxUnavailable(Exception):
     """No se puede ejecutar dentro del sandbox; la orden no debe lanzarse sola."""
 
 
+# Etiquetas de una orden que corrió aislada; 'none' es la que salió del sandbox con permiso.
+AISLADAS = ('seatbelt', 'bwrap')
+
+
+def nombre_del_sandbox():
+    """Cómo se llama el sandbox de este sistema en los avisos."""
+    return 'bwrap' if sys.platform.startswith('linux') else 'Seatbelt'
+
+
+def temporal_del_sistema():
+    """El temporal común que el sandbox deja escribir además de $TMPDIR."""
+    return '/tmp' if sys.platform.startswith('linux') else PRIVATE_TMP
+
+
+def sandbox_del_sistema(root, **opciones):
+    """El sandbox de este sistema para `root`: bubblewrap en Linux (seatbelt/bwrap.py) y Seatbelt en
+    el resto, que fuera de macOS no arranca y lleva al permiso «SIN SANDBOX»."""
+    if sys.platform.startswith('linux'):
+        from .bwrap import BwrapSandbox
+        return BwrapSandbox(root, **opciones)
+    return SeatbeltSandbox(root, **opciones)
+
+
 def regex_escape(text):
     # Dentro de #"…" Seatbelt no admite escapes: una comilla cerraría la
     # cadena. `[^/]` la cubre y sólo puede ampliar lo protegido, nunca reducirlo.
@@ -247,7 +270,7 @@ def _ancestors(path, stop):
     return found
 
 
-def recorrer_carpeta_de_trabajo(workspace, limit=None):
+def recorrer_carpeta_de_trabajo(workspace, limit=None, hallados=None):
     """Un solo recorrido de `workspace`: (anclados, sellados, instrucciones, entera).
 
     - anclados: directorios cuyo renombrado sacaría de la protección un `.git` o una carpeta de
@@ -264,10 +287,17 @@ def recorrer_carpeta_de_trabajo(workspace, limit=None):
     enorme (dependencias, compilados) no agote el tope antes de terminar las pequeñas. No sigue
     enlaces simbólicos: Seatbelt compara la ruta real, y el destino de un enlace dentro de la
     carpeta ya se recorre por su propia ruta.
+
+    `hallados`, si se pasa un diccionario, recibe además lo que necesita bwrap (seatbelt/bwrap.py),
+    que protege rutas que existen y no expresiones: 'git', los `.git` encontrados, e 'ilegibles',
+    los directorios que no se pudieron listar.
     """
     limit = SCAN_LIMIT if limit is None else limit
     nombres = {ruta_comparable(n) for n in PROTECTED_METADATA}
     anclados, sellados, instrucciones, vistas = set(), set(), set(), 0
+    gits, ilegibles = set(), set()
+    if hallados is not None:
+        hallados['git'], hallados['ilegibles'] = gits, ilegibles
 
     def listar(carpeta):
         """Subcarpetas por recorrer, o None si el tope se agotó a mitad."""
@@ -284,11 +314,14 @@ def recorrer_carpeta_de_trabajo(workspace, limit=None):
                         anclados.update(_ancestors(carpeta, workspace))
                         if nombre != '.git':
                             instrucciones.add(entrada.path)
+                        else:
+                            gits.add(entrada.path)
                     elif entrada.is_dir(follow_symlinks=False):
                         hijas.append(entrada.path)
         except OSError:
             anclados.update(_ancestors(carpeta, workspace))
             sellados.add(carpeta)
+            ilegibles.add(carpeta)
         return hijas
 
     primeras = listar(workspace)
@@ -329,6 +362,10 @@ class SeatbeltSandbox:
     un permiso «red» aprobado, y sólo para ese intento.
     """
 
+    etiqueta = 'seatbelt'
+    # El temporal común que se abre además de $TMPDIR: /private/tmp en macOS y /tmp en Linux.
+    temporal = PRIVATE_TMP
+
     def __init__(self, root, *, network=False, tmpdir=None, home=None, executable=SANDBOX_EXEC, protegidas=()):
         from ..complementos.rutas_habilidades import carpetas_protegidas
         self.root = root
@@ -366,7 +403,7 @@ class SeatbeltSandbox:
             # Un $TMPDIR que abarque el hogar ampliaría la escritura: se ignora.
             if tmp and not _contains(tmp, home) and tmp not in roots:
                 roots.append(tmp)
-        private_tmp = os.path.realpath(PRIVATE_TMP)
+        private_tmp = os.path.realpath(self.temporal)
         if private_tmp not in roots:
             roots.append(private_tmp)
         return roots

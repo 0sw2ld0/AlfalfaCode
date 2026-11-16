@@ -354,11 +354,11 @@ def _ruta_ajena(texto, raiz):
 
 def raices_temporales(raiz):
     """Las carpetas temporales en las que el sandbox de las órdenes ya deja escribir sin preguntar
-    ($TMPDIR resuelto y /private/tmp), de la misma `SeatbeltSandbox.writable_roots()` para que no se
+    ($TMPDIR resuelto y /private/tmp, o /tmp en Linux), de la misma `writable_roots()` para que no se
     separen. Vacío si no se pueden calcular."""
-    from .seatbelt import SandboxUnavailable, SeatbeltSandbox
+    from .seatbelt import SandboxUnavailable, sandbox_del_sistema
     try:
-        return SeatbeltSandbox(str(raiz)).writable_roots()[1:]
+        return sandbox_del_sistema(str(raiz)).writable_roots()[1:]
     except (SandboxUnavailable, OSError, ValueError, RuntimeError):
         return []
 

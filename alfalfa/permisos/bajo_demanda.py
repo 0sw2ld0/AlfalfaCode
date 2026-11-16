@@ -33,7 +33,7 @@ import shlex
 import unicodedata
 from uuid import uuid4
 
-from ..seatbelt import SandboxUnavailable
+from ..seatbelt import AISLADAS, SandboxUnavailable, nombre_del_sandbox
 from .denegacion import is_likely_sandbox_denied
 from .peligrosos import FORCED_RM, SUDO, dangerous_command_match
 
@@ -200,13 +200,14 @@ class OnRequestPolicy:
                 # SwiftPM no puede abrir su sandbox dentro del nuestro (seatbelt/compiladores.py).
                 from ..seatbelt.compiladores import dentro_del_sandbox
                 command = await (with_network(sandbox) if network else sandbox).prepare(dentro_del_sandbox(argv))
-                label = 'seatbelt'
+                label = getattr(sandbox, 'etiqueta', 'seatbelt')
             except SandboxUnavailable as exc:
                 failure = str(exc)
                 reasons.append(SALIR)
-                runtime.manager.event(runtime.task, 'system', 'Sandbox Seatbelt no disponible: ' + failure)
+                runtime.manager.event(runtime.task, 'system',
+                                      'Sandbox ' + nombre_del_sandbox() + ' no disponible: ' + failure)
             if network and not lectura_de_red(argv, runtime):
-                if label == 'seatbelt' and self._red_por_regla(runtime, argv, ruled, peligrosa):
+                if label in AISLADAS and self._red_por_regla(runtime, argv, ruled, peligrosa):
                     # «No volver a preguntar» en una tarjeta de red: la red, y nada más, sin tarjeta.
                     runtime.manager.event(runtime.task, 'system', 'Red permitida siempre por ' + str(rule_text)
                                           + ': ' + shlex.join(argv)[:300] + ' (en el sandbox)')
@@ -215,7 +216,7 @@ class OnRequestPolicy:
         # Fuera del sandbox (el reintento) vale lo que se ve sin él; dentro y sin red, sólo lo que
         # de verdad puede hacer daño ahí (permisos/peligrosos.py, `dentro_del_sandbox`).
         danger_fuera = danger
-        if danger and label == 'seatbelt' and not network:
+        if danger and label in AISLADAS and not network:
             danger = dangerous_command_match(argv, dentro_del_sandbox=True)
         if danger:
             reasons.append(PELIGROSO)
@@ -238,7 +239,7 @@ class OnRequestPolicy:
                             reglas=self.reglas)
         extra = {'intento': attempt, 'permisos': reasons, 'red': network or label == 'none'}
         result = await launch(command, label, extra)
-        if label != 'seatbelt' or not self._denied(result):
+        if label not in AISLADAS or not self._denied(label, result):
             return result
         # Se conserva el intento fallido tal como quedó registrado.
         result['denegacion_probable'] = True
@@ -259,7 +260,7 @@ class OnRequestPolicy:
             return result
         again = await launch(list(argv), 'none', {'intento': retry, 'reintento_de': attempt,
                                                    'permisos': retry_reasons, 'red': True})
-        again['intento_previo'] = {'intento': attempt, 'sandbox': 'seatbelt', 'exit_code': result.get('exit_code'),
+        again['intento_previo'] = {'intento': attempt, 'sandbox': label, 'exit_code': result.get('exit_code'),
                                    'output': str(result.get('output') or '')[-PREVIOUS_OUTPUT:]}
         evidencia = getattr(runtime, 'evidence', None)
         if evidencia is not None and hasattr(evidencia, 'repetida_sin_sandbox'):
@@ -298,10 +299,10 @@ class OnRequestPolicy:
         return text + (': ' + lines[-1][:DENIAL_LINE] if lines else ' y una salida típica del sandbox.')
 
     @staticmethod
-    def _denied(result):
+    def _denied(label, result):
         if result.get('timed_out') or result.get('exception') or result.get('output_limit_exceeded'):
             return False
-        return is_likely_sandbox_denied('seatbelt', result.get('exit_code'), aggregated=result.get('output') or '')
+        return is_likely_sandbox_denied(label, result.get('exit_code'), aggregated=result.get('output') or '')
 
     @staticmethod
     async def _ask(runtime, argv, args, reasons, attempt, unsandboxed_timeout, *, justification=None,
