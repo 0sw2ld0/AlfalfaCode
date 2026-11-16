@@ -138,7 +138,8 @@ struct PermissionCard: View {
     }
 
     /// «Sí, y no volver a preguntar por órdenes que empiecen por `git commit`», como Codex: queda
-    /// una regla en reglas.toml y esas órdenes corren fuera del sandbox sin preguntar.
+    /// una regla en reglas.toml. Lo que concede (fuera del sandbox, con red o sólo sin la pregunta
+    /// del modo) lo dice el motor en `prefijo_alcance`.
     private func allowAlways(_ prefix: [String]) -> some View {
         let command = prefix.joined(separator: " ")
         return Button { session.answer(request.id, approved: true, always: true) } label: {
@@ -149,8 +150,7 @@ struct PermissionCard: View {
         }
         .buttonStyle(.plain)
         .disabled(session.answered.contains(request.id))
-        .help("Aprueba y, desde ahora, las órdenes que empiecen por «\(command)» corren fuera del sandbox "
-              + "sin preguntar, en todas las sesiones. Se quita en ~/.alfalfa/reglas.toml.")
+        .help((request.alwaysScope ?? .outsideSandbox).help(command))
     }
 
     private var deny: some View {

@@ -410,8 +410,8 @@ ON_REQUEST_PROPERTIES = {
     'justification': {'type': 'string', 'description': 'Why the exception is needed (10-500 characters). '
                       'Mandatory with require_escalated.'},
     'prefix_rule': {'type': 'array', 'items': {'type': 'string'}, 'maxItems': 6, 'description': (
-        'Optional with require_escalated: a short categorical argv prefix the user may approve once and for '
-        'all, e.g. ["git", "commit"] or ["npm", "install"]. It must match the start of the command; '
+        'Optional with require_escalated or needs_network: a short categorical argv prefix the user may approve '
+        'once and for all, e.g. ["git", "commit"] or ["npm", "install"]. It must match the start of the command; '
         'never a bare interpreter or shell (["git"], ["python3"], ["bash", "-lc"]).')},
 }
 BACKGROUND_PROPERTY = {
@@ -524,7 +524,7 @@ ON_REQUEST_DESCRIPTION = ('Run exact argv in the workspace inside the Seatbelt s
                           'network. Normal commands run without asking; dangerous commands (rm with force, '
                           'sudo), needs_network and require_escalated ask the user first. A failure that '
                           'looks like a sandbox denial asks the user to retry the same argv without sandbox; '
-                          'do not retry it yourself. With require_escalated, add prefix_rule (e.g. '
+                          'do not retry it yourself. With require_escalated or needs_network, add prefix_rule (e.g. '
                           '["git", "push"]) so the user can say «No volver a preguntar». Read-only network '
                           'queries (gh pr view/list/checks, gh run view, git fetch <remote>) run with needs_network '
                           'and no prompt. Push with `git push origin <branch>`, without -u: setting the upstream '

@@ -83,7 +83,8 @@ CAMPOS = {
     'origen': 'origin', 'papelera': 'trash', 'para_sesion': 'for_session', 'paralelos': 'parallel', 'paso': 'step',
     'pasos': 'steps', 'patron': 'pattern', 'pendiente': 'pending', 'pendientes': 'pending',
     'permisos': 'permissions', 'permitidos': 'allowed', 'podadas': 'pruned', 'politica': 'policy',
-    'posicion': 'position', 'precio': 'price', 'prefijo': 'prefix', 'primer_turno': 'first_turn',
+    'posicion': 'position', 'precio': 'price', 'prefijo': 'prefix', 'prefijo_alcance': 'prefix_scope',
+    'primer_turno': 'first_turn',
     'prioridad': 'priority', 'procedencia': 'provenance', 'procesos': 'processes', 'proposito': 'purpose',
     'proveedor': 'provider', 'proyecto': 'project', 'quitado': 'removed', 'raiz': 'root', 'rama': 'branch',
     'rama_base': 'base_branch',
@@ -165,6 +166,8 @@ VALORES: dict[str, dict[str, str]] = {
     'step': {'deshacer': 'undo', 'rehacer': 'redo'},
     'phase': {'inicio': 'start', 'fin': 'end'},
     'decision': {'permitida': 'allowed', 'preguntar': 'ask', 'prohibida': 'forbidden'},
+    # Lo que concede «No volver a preguntar» (permisos/bajo_demanda.py, ALCANCE_*).
+    'prefix_scope': {'sin_sandbox': 'outside_sandbox', 'red': 'network', 'sandbox': 'sandbox'},
     'installation': {'paquete': 'package'},
     'capacity': {'roto': 'broken'},
     'result': {'correcta': 'succeeded', 'cancelada': 'cancelled', 'fallida': 'failed'},

@@ -28,6 +28,10 @@ forbidden), justification, match y not_match.
 - `bash -lc 'a && b | c'` se evalúa por partes si sólo tiene palabras literales
   unidas por &&, ||, ; o |. Con redirecciones, variables, subshells o comodines
   no es analizable: con reglas que preguntan o prohíben, se pregunta.
+- Lo que concede una regla `permitida` (lo escribe «No volver a preguntar» en la tarjeta):
+  sin más, quita la pregunta del modo Manual y la de orden peligrosa dentro del sandbox;
+  con `con_red = true`, además deja usar la red dentro del sandbox sin preguntar; con
+  `fuera_del_sandbox = true`, la orden corre fuera del sandbox (y con red) sin preguntar.
 """
 from __future__ import annotations
 
@@ -43,7 +47,8 @@ SEVERIDAD = {PERMITIDA: 0, PREGUNTAR: 1, PROHIBIDA: 2}
 SINONIMOS = {'allow': PERMITIDA, 'prompt': PREGUNTAR, 'forbidden': PROHIBIDA,
              PERMITIDA: PERMITIDA, PREGUNTAR: PREGUNTAR, PROHIBIDA: PROHIBIDA}
 CAMPOS = {'patron': 'pattern', 'decision': 'decision', 'justificacion': 'justification',
-          'coincide': 'match', 'no_coincide': 'not_match', 'fuera_del_sandbox': 'bypass_sandbox'}
+          'coincide': 'match', 'no_coincide': 'not_match', 'fuera_del_sandbox': 'bypass_sandbox',
+          'con_red': 'with_network'}
 SHELLS = {'bash', 'sh', 'zsh'}
 OPCIONES_SHELL = {'-c', '-lc', '-cl'}
 # Shells cuyo guion se mira para las reglas que preguntan o prohíben, con cualquier forma de -c.
@@ -72,6 +77,9 @@ class Regla:
     # Como `allow` de Codex: la orden corre fuera del sandbox sin preguntar. Sólo con
     # `fuera_del_sandbox = true`, que escribe «No volver a preguntar» en la tarjeta.
     sin_sandbox: bool = False
+    # Con `con_red = true` (la tarjeta de red): la orden usa la red dentro del sandbox sin
+    # preguntar. No la saca del sandbox ni quita ninguna otra pregunta.
+    con_red: bool = False
 
     def coincide(self, argv):
         """El prefijo de `argv` que casa, o None. Una regla `permitida` casa la orden tal cual
@@ -289,16 +297,27 @@ PREFIJOS_PROHIBIDOS = {tuple(p) for p in (
     ['npm', 'run'], ['pnpm', 'run'], ['yarn', 'run'], ['perl'], ['perl', '-e'], ['php'], ['php', '-r'],
     ['py'], ['py', '-3'], ['pypy'], ['pypy3'], ['python'], ['python', '-'], ['python', '-c'],
     ['python3'], ['python3', '-'], ['python3', '-c'], ['pythonw'], ['pyw'], ['ruby'], ['ruby', '-e'],
-    ['swift'], ['xcrun'], ['open'], ['xargs'], ['find'], ['curl'], ['wget'])}
+    ['swift'], ['xcrun'], ['open'], ['xargs'], ['find'], ['curl'], ['wget'],
+    # Como `npx` y `uvx`: bajan un paquete cualquiera y lo ejecutan.
+    ['npm', 'exec'], ['npm', 'x'], ['pnpm', 'exec'], ['pnpm', 'dlx'], ['yarn', 'exec'], ['yarn', 'dlx'],
+    ['uv', 'tool'], ['uv', 'run'])}
 MAX_PREFIJO = 6
+# Programas cuya segunda palabra es una suborden (`npm install`, `make test`): en las tarjetas de
+# dentro del sandbox (modo y red), si el modelo no propone prefijo, se ofrece programa + suborden,
+# como ya se hacía con git. Fuera del sandbox sólo git, como antes.
+CON_SUBORDEN = frozenset({'npm', 'pnpm', 'yarn', 'pip', 'pip3', 'uv', 'cargo', 'go', 'make', 'gem', 'bundle',
+                          'poetry', 'composer', 'mvn', 'gradle', 'dotnet', 'mix'})
+_SUBORDEN = re.compile(r'[a-z][a-z0-9-]*')
 
 
-def prefijo_para_siempre(propuesto, argv):
+def prefijo_para_siempre(propuesto, argv, dentro_del_sandbox=False):
     """El prefijo que la tarjeta puede ofrecer como «no volver a preguntar», o None.
 
     Como `derive_requested_execpolicy_amendment_from_prefix_rule` de Codex: el que propone el
     modelo (`prefix_rule`), si no está prohibido y cubre cada parte de la orden; si no propone
-    ninguno, para git se ofrece la suborden (`git commit`), nunca `git` a secas."""
+    ninguno, para git se ofrece la suborden (`git commit`), nunca `git` a secas. En una tarjeta
+    de dentro del sandbox (`dentro_del_sandbox`: la del modo o la de red), también la de los
+    programas de CON_SUBORDEN (`npm install`, `make test`)."""
     partes = _sin_cambios_de_carpeta(_segmentos(argv))
     if not partes:
         return None
@@ -307,6 +326,8 @@ def prefijo_para_siempre(propuesto, argv):
         nombre = orden[0].rsplit('/', 1)[-1]
         if nombre == 'git' and not orden[1].startswith('-'):
             propuesto = ['git', orden[1]]
+        elif dentro_del_sandbox and orden[0] in CON_SUBORDEN and _SUBORDEN.fullmatch(orden[1]):
+            propuesto = [orden[0], orden[1]]
     if (not isinstance(propuesto, list) or not 1 <= len(propuesto) <= MAX_PREFIJO
             or not all(isinstance(t, str) and t and t.strip() == t and not set(t) & _ESPECIALES for t in propuesto)):
         return None
@@ -321,14 +342,16 @@ def prefijo_para_siempre(propuesto, argv):
     return list(propuesto)
 
 
-def guardar_para_siempre(home, prefijo, justificacion, dentro_del_sandbox=False):
+def guardar_para_siempre(home, prefijo, justificacion, dentro_del_sandbox=False, con_red=False):
     """Añade a `$ALFALFA_HOME/reglas.toml` la regla de «No volver a preguntar», como
     `append_amendment_and_update` de Codex con `~/.codex/rules/default.rules`.
 
     Comprueba antes que el archivo resultante se lee bien: si el actual es inválido o la
     regla lo rompería, no escribe nada (ReglasInvalidas). Devuelve las reglas nuevas.
     `dentro_del_sandbox`: la regla sólo quita la pregunta del modo Manual; la orden sigue
-    corriendo en el sandbox, sin red."""
+    corriendo en el sandbox, sin red. Con `con_red` también, pero con la red abierta."""
+    if con_red and not dentro_del_sandbox:
+        raise ReglasInvalidas('con_red sólo vale para una regla de dentro del sandbox.')
     import json
     import os
     import tempfile
@@ -338,6 +361,7 @@ def guardar_para_siempre(home, prefijo, justificacion, dentro_del_sandbox=False)
     actual = ruta.read_text(encoding='utf-8') if ruta.exists() else ''
     bloque = ('\n[[regla]]\npatron = ' + json.dumps(list(prefijo), ensure_ascii=False)
               + '\ndecision = "permitida"\n' + ('' if dentro_del_sandbox else 'fuera_del_sandbox = true\n')
+              + ('con_red = true\n' if con_red else '')
               + 'justificacion = '
               + json.dumps(justificacion, ensure_ascii=False) + '\n')
     nuevo = actual + ('' if not actual or actual.endswith('\n') else '\n') + bloque
@@ -379,16 +403,23 @@ class Reglas:
         y cada parte de la orden la permite una regla con `fuera_del_sandbox`."""
         return self.cubre_toda(argv, sin_sandbox=True)
 
-    def cubre_toda(self, argv, sin_sandbox=False):
-        """¿Permiten reglas `permitida` (con `fuera_del_sandbox` si se pide) cada parte de la
-        orden tal cual, sin ninguna regla más estricta? Una que sólo cubre un trozo
+    def con_red(self, argv):
+        """¿Usa `argv` la red dentro del sandbox sin preguntar? Sólo si nada es más estricto que
+        `permitida` y cada parte la permite una regla con `con_red` (o con `fuera_del_sandbox`,
+        que ya lleva la red)."""
+        return self.cubre_toda(argv, con_red=True)
+
+    def cubre_toda(self, argv, sin_sandbox=False, con_red=False):
+        """¿Permiten reglas `permitida` (con `fuera_del_sandbox` o `con_red` si se pide) cada parte
+        de la orden tal cual, sin ninguna regla más estricta? Una que sólo cubre un trozo
         (`git status; rm -rf src`) no decide por la línea entera."""
         if self.evaluar(argv).decision != PERMITIDA:
             return False
         partes = _sin_cambios_de_carpeta(_segmentos(argv))
         if not partes:
             return False
-        permitidas = [r for r in self.reglas if r.decision == PERMITIDA and (r.sin_sandbox or not sin_sandbox)]
+        permitidas = [r for r in self.reglas if r.decision == PERMITIDA and (r.sin_sandbox or not sin_sandbox)
+                      and (r.con_red or r.sin_sandbox or not con_red)]
         return all(any(r.coincide(parte) is not None for r in permitidas) for parte in partes)
 
     def evaluar(self, argv):
@@ -471,8 +502,15 @@ def leer(datos, origen=ARCHIVO):
             raise ReglasInvalidas(donde + ': fuera_del_sandbox debe ser true o false.')
         if sin_sandbox and decision != PERMITIDA:
             raise ReglasInvalidas(donde + ': fuera_del_sandbox sólo vale con decision = "permitida".')
+        con_red = normal.get('with_network', False)
+        if not isinstance(con_red, bool):
+            raise ReglasInvalidas(donde + ': con_red debe ser true o false.')
+        if con_red and decision != PERMITIDA:
+            raise ReglasInvalidas(donde + ': con_red sólo vale con decision = "permitida".')
+        if con_red and sin_sandbox:
+            raise ReglasInvalidas(donde + ': con_red sobra con fuera_del_sandbox, que ya lleva la red.')
         regla = Regla(_patron(normal['pattern'], donde), decision,
-                      justificacion.strip() if justificacion else None, donde, sin_sandbox)
+                      justificacion.strip() if justificacion else None, donde, sin_sandbox, con_red)
         # Como execpolicy: los ejemplos son pruebas que se pasan al cargar.
         for ejemplo in normal.get('match', []) or []:
             argv = _ejemplo(ejemplo, donde)
