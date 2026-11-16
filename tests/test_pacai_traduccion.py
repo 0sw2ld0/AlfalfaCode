@@ -432,3 +432,60 @@ async def test_una_ejecucion_en_cierre_no_empieza_trabajo_nuevo_pero_informa_y_t
     await cerrar(c, 'interrupted')
     assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
     c.comprobar()
+
+
+# -- subagentes lanzados por una herramienta (§4.9, 0.3) -------------------
+def _fila(ident, estado):
+    return {'id': ident, 'nombre': 'Revisor', 'tipo': 'explorador', 'estado': estado}
+
+
+def _inicio(mensajes):
+    return next(m for m in mensajes if m['type'] == 'tool_start')
+
+
+async def test_la_subejecucion_lleva_el_tool_call_id_de_la_herramienta_que_la_lanzo():
+    c = Cliente()
+    run = await abrir(c)
+    lanzar = _inicio(herramienta(c, 'spawn_agent', {'message': 'Revisa', 'background': True}))
+    c.t.emit('subagentes', subagentes=[_fila('a1', 'trabajando')])
+    sub = [m for m in c.drenar() if m['type'] == 'run_started'][0]
+    assert sub['payload']['tool_call_id'] == lanzar['id'] and sub['payload']['parent_run_id'] == run
+    # En segundo plano la herramienta vuelve ya con el id: cierra `success` y el subagente sigue.
+    assert fin_de_herramienta(c, 'spawn_agent', {'agent': 'a1', 'status': 'trabajando'})[0]['payload']['status'] \
+        == 'success'
+    c.t.emit('subagente_evento', agente='a1', rol='agent', texto='Informe', hora=1.0)
+    # Relanzarlo con `send_input` es otra invocación, y la lanza esa herramienta.
+    c.t.emit('subagentes', subagentes=[_fila('a1', 'terminado')])
+    otra = _inicio(herramienta(c, 'send_input', {'agent': 'a1', 'message': 'Sigue'}))
+    c.t.emit('subagentes', subagentes=[_fila('a1', 'trabajando')])
+    segunda = [m for m in c.drenar() if m['type'] == 'run_started'][0]
+    assert segunda['payload']['tool_call_id'] == otra['id'] and segunda['id'] != sub['id']
+    fin_de_herramienta(c, 'send_input', {'agent': 'a1'})
+    c.t.emit('subagentes', subagentes=[_fila('a1', 'terminado')])
+    # Uno al que el cliente escribe con `steer` (sin herramienta) no lleva tool_call_id.
+    c.t.emit('subagentes', subagentes=[_fila('a1', 'trabajando')])
+    tercera = [m for m in c.drenar() if m['type'] == 'run_started'][0]
+    assert 'tool_call_id' not in tercera['payload']
+    await cerrar(c)
+    c.comprobar()
+
+
+async def test_interrumpir_un_subagente_cancela_la_herramienta_que_lo_espera_y_la_madre_sigue():
+    c = Cliente()
+    run = await abrir(c)
+    lanzar = _inicio(herramienta(c, 'spawn_agent', {'message': 'Revisa'}))
+    c.t.emit('subagentes', subagentes=[_fila('a2', 'trabajando')])
+    sub = [m for m in c.drenar() if m['type'] == 'run_started'][0]
+    c.t.emit('subagentes', subagentes=[_fila('a2', 'cerrado')])
+    cierre = c.drenar()
+    cierres = [m['payload'] for m in cierre if m['type'] in ('run_finished', 'tool_end')]
+    assert cierres == [{'run_id': sub['id'], 'outcome': 'interrupted'},
+                       {'tool_call_id': lanzar['id'], 'status': 'cancelled'}]
+    # El fin que el motor manda luego por esa herramienta ya no sale, y la madre sigue trabajando.
+    assert fin_de_herramienta(c, 'spawn_agent', {'agent': 'a2', 'status': 'cerrado'}) == []
+    c.t.emit('evento', rol='agent', texto='Sigo yo', hora=2.0)
+    assert 'message_start' in [m['type'] for m in c.drenar()]
+    await cerrar(c)
+    assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'success'}
+    assert lanzar['id'] in [m['payload']['tool_call_id'] for m in c.del_agente('tool_end')]
+    c.comprobar()

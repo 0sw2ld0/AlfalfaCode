@@ -33,6 +33,8 @@ RECORTADO = '… [recortado]'
 MAX_SALIDA = 60000            # caracteres de la salida de una herramienta en un `tool_end`
 EDITORES = frozenset({'write_file', 'edit_file', 'apply_patch'})
 SINTETICA = 'request_permission'
+# Herramientas del motor que lanzan (o relanzan) un subagente: su `tool_start` va en el `run_started` (§4.9).
+LANZADORES = frozenset({'spawn_agent', 'send_input'})
 # Estados de un subagente (subagentes.py) con los que ya no trabaja.
 TERMINADOS = frozenset({'terminado', 'fallido', 'cerrado', 'interrumpido'})
 RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'failed', 'cortado': 'interrupted',
@@ -60,6 +62,7 @@ class Herramienta:
     v2id: str | None = None          # petición del navegador de la app (lado cliente)
     sintetica: bool = False          # la abrió un permiso que ninguna herramienta abierta explicaba
     cancelada: bool = False          # su aprobación se canceló: su `tool_end` es `cancelled` (§4.5)
+    subagente: str | None = None     # el subagente (aN) que lanzó, si es un `spawn_agent` o un `send_input`
 
 
 @dataclass
@@ -68,6 +71,7 @@ class Ejecucion:
     agente: str | None = None        # id del subagente en AlfalfaCode (aN); None en la raíz
     activa: bool = True
     cerrando: bool = False           # el agente ya canceló algo suyo: no empieza trabajo nuevo (§4.2)
+    tool_call_id: str | None = None  # la herramienta de la madre que la lanzó
 
 
 @dataclass
@@ -204,6 +208,7 @@ class Traductor:
         self.de_sesion: list[tuple[str, str, str]] = []     # (nombre, digest, approval_id) con alcance session
         self.hay_cambios = False
         self.clientes_cancelados: set[str] = set()          # herramientas del cliente que el agente canceló
+        self.fines_ignorados: dict[tuple[str, str], int] = {}  # (run_id, nombre): fines del motor ya cerrados aquí
         # Quien conteste a v2 cuando PACAI no puede (navegador no declarado o cancelado): (id v2, texto).
         self.al_rechazar_navegador: Callable[[str, str], None] | None = None
 
@@ -301,6 +306,13 @@ class Traductor:
         ej.activa = False
         if ej.agente is not None and self.subagentes.get(ej.agente) == run_id:
             del self.subagentes[ej.agente]
+        lanzadora = self.herramientas.get(ej.tool_call_id) if ej.tool_call_id else None
+        if resultado == 'interrupted' and lanzadora is not None:
+            # La madre recibe el `tool_end` `cancelled` de la herramienta que lanzó al subagente y sigue (§4.6);
+            # el fin que el motor mande luego por ella ya no sale. Si ya terminó (segundo plano), nada que cerrar.
+            clave = (lanzadora.run_id, lanzadora.nombre)
+            self.fines_ignorados[clave] = self.fines_ignorados.get(clave, 0) + 1
+            salida += self._cerrar(lanzadora.id, 'cancelled')
         return salida
 
     def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
@@ -413,6 +425,9 @@ class Traductor:
 
     def _tool_end(self, run_id: str | None, datos: dict, texto: str) -> list[dict]:
         nombre = str(datos.get('nombre') or '')
+        if self.fines_ignorados.get((run_id, nombre)):
+            self.fines_ignorados[(run_id, nombre)] -= 1
+            return []
         tc = next((t for t, h in self.herramientas.items()
                    if h.run_id == run_id and h.nombre == nombre and h.lado == 'agent'), None)
         if tc is None:
@@ -437,10 +452,24 @@ class Traductor:
         if self._activa(self.subagentes.get(ident)) or not self._abierta(self.raiz):
             return []
         agente = {'name': nombre or 'subagent', **({'description': descripcion[:200]} if descripcion else {})}
-        m = self._msg('run_started', {'parent_run_id': self.raiz, 'agent': agente})
-        self.ejecuciones[m['id']] = Ejecucion(m['id'], agente=ident)
+        lanzadora = self._lanzadora(ident)
+        m = self._msg('run_started', {'parent_run_id': self.raiz, 'agent': agente,
+                                      **({'tool_call_id': lanzadora.id} if lanzadora else {})})
+        self.ejecuciones[m['id']] = Ejecucion(m['id'], agente=ident, tool_call_id=lanzadora.id if lanzadora else None)
         self.subagentes[ident] = m['id']
         return [m]
+
+    def _lanzadora(self, ident: str) -> Herramienta | None:
+        """La herramienta abierta de la raíz que lanza este subagente: un `spawn_agent` aún sin subagente, o un
+        `send_input` a él. Sin ninguna (el cliente le escribió con `steer`), la subejecución no lleva `tool_call_id`."""
+        for h in reversed(list(self.herramientas.values())):
+            if h.run_id != self.raiz or h.lado != 'agent' or h.nombre not in LANZADORES or h.subagente is not None:
+                continue
+            destino = h.argumentos.get('agent')
+            if h.nombre == 'spawn_agent' or destino in (None, ident):
+                h.subagente = ident
+                return h
+        return None
 
     def _v2_subagentes(self, campos: dict) -> list[dict]:
         salida: list[dict] = []

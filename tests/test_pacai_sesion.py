@@ -30,9 +30,10 @@ async def inference(self, client, endpoint, payload, **kwargs):
     if sys.argv[1] == 'tool' and not any(m['role'] == 'tool' for m in self.state['messages']):
         calls = [dict(function=dict(name='run_command', arguments=dict(
             argv=[sys.executable, '-c', 'print(1)'], purpose='Probar', needs_network=True)))]
-    if sys.argv[1] == 'sub' and not any(m['role'] == 'tool' for m in self.state['messages']):
+    if sys.argv[1] in ('sub', 'fondo') and not any(m['role'] == 'tool' for m in self.state['messages']):
         calls = [dict(function=dict(name='spawn_agent', arguments=dict(
-            message='Revisa A', description='Revisor A', agent_type='explorador')))]
+            message='Revisa A', description='Revisor A', agent_type='explorador',
+            **({'background': True} if sys.argv[1] == 'fondo' else {}))))]
     last = payload['messages'][-1]
     return dict(message=dict(role='assistant', content='' if calls else 'Hecho: ' + last['content'][:60],
                              tool_calls=calls), done=True, done_reason='stop', prompt_eval_count=1, eval_count=1)
@@ -152,11 +153,34 @@ def test_un_subagente_es_una_subejecucion_que_termina_antes_que_su_madre(proceso
     sub = [m for m in p.del_agente('run_started') if 'parent_run_id' in m['payload']]
     assert len(sub) == 1 and sub[0]['payload']['parent_run_id'] == raiz['id']
     assert sub[0]['payload']['agent'] == {'name': 'explorador', 'description': 'Revisor A'}
+    lanzar = next(m for m in p.del_agente('tool_start') if m['payload']['name'] == 'spawn_agent')
+    assert sub[0]['payload']['tool_call_id'] == lanzar['id']          # lo lanzó esa herramienta (§4.9)
     cierres = [m['payload']['run_id'] for m in p.del_agente('run_finished')]
     assert cierres == [sub[0]['id'], raiz['id']]
     # Lo que dice el subagente lleva su propio run_id.
     suyos = [m for m in p.del_agente('message_start') if m['payload']['run_id'] == sub[0]['id']]
     assert len(suyos) == 1
+    assert problemas(p.log) == []
+
+
+def test_un_subagente_en_segundo_plano_cierra_su_herramienta_en_el_acto_y_su_raiz_lo_espera(proceso):
+    p = proceso('fondo')
+    p.saludar()
+    p.entrada('Lanza un revisor en paralelo')
+    raiz = p.tipo('run_started')
+    p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == raiz['id'])
+    p.terminar()
+    lanzar = next(m for m in p.del_agente('tool_start') if m['payload']['name'] == 'spawn_agent')
+    sub = next(m for m in p.del_agente('run_started') if 'parent_run_id' in m['payload'])
+    assert sub['payload']['tool_call_id'] == lanzar['id'] and sub['payload']['parent_run_id'] == raiz['id']
+    orden = [(m['type'], m['payload'].get('tool_call_id') or m['payload'].get('run_id')) for m in p.del_agente()
+             if m['type'] in ('tool_end', 'run_finished')]
+    # `spawn_agent` vuelve en el acto con el id del subagente: su `tool_end` llega antes que el fin del subagente,
+    # y la raíz no termina hasta que acaba él.
+    assert orden.index(('tool_end', lanzar['id'])) < orden.index(('run_finished', sub['id'])) \
+        < orden.index(('run_finished', raiz['id']))
+    assert next(m for m in p.del_agente('tool_end') if m['payload']['tool_call_id'] == lanzar['id'])[
+        'payload']['status'] == 'success'
     assert problemas(p.log) == []
 
 
