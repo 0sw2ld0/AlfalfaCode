@@ -73,7 +73,8 @@ CAMPOS = {
     'indice_al_dia': 'index_up_to_date', 'informe': 'report', 'inicio': 'start', 'instalacion': 'installation',
     'instalada': 'installed', 'instrucciones': 'instructions', 'instrucciones_mcp': 'mcp_instructions',
     'intento': 'attempt', 'irreversibles': 'irreversible', 'justificacion': 'justification', 'limite': 'limit',
-    'linea': 'line', 'llamada': 'call', 'lugar': 'location', 'manifiesto': 'manifest', 'marcas': 'marks',
+    'limpieza': 'cleanup', 'linea': 'line', 'llamada': 'call', 'lugar': 'location', 'manifiesto': 'manifest',
+    'marcas': 'marks',
     'memoria': 'memory', 'mensaje': 'message', 'mensajes': 'messages', 'mensajes_antes': 'messages_before',
     'mes': 'month', 'modelo': 'model', 'modelo_revision': 'review_model', 'modelos': 'models', 'modo': 'mode',
     'motivo': 'reason', 'motivos': 'reasons', 'no_cubiertos': 'not_covered', 'nombre': 'name',
@@ -85,6 +86,7 @@ CAMPOS = {
     'posicion': 'position', 'precio': 'price', 'prefijo': 'prefix', 'primer_turno': 'first_turn',
     'prioridad': 'priority', 'procedencia': 'provenance', 'procesos': 'processes', 'proposito': 'purpose',
     'proveedor': 'provider', 'proyecto': 'project', 'quitado': 'removed', 'raiz': 'root', 'rama': 'branch',
+    'rama_base': 'base_branch',
     'razona': 'reasoning', 'rechazado': 'rejected', 'recortado': 'truncated', 'red': 'network',
     'referencia': 'reference', 'regla': 'rule', 'reintento_de': 'retry_of', 'renueva': 'renews',
     'reserva_maxima': 'max_reserve', 'restaurables': 'restorable', 'restaurados': 'restored',
@@ -133,6 +135,8 @@ VALORES: dict[str, dict[str, str]] = {
         # encargos.py (la cola y cada encargo)
         'lista': 'ready', 'ejecutando': 'running', 'pausando': 'pausing', 'pausada': 'paused',
         'completada': 'completed', 'cancelada': 'cancelled', 'cancelado': 'cancelled', 'pendiente': 'pending',
+        # encargos_worktrees.py (la limpieza de cada worktree)
+        'quitado': 'removed', 'conservado': 'kept', 'rama_conservada': 'branch_kept',
         # revision_codigo.py
         'disponible': 'available', 'revisando': 'reviewing', 'terminada': 'completed', 'fallida': 'failed',
         'sin_presupuesto': 'no_budget', 'sin_cierre': 'no_closing', 'sin_modelo_barato': 'no_cheap_model',
@@ -156,7 +160,7 @@ VALORES: dict[str, dict[str, str]] = {
                'sin_identificar': 'unidentified', 'usuario': 'user', 'cache': 'cache', 'ollama': 'ollama'},
     'action': {'crear': 'create', 'restaurar': 'restore', 'borrar': 'delete', 'parchear': 'patch',
                'permisos': 'permissions', 'add': 'add', 'remove': 'remove', 'preparar': 'prepare',
-               'iniciar': 'start', 'pausar': 'pause', 'detener': 'stop', 'cancelar': 'cancel',
+               'iniciar': 'start', 'pausar': 'pause', 'detener': 'stop', 'cancelar': 'cancel', 'limpiar': 'clean',
                'cancelar_relevo': 'cancel_handoff'},
     'step': {'deshacer': 'undo', 'rehacer': 'redo'},
     'phase': {'inicio': 'start', 'fin': 'end'},
@@ -184,7 +188,7 @@ ORDEN_VALORES: dict[str, dict[str, dict[str, str]]] = {
     'set_context_mode': {'mode': {'saving': 'ahorro', 'full': 'completo'}},
     'jobs_command': {'mode': {'serial': 'serie', 'parallel': 'paralelo'},
                      'action': {'prepare': 'preparar', 'start': 'iniciar', 'pause': 'pausar', 'stop': 'detener',
-                                'cancel': 'cancelar'}},
+                                'cancel': 'cancelar', 'clean': 'limpiar'}},
 }
 
 # La herramienta del cliente `browser`: el navegador de la app de v2 (`navegador` / `navegador_respuesta`).

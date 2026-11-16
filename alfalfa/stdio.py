@@ -839,6 +839,12 @@ async def run(args, transport):
                     transport.en_segundo_plano(manager.cola_encargos.detener(), 'Detener la cola')
                 elif accion == 'cancelar':
                     manager.cola_encargos.cancelar()
+                    # Cancelada, ya no reanuda nada: quita los worktrees que no guardan trabajo.
+                    if manager.cola_encargos.limpiables():
+                        transport.en_segundo_plano(manager.cola_encargos.limpiar(),
+                                                   'Limpiar los worktrees de la cola')
+                elif accion == 'limpiar':
+                    transport.en_segundo_plano(manager.cola_encargos.limpiar(), 'Limpiar los worktrees de la cola')
                 else:
                     raise ValueError('Acción de cola desconocida.')
             except ValueError as exc:
@@ -846,6 +852,10 @@ async def run(args, transport):
 
         transport.encargos = encargos
         manager.cola_encargos.avisar()
+        if not cola and manager.cola_encargos.limpiables():
+            # Al reabrir la sesión de una cola: lo que ya se integró desde la última vez.
+            transport.en_segundo_plano(manager.cola_encargos.limpiar(avisar_siempre=False),
+                                       'Limpiar los worktrees de la cola')
         if cola:
             from .encargos import leer_archivo
             manager.cola_encargos.preparar(*leer_archivo(cola))

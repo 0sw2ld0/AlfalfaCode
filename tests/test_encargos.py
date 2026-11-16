@@ -2,6 +2,8 @@
 import asyncio
 import io
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -32,7 +34,8 @@ def demo(tmp_path, monkeypatch):
 @pytest.fixture
 def ejecutor(monkeypatch):
     vistos = []
-    control = {'bloqueado': None, 'esperar': None, 'activos': 0, 'maximos': 0}
+    # `hacer`: objetivo → lo que el encargo deja en su carpeta, en lugar de los archivos de siempre.
+    control = {'bloqueado': None, 'esperar': None, 'activos': 0, 'maximos': 0, 'hacer': {}}
 
     async def trabajo(m, texto, eco=False):
         vistos.append((m, texto))
@@ -43,11 +46,14 @@ def ejecutor(monkeypatch):
                 await control['esperar'].wait()
             await asyncio.sleep(.01)
             root = Path(m.task['cwd'])
-            if m.task['objective'] == 'primero':
+            if m.task['objective'] in control['hacer']:
+                control['hacer'][m.task['objective']](root)
+            elif m.task['objective'] == 'primero':
                 (root / 'primero.txt').write_text('primer resultado')
             elif m.task['objective'] == 'segundo':
                 assert (root / 'primero.txt').read_text() == 'primer resultado'
-            (root / (m.task['id'] + '.txt')).write_text(m.task['objective'])
+            if m.task['objective'] not in control['hacer']:
+                (root / (m.task['id'] + '.txt')).write_text(m.task['objective'])
             m.task.update(status='blocked' if control['bloqueado'] == m.task['objective'] else 'completed',
                           cierre={'resumen': 'Informe de ' + m.task['objective']})
             m.task['total_tokens'] = (m.task.get('total_tokens') or 0) + 100
@@ -364,6 +370,16 @@ def test_stdio_guardar_iniciar_permisos_y_resumen_con_runtime_real(tmp_path, mod
         else:
             assert (root / 'base.txt').read_text() == 'base\n'
             assert [(Path(f['carpeta']) / 'base.txt').read_text() for f in fin['encargos']] == ['A\n', 'B\n']
+            # El trabajo de cada encargo está sin confirmar: los dos worktrees se conservan.
+            assert [f['limpieza']['motivo'] for f in fin['encargos']] == ['tiene 1 cambio sin confirmar'] * 2
+            assert 'Se conserva: tiene 1 cambio sin confirmar' in fin['resumen']
+            # Descartado a mano el de A, la orden explícita lo quita y deja el de B.
+            git(fin['encargos'][0]['carpeta'], 'checkout', '--', 'base.txt')
+            enviar({'tipo': 'encargos', 'accion': 'limpiar'})
+            limpia = hasta('encargos')['cola']['encargos']
+            assert [f['limpieza']['estado'] for f in limpia] == ['quitado', 'conservado']
+            assert not Path(limpia[0]['carpeta']).exists()
+            assert (Path(limpia[1]['carpeta']) / 'base.txt').read_text() == 'B\n'
         enviar({'tipo': 'cancelar'})
         proceso.wait(timeout=20)
         guardado = json.loads((tmp_path / 'alfalfa' / 'sesiones' / sesion / 'task.json').read_text())
@@ -403,3 +419,240 @@ def test_cli_archivo_y_resumen_sin_proveedor_real(tmp_path, aprobar):
         assert resultado.returncode == 1, resultado.stdout + resultado.stderr
         assert 'B: pendiente' in resultado.stdout
         assert (root / 'base.txt').read_text() == 'base\n'
+
+
+# Limpieza de los worktrees de la cola: con repos de verdad, nunca se pierde trabajo.
+
+def repo_de_prueba(root, gitignore=False):
+    git(root, 'init', '-q', '-b', 'main')
+    if gitignore:
+        (root / '.gitignore').write_text('build/\n')
+    git(root, 'add', '.')
+    git(root, 'commit', '-qm', 'Base de prueba')
+
+
+def foto_del_repo(root):
+    """Lo que el usuario ve de su repositorio: HEAD, rama, índice y `git status`."""
+    sin_escribir = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
+    return [subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, env=sin_escribir).stdout
+            for args in (['rev-parse', 'HEAD'], ['symbolic-ref', 'HEAD'], ['ls-files', '--stage'],
+                         ['status', '--porcelain', '--untracked-files=all'])]
+
+
+def hay_rama(root, rama):
+    return subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', '-q', 'refs/heads/' + rama],
+                          capture_output=True).returncode == 0
+
+
+def registrados(root):
+    salida = git(root, 'worktree', 'list', '--porcelain')
+    return [str(Path(linea.split(' ', 1)[1]).resolve()) for linea in salida.splitlines()
+            if linea.startswith('worktree ')]
+
+
+async def cola_en_paralelo(m, textos):
+    cola = m.cola_encargos
+    cola.preparar(textos, 'paralelo', 2)
+    cola.iniciar()
+    await cola.worker
+    return cola
+
+
+def nada(_root):
+    pass
+
+
+def commit(texto):
+    def hacer(root):
+        (root / 'nuevo.txt').write_text(texto)
+        git(root, 'add', 'nuevo.txt')
+        git(root, 'commit', '-qm', texto)
+    return hacer
+
+
+async def test_limpieza_quita_el_worktree_limpio_sin_commits_y_su_rama(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root, gitignore=True)
+    foto = foto_del_repo(root)
+
+    def solo_ignorados(carpeta):
+        (carpeta / 'build').mkdir()
+        (carpeta / 'build' / 'salida.o').write_text('compilado')
+    ejecutor[1]['hacer'] = {'A': solo_ignorados}
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert cola.datos['estado'] == 'completada', cola.datos
+    assert cola.datos['rama_base'] == 'main'
+    assert fila['limpieza'] == {'estado': 'quitado', 'motivo': None}
+    assert not Path(fila['carpeta']).exists() and not Path(fila['carpeta']).parent.exists()
+    assert not hay_rama(root, fila['rama'])
+    assert registrados(root) == [str(root.resolve())]
+    assert 'Worktree y rama quitados' in cola.datos['resumen']
+    assert foto_del_repo(root) == foto
+
+
+async def test_limpieza_conserva_un_worktree_con_cambios_sin_confirmar(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    foto = foto_del_repo(root)
+    ejecutor[1]['hacer'] = {'A': lambda carpeta: (carpeta / 'base.txt').write_text('trabajo del agente\n')}
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert fila['limpieza']['estado'] == 'conservado'
+    assert fila['limpieza']['motivo'] == 'tiene 1 cambio sin confirmar'
+    assert (Path(fila['carpeta']) / 'base.txt').read_text() == 'trabajo del agente\n'
+    assert hay_rama(root, fila['rama'])
+    assert 'Se conserva: tiene 1 cambio sin confirmar' in cola.datos['resumen']
+    assert foto_del_repo(root) == foto
+
+
+async def test_limpieza_conserva_un_worktree_con_archivos_nuevos_sin_seguimiento(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    foto = foto_del_repo(root)
+
+    def nuevos(carpeta):
+        (carpeta / 'informe.md').write_text('resultado')
+        (carpeta / 'sub').mkdir()
+        (carpeta / 'sub' / 'otro.py').write_text('x = 1\n')
+    ejecutor[1]['hacer'] = {'A': nuevos}
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert fila['limpieza'] == {'estado': 'conservado', 'motivo': 'tiene 2 archivos nuevos sin seguimiento'}
+    assert (Path(fila['carpeta']) / 'sub' / 'otro.py').read_text() == 'x = 1\n'
+    assert hay_rama(root, fila['rama'])
+    assert foto_del_repo(root) == foto
+
+
+async def test_limpieza_conserva_la_rama_con_commits_sin_integrar_y_la_quita_al_integrarla(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    foto = foto_del_repo(root)
+    ejecutor[1]['hacer'] = {'A': commit('Trabajo del agente')}
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert fila['limpieza'] == {'estado': 'conservado', 'motivo': 'tiene 1 commit sin integrar en main'}
+    punta = git(root, 'rev-parse', fila['rama'])
+    assert Path(fila['carpeta']).exists() and hay_rama(root, fila['rama'])
+    assert foto_del_repo(root) == foto
+    # Pedirlo otra vez no cambia nada mientras no se integre.
+    assert 'tiene 1 commit sin integrar' in await cola.limpiar()
+    assert git(root, 'rev-parse', fila['rama']) == punta and Path(fila['carpeta']).exists()
+    # El usuario lo integra en su rama: entonces sí se quitan.
+    git(root, 'merge', '-q', '--ff-only', fila['rama'])
+    foto = foto_del_repo(root)
+    texto = await cola.limpiar()
+    assert 'worktree y rama quitados' in texto
+    assert fila['limpieza']['estado'] == 'quitado'
+    assert not Path(fila['carpeta']).exists() and not hay_rama(root, fila['rama'])
+    assert git(root, 'cat-file', '-t', punta) == 'commit'
+    assert foto_del_repo(root) == foto
+    eventos = [json.loads(linea) for linea in (m.directory / (m.task['id'] + '.jsonl')).read_text().splitlines()]
+    assert any(e['role'] == 'system' and e['text'].startswith('Limpieza de los worktrees') for e in eventos)
+
+
+async def test_limpieza_conserva_los_worktrees_que_la_cola_va_a_reanudar(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    foto = foto_del_repo(root)
+    ejecutor[1]['hacer'] = {'A': nada, 'B': nada}
+    ejecutor[1]['bloqueado'] = 'B'
+    cola = await cola_en_paralelo(m, ['A', 'B'])
+    a, b = cola.datos['encargos']
+    assert cola.datos['estado'] == 'pausada' and b['estado'] == 'blocked'
+    # A terminó y reanudar lo salta: se quita. B se reanudará en su worktree: se conserva tal cual.
+    assert a['limpieza']['estado'] == 'quitado' and not Path(a['carpeta']).exists()
+    assert b['limpieza'] == {'estado': 'conservado', 'motivo': 'la cola puede reanudarlo'}
+    assert Path(b['carpeta']).exists() and hay_rama(root, b['rama'])
+    assert not cola.limpiables()
+    await cola.limpiar()
+    assert Path(b['carpeta']).exists() and hay_rama(root, b['rama'])
+    ejecutor[1]['bloqueado'] = None
+    cola.iniciar()
+    await cola.worker
+    assert cola.datos['estado'] == 'completada'
+    assert sorted(h.task['objective'] for h, _ in ejecutor[0]) == ['A', 'B', 'B']  # A no se repite
+    assert b['limpieza']['estado'] == 'quitado' and not hay_rama(root, b['rama'])
+    assert foto_del_repo(root) == foto
+
+
+async def test_limpieza_poda_el_registro_huerfano_de_la_cola_y_no_toca_otros(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    ajeno = root.parent / 'ajeno'
+    git(root, 'worktree', 'add', '-q', '-b', 'del-usuario', str(ajeno))
+    shutil.rmtree(ajeno)
+    foto = foto_del_repo(root)
+    ejecutor[1]['hacer'] = {'A': lambda carpeta: (carpeta / 'borrador.txt').write_text('x')}
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert fila['limpieza']['estado'] == 'conservado'
+    shutil.rmtree(fila['carpeta'])  # El usuario borra a mano la carpeta del worktree.
+    assert str(Path(fila['carpeta']).resolve()) in registrados(root)
+    await cola.limpiar()
+    assert fila['limpieza']['estado'] == 'quitado'
+    assert str(Path(fila['carpeta']).resolve()) not in registrados(root) and not hay_rama(root, fila['rama'])
+    # El worktree del usuario sin carpeta sigue registrado: no es de la cola.
+    assert str(ajeno.resolve()) in registrados(root) and hay_rama(root, 'del-usuario')
+    assert foto_del_repo(root) == foto
+
+
+async def test_limpieza_no_toca_carpetas_que_no_creo_la_cola(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    otro = root.parent / 'otro-worktree'
+    git(root, 'worktree', 'add', '-q', '-b', 'otra-rama', str(otro))
+    ejecutor[1]['hacer'] = {'A': lambda carpeta: (carpeta / 'borrador.txt').write_text('x')}
+    cola = await cola_en_paralelo(m, ['A'])
+    cola.datos['encargos'][0].update(carpeta=str(otro), rama='otra-rama', limpieza=None)
+    await cola.limpiar()
+    assert cola.datos['encargos'][0]['limpieza'] == {'estado': 'conservado',
+                                                      'motivo': 'no es un worktree creado por esta cola'}
+    assert otro.exists() and hay_rama(root, 'otra-rama')
+
+
+async def test_cancelar_la_cola_por_stdio_limpia_lo_que_ya_no_se_reanuda(demo, ejecutor):
+    m, root = demo
+    repo_de_prueba(root)
+    ejecutor[1]['hacer'] = {'A': nada}
+    ejecutor[1]['bloqueado'] = 'A'
+    cola = await cola_en_paralelo(m, ['A'])
+    fila = cola.datos['encargos'][0]
+    assert fila['limpieza']['estado'] == 'conservado' and Path(fila['carpeta']).exists()
+    cola.cancelar()
+    assert cola.limpiables()
+    await cola.limpiar()
+    assert fila['limpieza']['estado'] == 'quitado' and not Path(fila['carpeta']).exists()
+
+
+def test_cli_limpiar_worktrees_de_una_cola_guardada(tmp_path):
+    import os
+    import sys
+
+    root = tmp_path / 'proyecto'
+    root.mkdir()
+    (root / 'base.txt').write_text('base\n')
+    repo_de_prueba(root)
+    foto = foto_del_repo(root)
+    archivo = tmp_path / 'cola.json'
+    archivo.write_text(json.dumps({'encargos': ['A', 'B'], 'modo': 'paralelo', 'paralelos': 2}))
+    env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]),
+               ALFALFA_HOME=str(tmp_path / 'alfalfa'), PRUEBA_APROBAR='1')
+    orden = [sys.executable, '-c', GUION, '--modelo', 'simulado', '--modo', 'manual']
+    resultado = subprocess.run([*orden, '--cola-encargos', str(archivo)], cwd=root, env=env, capture_output=True,
+                               text=True, timeout=90)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    sesion = resultado.stdout.split('Sesión de la cola: ', 1)[1].split()[0]
+    filas = json.loads((tmp_path / 'alfalfa' / 'sesiones' / sesion / 'task.json').read_text())['cola_encargos']
+    a, b = filas['encargos']
+    assert Path(a['carpeta']).exists() and Path(b['carpeta']).exists()
+    git(a['carpeta'], 'checkout', '--', 'base.txt')
+    resultado = subprocess.run([*orden, '--reanudar', sesion, '--limpiar-worktrees'], cwd=root, env=env,
+                               capture_output=True, text=True, timeout=90)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert 'A: worktree y rama quitados.' in resultado.stdout
+    assert 'B: se conserva' in resultado.stdout and 'tiene 1 cambio sin confirmar' in resultado.stdout
+    assert 'PERMISO EXPLÍCITO SIMULADO' not in resultado.stdout  # No ejecutó ningún encargo.
+    assert not Path(a['carpeta']).exists() and not hay_rama(root, a['rama'])
+    assert (Path(b['carpeta']) / 'base.txt').read_text() == 'B\n' and hay_rama(root, b['rama'])
+    assert foto_del_repo(root) == foto
