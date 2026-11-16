@@ -476,6 +476,8 @@ class TerminalManager:
             self.despierto.cerrar()
         if getattr(self, 'diagnosticos', None) is not None:
             self.diagnosticos.matar()  # lo que no cerró cerrar_diagnosticos
+        if getattr(self, 'fondo', None) is not None:
+            self.fondo.cerrar()  # los registros de procesos terminados: ya nadie puede pedirlos
         if self._lock is not None:
             os.close(self._lock)
             self._lock = None

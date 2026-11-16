@@ -1752,7 +1752,9 @@ class WorkspaceTools:
             return None
         collector.cancel()
         await asyncio.gather(collector, return_exceptions=True)
-        proceso = fondo.adoptar(proc, captured, args['argv'], cwd, sandbox, str(args.get('purpose') or ''))
+        # Con el grupo que se guardó al lanzarla: si el arnés muere, el siguiente arranque la recoge.
+        proceso = fondo.adoptar(proc, captured, args['argv'], cwd, sandbox, str(args.get('purpose') or ''),
+                                grupo=self.runtime.task.get('process_group'))
         segundos = int(self.command_timeout(args))
         fondo.evento('La orden sigue tras ' + str(segundos) + ' s y pasó a segundo plano como ' + proceso.id + ': '
                      + shlex.join(proceso.argv)[:200])
@@ -1768,25 +1770,25 @@ class WorkspaceTools:
                                  desde, presentes):
         """`background: true`: como exec_command de Codex con yield_time_ms. Si el proceso
         sigue vivo pasados unos segundos, queda en segundo plano con su id y el modelo
-        recupera el control; la salida va a un archivo de la sesión (segundo_plano.py)."""
+        recupera el control. Su salida va por una tubería que segundo_plano.py lee y guarda
+        con tope en un archivo de la sesión."""
         from ... import segundo_plano
-        ident, ruta, descriptor = fondo.nuevo_registro()
+        ident, salida = fondo.nuevo_registro()
         try:
             proc = await asyncio.create_subprocess_exec(*launch, cwd=cwd, env=env, stdin=asyncio.subprocess.DEVNULL,
-                                                        stdout=descriptor, stderr=descriptor,
-                                                        start_new_session=True)
+                                                        stdout=asyncio.subprocess.PIPE,
+                                                        stderr=asyncio.subprocess.STDOUT, start_new_session=True)
         except (OSError, ValueError) as exc:
+            salida.borrar()
             message = str(exc) or type(exc).__name__
             result = {'exit_code': None, 'output': message, 'truncated': False, 'error': message,
                       'exception': type(exc).__name__, **({'sandbox': sandbox} if sandbox else {}), **(extra or {})}
             return self._record_command_result(args, result, revision, False, cwd, exception=True)
-        finally:
-            os.close(descriptor)
-        proceso = fondo.registrar(ident, proc, args['argv'], cwd, sandbox, ruta, str(args.get('purpose') or ''))
-        try:
-            await asyncio.wait_for(proc.wait(), min(segundo_plano.ESPERA_INICIAL, self.command_timeout(args)))
-        except asyncio.TimeoutError:
-            pass
+        proceso = fondo.registrar(ident, proc, args['argv'], cwd, sandbox, salida, str(args.get('purpose') or ''),
+                                  grupo=registro_de_grupo(proc.pid, desde))
+        await esperar_salida(proc, min(segundo_plano.ESPERA_INICIAL, self.command_timeout(args)))
+        if proc.returncode is not None:
+            await proceso.vaciar()  # lo que quedaba en la tubería
         texto, fin, recortado = proceso.salida(0)
         proceso.leido = fin
         fondo.aviso()  # la app ve ya sus primeras líneas
