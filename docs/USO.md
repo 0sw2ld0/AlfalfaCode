@@ -307,8 +307,8 @@ Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos 
 
 ```jsonl
 {"pacai":"0.3","id":"c_1","type":"hello","session":"s_0123456789abcdef","sender":"client","seq":1,"time":"2026-11-15T10:00:00Z","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"]}}
-{"pacai":"0.3","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.21"}}}
-{"pacai":"0.3","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.21"}}}
+{"pacai":"0.3","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.22"}}}
+{"pacai":"0.3","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.22"}}}
 {"pacai":"0.3","id":"c_2","type":"input","session":"s_0123456789abcdef","sender":"client","seq":2,"time":"…","payload":{"blocks":[{"type":"text","text":"Corrige el test de login"}]}}
 {"pacai":"0.3","id":"m_a3","type":"run_started","…":"…","payload":{"input_id":"c_2"}}
 {"pacai":"0.3","id":"m_a4","type":"tool_start","…":"…","payload":{"run_id":"m_a3","name":"run_command","arguments":{"argv":["pytest","-q"],"purpose":"Probar"},"side":"agent","title":"Ejecutar pytest -q"}}
