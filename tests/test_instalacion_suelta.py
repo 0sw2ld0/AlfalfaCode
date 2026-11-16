@@ -206,3 +206,15 @@ def test_con_feed_local_solo_vale_un_dmg_local(tmp_path):
     feed.write_text('{"version": "9.9.9", "url": "https://evil.example/x.dmg", "sha256": "%s"}' % ('0' * 64))
     r = _sh(tmp_path / 'home', ALFALFA_FEED='file://' + str(feed))
     assert r.returncode != 0 and 'sólo vale un DMG file://' in r.stderr
+
+
+def test_en_linux_dice_como_instalar_el_motor_con_pipx(tmp_path):
+    """Antes decía «sólo funciona en macOS»; el motor funciona en Linux, instalado con pipx."""
+    bin_ = tmp_path / 'bin'
+    bin_.mkdir()
+    (bin_ / 'uname').write_text('#!/bin/sh\necho Linux\n')
+    (bin_ / 'uname').chmod(0o755)
+    r = _sh(tmp_path / 'home', PATH=str(bin_) + ':/usr/bin:/bin:/usr/sbin:/sbin')
+    assert r.returncode != 0
+    assert 'pipx install' in r.stderr and 'bubblewrap' in r.stderr and 'docs/USO.md#linux' in r.stderr
+    assert not (tmp_path / 'home' / '.local').exists()

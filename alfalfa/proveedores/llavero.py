@@ -42,6 +42,11 @@ def _security():
     return shutil.which('security') or '/usr/bin/security'
 
 
+def disponible():
+    """¿Hay dónde guardar claves? Sólo el Llavero de macOS; fuera, las claves van en variables de entorno."""
+    return _almacen is not None or _security() is not None
+
+
 # Los compatibles con OpenAI del catálogo guardan su clave con su id (`openrouter`).
 _CUENTA = re.compile(r'^[a-z0-9][a-z0-9-]{0,63}$')
 

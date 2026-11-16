@@ -316,3 +316,19 @@ def test_un_modelo_de_ollama_con_el_nombre_de_un_proveedor_sigue_en_ollama(con_c
     assert proveedores.separar(filas['deepseek/deepseek-r1:7b']['name']) == ('ollama', 'deepseek/deepseek-r1:7b')
     assert filas['huihui/gemma:1b']['name'] == 'huihui/gemma:1b'
     assert proveedores.para_modelo('ollama/deepseek/deepseek-r1:7b')[0].id == 'ollama'
+
+
+@pytest.mark.parametrize('proveedor,variable', [('openai', 'OPENAI_API_KEY'), ('nube', 'NUBE_API_KEY')])
+def test_sin_llavero_dice_la_variable_antes_de_pedir_la_clave(con_catalogo, monkeypatch, capsys,  # noqa: F811
+                                                              proveedor, variable):
+    """En Linux no hay Llavero: se escribía la clave para luego leer «usa la variable de entorno del
+    proveedor», sin decir cuál."""
+    monkeypatch.setattr(llavero, '_almacen', None)
+    monkeypatch.setattr(llavero, '_security', lambda: None)
+    args = SimpleNamespace(proveedores=False, guardar_clave=proveedor, borrar_clave=None, proveedor_por_defecto=None,
+                           fijar_url=None, activar_codigo=False, cuota=False, json=False, catalogo=False)
+    entrada = io.StringIO('sk-sin-leer-123456\n')
+    assert orden.orden(args, entrada=entrada) == 1
+    error = capsys.readouterr().err
+    assert variable in error and 'docs/USO.md' in error and 'sk-sin-leer' not in error
+    assert entrada.read() == 'sk-sin-leer-123456\n', 'no se pide la clave'

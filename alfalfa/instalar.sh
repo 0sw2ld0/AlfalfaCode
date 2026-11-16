@@ -177,7 +177,15 @@ main() {
 }
 
 comprobar_mac() {
-  [ "$(uname -s)" = "Darwin" ] || falla "AlfalfaCode sólo funciona en macOS."
+  case "$(uname -s)" in
+    Darwin) ;;
+    # Este guion instala la app de Mac; en Linux el motor se instala con pipx.
+    Linux) falla "este guion instala la app de Mac. En Linux, instala el motor con pipx:
+  sudo apt install -y pipx git bubblewrap
+  pipx install \"git+https://github.com/$REPO@v<versión>\"
+Pasos, sandbox y claves: https://github.com/$REPO/blob/main/docs/USO.md#linux" ;;
+    *) falla "AlfalfaCode funciona en macOS y en Linux (en Windows, con WSL2)." ;;
+  esac
   # Bajo Rosetta, uname -m dice x86_64 aunque el Mac sea Apple Silicon.
   [ "$(uname -m)" = "arm64" ] || [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ] \
     || falla "AlfalfaCode necesita un Mac con Apple Silicon (M1 o posterior)."

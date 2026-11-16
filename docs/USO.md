@@ -837,3 +837,122 @@ el permiso de sesión guardado. Las órdenes incluyen el identificador de su
 registro de ejecución para consultar el detalle cuando haga falta. El JSONL
 omite argumentos, mensajes, salidas y contenido de archivos. Se guarda
 localmente y queda fuera del repositorio.
+
+## Linux
+
+El motor (`alfalfa`) también corre en Linux, con los mismos modos que en el Mac: un
+encargo desde la terminal (por SSH, por ejemplo), `alfalfa "encargo"` desde un guion y
+el control por stdio (`--stdio` y `--pacai`). La app de Mac y CuyBrowser no existen en
+Linux. Está probado en Ubuntu 24.04 con Python 3.12. En Windows, usa WSL2 con Ubuntu
+24.04 y sigue estos mismos pasos; una versión nativa sería otro proyecto.
+
+### Linux: instalar
+
+Hace falta Python 3.11 o posterior, git y bubblewrap. Con pipx:
+
+```bash
+sudo apt update
+sudo apt install -y pipx git bubblewrap
+pipx ensurepath
+pipx install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.22"
+```
+
+Cambia `v0.99.22` por la [última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest).
+Abre otra terminal para que `~/.local/bin` entre en el PATH y comprueba con
+`alfalfa --version`. Para actualizar, `pipx install --force` con la versión nueva; para
+quitarlo, `pipx uninstall alfalfa` (tus sesiones de `~/.alfalfa` se quedan).
+
+Sin pipx, en un venv propio:
+
+```bash
+python3 -m venv ~/.local/share/alfalfa-venv
+~/.local/share/alfalfa-venv/bin/pip install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.22"
+mkdir -p ~/.local/bin && ln -sf ~/.local/share/alfalfa-venv/bin/alfalfa ~/.local/bin/alfalfa
+```
+
+`instalar.sh` no sirve en Linux: baja y comprueba la app firmada de Mac, y en Linux sólo
+remite aquí.
+
+### Linux: el sandbox
+
+Las órdenes del agente, los hooks, los servidores MCP por stdio y los linters corren en
+bubblewrap (`bwrap`), con la misma política que Seatbelt en el Mac:
+
+- leen todo el disco y sólo escriben en la carpeta de trabajo, `$TMPDIR` y `/tmp`;
+- `.git` no se puede mover ni borrar, y sus `hooks` y `config` son de solo lectura. Ramas,
+  commits y stash funcionan sin pedir permiso;
+- el hogar `~/.alfalfa` es de solo lectura;
+- sin red salvo un permiso «red». Además de un espacio de red propio, un filtro seccomp
+  niega abrir sockets, también los Unix: así una orden no llega a Docker, a tmux ni al bus
+  de la sesión;
+- sin capacidades, también si AlfalfaCode corre como root, y con su propio espacio de
+  procesos: no ve el entorno de AlfalfaCode, donde están las claves.
+
+Si `bwrap` falta o no arranca, cada orden pide el permiso «SIN SANDBOX», como en el Mac
+cuando falla Seatbelt.
+
+**Ubuntu 23.10 y posteriores, 24.04 incluida,** limitan con AppArmor los espacios de
+nombres de usuario sin privilegios, y bwrap los necesita. Como usuario normal falla con
+`setting up uid map: Permission denied` o `loopback: Failed RTM_NEWADDR`, y AlfalfaCode
+lo dice. Se arregla una vez, con sudo, dándole a `/usr/bin/bwrap` un perfil que se lo
+permita, como Ubuntu hace con otros programas que los usan:
+
+```bash
+sudo tee /etc/apparmor.d/bwrap >/dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/bwrap>
+}
+EOF
+```
+
+```bash
+sudo apparmor_parser -r /etc/apparmor.d/bwrap
+```
+
+Para comprobarlo: `bwrap --ro-bind / / --unshare-user --unshare-net true && echo bien`.
+Como root no hace falta el perfil, pero es mejor un usuario normal: lo que saliera del
+sandbox tendría sus permisos y no los de root. Dentro de Docker, bwrap necesita además
+`--security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt
+systempaths=unconfined`.
+
+Diferencias con el Mac, porque un montaje sólo protege lo que existe al lanzar la orden:
+
+- En el Mac una orden tampoco puede crear un `.git` ni una carpeta de instrucciones
+  (`.alfalfa`, `.agents`, `.claude`, `.codex`) nuevos; en Linux se protegen los que ya
+  existen. Si a un `.git` le faltan `hooks` o `config`, se crean vacíos antes de la orden.
+- Cada orden tiene su propio espacio de procesos: lo que deja en segundo plano con `&`
+  muere con ella, y las órdenes mueren con AlfalfaCode. Para dejar un servidor abierto
+  entre turnos está `run_command` en segundo plano, como en el Mac.
+- Sin macOS no hay PDFKit, sips ni sourcekit-lsp aislado: un PDF sólo llega a los modelos
+  que leen PDF, las imágenes grandes no se reducen y no hay diagnósticos de Swift.
+
+### Linux: claves
+
+No hay Llavero: `alfalfa --guardar-clave` lo dice, sin pedir la clave, y nombra la
+variable de entorno donde va:
+
+| Proveedor | Variable |
+|---|---|
+| Ollama Cloud | `OLLAMA_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| OpenCode Zen | `OPENCODE_API_KEY` |
+| otro compatible del catálogo | la que dice `alfalfa --proveedores --json` (`variable`) |
+
+Por SSH, se exporta en la sesión antes de usar `alfalfa`. En Ubuntu, con un espacio
+delante, bash no la guarda en el historial:
+
+```bash
+ export OLLAMA_API_KEY='…'
+```
+
+Con `--pacai`, `--stdio` o desde otro programa, el proceso que lanza `alfalfa` le pasa la
+variable en su entorno. Las órdenes del agente no la reciben: el arnés les da un entorno
+mínimo y el sandbox no les deja leer el de AlfalfaCode. `alfalfa --proveedores` dice qué
+proveedores tienen clave, sin enseñarla.

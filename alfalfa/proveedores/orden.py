@@ -32,6 +32,7 @@ from .ollama import validar_url
 
 # Qué proveedor guarda qué en el Llavero; cada uno su cuenta.
 CON_CLAVE = ('ollama', 'openai', 'anthropic')
+VARIABLES = {'ollama': 'OLLAMA_API_KEY', 'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY'}
 CON_URL = ('ollama', 'alfalfa')
 
 
@@ -140,6 +141,12 @@ def orden(args, entrada=None):
                 from .compatible import Compatible
                 # La clave queda atada a la URL de ahora: si el catálogo la cambia, no la sigue.
                 url = Compatible(proveedor).url()
+            if not llavero.disponible():
+                # Antes de pedirla: en Linux se escribía la clave para luego oír que no había dónde guardarla.
+                variable = Compatible(proveedor).variable() if compatible else VARIABLES[proveedor]
+                raise llavero.LlaveroNoDisponible(
+                    'Aquí no hay Llavero de macOS: la clave de ' + proveedor + ' va en la variable de entorno '
+                    + variable + ' (docs/USO.md, «Linux»).')
             llavero.guardar(proveedor, _leer_secreto(proveedor, entrada))
             if compatible:
                 configuracion.cambiar(proveedor, 'url', url)
