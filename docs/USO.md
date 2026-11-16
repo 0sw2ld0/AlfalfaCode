@@ -933,8 +933,11 @@ Diferencias con el Mac, porque un montaje sólo protege lo que existe al lanzar 
 - El texto de un PDF adjunto lo saca `pdftotext`, de poppler-utils, dentro de bubblewrap y
   sin red, en lugar de PDFKit. Sin poppler-utils, o si bwrap no arranca, un PDF sólo llega
   a los modelos que leen PDF.
-- Sin sips las imágenes grandes no se reducen, y sin macOS no hay sourcekit-lsp aislado ni
-  diagnósticos de Swift.
+- Las imágenes adjuntas las mide, reduce a 2048 px y pasa a PNG Pillow, que pipx instala
+  con AlfalfaCode sólo en Linux, en un proceso aparte dentro de bubblewrap y sin red, en
+  lugar de sips. Si bwrap no arranca, una PNG o JPEG va tal cual y las demás no se
+  adjuntan. Pillow no lee HEIC.
+- Sin macOS no hay sourcekit-lsp aislado ni diagnósticos de Swift.
 
 ### Linux: claves
 

@@ -6,12 +6,20 @@ modelo sepa a cuál se refiere el texto, y la reduce a 2048 px como mucho
 (codex-rs/utils/image). Aquí el texto lleva esas mismas etiquetas, la imagen se
 copia (reducida) a la carpeta de la sesión y, al llamar a Ollama, el mensaje
 lleva sus bytes en base64 en el campo `images` de `/api/chat`.
+
+En macOS mide, reduce y convierte `sips`. En Linux lo hace Pillow, que se instala
+con AlfalfaCode sólo allí, en un proceso aparte aislado y sin red
+(alfalfa.aisladas): sus decodificadores son código nativo que abre un archivo de
+fuera.
 """
 import base64
 import hashlib
+import importlib.util
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 MAX_DIMENSION = 2048
@@ -22,6 +30,35 @@ EXTENSIONES = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic', '.heif', '.tif
 DIRECTAS = {'.png', '.jpg', '.jpeg'}
 ETIQUETA = re.compile(r'<image name=\[Image #(\d+)\] path="([^"\n]+)">')
 CIERRE = '</image>'
+# Pillow en Linux: lo que se decodifica como mucho (una foto de 48 Mpx cabe; una bomba de descompresión, no),
+# lo que puede ocupar la imagen que devuelve y cuánto puede tardar.
+MAX_PIXELES = 50_000_000
+MAX_SALIDA = 64 * 1024 * 1024
+PLAZO = 60
+# Corre en el proceso aislado: argv = ruta, formato (PNG o JPEG), lado máximo y píxeles máximos. Escribe por
+# stdout la imagen reducida (sin ampliar nunca) y girada según su EXIF, o nada si ya sirve tal cual.
+_PILLOW = r'''
+import io, sys, warnings
+from PIL import Image, ImageOps
+ruta, formato, lado = sys.argv[1], sys.argv[2], int(sys.argv[3])
+Image.MAX_IMAGE_PIXELS = int(sys.argv[4])
+warnings.simplefilter('error', Image.DecompressionBombWarning)
+imagen = Image.open(ruta)
+if max(imagen.size) <= lado and imagen.format == formato:
+    sys.exit(0)
+imagen.draft(None, (lado, lado))
+if imagen.mode in ('1', 'P') and max(imagen.size) > lado:
+    imagen = imagen.convert('RGBA')
+imagen.thumbnail((lado, lado), Image.Resampling.LANCZOS)
+imagen = ImageOps.exif_transpose(imagen)
+validos = ('L', 'RGB', 'CMYK') if formato == 'JPEG' else ('1', 'L', 'LA', 'I', 'I;16', 'P', 'RGB', 'RGBA')
+if imagen.mode not in validos:
+    imagen = imagen.convert('RGBA' if formato == 'PNG' and 'A' in imagen.mode else 'RGB')
+salida = io.BytesIO()
+opciones = {'quality': 90} if formato == 'JPEG' else {}
+imagen.save(salida, formato, icc_profile=imagen.info.get('icc_profile'), **opciones)
+sys.stdout.buffer.write(salida.getvalue())
+'''
 
 
 class ImagenInvalida(ValueError):
@@ -64,6 +101,8 @@ def preparar(ruta, destino):
     copia = destino / (resumen + extension)
     if copia.exists():
         return copia
+    if not shutil.which('sips') and sys.platform.startswith('linux'):
+        return _preparar_con_pillow(origen, copia, extension)
     orden = ['sips']
     if max(_dimensiones(origen)) > MAX_DIMENSION:
         orden += ['-Z', str(MAX_DIMENSION)]  # sólo reduce: -Z también ampliaría las pequeñas
@@ -84,6 +123,49 @@ def preparar(ruta, destino):
         shutil.copyfile(origen, copia)
     copia.chmod(0o600)
     return copia
+
+
+def _preparar_con_pillow(origen, copia, extension):
+    """Como con sips: si no se puede medir, una PNG o JPEG se copia tal cual; otro formato no se adjunta."""
+    try:
+        datos = _con_pillow(origen, 'JPEG' if extension in ('.jpg', '.jpeg') else 'PNG')
+    except ImagenInvalida as exc:
+        if extension != origen.suffix.lower():
+            raise ImagenInvalida(f'No se pudo convertir {origen.name} a PNG: {exc}') from None
+        datos = None
+    temporal = copia.with_name(copia.name + '.tmp')
+    if datos is None:
+        shutil.copyfile(origen, temporal)
+    else:
+        temporal.write_bytes(datos)
+    temporal.chmod(0o600)
+    os.replace(temporal, copia)
+    return copia
+
+
+def _hay_pillow():
+    return importlib.util.find_spec('PIL') is not None
+
+
+def _con_pillow(origen, formato):
+    """La imagen reducida o convertida a `formato`, o None si ya sirve; ImagenInvalida si no se pudo."""
+    from .aisladas import Cortada, correr
+    from .seatbelt import SandboxUnavailable
+    if not _hay_pillow():
+        raise ImagenInvalida('falta Pillow, que AlfalfaCode instala en Linux (pip install pillow)')
+    try:
+        codigo, salida, error = correr([sys.executable, '-I', '-c', _PILLOW, str(origen), formato,
+                                        str(MAX_DIMENSION), str(MAX_PIXELES)], tope=MAX_SALIDA, plazo=PLAZO)
+    except SandboxUnavailable as exc:
+        raise ImagenInvalida('Pillow sólo corre en el sandbox y no arrancó (' + str(exc)[:300] + ')') from None
+    except Cortada:
+        raise ImagenInvalida('la imagen reducida pesa demasiado') from None
+    except TimeoutError:
+        raise ImagenInvalida('Pillow tardó demasiado en leerla') from None
+    if codigo != 0:
+        lineas = error.strip().splitlines()
+        raise ImagenInvalida('Pillow no pudo leerla' + (': ' + lineas[-1][:200] if lineas else ''))
+    return salida or None
 
 
 def _dimensiones(ruta):
