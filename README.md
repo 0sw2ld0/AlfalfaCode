@@ -50,6 +50,10 @@ Ninguna de las dos borra `~/.alfalfa`, donde viven tus sesiones y ajustes. El pa
 paso, las variables de `instalar.sh` y la instalación desde el código están en la
 [guía de instalación](docs/guia/instalar.md).
 
+En Linux (Ubuntu 24.04, también en WSL2) el motor se instala con pipx y aísla sus órdenes
+con bubblewrap; los pasos, el perfil de AppArmor y las claves están en
+[Linux](docs/USO.md#linux).
+
 ## Primeros pasos
 
 1. Instala y abre la app, o en la terminal:
