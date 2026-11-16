@@ -9,6 +9,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from ..seatbelt import nombre_del_sandbox, temporal_del_sistema
+
 # Lecturas que Manual y «Aceptar ediciones» dejan pasar sin preguntar. Es una lista de
 # permitidos por programa y opción, no de prohibidos: lo que no se reconoce entero pregunta.
 # La orden corre igualmente en el sandbox (sin red, sin escribir fuera de la carpeta); esta
@@ -298,11 +300,11 @@ class TerminalApproval:
                         '¿Guardarlo? [s/N] ' if args.get('motivo') == 'aprendizaje' else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
                         if unsandboxed else
-                        'Sandbox Seatbelt con red: escribe sólo en la carpeta, $TMPDIR y /private/tmp. ¿Ejecutar? '
-                        '[s/N] '
+                        'Sandbox ' + nombre_del_sandbox() + ' con red: escribe sólo en la carpeta, $TMPDIR y '
+                        + temporal_del_sistema() + '. ¿Ejecutar? [s/N] '
                         if args.get('red') else
-                        'Sandbox Seatbelt: escribe sólo en la carpeta, $TMPDIR y /private/tmp; sin red. ¿Ejecutar? '
-                        '[s/N] ')
+                        'Sandbox ' + nombre_del_sandbox() + ': escribe sólo en la carpeta, $TMPDIR y '
+                        + temporal_del_sistema() + '; sin red. ¿Ejecutar? [s/N] ')
             if args.get('para_sesion'):
                 question = question.replace('[s/N] ', '[s/t/N] (t: también el resto de la sesión) ')
             if args.get('prefijo'):

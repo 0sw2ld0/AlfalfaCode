@@ -13,6 +13,7 @@ from alfalfa import contenido_externo as seguridad
 from alfalfa.busqueda_sesiones import lectura, redaccion
 from alfalfa.permisos import modos
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.seatbelt import temporal_del_sistema
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
 from tests.casa import casa_real
@@ -813,8 +814,10 @@ def temporales(tmp_path, monkeypatch):
 
 def test_las_temporales_del_sandbox_cuentan_como_la_carpeta(temporales):
     raiz, tmpdir = temporales
-    assert seguridad.raices_temporales(raiz) == [str(tmpdir), os.path.realpath('/private/tmp')]
-    for ruta in ('/private/tmp/pacai_readme_check.py', '/tmp/x.py', str(tmpdir / 'x.py')):
+    # /private/tmp en macOS y /tmp en Linux: el temporal común del sandbox del sistema.
+    comun = os.path.realpath(temporal_del_sistema())
+    assert seguridad.raices_temporales(raiz) == [str(tmpdir), comun]
+    for ruta in (os.path.join(comun, 'pacai_readme_check.py'), '/tmp/x.py', str(tmpdir / 'x.py')):
         assert seguridad.riesgo('write_file', {'path': ruta, 'content': 'x'}, raiz) is None, ruta
 
 
@@ -850,6 +853,7 @@ async def test_tras_la_web_un_temporal_no_saca_tarjeta(rt, temporales):
 
     rt.approval_policy = aprobar
     with pytest.raises(ValueError, match='sale del workspace'):
-        await rt.tools.call('write_file', {'path': '/private/tmp/pacai_readme_check.py', 'content': 'x',
+        await rt.tools.call('write_file', {'path': os.path.join(temporal_del_sistema(), 'pacai_readme_check.py'),
+                                           'content': 'x',
                                            'expected_sha256': 'NEW'})
     assert not [p for p in permisos if p.get('motivo') == seguridad.MOTIVO]

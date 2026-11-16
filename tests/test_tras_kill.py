@@ -25,7 +25,8 @@ from alfalfa.proveedores.nativo.runtime import NativeRuntime
 async def work(self, prompt):
     self.task['status'] = 'running'
     await self.tools.call('run_command', dict(argv=[sys.executable, '-c',
-        "import os,time; open('hijo.pid','w').write(str(os.getpid())); time.sleep(120)"], purpose='larga'))
+        "import os,time; open('hijo.pid','w').write(str(os.getpid())); time.sleep(120)", 'alfalfa-hijo-' + 'tras-kill'],
+        purpose='larga'))
 with patch.object(NativeRuntime, 'run', work):
     sys.exit(main(['--stdio', '--auto', 'larga']))
 '''
@@ -37,6 +38,23 @@ def vivo(pid):
         return True
     except ProcessLookupError:
         return False
+
+
+def pid_del_hijo():
+    """El pid de la orden visto desde fuera. Con bwrap la orden tiene su propio espacio de procesos y el
+    que escribe en hijo.pid es el de dentro; además el propio bwrap lleva la orden entre sus argumentos."""
+    marca = 'alfalfa-hijo-tras-kill'
+    pids = subprocess.run(['pgrep', '-f', marca], capture_output=True, text=True).stdout.split()
+    for pid in pids:
+        orden = subprocess.run(['ps', '-ww', '-o', 'args=', '-p', pid], capture_output=True, text=True).stdout.strip()
+        if orden.startswith(sys.executable + ' -c ') and orden.endswith(marca):
+            return int(pid)
+    raise AssertionError('no se encontró la orden entre ' + str(pids))
+
+
+def con_bwrap():
+    from alfalfa.seatbelt import sandbox_del_sistema
+    return sandbox_del_sistema('.').etiqueta == 'bwrap'
 
 
 @pytest.fixture
@@ -54,7 +72,7 @@ def muerto_de_golpe(tmp_path, monkeypatch):
         fin = time.monotonic() + 20
         while not (tmp_path / 'hijo.pid').exists() and time.monotonic() < fin:
             time.sleep(0.05)
-        hijo = int((tmp_path / 'hijo.pid').read_text())
+        hijo = pid_del_hijo()
         time.sleep(0.3)
         motor.kill()  # kill -9: ni finally ni guardado
         motor.wait(timeout=10)
@@ -80,7 +98,15 @@ def test_el_listado_no_dice_running_si_nadie_trabaja_en_ella(muerto_de_golpe):
 
 def test_al_reabrirla_se_recoge_la_orden_y_se_cierra_el_turno(muerto_de_golpe):
     ident, hogar, hijo = muerto_de_golpe
-    assert vivo(hijo), 'la orden quedó huérfana'
+    if con_bwrap():
+        # bwrap (--die-with-parent) se lleva la orden con el motor: no queda huérfana que recoger.
+        fin = time.monotonic() + 10
+        while vivo(hijo) and time.monotonic() < fin:
+            time.sleep(0.05)
+        assert not vivo(hijo), 'la orden sigue viva sin su motor'
+    else:
+        # Seatbelt la deja huérfana (viva) hasta que se reabre la sesión.
+        assert vivo(hijo), 'la orden quedó huérfana'
     m = TerminalManager(None, resume=ident, home=hogar, wait=True)
     try:
         assert m.task['status'] == 'interrupted'

@@ -25,12 +25,14 @@ from alfalfa.mcp_cliente.gestor import BUSCAR, ESPEC_BUSCAR, METODO, McpManager,
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.stdio import Transport
 from alfalfa.terminal import TerminalManager
+from tests.sandbox_del_sistema import motivo_sin_sandbox, procesos_con
 
 SERVIDOR = str(Path(__file__).with_name('mcp_servidor_prueba.py'))
 SERVER = Path(__file__).resolve().parents[1]
-# Lo añaden macOS (CoreFoundation) y Python (PEP 538) al arrancar; no se heredan.
-DEL_SISTEMA = {'__CF_USER_TEXT_ENCODING', 'LC_CTYPE'}
-macos = pytest.mark.skipif(sys.platform != 'darwin', reason='stdio corre en Seatbelt, sólo en macOS')
+# Lo añaden macOS (CoreFoundation), Python (PEP 538) y bwrap (PWD, la carpeta) al arrancar; no se heredan.
+DEL_SISTEMA = {'__CF_USER_TEXT_ENCODING', 'LC_CTYPE', 'PWD'}
+# Los servidores stdio corren en el sandbox del sistema (Seatbelt o bwrap); sin él no se inician.
+con_sandbox = pytest.mark.skipif(motivo_sin_sandbox() is not None, reason=str(motivo_sin_sandbox()))
 
 
 def stdio(*args, **campos):
@@ -240,7 +242,7 @@ def test_sin_archivo_o_en_solo_lectura_no_hay_cliente(tmp_path, monkeypatch):
     m.close()
 
 
-@macos
+@con_sandbox
 def test_servidor_invalido_no_se_lanza(tmp_path, monkeypatch):
     marca = tmp_path / 'lanzado'
     s = Sesion(tmp_path, monkeypatch, {
@@ -277,7 +279,7 @@ def test_nombres_con_prefijo_normalizados_unicos_y_reversibles():
     assert configuracion.ID.fullmatch('srv_x') is None
 
 
-@macos
+@con_sandbox
 def test_colisiones_reales_y_seleccion_ambigua(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {
         'uno': stdio('--extra', 'a.b,a_b', confianza=['a.b', 'a_b']), 'dos': stdio()})
@@ -306,7 +308,7 @@ def test_colisiones_reales_y_seleccion_ambigua(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- habilitación
 
-@macos
+@con_sandbox
 def test_deshabilitada_no_se_busca_carga_expone_ni_ejecuta(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio(
         habilitadas=['contar', 'entorno'], deshabilitadas=['contar'], directas=['contar'], confianza=['contar'])})
@@ -434,7 +436,7 @@ def test_ref_externo_del_esquema_de_salida_no_se_descarga(monkeypatch):
     assert enviadas == ['t', 'u', 'u', 'u'] and vigilado.urls == []
 
 
-@macos
+@con_sandbox
 def test_esquema_grande_real_se_rechaza_aunque_sea_directa(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--grande', directas=['enorme', 'contar'],
                                                        confianza=['enorme'])})
@@ -457,8 +459,11 @@ def test_esquema_grande_real_se_rechaza_aunque_sea_directa(tmp_path, monkeypatch
 # ---------------------------------------------------------------- permisos con contador
 
 async def _matar(sesion):
-    pid = int((sesion.root / 'servidor.pid').read_text())
-    os.kill(pid, signal.SIGKILL)
+    # El pid que anota el servidor es el de dentro del sandbox: se busca desde fuera por su archivo.
+    pids = procesos_con(str(sesion.root / 'servidor.pid'))
+    assert pids, 'no se encontró el servidor'
+    for pid in pids:
+        os.kill(pid, signal.SIGKILL)
     await asyncio.wait_for(sesion.m.mcp.conexiones['prueba'].cerrada.wait(), 10)
 
 
@@ -476,11 +481,11 @@ CASOS = {
 }
 
 
-@macos
+@con_sandbox
 @pytest.mark.parametrize('caso', CASOS)
 def test_contador_de_ejecuciones_por_decision(tmp_path, monkeypatch, caso):
     campos, opciones, esperadas, error = CASOS[caso]
-    s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--pid', 'servidor.pid', **campos),
+    s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--pid', str(tmp_path / 'project' / 'servidor.pid'), **campos),
                                        'otro': stdio(confianza=['contar'])}, **opciones)
 
     async def run():
@@ -511,7 +516,7 @@ def test_contador_de_ejecuciones_por_decision(tmp_path, monkeypatch, caso):
     assert len(resueltos) == 1 and resueltos[0]['aprobado'] is (caso in ('aprobada', 'desconexion_durante_permiso'))
 
 
-@macos
+@con_sandbox
 @pytest.mark.parametrize('modo', ['cliente_cancela', 'tarea_cancelada'])
 def test_cancelacion_con_permiso_pendiente_no_ejecuta(tmp_path, monkeypatch, modo):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio()}, respuesta=None)
@@ -538,7 +543,7 @@ def test_cancelacion_con_permiso_pendiente_no_ejecuta(tmp_path, monkeypatch, mod
     assert contador(s.root) == 0
 
 
-@macos
+@con_sandbox
 def test_terminal_sin_tty_niega_aunque_haya_auto(tmp_path, monkeypatch):
     root = tmp_path / 'project'
     root.mkdir()
@@ -564,7 +569,7 @@ def test_terminal_sin_tty_niega_aunque_haya_auto(tmp_path, monkeypatch):
     assert 'Argumentos: {"nota": "auto"}' in pregunta
 
 
-@macos
+@con_sandbox
 def test_argumentos_invalidos_y_esquema_no_cargado_no_ejecutan(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio(confianza=['contar'])})
 
@@ -585,7 +590,7 @@ def test_argumentos_invalidos_y_esquema_no_cargado_no_ejecutan(tmp_path, monkeyp
 
 # ---------------------------------------------------------------- ciclo de vida y concurrencia
 
-@macos
+@con_sandbox
 def test_caida_a_mitad_de_llamada_queda_incierta_sin_reintento(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio(confianza=['morir', 'contar'])})
 
@@ -604,7 +609,7 @@ def test_caida_a_mitad_de_llamada_queda_incierta_sin_reintento(tmp_path, monkeyp
     assert contador(s.root) == 0
 
 
-@macos
+@con_sandbox
 def test_plazo_cancelacion_y_concurrencia_sin_cruzar_respuestas(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio(tiempo_herramienta=1, confianza=[
         'lento', 'contar', 'herramienta_001', 'herramienta_002'])})
@@ -638,14 +643,16 @@ def test_plazo_cancelacion_y_concurrencia_sin_cruzar_respuestas(tmp_path, monkey
     assert (s.root / 'lento.txt').read_text() == '1\n1\n'
 
 
-@macos
+@con_sandbox
 def test_cierre_termina_el_proceso_y_reanudar_no_repite(tmp_path, monkeypatch):
-    s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--pid', 'servidor.pid')})
+    marca = str(tmp_path / 'project' / 'servidor.pid')
+    s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--pid', marca)})
 
     async def run():
         rt = await s.iniciar()
         try:
             await s.cargar('mcp__prueba__contar')
+            assert procesos_con(marca), 'el servidor no está en marcha'
             # Una llamada que quedó en curso al caer el proceso se informa como incierta.
             rt.state['pending'] = [dict(function={'name': 'mcp__prueba__contar', 'arguments': {'nota': 'x'}},
                                         status='executing')]
@@ -655,19 +662,13 @@ def test_cierre_termina_el_proceso_y_reanudar_no_repite(tmp_path, monkeypatch):
             await s.cerrar()
     correr(run())
     assert contador(s.root) == 0
-    pid = int((s.root / 'servidor.pid').read_text())
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            break
+    while procesos_con(marca) and time.monotonic() < deadline:
         time.sleep(0.05)
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
+    assert procesos_con(marca) == []
 
 
-@macos
+@con_sandbox
 def test_inicio_fallido_o_lento_da_diagnostico(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {
         'inexistente': dict(orden='/no/existe/servidor', tiempo_inicio=10),
@@ -691,7 +692,7 @@ def test_inicio_fallido_o_lento_da_diagnostico(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- medición de contexto
 
-@macos
+@con_sandbox
 def test_medicion_al_cargar_retirar_y_reconstruir(tmp_path, monkeypatch):
     s = Sesion(tmp_path, monkeypatch, {'prueba': stdio('--herramientas', '294', directas=['entorno'])})
     medidas = {}
@@ -783,7 +784,7 @@ def primer_payload(tmp_path, monkeypatch, con_mcp):
     return modelo.payloads[0], s
 
 
-@macos
+@con_sandbox
 def test_extremo_a_extremo_300_herramientas_diferidas(tmp_path, monkeypatch):
     # La memoria propia (almacén «entorno») se apaga: aquí sólo se mide lo que declara MCP.
     monkeypatch.setenv('ALFALFA_APRENDER', '0')
@@ -896,7 +897,7 @@ def servidor_http(directorio):
     return proc, numero, cabeceras
 
 
-@macos
+@con_sandbox
 def test_entorno_minimo_secretos_redactados_y_http_con_sus_cabeceras(tmp_path, monkeypatch):
     for nombre, valor in CENTINELAS.items():
         monkeypatch.setenv(nombre, valor)
@@ -958,7 +959,7 @@ def test_entorno_minimo_secretos_redactados_y_http_con_sus_cabeceras(tmp_path, m
 
 # ---------------------------------------------------------------- sandbox
 
-@macos
+@con_sandbox
 def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
     escucha = socket.socket()
     escucha.bind(('127.0.0.1', 0))
@@ -987,7 +988,9 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
         correr(run())
     finally:
         escucha.close()
-    assert not (tmp_path / 'project' / '.git' / 'config').exists()
+    config = tmp_path / 'project' / '.git' / 'config'
+    # Seatbelt niega crearlo; bwrap lo crea vacío y de solo lectura antes de lanzar (seatbelt/bwrap.py).
+    assert not config.exists() or config.read_text() == ''
     assert (tmp_path / 'project' / 'permitido.txt').exists()
     assert len(s.eventos('permiso')) == 2
 
@@ -995,13 +998,14 @@ def test_lanzamiento_en_seatbelt_y_aprobar_no_amplia(tmp_path, monkeypatch):
 def test_sin_sandbox_el_servidor_stdio_no_arranca(tmp_path, monkeypatch):
     marca = tmp_path / 'lanzado'
     s = Sesion(tmp_path, monkeypatch, {'prueba': dict(orden='/usr/bin/touch', argumentos=[str(marca)])})
-    from alfalfa.seatbelt import SandboxUnavailable
+    from alfalfa.seatbelt import SandboxUnavailable, nombre_del_sandbox, sandbox_del_sistema
 
     async def sin_sandbox(self, argv):
         raise SandboxUnavailable('prueba')
 
     async def run():
-        with patch('alfalfa.seatbelt.SeatbeltSandbox.prepare', sin_sandbox):
+        # Seatbelt en macOS y bwrap en Linux: el del sistema es el que no arranca.
+        with patch.object(type(sandbox_del_sistema(str(tmp_path))), 'prepare', sin_sandbox):
             await s.iniciar()
         try:
             assert s.m.mcp.conexiones == {} and s.m.mcp.declaraciones() == []
@@ -1009,15 +1013,16 @@ def test_sin_sandbox_el_servidor_stdio_no_arranca(tmp_path, monkeypatch):
             await s.cerrar()
     correr(run())
     assert not marca.exists()
-    assert any('Sandbox Seatbelt no disponible' in r['texto'] for r in s.eventos('evento'))
+    assert any('Sandbox ' + nombre_del_sandbox() + ' no disponible' in r['texto'] for r in s.eventos('evento'))
 
 
 # ---------------------------------------------------------------- --stdio con proceso real
 
-@macos
+@con_sandbox
 def test_stdio_real_tarjeta_mcp_contexto_y_cierre(tmp_path):
     home = tmp_path / 'home'
-    configurar(home, {'prueba': stdio('--pid', 'servidor.pid')})
+    marca = str(tmp_path / 'project' / 'servidor.pid')
+    configurar(home, {'prueba': stdio('--pid', marca)})
     project = tmp_path / 'project'
     project.mkdir()
     code = '''
@@ -1081,9 +1086,11 @@ with patch.object(NativeRuntime, 'request', request):
     # El evento «Inicio» de la herramienta redacta igual que la tarjeta.
     assert 'CENTINELA-ARG-123' not in json.dumps(rows) + stderr
     assert contador(project) == 1
-    pid = int((project / 'servidor.pid').read_text())
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
+    assert (project / 'servidor.pid').exists()
+    deadline = time.monotonic() + 10
+    while procesos_con(marca) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert procesos_con(marca) == []
 
 
 # ---------------------------------------------------------------- contrato con alfalfa-mac

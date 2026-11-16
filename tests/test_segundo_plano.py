@@ -292,6 +292,10 @@ def test_detener_todos_recoge_al_nieto_que_retiene_la_tuberia(motor):
     """`servidor &`: la orden sale y el nieto sigue escribiendo en su grupo; detener todos lo cierra."""
     from alfalfa.procesos import grupo_vivo
     m, rt, llamar, salida = motor
+    if getattr(rt.process_sandbox, 'etiqueta', None) == 'bwrap':
+        # Con bwrap cada orden tiene su espacio de procesos y el nieto muere al salir ella (test_bwrap.py).
+        # Lo que se prueba aquí es la recogida del arnés, así que la orden sale del sandbox, como permite Si.
+        rt.process_sandbox = None
     resultado = llamar('run_command', argv=PY + [NIETO], purpose='Abrir', background=True)
     assert resultado['exit_code'] == 0
     proceso = m.fondo.procesos['p1']

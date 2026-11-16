@@ -1624,7 +1624,8 @@ class WorkspaceTools:
         # workspace cambió»): GLM repitió cinco veces un diff --check en verde.
         env['GIT_OPTIONAL_LOCKS'] = '0'
         env.update(self.runtime.process_env)
-        if sandbox == 'seatbelt':
+        from ...seatbelt import AISLADAS
+        if sandbox in AISLADAS:
             # La caché de Clang y Swift vive en ~/.cache, fuera de lo que el sandbox deja escribir.
             from ...seatbelt.compiladores import entorno_del_sandbox
             entorno_del_sandbox(env)
@@ -1812,19 +1813,20 @@ class WorkspaceTools:
         """El argv que se lanza y el aislamiento con que se lanza.
 
         Sin sandbox configurado la orden sale tal cual (agentes del integrador). Si
-        Seatbelt falta o no arranca no hay alternativa silenciosa: se pide un
+        Seatbelt (o bwrap en Linux) falta o no arranca no hay alternativa silenciosa: se pide un
         permiso aparte para ejecutar sin aislamiento, y rechazarlo, cancelarlo
         o no responder deja la orden sin lanzar.
         """
         sandbox = self.runtime.process_sandbox
         if sandbox is None:
             return argv, None
-        from ...seatbelt import SandboxUnavailable
+        from ...seatbelt import SandboxUnavailable, nombre_del_sandbox
         try:
-            return await sandbox.prepare(argv), 'seatbelt'
+            return await sandbox.prepare(argv), getattr(sandbox, 'etiqueta', 'seatbelt')
         except SandboxUnavailable as exc:
             reason = str(exc)
-        self.runtime.manager.event(self.runtime.task, 'system', 'Sandbox Seatbelt no disponible: ' + reason)
+        self.runtime.manager.event(self.runtime.task, 'system',
+                                   'Sandbox ' + nombre_del_sandbox() + ' no disponible: ' + reason)
         request = dict(args, sin_sandbox=reason,
                        purpose='SIN SANDBOX (' + reason + '). ' + str(args['purpose']))
         try:
