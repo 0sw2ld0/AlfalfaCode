@@ -28,6 +28,8 @@ CADUCIDAD_APROBACION = 24 * 3600
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
+MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)
+RECORTADO = '… [recortado]'
 MAX_SALIDA = 60000            # caracteres de la salida de una herramienta en un `tool_end`
 EDITORES = frozenset({'write_file', 'edit_file', 'apply_patch'})
 SINTETICA = 'request_permission'
@@ -120,6 +122,37 @@ def argumentos_de(texto: str, datos: dict | None) -> dict:
     return args
 
 
+def _tamano(valor: Any) -> int:
+    return len(json.dumps(valor, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+
+
+def recortar_argumentos(args: dict, limite: int) -> tuple[dict, bool]:
+    """Los argumentos tal cual si caben en `limite` bytes; si no, una copia con los textos más largos recortados
+    (acaban en «… [recortado]») y True. Si ni así caben, se quedan los campos que no son texto largo."""
+    if _tamano(args) <= limite:
+        return args, False
+    copia = json.loads(json.dumps(args))
+    for _ in range(200):
+        cadenas: list[tuple[Any, Any]] = []
+        pendientes = [copia]
+        while pendientes:
+            actual = pendientes.pop()
+            for clave, hijo in (actual.items() if isinstance(actual, dict) else enumerate(actual)):
+                if isinstance(hijo, str) and len(hijo) > 200:
+                    cadenas.append((actual, clave))
+                elif isinstance(hijo, (dict, list)):
+                    pendientes.append(hijo)
+        if not cadenas:
+            break
+        contenedor, clave = max(cadenas, key=lambda par: len(par[0][par[1]]))
+        texto = contenedor[clave].removesuffix(RECORTADO)
+        contenedor[clave] = texto[:len(texto) // 2] + RECORTADO
+        if _tamano(copia) <= limite:
+            return copia, True
+    resto = {k: v for k, v in copia.items() if _tamano(v) <= 1000}
+    return (resto if _tamano(resto) <= limite else {}), True
+
+
 def archivos_del_diff(parche: str) -> list[dict]:
     """`path`, `added` y `removed` de cada archivo de un diff unificado.
 
@@ -160,8 +193,9 @@ def _fallo(datos: dict) -> bool:
 
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
-                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora):
-        self.emisor, self.reloj = emisor, reloj
+                 caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+                 max_argumentos: int = MAX_ARGUMENTOS):
+        self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
         self.herramientas_cliente = set(herramientas_cliente)
         self.caducidad = caducidad
@@ -307,11 +341,11 @@ class Traductor:
         if rol == 'tool':
             datos = campos.get('herramienta')
             if isinstance(datos, dict) and datos.get('fase') == 'inicio':
-                return self._tool_start(self.raiz, texto, datos)
+                return self._tool_start(self.raiz, texto, datos, campos.get('_argumentos'))
             if isinstance(datos, dict) and datos.get('fase') == 'fin':
                 return self._tool_end(self.raiz, datos, texto)
             return []
-        propio = {k: v for k, v in campos.items() if k != 'version'}
+        propio = {k: v for k, v in campos.items() if k not in ('version', '_argumentos')}
         if rol in ('agent', 'assistant') and self._activa(self.raiz):
             return self._mensaje(self.raiz, 'assistant', texto)
         if rol == 'system' and self._activa(self.raiz) and 'compactacion' not in campos and 'tarifa' not in campos:
@@ -319,14 +353,26 @@ class Traductor:
         return self._ext('notice', propio)
 
     # -- herramientas (§4.4) -----------------------------------------------
-    def _tool_start(self, run_id: str | None, texto: str, datos: dict) -> list[dict]:
+    def _tool_start(self, run_id: str | None, texto: str, datos: dict, argumentos: Any = None) -> list[dict]:
+        """`argumentos`: los de la llamada del modelo, ya sin secretos (`Transport.argumentos_herramienta`). Sin
+        ellos (o si no son un objeto JSON) se sacan, como antes, del texto del evento."""
         if not self._activa(run_id):
             return []
         nombre = str(datos.get('nombre') or 'tool')
-        args = argumentos_de(texto, datos)
+        reales = _json_seguro(argumentos) if isinstance(argumentos, dict) else None
+        recortados = False
+        if reales is not None:
+            args, recortados = recortar_argumentos(reales, self.max_argumentos)
+        else:
+            args = argumentos_de(texto, datos)
         payload: dict[str, Any] = {'run_id': run_id, 'name': nombre, 'arguments': args, 'side': 'agent'}
-        if datos.get('descripcion'):
-            payload['title'] = str(datos['descripcion'])[:200]
+        # Lo legible va aparte (como `title` de ACP): la descripción que enseña la app o, sin ella, el texto de
+        # siempre del motor.
+        legible = datos.get('descripcion') or (texto.split(' · ', 1)[1] if ' · ' in texto else '')
+        if legible:
+            payload['title'] = str(legible)[:200]
+        if recortados:
+            payload.update(self._alfalfa({'arguments_truncated': True}))
         d = digest(args)
         aprobada = next((a for n, g, a in self.de_sesion if n == nombre and g == d), None)
         if aprobada:
@@ -389,7 +435,7 @@ class Traductor:
         rol, texto = campos.get('rol'), str(campos.get('texto') or '')
         if rol == 'tool' and texto.startswith('Inicio '):
             nombre = texto[len('Inicio '):].split(' · ', 1)[0]
-            return salida + self._tool_start(run_id, texto, {'nombre': nombre})
+            return salida + self._tool_start(run_id, texto, {'nombre': nombre}, campos.get('_argumentos'))
         if rol == 'tool':
             return salida + self._tool_end(run_id, {'nombre': texto.split('\n', 1)[0]}, texto)
         if rol in ('agent', 'assistant', 'system'):

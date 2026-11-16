@@ -390,9 +390,12 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
 ### Límites de esta primera versión
 
 - Los `input` admiten bloques de texto; `file` y `structured` se rechazan con `invalid_message`.
-- Los `arguments` de un `tool_start` son los que el motor muestra en su evento (`Inicio <herramienta> · …`, ya sin
-  secretos y recortados a 1000 caracteres); si no caben, llevan `truncated: true` con la orden, la carpeta y los
-  archivos.
+- Los `arguments` de un `tool_start` (y de su `approval_request`) son los argumentos JSON de la llamada del
+  modelo, completos y con los secretos tachados (`[REDACTADO]`), como los ve la app; lo legible va en `title` (la
+  descripción de la app). Si pasan de una cuarta parte de `max_message_bytes` (256 KiB por defecto), los textos
+  más largos se recortan (acaban en `… [recortado]`) y, con la extensión, el `tool_start` lleva
+  `payload.alfalfa.arguments_truncated: true`; el `digest` es el de lo que se envía. PACAI 0.2 no tiene un campo
+  `truncated` en el núcleo. `--stdio` v2 no cambia: su evento sigue llevando el texto `Inicio <herramienta> · …`.
 - Un permiso que llega fuera de una ejecución (guardar una prueba del navegador entre turnos, o un encargo de la
   cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para

@@ -269,6 +269,10 @@ class _GestorDeSubagente:
         """Los pasos de un subagente van a su registro, nunca a la conversación principal."""
         self.event(task, 'tool', text)
 
+    def tool_arguments(self, task, nombre, argumentos):
+        """Como el del gestor principal: llega justo antes del `subagente_evento` de su inicio."""
+        self._padre.tool_arguments(task, nombre, argumentos)
+
     def context(self, task, tokens, limit):
         task['context_tokens'], task['context_limit'] = tokens, limit
 

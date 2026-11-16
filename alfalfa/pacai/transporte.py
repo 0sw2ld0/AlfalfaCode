@@ -91,6 +91,7 @@ class TransportePacai(Transport):
         self._ocupado = False                            # hay una entrada en manos del motor hasta que cierra su turno
         self._cola: deque[tuple[str, str]] = deque()     # `new_run` que esperan a la ejecución en curso
         self._ultima_entrada: str | None = None
+        self._argumentos: tuple[str, Any] | None = None   # los de la herramienta cuyo evento de inicio viene ahora
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -105,11 +106,26 @@ class TransportePacai(Transport):
             return
         self._enviar_todo(self.t.empezar_turno(entrada))
 
+    def argumentos_herramienta(self, nombre, argumentos) -> None:
+        self._argumentos = (nombre, argumentos)
+
+    def _con_argumentos(self, tipo: str, campos: dict) -> dict:
+        """El evento de inicio de una herramienta se lleva sus argumentos estructurados (`_argumentos`), que el
+        motor dio justo antes; cualquier otro evento los descarta."""
+        if tipo not in ('evento', 'subagente_evento') or self._argumentos is None:
+            return campos
+        (nombre, argumentos), self._argumentos = self._argumentos, None
+        datos = campos.get('herramienta')
+        es_inicio = (isinstance(datos, dict) and datos.get('fase') == 'inicio' and datos.get('nombre') == nombre
+                     if tipo == 'evento'
+                     else str(campos.get('texto') or '').startswith('Inicio ' + nombre + ' · '))
+        return dict(campos, _argumentos=argumentos) if es_inicio and campos.get('rol') == 'tool' else campos
+
     # -- salida: eventos v2 → mensajes PACAI -------------------------------
     def emit(self, tipo, **campos):
         if getattr(self, 'salida_rota', False) or self.cerrado:
             return
-        campos = self.clean(campos)
+        campos = self._con_argumentos(tipo, self.clean(campos))
         if not self.empezado:
             if tipo == 'fin':
                 self._fin_sin_saludo(campos)
@@ -362,9 +378,12 @@ class TransportePacai(Transport):
         limite = (p.get('limits') or {}).get('max_message_bytes')
         if isinstance(limite, int):
             self.max_bytes = min(limite, MAX_BYTES * 16)
+        # Los argumentos van en el `tool_start` y otra vez en su `approval_request`, con el resto del mensaje:
+        # una cuarta parte del máximo deja sitio a todo lo demás.
+        max_argumentos = max(1024, self.max_bytes // 4)
         herramientas = [h['name'] for h in p.get('client_tools', []) if isinstance(h, dict) and h.get('name')]
         self.t = Traductor(self.emisor, perfiles=perfiles, extensiones=extensiones, herramientas_cliente=herramientas,
-                           caducidad=self.caducidad, reloj=self.reloj)
+                           caducidad=self.caducidad, reloj=self.reloj, max_argumentos=max_argumentos)
         self.t.al_rechazar_navegador = self._rechazar_navegador
         agente = {'name': NOMBRE, 'version': __version__}
         self._enviar(self.emisor.mensaje('hello', {'versions': [VERSION], 'profiles': list(PERFILES),

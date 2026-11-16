@@ -586,6 +586,16 @@ class TerminalManager:
         """Evento de una herramienta con su descripción (`herramienta`)."""
         self.event(task, 'tool', text, herramienta=datos if isinstance(datos, dict) else None)
 
+    def tool_arguments(self, task, nombre, argumentos):
+        """Los argumentos de la llamada que va a empezar, sin secretos, para el transporte (`--pacai` los manda en
+        su `tool_start`; v2 no los usa). Llega justo antes de su `tool_event`."""
+        if not self.transport:
+            return
+        argumentos = self.transport.clean(argumentos)
+        if getattr(self, 'mcp', None) is not None:
+            argumentos = self.mcp.limpiar(argumentos)
+        self.transport.argumentos_herramienta(str(nombre), argumentos)
+
     def plan(self, task, pasos, explicacion=None):
         """`plan`: la lista de tareas del agente, como la de Codex; la app la enseña."""
         if self.transport:

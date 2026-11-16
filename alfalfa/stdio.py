@@ -259,6 +259,10 @@ class Transport:
     def turno_empieza(self, prompt):
         """`run` va a abrir un turno con este mensaje. v2 no lo anuncia; `--pacai` abre su ejecución."""
 
+    def argumentos_herramienta(self, nombre, argumentos):
+        """Los argumentos (ya sin secretos) de la herramienta cuyo evento de inicio viene ahora. v2 no los emite:
+        su evento lleva el texto de siempre; `--pacai` los pone en su `tool_start`."""
+
     def take_compact(self):
         pending, self.compact_pending = self.compact_pending, False
         return pending
