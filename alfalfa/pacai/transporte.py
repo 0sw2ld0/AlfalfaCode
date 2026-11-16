@@ -28,7 +28,7 @@ from typing import Any, Callable
 from .. import __version__
 from ..stdio import MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
-from .nombres import de_la_orden
+from .nombres import de_la_orden, respuesta_del_navegador
 from .sobre import Emisor, ahora, nueva_sesion
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
@@ -544,7 +544,7 @@ class TransportePacai(Transport):
     def _respuesta_del_navegador(p: dict) -> dict:
         """`navegador_respuesta` de v2 a partir del `tool_end` del cliente: un bloque `structured` lleva el cuerpo."""
         bloques = p.get('output') or []
-        datos = next((b['data'] for b in bloques if b.get('type') == 'structured'), None)
+        datos = next((respuesta_del_navegador(b['data']) for b in bloques if b.get('type') == 'structured'), None)
         texto = '\n'.join(b['text'] for b in bloques if b.get('type') == 'text' and b.get('text'))
         if p['status'] == 'success':
             if isinstance(datos, dict):
@@ -572,7 +572,11 @@ class TransportePacai(Transport):
         v2 = COMANDOS.get(nombre)
         if v2 is None:
             return self._error('invalid_message', 'Orden desconocida: ' + m['type'], m['id'])
-        super().receive(json.dumps(dict(de_la_orden(p), tipo=v2)))
+        try:
+            orden = de_la_orden(p, nombre)
+        except ValueError as exc:
+            return self._error('invalid_message', str(exc), m['id'])
+        super().receive(json.dumps(dict(orden, tipo=v2)))
 
     def _quitar_de_cola(self, ident) -> None:
         """Quitar una entrada que aún espera su ejecución: en la cola de PACAI o, ya entregada, en la del motor."""

@@ -222,6 +222,7 @@ def test_una_sesion_0_3_con_cancelaciones_y_un_subagente_en_segundo_plano(proces
     p.entrada('dos')
     segunda = p.tipo('run_started')
     navegador = p.hasta(lambda m: m['type'] == 'tool_start' and m['payload']['side'] == 'client')
+    assert navegador['payload']['arguments']['action'] == 'read'          # en inglés, como el resto (§8)
     p.enviar('interrupt', {'run_id': segunda['id']})
     p.hasta(lambda m: m['type'] == 'run_finished' and m['payload']['run_id'] == segunda['id'])
     p.terminar()

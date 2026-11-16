@@ -281,7 +281,7 @@ async def test_los_errores_del_motor_son_error_con_codigo_propio_o_del_nucleo():
     uno, dos, tres = c.drenar()
     assert uno['payload']['code'] == 'alfalfa.engine_error' and uno['payload']['message'].startswith('No se pudo')
     assert dos['payload']['code'] == 'message_too_large'
-    assert tres['payload']['alfalfa'] == {'reason': 'sin_vision', 'rejected': {'text': 'hola'}}
+    assert tres['payload']['alfalfa'] == {'reason': 'no_vision', 'rejected': {'text': 'hola'}}
     c.comprobar()
 
 
