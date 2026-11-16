@@ -843,8 +843,7 @@ localmente y queda fuera del repositorio.
 El motor (`alfalfa`) también corre en Linux, con los mismos modos que en el Mac: un
 encargo desde la terminal (por SSH, por ejemplo), `alfalfa "encargo"` desde un guion y
 el control por stdio (`--stdio` y `--pacai`). La app de Mac y CuyBrowser no existen en
-Linux. Está probado en Ubuntu 24.04 con Python 3.12. En Windows, usa WSL2 con Ubuntu
-24.04 y sigue estos mismos pasos; una versión nativa sería otro proyecto.
+Linux. Está probado en Ubuntu 24.04 con Python 3.12. En Windows, con WSL2 (más abajo).
 
 ### Linux: instalar
 
@@ -956,3 +955,21 @@ Con `--pacai`, `--stdio` o desde otro programa, el proceso que lanza `alfalfa` l
 variable en su entorno. Las órdenes del agente no la reciben: el arnés les da un entorno
 mínimo y el sandbox no les deja leer el de AlfalfaCode. `alfalfa --proveedores` dice qué
 proveedores tienen clave, sin enseñarla.
+
+### Windows: WSL2
+
+En Windows, AlfalfaCode corre dentro de WSL2 con Ubuntu 24.04; una versión nativa sería otro
+proyecto. Todavía no se ha probado en WSL2. Desde PowerShell:
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+Dentro de Ubuntu, instala `alfalfa` y bubblewrap como en «Linux: instalar» y da las claves por
+variables de entorno como en «Linux: claves». Trabaja en carpetas del sistema de archivos de
+Linux (`~/proyectos/…`), no en `/mnt/c/…`: ahí git y el sandbox van mucho más lentos.
+
+El núcleo de WSL2 no suele traer AppArmor activo. Si
+`bwrap --ro-bind / / --unshare-user --unshare-net true && echo bien` ya funciona, el perfil
+de «Linux: el sandbox» no hace falta (y `apparmor_parser` puede decir que AppArmor no está
+activo). Si falla con los mismos mensajes, aplícalo.
