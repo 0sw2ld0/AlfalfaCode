@@ -1,0 +1,1095 @@
+{
+ "escenario": "ajustes",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "ee9d07f63dde4c7e",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 15,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: Hola",
+     "hora": 1794813239.9767869,
+     "turno": "975c870149114e68"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: Hola",
+     "codigo_salida": 0,
+     "tokens": 3,
+     "turno": "975c870149114e68",
+     "tokens_turno": 3
+    }
+   },
+   {
+    "orden": {
+     "tipo": "budget",
+     "session": 5,
+     "month": 50
+    },
+    "enviado": [
+     {
+      "tipo": "presupuesto",
+      "sesion": 5,
+      "mes": 50
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "presupuesto",
+     "sesion": {
+      "tope": 5.0,
+      "gastado": 0.0
+     },
+     "mes": {
+      "tope": 50.0,
+      "gastado": 0.0,
+      "mes": "2026-11"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "settings",
+     "model": "glm-5.3-flash:cloud",
+     "effort": "high",
+     "mode": "ediciones"
+    },
+    "enviado": [
+     {
+      "tipo": "ajustes",
+      "modelo": "glm-5.3-flash:cloud",
+      "esfuerzo": "high",
+      "modo": "ediciones"
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "contextMode",
+     "mode": "completo"
+    },
+    "enviado": [
+     {
+      "tipo": "contexto",
+      "modo": "completo"
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "keepAwake",
+     "on": false
+    },
+    "enviado": [
+     {
+      "tipo": "mantener_despierto",
+      "activo": false
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "system",
+     "texto": "Contexto completo: uso la ventana entera del modelo, aunque cobre más por contexto largo.",
+     "hora": 1794813240.0030458
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "ee9d07f63dde4c7e",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "completo"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 15,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "sigue",
+     "id": "cola-seis-0006"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "sigue",
+      "id": "cola-seis-0006"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "ee9d07f63dde4c7e",
+     "cwd": "/proyecto",
+     "modelo": "glm-5.3-flash:cloud",
+     "esfuerzo": "high",
+     "modo": "ediciones",
+     "contexto": "completo"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "sigue",
+     "hora": 1794813240.620498,
+     "id_cola": "cola-seis-0006",
+     "turno": "24291c12083a4bdf"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1000000,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 15,
+     "umbral": 900000,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: sigue",
+     "hora": 1794813240.6742709,
+     "turno": "24291c12083a4bdf"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: sigue",
+     "codigo_salida": 0,
+     "tokens": 6,
+     "turno": "24291c12083a4bdf",
+     "tokens_turno": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "presupuesto",
+     "sesion": {
+      "tope": 5.0,
+      "gastado": 0.0
+     },
+     "mes": {
+      "tope": 50.0,
+      "gastado": 0.0,
+      "mes": "2026-11"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "completed",
+     "resumen": "Hecho: sigue",
+     "codigo_salida": 0,
+     "tokens": 6
+    }
+   }
+  ],
+  "salida": 0
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "Hola"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "Hola"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_693d938df22a2e11",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:14:01.209Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_483a9d6a64432d88",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:14:01.210Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0b5314f809c9c26c",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:14:01.210Z",
+     "payload": {
+      "id": "7798ce49e0624d12",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0a7a24457a2235cb",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:14:01.217Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f40f415dc21e0c2e",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:14:01.228Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5070d24cbffe0a2a",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:14:01.317Z",
+     "payload": {
+      "run_id": "m_0a7a24457a2235cb",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2d109ab0f87a011f",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:14:01.317Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 15,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4e4bd8a25809f0ba",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:14:01.317Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_9586a8274939f427",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:14:01.320Z",
+     "payload": {
+      "run_id": "m_0a7a24457a2235cb",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "db717aaee79646ca"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_23e4127368cc043a",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:14:01.320Z",
+     "payload": {
+      "message_id": "m_9586a8274939f427",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: Hola"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d04b49637e0a15cf",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:14:01.320Z",
+     "payload": {
+      "message_id": "m_9586a8274939f427"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_29a05b38a2b5bc3b",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:14:01.341Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2a105f075cba87a5",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:14:01.341Z",
+     "payload": {
+      "run_id": "m_0a7a24457a2235cb",
+      "alfalfa": {
+       "turn_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bbaf42ca730d26b9",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:14:01.341Z",
+     "payload": {
+      "run_id": "m_0a7a24457a2235cb",
+      "status": "completed",
+      "summary": "Hecho: Hola",
+      "exit_code": 0,
+      "tokens": 3,
+      "turn": "db717aaee79646ca",
+      "turn_tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2ee8fc364f9e3640",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:14:01.341Z",
+     "payload": {
+      "run_id": "m_0a7a24457a2235cb",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "budget",
+     "session": 5,
+     "month": 50
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000003",
+      "type": "alfalfa.set_budget",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 3,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "session": 5,
+       "month": 50
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1baa05cc8277a777",
+     "type": "alfalfa.budget",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:14:01.347Z",
+     "payload": {
+      "session": {
+       "cap": 5.0,
+       "spent": 0.0
+      },
+      "month": {
+       "cap": 50.0,
+       "spent": 0.0,
+       "month": "2026-11"
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "settings",
+     "model": "glm-5.3-flash:cloud",
+     "effort": "high",
+     "mode": "ediciones"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000004",
+      "type": "alfalfa.set_settings",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 4,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "model": "glm-5.3-flash:cloud",
+       "effort": "high",
+       "mode": "accept_edits"
+      }
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "contextMode",
+     "mode": "completo"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000005",
+      "type": "alfalfa.set_context_mode",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 5,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "mode": "full"
+      }
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "keepAwake",
+     "on": false
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000006",
+      "type": "alfalfa.set_keep_awake",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 6,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "active": false
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_caf3b97ec5ff36e9",
+     "type": "alfalfa.notice",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 17,
+     "time": "2026-11-16T07:14:01.351Z",
+     "payload": {
+      "role": "system",
+      "text": "Contexto completo: uso la ventana entera del modelo, aunque cobre más por contexto largo.",
+      "time": 1794813241.350781
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ebaeeab810b2edc8",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 18,
+     "time": "2026-11-16T07:14:01.351Z",
+     "payload": {
+      "id": "7798ce49e0624d12",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "full"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c543077caed82edf",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 19,
+     "time": "2026-11-16T07:14:01.351Z",
+     "payload": {
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_daaa92e283d78f14",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 20,
+     "time": "2026-11-16T07:14:01.351Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 15,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "sigue",
+     "id": "cola-seis-0006"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-seis-0006",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 7,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "sigue"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_acff21e3a05e34fd",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 21,
+     "time": "2026-11-16T07:14:01.958Z",
+     "payload": {
+      "id": "7798ce49e0624d12",
+      "cwd": "/proyecto",
+      "model": "glm-5.3-flash:cloud",
+      "effort": "high",
+      "mode": "accept_edits",
+      "context": "full"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3ab3020eb03af72c",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 22,
+     "time": "2026-11-16T07:14:01.958Z",
+     "payload": {
+      "input_id": "cola-seis-0006"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c0dc23f6faba1151",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 23,
+     "time": "2026-11-16T07:14:01.974Z",
+     "payload": {
+      "text": "sigue",
+      "input_id": "cola-seis-0006",
+      "turn": "4b1e347bf41545af"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1da2314bde315c42",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 24,
+     "time": "2026-11-16T07:14:02.030Z",
+     "payload": {
+      "run_id": "m_3ab3020eb03af72c",
+      "context_tokens": 2,
+      "context_limit": 1000000
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_eac06859a8d59f7e",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 25,
+     "time": "2026-11-16T07:14:02.030Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1000000,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 15,
+      "threshold": 900000,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_265328d37f141595",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 26,
+     "time": "2026-11-16T07:14:02.030Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b9aa96733c9c2d2c",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 27,
+     "time": "2026-11-16T07:14:02.033Z",
+     "payload": {
+      "run_id": "m_3ab3020eb03af72c",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "4b1e347bf41545af"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1c6c3269f3dfb458",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 28,
+     "time": "2026-11-16T07:14:02.033Z",
+     "payload": {
+      "message_id": "m_b9aa96733c9c2d2c",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: sigue"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6ff34c9b49787221",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 29,
+     "time": "2026-11-16T07:14:02.033Z",
+     "payload": {
+      "message_id": "m_b9aa96733c9c2d2c"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e46836291c8c7f0c",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 30,
+     "time": "2026-11-16T07:14:02.042Z",
+     "payload": {
+      "run_id": "m_3ab3020eb03af72c",
+      "alfalfa": {
+       "turn_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_caed8893b49e3338",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 31,
+     "time": "2026-11-16T07:14:02.042Z",
+     "payload": {
+      "run_id": "m_3ab3020eb03af72c",
+      "status": "completed",
+      "summary": "Hecho: sigue",
+      "exit_code": 0,
+      "tokens": 6,
+      "turn": "4b1e347bf41545af",
+      "turn_tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_10f99b82da74c48b",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 32,
+     "time": "2026-11-16T07:14:02.042Z",
+     "payload": {
+      "run_id": "m_3ab3020eb03af72c",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_28fb1c76404229bf",
+     "type": "alfalfa.budget",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 33,
+     "time": "2026-11-16T07:14:02.042Z",
+     "payload": {
+      "session": {
+       "cap": 5.0,
+       "spent": 0.0
+      },
+      "month": {
+       "cap": 50.0,
+       "spent": 0.0,
+       "month": "2026-11"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_9fdd297208c58a19",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 34,
+     "time": "2026-11-16T07:14:02.047Z",
+     "payload": {
+      "reason": "Hecho: sigue",
+      "alfalfa": {
+       "status": "completed",
+       "summary": "Hecho: sigue",
+       "exit_code": 0,
+       "tokens": 6
+      }
+     }
+    }
+   }
+  ],
+  "salida": 0
+ }
+}

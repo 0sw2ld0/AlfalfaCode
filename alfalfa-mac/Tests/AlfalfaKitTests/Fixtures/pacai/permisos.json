@@ -1,0 +1,2737 @@
+{
+ "escenario": "permisos",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "f21f473a9f8c4571",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 62,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/Prueba-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+     "hora": 1794812873.8822541,
+     "turno": "c501c42dde1e47db",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Ver las ramas remotas",
+      "en_curso": "Viendo las ramas remotas",
+      "orden": "git ls-remote https://ejemplo.com/Prueba-orden-red"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso",
+     "id": "8af2cc108e4e4eb29ce3c80a6d9c03dd",
+     "argv": [
+      "git",
+      "ls-remote",
+      "https://ejemplo.com/Prueba-orden-red"
+     ],
+     "proposito": "Ver las ramas remotas",
+     "motivo": "red",
+     "motivos": [
+      "red"
+     ],
+     "intento": "395aea112d994b6a",
+     "red": true,
+     "para_sesion": true,
+     "prefijo": [
+      "git",
+      "ls-remote"
+     ],
+     "prefijo_alcance": "red"
+    }
+   },
+   {
+    "orden": {
+     "tipo": "permission",
+     "approved": true
+    },
+    "enviado": [
+     {
+      "tipo": "permiso",
+      "id": "8af2cc108e4e4eb29ce3c80a6d9c03dd",
+      "aprobado": true
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso_resuelto",
+     "id": "8af2cc108e4e4eb29ce3c80a6d9c03dd",
+     "aprobado": true,
+     "motivo": "Respuesta del cliente"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/Prueba-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"395aea112d994b6a\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/Prueba-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000001\"}",
+     "hora": 1794812874.2939038,
+     "turno": "c501c42dde1e47db",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "codigo": 128,
+      "clasificacion": {
+       "disposition": "failure",
+       "status": "failed"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 18,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: Prueba orden-red",
+     "hora": 1794812874.3078778,
+     "turno": "c501c42dde1e47db"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: Prueba orden-red",
+     "codigo_salida": 0,
+     "tokens": 6,
+     "turno": "c501c42dde1e47db",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "otra vez orden-red",
+     "id": "cola-permiso-0000"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "otra vez orden-red",
+      "id": "cola-permiso-0000"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "otra vez orden-red",
+     "hora": 1794812874.3831859,
+     "id_cola": "cola-permiso-0000",
+     "turno": "4706b49af6334d5b"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 62,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 9
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/otra-vez-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+     "hora": 1794812874.4517992,
+     "turno": "4706b49af6334d5b",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Ver las ramas remotas",
+      "en_curso": "Viendo las ramas remotas",
+      "orden": "git ls-remote https://ejemplo.com/otra-vez-orden-red"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso",
+     "id": "30aa0dc6fd074fcbb48ea9041b05c14c",
+     "argv": [
+      "git",
+      "ls-remote",
+      "https://ejemplo.com/otra-vez-orden-red"
+     ],
+     "proposito": "Ver las ramas remotas",
+     "motivo": "red",
+     "motivos": [
+      "red"
+     ],
+     "intento": "630a63bdd8074b42",
+     "red": true,
+     "para_sesion": true,
+     "prefijo": [
+      "git",
+      "ls-remote"
+     ],
+     "prefijo_alcance": "red"
+    }
+   },
+   {
+    "orden": {
+     "approved": true,
+     "session": true,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "tipo": "permiso",
+      "id": "30aa0dc6fd074fcbb48ea9041b05c14c",
+      "aprobado": true,
+      "sesion": true
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso_resuelto",
+     "id": "30aa0dc6fd074fcbb48ea9041b05c14c",
+     "aprobado": true,
+     "motivo": "Respuesta del cliente",
+     "sesion": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/otra-vez-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"630a63bdd8074b42\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/otra-vez-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000002\"}",
+     "hora": 1794812874.9870238,
+     "turno": "4706b49af6334d5b",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "codigo": 128,
+      "clasificacion": {
+       "disposition": "failure",
+       "status": "failed"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 1,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 18,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 12
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: otra vez orden-red",
+     "hora": 1794812875.000761,
+     "turno": "4706b49af6334d5b"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: otra vez orden-red",
+     "codigo_salida": 0,
+     "tokens": 12,
+     "turno": "4706b49af6334d5b",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y una más orden-red",
+     "id": "cola-permiso-0001"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "y una más orden-red",
+      "id": "cola-permiso-0001"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "y una más orden-red",
+     "hora": 1794812875.0214012,
+     "id_cola": "cola-permiso-0001",
+     "turno": "baaf2996413343b3"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 1,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 63,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 15
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/y-una-más-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+     "hora": 1794812875.104662,
+     "turno": "baaf2996413343b3",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Ver las ramas remotas",
+      "en_curso": "Viendo las ramas remotas",
+      "orden": "git ls-remote 'https://ejemplo.com/y-una-más-orden-red'"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso",
+     "id": "59d045bb029c4c41ad82cda08e3486f5",
+     "argv": [
+      "git",
+      "ls-remote",
+      "https://ejemplo.com/y-una-más-orden-red"
+     ],
+     "proposito": "Ver las ramas remotas",
+     "motivo": "red",
+     "motivos": [
+      "red"
+     ],
+     "intento": "8998d016f93e4f9e",
+     "red": true,
+     "para_sesion": true,
+     "prefijo": [
+      "git",
+      "ls-remote"
+     ],
+     "prefijo_alcance": "red"
+    }
+   },
+   {
+    "orden": {
+     "approved": false,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "tipo": "permiso",
+      "id": "59d045bb029c4c41ad82cda08e3486f5",
+      "aprobado": false
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso_resuelto",
+     "id": "59d045bb029c4c41ad82cda08e3486f5",
+     "aprobado": false,
+     "motivo": "Respuesta del cliente"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"error\": \"Comando rechazado; no se ejecutó.\"}",
+     "hora": 1794812875.130891,
+     "turno": "baaf2996413343b3",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "error": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 1,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 19,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 18
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: y una más orden-red",
+     "hora": 1794812875.145382,
+     "turno": "baaf2996413343b3"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: y una más orden-red",
+     "codigo_salida": 0,
+     "tokens": 18,
+     "turno": "baaf2996413343b3",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "la última orden-red",
+     "id": "cola-permiso-0002"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "la última orden-red",
+      "id": "cola-permiso-0002"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "la última orden-red",
+     "hora": 1794812875.167165,
+     "id_cola": "cola-permiso-0002",
+     "turno": "abd4083c96ba4a2e"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 1,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 63,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 21
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/la-última-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+     "hora": 1794812875.2423959,
+     "turno": "abd4083c96ba4a2e",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Ver las ramas remotas",
+      "en_curso": "Viendo las ramas remotas",
+      "orden": "git ls-remote 'https://ejemplo.com/la-última-orden-red'"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso",
+     "id": "e28c0a7ffa52453bb8aa1f3af36058e2",
+     "argv": [
+      "git",
+      "ls-remote",
+      "https://ejemplo.com/la-última-orden-red"
+     ],
+     "proposito": "Ver las ramas remotas",
+     "motivo": "red",
+     "motivos": [
+      "red"
+     ],
+     "intento": "e1c327ec4d6a4196",
+     "red": true,
+     "para_sesion": true,
+     "prefijo": [
+      "git",
+      "ls-remote"
+     ],
+     "prefijo_alcance": "red"
+    }
+   },
+   {
+    "orden": {
+     "approved": true,
+     "always": true,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "tipo": "permiso",
+      "id": "e28c0a7ffa52453bb8aa1f3af36058e2",
+      "aprobado": true,
+      "siempre": true
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso_resuelto",
+     "id": "e28c0a7ffa52453bb8aa1f3af36058e2",
+     "aprobado": true,
+     "motivo": "Respuesta del cliente",
+     "siempre": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "system",
+     "texto": "Ya no se preguntará por las órdenes que empiecen por «git ls-remote»: siguen dentro del sandbox, con red. Se quita en reglas.toml.",
+     "hora": 1794812875.262971,
+     "turno": "abd4083c96ba4a2e"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/la-última-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"e1c327ec4d6a4196\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/la-última-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000003\"}",
+     "hora": 1794812875.784084,
+     "turno": "abd4083c96ba4a2e",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "codigo": 128,
+      "clasificacion": {
+       "disposition": "failure",
+       "status": "failed"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 1,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 19,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 24
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: la última orden-red",
+     "hora": 1794812875.819175,
+     "turno": "abd4083c96ba4a2e"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: la última orden-red",
+     "codigo_salida": 0,
+     "tokens": 24,
+     "turno": "abd4083c96ba4a2e",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "completed",
+     "resumen": "Hecho: la última orden-red",
+     "codigo_salida": 0,
+     "tokens": 24
+    }
+   }
+  ],
+  "salida": 0
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "Prueba orden-red"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "Prueba orden-red"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_26ffc78521e45360",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:07:56.616Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bbfc2472cf0d08af",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:07:56.616Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3a38f71d8a60fbbd",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:07:56.616Z",
+     "payload": {
+      "id": "48007beaa6ab46c3",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_50111872f5d19308",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:07:56.625Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e4f4f9fe76aeea90",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:07:56.639Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_78c053424cd129ec",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:07:56.754Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1b373c449d78c57d",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:07:56.754Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 62,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0587a6eb52607daf",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:07:56.754Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5e8108dcae660ad4",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:07:56.763Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "side": "agent",
+      "title": "Ver las ramas remotas",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/Prueba-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Ver las ramas remotas",
+        "ongoing": "Viendo las ramas remotas",
+        "command": "git ls-remote https://ejemplo.com/Prueba-orden-red"
+       },
+       "turn": "b0cd3708e8d348ac"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_8dd7a08998800989",
+     "type": "approval_request",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:07:56.785Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "tool_call_id": "m_5e8108dcae660ad4",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "digest": "sha256:1d479c7ba22aa7896875d6ba8724a5895eda180828ce88b6cbb746960d4001c4",
+      "reason": "network",
+      "scopes": [
+       "once",
+       "session"
+      ],
+      "alfalfa": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "reason": "network",
+       "reasons": [
+        "network"
+       ],
+       "attempt": "a8d88c7cf769419d",
+       "network": true,
+       "prefix": [
+        "git",
+        "ls-remote"
+       ],
+       "prefix_scope": "network",
+       "for_session": true
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "permission",
+     "approved": true
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000003",
+      "type": "approval_result",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 3,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "decision": "approved",
+       "scope": "once"
+      },
+      "reply_to": "m_8dd7a08998800989"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_be45085e784cf0d4",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:07:57.179Z",
+     "payload": {
+      "tool_call_id": "m_5e8108dcae660ad4",
+      "status": "error",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/Prueba-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"a8d88c7cf769419d\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/Prueba-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000001\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "run_command",
+        "phase": "end",
+        "code": 128,
+        "classification": {
+         "disposition": "failure",
+         "status": "failed"
+        }
+       },
+       "turn": "b0cd3708e8d348ac"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b8e168097bb4fa82",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:07:57.190Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_22f2e17d99dc7779",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:07:57.190Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 18,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ad82443514615ad5",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:07:57.190Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_15aa5fcfd4efa71a",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:07:57.193Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "b0cd3708e8d348ac"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6738813bb8eeb4ce",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:07:57.193Z",
+     "payload": {
+      "message_id": "m_15aa5fcfd4efa71a",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: Prueba orden-red"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a052cac771abc602",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 17,
+     "time": "2026-11-16T07:07:57.193Z",
+     "payload": {
+      "message_id": "m_15aa5fcfd4efa71a"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c2f0701156a3fc99",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 18,
+     "time": "2026-11-16T07:07:57.220Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3ab4442d7717ea75",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 19,
+     "time": "2026-11-16T07:07:57.220Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c98c289d2d8e1c97",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 20,
+     "time": "2026-11-16T07:07:57.220Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "status": "completed",
+      "summary": "Hecho: Prueba orden-red",
+      "exit_code": 0,
+      "tokens": 6,
+      "turn": "b0cd3708e8d348ac",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6683918799522b85",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 21,
+     "time": "2026-11-16T07:07:57.220Z",
+     "payload": {
+      "run_id": "m_50111872f5d19308",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "otra vez orden-red",
+     "id": "cola-permiso-0000"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-permiso-0000",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 4,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "otra vez orden-red"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0d1f93951fd719f9",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 22,
+     "time": "2026-11-16T07:07:57.227Z",
+     "payload": {
+      "input_id": "cola-permiso-0000"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5a76e1b3d8df33f2",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 23,
+     "time": "2026-11-16T07:07:57.237Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_829f0226826824b6",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 24,
+     "time": "2026-11-16T07:07:57.245Z",
+     "payload": {
+      "text": "otra vez orden-red",
+      "input_id": "cola-permiso-0000",
+      "turn": "a0a1ba3d7eb149a9"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cc062a02dfcd6c3d",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 25,
+     "time": "2026-11-16T07:07:57.312Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2428deec8541053b",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 26,
+     "time": "2026-11-16T07:07:57.312Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 62,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e14dae6d371bdf41",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 27,
+     "time": "2026-11-16T07:07:57.313Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 9
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a3950fdad54feac9",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 28,
+     "time": "2026-11-16T07:07:57.321Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/otra-vez-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "side": "agent",
+      "title": "Ver las ramas remotas",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/otra-vez-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Ver las ramas remotas",
+        "ongoing": "Viendo las ramas remotas",
+        "command": "git ls-remote https://ejemplo.com/otra-vez-orden-red"
+       },
+       "turn": "a0a1ba3d7eb149a9"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1b14769abb308f18",
+     "type": "approval_request",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 29,
+     "time": "2026-11-16T07:07:57.340Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "tool_call_id": "m_a3950fdad54feac9",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/otra-vez-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "digest": "sha256:440f2cd5b352adf6fbc14e2284e005e25adad766a0a0fa7e5826f8722dc207a5",
+      "reason": "network",
+      "scopes": [
+       "once",
+       "session"
+      ],
+      "alfalfa": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/otra-vez-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "reason": "network",
+       "reasons": [
+        "network"
+       ],
+       "attempt": "66f6adc326ba4f99",
+       "network": true,
+       "prefix": [
+        "git",
+        "ls-remote"
+       ],
+       "prefix_scope": "network",
+       "for_session": true
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "approved": true,
+     "session": true,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000005",
+      "type": "approval_result",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 5,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "decision": "approved",
+       "scope": "session"
+      },
+      "reply_to": "m_1b14769abb308f18"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6d7b45e3fe1a12d3",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 30,
+     "time": "2026-11-16T07:07:57.712Z",
+     "payload": {
+      "tool_call_id": "m_a3950fdad54feac9",
+      "status": "error",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/otra-vez-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"66f6adc326ba4f99\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/otra-vez-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000002\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "run_command",
+        "phase": "end",
+        "code": 128,
+        "classification": {
+         "disposition": "failure",
+         "status": "failed"
+        }
+       },
+       "turn": "a0a1ba3d7eb149a9"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_59f710869273ea1f",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 31,
+     "time": "2026-11-16T07:07:57.723Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_559689235d062f14",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 32,
+     "time": "2026-11-16T07:07:57.723Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 1,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 18,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5a754b1f1ffab2af",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 33,
+     "time": "2026-11-16T07:07:57.723Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 12
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ccd471828958ce47",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 34,
+     "time": "2026-11-16T07:07:57.727Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "a0a1ba3d7eb149a9"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5c4f7ce6f0d5f6bf",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 35,
+     "time": "2026-11-16T07:07:57.727Z",
+     "payload": {
+      "message_id": "m_ccd471828958ce47",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: otra vez orden-red"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fab0fba48ce94e6d",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 36,
+     "time": "2026-11-16T07:07:57.727Z",
+     "payload": {
+      "message_id": "m_ccd471828958ce47"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_56643213c860f106",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 37,
+     "time": "2026-11-16T07:07:57.738Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7dfff523b17eb09b",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 38,
+     "time": "2026-11-16T07:07:57.739Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_aad75459697e9dee",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 39,
+     "time": "2026-11-16T07:07:57.739Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "status": "completed",
+      "summary": "Hecho: otra vez orden-red",
+      "exit_code": 0,
+      "tokens": 12,
+      "turn": "a0a1ba3d7eb149a9",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_18bc6556e03f5a53",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 40,
+     "time": "2026-11-16T07:07:57.739Z",
+     "payload": {
+      "run_id": "m_0d1f93951fd719f9",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y una más orden-red",
+     "id": "cola-permiso-0001"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-permiso-0001",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 6,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "y una más orden-red"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_be69af645af23393",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 41,
+     "time": "2026-11-16T07:07:57.742Z",
+     "payload": {
+      "input_id": "cola-permiso-0001"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1e54bd1699259460",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 42,
+     "time": "2026-11-16T07:07:57.752Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f850ad1a03310033",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 43,
+     "time": "2026-11-16T07:07:57.759Z",
+     "payload": {
+      "text": "y una más orden-red",
+      "input_id": "cola-permiso-0001",
+      "turn": "417af60f425a4e98"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fce8daa282183c15",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 44,
+     "time": "2026-11-16T07:07:57.821Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b3b1f5a27b5c4d23",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 45,
+     "time": "2026-11-16T07:07:57.821Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 1,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 63,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d199562393f58306",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 46,
+     "time": "2026-11-16T07:07:57.821Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 15
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fc6e96bd812f5deb",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 47,
+     "time": "2026-11-16T07:07:57.829Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/y-una-más-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "side": "agent",
+      "title": "Ver las ramas remotas",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/y-una-más-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Ver las ramas remotas",
+        "ongoing": "Viendo las ramas remotas",
+        "command": "git ls-remote 'https://ejemplo.com/y-una-más-orden-red'"
+       },
+       "turn": "417af60f425a4e98"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_8f005d588875248c",
+     "type": "approval_request",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 48,
+     "time": "2026-11-16T07:07:57.846Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "tool_call_id": "m_fc6e96bd812f5deb",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/y-una-más-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "digest": "sha256:e4cd6596b945ad393bde546e6e24b551b0aea8d9db9186d9ea429fb343610c90",
+      "reason": "network",
+      "scopes": [
+       "once",
+       "session"
+      ],
+      "alfalfa": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/y-una-más-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "reason": "network",
+       "reasons": [
+        "network"
+       ],
+       "attempt": "803c934730814a16",
+       "network": true,
+       "prefix": [
+        "git",
+        "ls-remote"
+       ],
+       "prefix_scope": "network",
+       "for_session": true
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "approved": false,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000007",
+      "type": "approval_result",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 7,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "decision": "denied"
+      },
+      "reply_to": "m_8f005d588875248c"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_667663be374d9826",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 49,
+     "time": "2026-11-16T07:07:57.853Z",
+     "payload": {
+      "tool_call_id": "m_fc6e96bd812f5deb",
+      "status": "error",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"error\": \"Comando rechazado; no se ejecutó.\"}"
+       }
+      ],
+      "summary": "Comando rechazado; no se ejecutó.",
+      "alfalfa": {
+       "tool": {
+        "name": "run_command",
+        "phase": "end",
+        "error": true
+       },
+       "turn": "417af60f425a4e98"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_eeb1133b7f5b4249",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 50,
+     "time": "2026-11-16T07:07:57.863Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_59433f3a34647163",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 51,
+     "time": "2026-11-16T07:07:57.863Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 1,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 19,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_77bc5bab3fef69c7",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 52,
+     "time": "2026-11-16T07:07:57.864Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 18
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cf4183a129045c5c",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 53,
+     "time": "2026-11-16T07:07:57.867Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "417af60f425a4e98"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f4d7693f4111af99",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 54,
+     "time": "2026-11-16T07:07:57.867Z",
+     "payload": {
+      "message_id": "m_cf4183a129045c5c",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: y una más orden-red"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e1c83004512f8d4e",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 55,
+     "time": "2026-11-16T07:07:57.867Z",
+     "payload": {
+      "message_id": "m_cf4183a129045c5c"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b8921b192dd54bd6",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 56,
+     "time": "2026-11-16T07:07:57.879Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_63e535bf49a1e122",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 57,
+     "time": "2026-11-16T07:07:57.879Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_67ecab7078ac9bbf",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 58,
+     "time": "2026-11-16T07:07:57.879Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "status": "completed",
+      "summary": "Hecho: y una más orden-red",
+      "exit_code": 0,
+      "tokens": 18,
+      "turn": "417af60f425a4e98",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fffa9ba98851d96e",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 59,
+     "time": "2026-11-16T07:07:57.879Z",
+     "payload": {
+      "run_id": "m_be69af645af23393",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "la última orden-red",
+     "id": "cola-permiso-0002"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-permiso-0002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 8,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "la última orden-red"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f0967c77f603c371",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 60,
+     "time": "2026-11-16T07:07:57.883Z",
+     "payload": {
+      "input_id": "cola-permiso-0002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_76ab2d63c3d72ed7",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 61,
+     "time": "2026-11-16T07:07:57.893Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0e1b5932f58b0dcb",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 62,
+     "time": "2026-11-16T07:07:57.900Z",
+     "payload": {
+      "text": "la última orden-red",
+      "input_id": "cola-permiso-0002",
+      "turn": "91fd7d4226e74502"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a6aa926ebceb5af7",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 63,
+     "time": "2026-11-16T07:07:57.964Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_877b9aefd408f9c4",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 64,
+     "time": "2026-11-16T07:07:57.964Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 1,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 63,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_12dd00d694b4ce53",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 65,
+     "time": "2026-11-16T07:07:57.964Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 21
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_399f55cce0762422",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 66,
+     "time": "2026-11-16T07:07:57.972Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/la-última-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "side": "agent",
+      "title": "Ver las ramas remotas",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/la-última-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Ver las ramas remotas",
+        "ongoing": "Viendo las ramas remotas",
+        "command": "git ls-remote 'https://ejemplo.com/la-última-orden-red'"
+       },
+       "turn": "91fd7d4226e74502"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_40990b8950139b86",
+     "type": "approval_request",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 67,
+     "time": "2026-11-16T07:07:57.990Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "tool_call_id": "m_399f55cce0762422",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/la-última-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "digest": "sha256:bd2cc2f5d43a0d62713b09976890fbd0ea60c07783ed155f8d02d82a523477e6",
+      "reason": "network",
+      "scopes": [
+       "once",
+       "session"
+      ],
+      "alfalfa": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/la-última-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "reason": "network",
+       "reasons": [
+        "network"
+       ],
+       "attempt": "6397084497574d9b",
+       "network": true,
+       "prefix": [
+        "git",
+        "ls-remote"
+       ],
+       "prefix_scope": "network",
+       "for_session": true
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "approved": true,
+     "always": true,
+     "tipo": "permission"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000009",
+      "type": "approval_result",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 9,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "decision": "approved",
+       "scope": "once",
+       "alfalfa": {
+        "scope": "always"
+       }
+      },
+      "reply_to": "m_40990b8950139b86"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_369458362df3cc0d",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 68,
+     "time": "2026-11-16T07:07:57.993Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "role": "system",
+      "alfalfa": {
+       "turn": "91fd7d4226e74502"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_849b0b584034626a",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 69,
+     "time": "2026-11-16T07:07:57.993Z",
+     "payload": {
+      "message_id": "m_369458362df3cc0d",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Ya no se preguntará por las órdenes que empiecen por «git ls-remote»: siguen dentro del sandbox, con red. Se quita en reglas.toml."
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cd99f346319f0f46",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 70,
+     "time": "2026-11-16T07:07:57.993Z",
+     "payload": {
+      "message_id": "m_369458362df3cc0d"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1f5e83f6f254bb8d",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 71,
+     "time": "2026-11-16T07:07:58.368Z",
+     "payload": {
+      "tool_call_id": "m_399f55cce0762422",
+      "status": "error",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"exit_code\": 128, \"output\": \"remote: Not Found\\nfatal: repositorio 'https://ejemplo.com/la-última-orden-red/' no encontrado\\n\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"6397084497574d9b\", \"permisos\": [\"red\"], \"red\": true, \"argv\": [\"git\", \"ls-remote\", \"https://ejemplo.com/la-última-orden-red\"], \"cwd\": \"/proyecto\", \"purpose\": \"Ver las ramas remotas\", \"classification\": {\"status\": \"failed\", \"disposition\": \"failure\", \"cause\": \"nonzero_exit\", \"message\": \"La operación terminó con código 128.\"}, \"operation_id\": \"operation-000003\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "run_command",
+        "phase": "end",
+        "code": 128,
+        "classification": {
+         "disposition": "failure",
+         "status": "failed"
+        }
+       },
+       "turn": "91fd7d4226e74502"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_118f0e572431e57c",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 72,
+     "time": "2026-11-16T07:07:58.380Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_080d879715287456",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 73,
+     "time": "2026-11-16T07:07:58.380Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 1,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 19,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_56111b7657a902f3",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 74,
+     "time": "2026-11-16T07:07:58.380Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 24
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_df28982cb13436e0",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 75,
+     "time": "2026-11-16T07:07:58.383Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "91fd7d4226e74502"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4d05217b33c16164",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 76,
+     "time": "2026-11-16T07:07:58.383Z",
+     "payload": {
+      "message_id": "m_df28982cb13436e0",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: la última orden-red"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4d6f6933f2835761",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 77,
+     "time": "2026-11-16T07:07:58.383Z",
+     "payload": {
+      "message_id": "m_df28982cb13436e0"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a19dd9745b74fae9",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 78,
+     "time": "2026-11-16T07:07:58.395Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cc0d8b4031631800",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 79,
+     "time": "2026-11-16T07:07:58.396Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3dd20f6821aaab14",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 80,
+     "time": "2026-11-16T07:07:58.396Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "status": "completed",
+      "summary": "Hecho: la última orden-red",
+      "exit_code": 0,
+      "tokens": 24,
+      "turn": "91fd7d4226e74502",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_337e9fc4efe70990",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 81,
+     "time": "2026-11-16T07:07:58.396Z",
+     "payload": {
+      "run_id": "m_f0967c77f603c371",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_9b4c73cdebb8dff3",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 82,
+     "time": "2026-11-16T07:07:58.402Z",
+     "payload": {
+      "reason": "Hecho: la última orden-red",
+      "alfalfa": {
+       "status": "completed",
+       "summary": "Hecho: la última orden-red",
+       "exit_code": 0,
+       "tokens": 24
+      }
+     }
+    }
+   }
+  ],
+  "salida": 0
+ }
+}

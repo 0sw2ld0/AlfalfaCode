@@ -793,8 +793,14 @@ public enum AlfalfaMessage: Equatable, Sendable {
     public static func decode(line: String) -> AlfalfaMessage? {
         guard let data = line.data(using: .utf8),
               let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              object["version"] as? Int == protocolVersion,
-              let kind = object["tipo"] as? String else { return nil }
+              object["version"] as? Int == protocolVersion else { return nil }
+        return decode(object: object)
+    }
+
+    /// Un evento v2 ya leído (`tipo` y sus campos). El cliente PACAI devuelve sus mensajes a esta forma para que la
+    /// app vea los mismos casos con los dos protocolos.
+    static func decode(object: [String: Any]) -> AlfalfaMessage? {
+        guard let kind = object["tipo"] as? String else { return nil }
         switch kind {
         case "revision_codigo":
             return CodeReview(value: object["revision"]).map(Self.codeReview)

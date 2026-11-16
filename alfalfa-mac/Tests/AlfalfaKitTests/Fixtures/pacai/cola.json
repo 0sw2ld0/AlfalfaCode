@@ -1,0 +1,1611 @@
+{
+ "escenario": "cola",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "4187c18a43d94414",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 41,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['sleep', '3'], 'purpose': 'Esperar'}",
+     "hora": 1794813512.433645,
+     "turno": "283ba47e459b425b",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Esperar",
+      "en_curso": "Esperando",
+      "orden": "sleep 3"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y luego di adiós",
+     "id": "cola-uno-0001"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "y luego di adiós",
+      "id": "cola-uno-0001"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"eec7e755fc294c2a\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}",
+     "hora": 1794813515.4932191,
+     "turno": "283ba47e459b425b",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "codigo": 0,
+      "clasificacion": {
+       "disposition": "pass",
+       "status": "passed"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "y luego di adiós",
+     "hora": 1794813515.4982998,
+     "id_cola": "cola-uno-0001",
+     "turno": "283ba47e459b425b"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 18,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: y luego di adiós",
+     "hora": 1794813515.502995,
+     "turno": "283ba47e459b425b"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: y luego di adiós",
+     "codigo_salida": 0,
+     "tokens": 6,
+     "turno": "283ba47e459b425b",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "otra orden-lenta",
+     "id": "cola-dos-0002"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "otra orden-lenta",
+      "id": "cola-dos-0002"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "otra orden-lenta",
+     "hora": 1794813515.531258,
+     "id_cola": "cola-dos-0002",
+     "turno": "21a285d877234b78"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 41,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 9
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['sleep', '3'], 'purpose': 'Esperar'}",
+     "hora": 1794813515.572762,
+     "turno": "21a285d877234b78",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Esperar",
+      "en_curso": "Esperando",
+      "orden": "sleep 3"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "éste se queda",
+     "id": "cola-tres-0003"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "éste se queda",
+      "id": "cola-tres-0003"
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "éste se quita",
+     "id": "cola-cuatro-0004"
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "éste se quita",
+      "id": "cola-cuatro-0004"
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "unqueue",
+     "id": "cola-cuatro-0004"
+    },
+    "enviado": [
+     {
+      "tipo": "quitar_de_cola",
+      "id": "cola-cuatro-0004"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "quitado_de_cola",
+     "id": "cola-cuatro-0004",
+     "quitado": true
+    }
+   },
+   {
+    "orden": {
+     "tipo": "sendNow",
+     "text": "éste se queda",
+     "id": "cola-tres-0003"
+    },
+    "enviado": [
+     {
+      "tipo": "enviar_ahora",
+      "texto": "éste se queda",
+      "id": "cola-tres-0003"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "cortado",
+     "resumen": "Turno interrumpido por el usuario.",
+     "codigo_salida": 1,
+     "tokens": 9,
+     "turno": "21a285d877234b78",
+     "tokens_turno": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "éste se queda",
+     "hora": 1794813515.58712,
+     "id_cola": "cola-tres-0003",
+     "turno": "74946909cdbc4d10"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"error\": \"El proceso se interrumpió durante esta herramienta. Resultado incierto; inspecciona el estado real antes de repetirla.\"}",
+     "hora": 1794813515.6190422,
+     "turno": "74946909cdbc4d10",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "error": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 17,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 12
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: éste se queda",
+     "hora": 1794813515.629537,
+     "turno": "74946909cdbc4d10"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "system",
+     "texto": "Queda pendiente: resultado incierto de run_command",
+     "hora": 1794813515.63221,
+     "turno": "74946909cdbc4d10"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: éste se queda",
+     "codigo_salida": 0,
+     "tokens": 12,
+     "turno": "74946909cdbc4d10",
+     "tokens_turno": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "completed",
+     "resumen": "Hecho: éste se queda",
+     "codigo_salida": 0,
+     "tokens": 12
+    }
+   }
+  ],
+  "salida": 0
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "Haz una orden-lenta"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "Haz una orden-lenta"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4bf5863447dc95e5",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:18:36.054Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_50beb15e8da44a91",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:18:36.054Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6f0fe9859b16b6fc",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:18:36.055Z",
+     "payload": {
+      "id": "f3aa36508fd6401d",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_653f8f36eabb1c96",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:18:36.059Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f1c904a58519fc05",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:18:36.067Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4cfe2704e9d0e612",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:18:36.134Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_aed5adec19215c4b",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:18:36.134Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 41,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2d297cbb185a005a",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:18:36.134Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5f9e0fcffe98699d",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:18:36.138Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "sleep",
+        "3"
+       ],
+       "purpose": "Esperar"
+      },
+      "side": "agent",
+      "title": "Esperar",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['sleep', '3'], 'purpose': 'Esperar'}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Esperar",
+        "ongoing": "Esperando",
+        "command": "sleep 3"
+       },
+       "turn": "56ab61561ce74f8f"
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y luego di adiós",
+     "id": "cola-uno-0001"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-uno-0001",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 3,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "y luego di adiós"
+        }
+       ],
+       "mode": "steer",
+       "run_id": "m_653f8f36eabb1c96",
+       "alfalfa": {
+        "redirect": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_8e19fca860fcd171",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:18:39.193Z",
+     "payload": {
+      "tool_call_id": "m_5f9e0fcffe98699d",
+      "status": "success",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"d576767b12ab4b55\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "run_command",
+        "phase": "end",
+        "code": 0,
+        "classification": {
+         "disposition": "pass",
+         "status": "passed"
+        }
+       },
+       "turn": "56ab61561ce74f8f"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_79d9b0bbcdb76af8",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:18:39.198Z",
+     "payload": {
+      "text": "y luego di adiós",
+      "input_id": "cola-uno-0001",
+      "turn": "56ab61561ce74f8f"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_8ef795eed48a43c8",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:18:39.201Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fcb575b2c479431c",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:18:39.201Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 18,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cba905f77260b9c6",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:18:39.201Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_883c0a5dfdfc7e18",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:18:39.203Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "56ab61561ce74f8f"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3ef58bae8c51d728",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:18:39.203Z",
+     "payload": {
+      "message_id": "m_883c0a5dfdfc7e18",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: y luego di adiós"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_171ae0619501cd60",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 17,
+     "time": "2026-11-16T07:18:39.204Z",
+     "payload": {
+      "message_id": "m_883c0a5dfdfc7e18"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_946638c437f40d5b",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 18,
+     "time": "2026-11-16T07:18:39.219Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3a739cbd14723246",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 19,
+     "time": "2026-11-16T07:18:39.219Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fd428fd38a927837",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 20,
+     "time": "2026-11-16T07:18:39.219Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "status": "completed",
+      "summary": "Hecho: y luego di adiós",
+      "exit_code": 0,
+      "tokens": 6,
+      "turn": "56ab61561ce74f8f",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_08a320298e183829",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 21,
+     "time": "2026-11-16T07:18:39.219Z",
+     "payload": {
+      "run_id": "m_653f8f36eabb1c96",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "otra orden-lenta",
+     "id": "cola-dos-0002"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-dos-0002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 4,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "otra orden-lenta"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c6cc435a1d2bb510",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 22,
+     "time": "2026-11-16T07:18:39.223Z",
+     "payload": {
+      "input_id": "cola-dos-0002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5ae2b59c6b20b733",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 23,
+     "time": "2026-11-16T07:18:39.230Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_26ba05345d670e2c",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 24,
+     "time": "2026-11-16T07:18:39.234Z",
+     "payload": {
+      "text": "otra orden-lenta",
+      "input_id": "cola-dos-0002",
+      "turn": "9ce112a9061f4126"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6ca689d10ad3ce9c",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 25,
+     "time": "2026-11-16T07:18:39.274Z",
+     "payload": {
+      "run_id": "m_c6cc435a1d2bb510",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_899c9570f6720ae5",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 26,
+     "time": "2026-11-16T07:18:39.274Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 41,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_eee2769704aa9c35",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 27,
+     "time": "2026-11-16T07:18:39.274Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 9
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_9eec71000c332b87",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 28,
+     "time": "2026-11-16T07:18:39.279Z",
+     "payload": {
+      "run_id": "m_c6cc435a1d2bb510",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "sleep",
+        "3"
+       ],
+       "purpose": "Esperar"
+      },
+      "side": "agent",
+      "title": "Esperar",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['sleep', '3'], 'purpose': 'Esperar'}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Esperar",
+        "ongoing": "Esperando",
+        "command": "sleep 3"
+       },
+       "turn": "9ce112a9061f4126"
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "éste se queda",
+     "id": "cola-tres-0003"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-tres-0003",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 5,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "éste se queda"
+        }
+       ],
+       "mode": "steer",
+       "run_id": "m_c6cc435a1d2bb510",
+       "alfalfa": {
+        "redirect": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "éste se quita",
+     "id": "cola-cuatro-0004"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-cuatro-0004",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 6,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "éste se quita"
+        }
+       ],
+       "mode": "steer",
+       "run_id": "m_c6cc435a1d2bb510",
+       "alfalfa": {
+        "redirect": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "orden": {
+     "tipo": "unqueue",
+     "id": "cola-cuatro-0004"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000007",
+      "type": "alfalfa.dequeue",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 7,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "id": "cola-cuatro-0004"
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d8e6d780d72e3150",
+     "type": "alfalfa.dequeued",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 29,
+     "time": "2026-11-16T07:18:39.281Z",
+     "payload": {
+      "id": "cola-cuatro-0004",
+      "removed": true
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "sendNow",
+     "text": "éste se queda",
+     "id": "cola-tres-0003"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000008",
+      "type": "alfalfa.send_now",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 8,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "id": "cola-tres-0003"
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e7f701b24939ddf9",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 30,
+     "time": "2026-11-16T07:18:39.287Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_020301c66f6f8d16",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 31,
+     "time": "2026-11-16T07:18:39.289Z",
+     "payload": {
+      "run_id": "m_c6cc435a1d2bb510",
+      "alfalfa": {
+       "turn_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cd80a4baa74d93e4",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 32,
+     "time": "2026-11-16T07:18:39.289Z",
+     "payload": {
+      "run_id": "m_c6cc435a1d2bb510",
+      "status": "cut",
+      "summary": "Turno interrumpido por el usuario.",
+      "exit_code": 1,
+      "tokens": 9,
+      "turn": "9ce112a9061f4126",
+      "turn_tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4b23108935589ed6",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 33,
+     "time": "2026-11-16T07:18:39.289Z",
+     "payload": {
+      "tool_call_id": "m_9eec71000c332b87",
+      "status": "cancelled"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_82d11ba7099b329b",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 34,
+     "time": "2026-11-16T07:18:39.289Z",
+     "payload": {
+      "run_id": "m_c6cc435a1d2bb510",
+      "outcome": "interrupted"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c324f0974803339d",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 35,
+     "time": "2026-11-16T07:18:39.289Z",
+     "payload": {
+      "input_id": "cola-tres-0003"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_627076134201fd69",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 36,
+     "time": "2026-11-16T07:18:39.296Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f82b61c8862caee9",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 37,
+     "time": "2026-11-16T07:18:39.302Z",
+     "payload": {
+      "text": "éste se queda",
+      "input_id": "cola-tres-0003",
+      "turn": "9762286185214619"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bdabf350607c0b1d",
+     "type": "alfalfa.notice",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 38,
+     "time": "2026-11-16T07:18:39.337Z",
+     "payload": {
+      "role": "tool",
+      "text": "run_command\n{\"error\": \"El proceso se interrumpió durante esta herramienta. Resultado incierto; inspecciona el estado real antes de repetirla.\"}",
+      "time": 1794813519.336718,
+      "turn": "9762286185214619",
+      "tool": {
+       "name": "run_command",
+       "phase": "end",
+       "error": true
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f7d5e1c84c1eac7f",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 39,
+     "time": "2026-11-16T07:18:39.345Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_59f2b795842aa780",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 40,
+     "time": "2026-11-16T07:18:39.345Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 17,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_42fd48bbf05fbc25",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 41,
+     "time": "2026-11-16T07:18:39.345Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 12
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_fd4beee6bf4c03c2",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 42,
+     "time": "2026-11-16T07:18:39.348Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "9762286185214619"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c6bd6dfeaf7c3e13",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 43,
+     "time": "2026-11-16T07:18:39.348Z",
+     "payload": {
+      "message_id": "m_fd4beee6bf4c03c2",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: éste se queda"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4a350d9d1c31c31a",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 44,
+     "time": "2026-11-16T07:18:39.348Z",
+     "payload": {
+      "message_id": "m_fd4beee6bf4c03c2"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_742e44236a589c7f",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 45,
+     "time": "2026-11-16T07:18:39.350Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "role": "system",
+      "alfalfa": {
+       "turn": "9762286185214619"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_be2dc4328464d9af",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 46,
+     "time": "2026-11-16T07:18:39.350Z",
+     "payload": {
+      "message_id": "m_742e44236a589c7f",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Queda pendiente: resultado incierto de run_command"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ce164a830528e5fe",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 47,
+     "time": "2026-11-16T07:18:39.350Z",
+     "payload": {
+      "message_id": "m_742e44236a589c7f"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_82fee73649facc81",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 48,
+     "time": "2026-11-16T07:18:39.354Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2d91e10a133eda31",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 49,
+     "time": "2026-11-16T07:18:39.355Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "alfalfa": {
+       "turn_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_36e39cd3a1f00c2b",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 50,
+     "time": "2026-11-16T07:18:39.355Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "status": "completed",
+      "summary": "Hecho: éste se queda",
+      "exit_code": 0,
+      "tokens": 12,
+      "turn": "9762286185214619",
+      "turn_tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_202d153dbedfb602",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 51,
+     "time": "2026-11-16T07:18:39.355Z",
+     "payload": {
+      "run_id": "m_c324f0974803339d",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5748b765d8c10b5b",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 52,
+     "time": "2026-11-16T07:18:39.358Z",
+     "payload": {
+      "reason": "Hecho: éste se queda",
+      "alfalfa": {
+       "status": "completed",
+       "summary": "Hecho: éste se queda",
+       "exit_code": 0,
+       "tokens": 12
+      }
+     }
+    }
+   }
+  ],
+  "salida": 0
+ }
+}

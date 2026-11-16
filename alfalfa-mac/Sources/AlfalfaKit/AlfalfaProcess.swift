@@ -101,9 +101,43 @@ public enum Launcher {
         if let task { arguments += ["--", task] }
         return arguments
     }
+
+    /// Argumentos de `alfalfa --pacai`: los mismos ajustes que `--stdio`, sin encargo, adjuntos ni `--esperar`,
+    /// porque con PACAI todo eso llega como mensajes (`PacaiClient.Opening`).
+    public static func pacaiArguments(resume: String?, model: String?, effort: String?, readOnly: Bool,
+                                      mode: String? = nil, parent: String? = nil, title: String? = nil,
+                                      keepAwake: Bool = true, browser: Bool = false, budget: Double? = nil,
+                                      monthlyBudget: Double? = nil, diagnostics: Bool = true,
+                                      swiftDiagnostics: Bool = false, commitSignature: Bool = true,
+                                      queue: Bool = false, browserEngine: String? = nil,
+                                      cuyBrowserProfile: String = "alfalfa",
+                                      cuyBrowserFromPath: Bool? = nil) -> [String] {
+        var arguments = stdioArguments(task: nil, resume: resume, model: model, effort: effort, readOnly: readOnly,
+                                       mode: mode, parent: parent, title: title, keepAwake: keepAwake,
+                                       browser: browser, budget: budget, monthlyBudget: monthlyBudget,
+                                       diagnostics: diagnostics, swiftDiagnostics: swiftDiagnostics,
+                                       commitSignature: commitSignature, queue: queue, browserEngine: browserEngine,
+                                       cuyBrowserProfile: cuyBrowserProfile, cuyBrowserFromPath: cuyBrowserFromPath)
+        arguments[0] = "--pacai"
+        return arguments
+    }
 }
 
-/// Proceso hijo `alfalfa --stdio`. Lee JSONL de stdout y escribe JSONL en stdin.
+/// El protocolo con el que la app abre sus sesiones. PACAI salvo que `UserDefaults` diga `ProtocoloMotor = stdio`:
+/// la salida de emergencia a `--stdio` v2 si algo fallara (`defaults write <id de la app> ProtocoloMotor stdio`).
+public enum EngineProtocol: String, Sendable {
+    case pacai
+    case stdio
+
+    public static let defaultsKey = "ProtocoloMotor"
+
+    public static func current(_ defaults: UserDefaults = .standard) -> EngineProtocol {
+        defaults.string(forKey: defaultsKey) == stdio.rawValue ? .stdio : .pacai
+    }
+}
+
+/// Proceso hijo `alfalfa --stdio` o `alfalfa --pacai`. Lee JSONL de stdout y escribe JSONL en stdin. Con PACAI,
+/// `PacaiClient` traduce en los dos sentidos y la app recibe los mismos `AlfalfaMessage`.
 public final class AlfalfaProcess: @unchecked Sendable {
     private let process = Process()
     private let input = Pipe()
@@ -114,13 +148,16 @@ public final class AlfalfaProcess: @unchecked Sendable {
     private var buffer = Data()
     private var stderrTail = Data()
     private var inputClosed = false
+    /// Sólo se usa desde `queue`.
+    private let pacai: PacaiClient?
 
     public var onMessage: (@Sendable (AlfalfaMessage) -> Void)?
     /// Código de salida y últimas líneas de stderr (sin la clave de Ollama).
     public var onExit: (@Sendable (Int32, String) -> Void)?
 
     public init(launcher: URL, arguments: [String], directory: URL,
-                environment: [String: String] = ProcessInfo.processInfo.environment) {
+                environment: [String: String] = ProcessInfo.processInfo.environment, pacai: PacaiClient? = nil) {
+        self.pacai = pacai
         process.executableURL = launcher
         process.arguments = arguments
         process.currentDirectoryURL = directory
@@ -176,6 +213,8 @@ public final class AlfalfaProcess: @unchecked Sendable {
             errors.fileHandleForReading.readabilityHandler = nil
             throw error
         }
+        // PACAI empieza por el saludo del cliente (y el mensaje que abre la sesión, si lo hay).
+        if let pacai { queue.async { self.deliver(pacai.start()) } }
         group.notify(queue: queue) { [weak self] in
             guard let self else { return }
             let tail = Redactor.clean(String(decoding: self.stderrTail, as: UTF8.self))
@@ -203,14 +242,30 @@ public final class AlfalfaProcess: @unchecked Sendable {
 
     private func emit(_ line: Data) {
         let text = Redactor.clean(String(decoding: line, as: UTF8.self))
-        if let message = AlfalfaMessage.decode(line: text) { onMessage?(message) }
+        if let pacai {
+            deliver(pacai.receive(text))
+        } else if let message = AlfalfaMessage.decode(line: text) {
+            onMessage?(message)
+        }
+    }
+
+    /// Lo que el cliente PACAI tiene que escribir y lo que la app tiene que ver. Desde `queue`.
+    private func deliver(_ output: PacaiClient.Output) {
+        if !inputClosed {
+            for line in output.lines { try? input.fileHandleForWriting.write(contentsOf: Data(line.utf8)) }
+        }
+        for message in output.events { onMessage?(message) }
     }
 
     /// Escribe una línea de entrada. No hace nada si el proceso ya cerró stdin.
     public func send(_ command: AlfalfaCommand) {
         queue.async {
             guard !self.inputClosed, self.process.isRunning else { return }
-            try? self.input.fileHandleForWriting.write(contentsOf: Data(command.line.utf8))
+            if let pacai = self.pacai {
+                self.deliver(pacai.send(command))
+            } else {
+                try? self.input.fileHandleForWriting.write(contentsOf: Data(command.line.utf8))
+            }
         }
     }
 

@@ -106,6 +106,10 @@ Nada que haya que instalar después de copiar la app.
 Las herramientas propias de cada proyecto (Xcode, `swift`, `node`, `python3`…) no son del
 motor: si el agente las necesita, son las del usuario.
 
+La app abre cada sesión con `alfalfa --pacai` (PACAI 0.3). Salida de emergencia, sin tocar la interfaz:
+`defaults write com.cuycoders.alfalfacode ProtocoloMotor stdio` vuelve a `--stdio` v2 en las sesiones que se abran
+después (`defaults delete com.cuycoders.alfalfacode ProtocoloMotor` lo deshace).
+
 ### Llevar git dentro (propuesta)
 
 Lo que de verdad quita el requisito es compilar git al empaquetar, como `rg` pero desde su

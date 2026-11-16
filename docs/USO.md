@@ -282,8 +282,9 @@ en worktrees utiliza el del repositorio compartido.
 ## Control con PACAI: `alfalfa --pacai`
 
 `alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.3 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor
-(TerminalManager y NativeRuntime): cambia sólo el idioma. `--stdio` v2 sigue igual y no se retira; la app de Mac
-y Chiyo siguen usándolo.
+(TerminalManager y NativeRuntime): cambia sólo el idioma. La app de Mac abre así sus sesiones (con
+`ProtocoloMotor = stdio` en sus `UserDefaults` vuelve a v2). `--stdio` v2 sigue igual y no se retira: Chiyo lo usa,
+y la app también para sus consultas de una pasada (`--json`) y para los Ajustes de sitios del navegador.
 
 ### Qué es PACAI
 

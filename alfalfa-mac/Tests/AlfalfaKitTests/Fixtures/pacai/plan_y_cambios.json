@@ -1,0 +1,785 @@
+{
+ "escenario": "plan_y_cambios",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "8de86db9ea444cbc",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 95,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio update_plan · {'explanation': 'Voy por partes', 'plan': [{'step': 'Escribir la nota', 'status': 'in_progress'}, {'step': 'Repasarla', 'status': 'pending'}]}",
+     "hora": 1794813603.897998,
+     "turno": "cc1346633fe84d60",
+     "herramienta": {
+      "nombre": "update_plan",
+      "fase": "inicio",
+      "descripcion": "Actualizar el plan",
+      "en_curso": "Actualizando el plan"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "plan",
+     "pasos": [
+      {
+       "paso": "Escribir la nota",
+       "estado": "in_progress"
+      },
+      {
+       "paso": "Repasarla",
+       "estado": "pending"
+      }
+     ],
+     "explicacion": "Voy por partes"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "update_plan\n{\"ok\": true, \"plan\": \"Voy por partes\\n[>] Escribir la nota\\n[ ] Repasarla\"}",
+     "hora": 1794813603.900816,
+     "turno": "cc1346633fe84d60",
+     "herramienta": {
+      "nombre": "update_plan",
+      "fase": "fin"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio write_file · {'path': 'nota.txt', 'content': 'hola\\n', 'expected_sha256': 'NEW'}",
+     "hora": 1794813603.903062,
+     "turno": "cc1346633fe84d60",
+     "herramienta": {
+      "nombre": "write_file",
+      "fase": "inicio",
+      "descripcion": "Crear nota.txt",
+      "en_curso": "Creando nota.txt",
+      "objetivo": "nota.txt"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "write_file\n{\"path\": \"nota.txt\", \"before\": \"NEW\", \"after\": \"133ee989293f92736301280c6f14c89d521200c17dcdcecca30cd20705332d44\"}",
+     "hora": 1794813603.906365,
+     "turno": "cc1346633fe84d60",
+     "herramienta": {
+      "nombre": "write_file",
+      "fase": "fin"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 20,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: planifica y escribe la nota",
+     "hora": 1794813603.914399,
+     "turno": "cc1346633fe84d60"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: planifica y escribe la nota",
+     "codigo_salida": 0,
+     "tokens": 6,
+     "turno": "cc1346633fe84d60",
+     "tokens_turno": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "completed",
+     "resumen": "Hecho: planifica y escribe la nota",
+     "codigo_salida": 0,
+     "tokens": 6
+    }
+   }
+  ],
+  "salida": 0
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "planifica y escribe la nota"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "planifica y escribe la nota"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_704362968c59f176",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:20:04.363Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c36631871ce42ed6",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:20:04.363Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b9275a108f3083b3",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:20:04.363Z",
+     "payload": {
+      "id": "bb32a01036624ff8",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f6a059b8bfe45564",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:20:04.367Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_58bf4689c42447cc",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:20:04.404Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_eb3613faafb3daca",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:20:04.465Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_81efbb9e045be125",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:20:04.465Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 95,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a9e017ea6a267460",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:20:04.465Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3552296f05c1d284",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:20:04.469Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "name": "update_plan",
+      "arguments": {
+       "explanation": "Voy por partes",
+       "plan": [
+        {
+         "step": "Escribir la nota",
+         "status": "in_progress"
+        },
+        {
+         "step": "Repasarla",
+         "status": "pending"
+        }
+       ]
+      },
+      "side": "agent",
+      "title": "Actualizar el plan",
+      "alfalfa": {
+       "text": "Inicio update_plan · {'explanation': 'Voy por partes', 'plan': [{'step': 'Escribir la nota', 'status': 'in_progress'}, {'step': 'Repasarla', 'status': 'pending'}]}",
+       "tool": {
+        "name": "update_plan",
+        "phase": "start",
+        "description": "Actualizar el plan",
+        "ongoing": "Actualizando el plan"
+       },
+       "turn": "53bde63713594b34"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5c6679ab39b8429a",
+     "type": "plan_updated",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:20:04.469Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "steps": [
+       {
+        "text": "Escribir la nota",
+        "status": "in_progress"
+       },
+       {
+        "text": "Repasarla",
+        "status": "pending"
+       }
+      ],
+      "alfalfa": {
+       "explanation": "Voy por partes"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_592db6459c4e6600",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:20:04.472Z",
+     "payload": {
+      "tool_call_id": "m_3552296f05c1d284",
+      "status": "success",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"ok\": true, \"plan\": \"Voy por partes\\n[>] Escribir la nota\\n[ ] Repasarla\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "update_plan",
+        "phase": "end"
+       },
+       "turn": "53bde63713594b34"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_29fafd52147ec667",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:20:04.474Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "name": "write_file",
+      "arguments": {
+       "path": "nota.txt",
+       "content": "hola\n",
+       "expected_sha256": "NEW"
+      },
+      "side": "agent",
+      "title": "Crear nota.txt",
+      "alfalfa": {
+       "text": "Inicio write_file · {'path': 'nota.txt', 'content': 'hola\\n', 'expected_sha256': 'NEW'}",
+       "tool": {
+        "name": "write_file",
+        "phase": "start",
+        "description": "Crear nota.txt",
+        "ongoing": "Creando nota.txt",
+        "target": "nota.txt"
+       },
+       "turn": "53bde63713594b34"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_109fb25bad57ed85",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:20:04.477Z",
+     "payload": {
+      "tool_call_id": "m_29fafd52147ec667",
+      "status": "success",
+      "output": [
+       {
+        "type": "text",
+        "text": "{\"path\": \"nota.txt\", \"before\": \"NEW\", \"after\": \"133ee989293f92736301280c6f14c89d521200c17dcdcecca30cd20705332d44\"}"
+       }
+      ],
+      "alfalfa": {
+       "tool": {
+        "name": "write_file",
+        "phase": "end"
+       },
+       "turn": "53bde63713594b34"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5e76f7ed02115c6a",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:20:04.483Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7c30108e7a46f13b",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:20:04.483Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 20,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3a46b1124d55dc6f",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:20:04.483Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1ef1a2b01dfb28d9",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 17,
+     "time": "2026-11-16T07:20:04.485Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "53bde63713594b34"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b3fd6098b9c8b5d5",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 18,
+     "time": "2026-11-16T07:20:04.485Z",
+     "payload": {
+      "message_id": "m_1ef1a2b01dfb28d9",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: planifica y escribe la nota"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6d5581e9e6866017",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 19,
+     "time": "2026-11-16T07:20:04.485Z",
+     "payload": {
+      "message_id": "m_1ef1a2b01dfb28d9"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bfbe63a6dbb68988",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 20,
+     "time": "2026-11-16T07:20:04.500Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_19859e650e2c94bc",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 21,
+     "time": "2026-11-16T07:20:04.536Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "alfalfa": {
+       "turn_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_8bdf1e11c8e6e6ac",
+     "type": "diff_updated",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 22,
+     "time": "2026-11-16T07:20:04.536Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "files": [
+       {
+        "path": "nota.txt",
+        "added": 1,
+        "removed": 0
+       }
+      ],
+      "patch": "diff --git a/nota.txt b/nota.txt\nnew file mode 100644\nindex 0000000..5c1b149\n--- /dev/null\n+++ b/nota.txt\n@@ -0,0 +1 @@\n+hola\n"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b4dcdea875ac7a28",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 23,
+     "time": "2026-11-16T07:20:04.536Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "status": "completed",
+      "summary": "Hecho: planifica y escribe la nota",
+      "exit_code": 0,
+      "tokens": 6,
+      "turn": "53bde63713594b34",
+      "turn_tokens": 6
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_51b0861e66ce4744",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 24,
+     "time": "2026-11-16T07:20:04.536Z",
+     "payload": {
+      "run_id": "m_f6a059b8bfe45564",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c83140f1d4c69cf6",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 25,
+     "time": "2026-11-16T07:20:04.539Z",
+     "payload": {
+      "reason": "Hecho: planifica y escribe la nota",
+      "alfalfa": {
+       "status": "completed",
+       "summary": "Hecho: planifica y escribe la nota",
+       "exit_code": 0,
+       "tokens": 6
+      }
+     }
+    }
+   }
+  ],
+  "salida": 0
+ }
+}
