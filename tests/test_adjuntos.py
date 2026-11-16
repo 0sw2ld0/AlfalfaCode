@@ -6,18 +6,34 @@ import json
 import os
 import shutil
 import stat
+import sys
 from pathlib import Path
 
 import pytest
 
-from alfalfa import adjuntos, contenido_externo
+from alfalfa import adjuntos, aisladas, contenido_externo
 from alfalfa.proveedores import anthropic, openai
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
+from alfalfa.seatbelt import SandboxUnavailable
 from alfalfa.stdio import Transport, _sin_etiquetas, _texto_escrito
 from alfalfa.terminal import TerminalManager
 from tests import archivos_de_prueba
+from tests.sandbox_del_sistema import motivo_sin_sandbox
 
-CON_PDFKIT = pytest.mark.skipif(not shutil.which('osascript'), reason='PDFKit sólo está en macOS')
+
+def _sin_lector_pdf():
+    """None si aquí se saca el texto de un PDF: PDFKit en macOS, pdftotext aislado en bwrap en Linux."""
+    if shutil.which('osascript'):
+        return None
+    if not sys.platform.startswith('linux'):
+        return 'sin PDFKit (macOS) ni pdftotext (Linux)'
+    if not shutil.which('pdftotext'):
+        return 'sin pdftotext: ' + adjuntos.INSTALAR_POPPLER
+    return motivo_sin_sandbox()
+
+
+SIN_LECTOR_PDF = _sin_lector_pdf()
+CON_LECTOR_PDF = pytest.mark.skipif(SIN_LECTOR_PDF is not None, reason=str(SIN_LECTOR_PDF))
 
 
 @pytest.fixture
@@ -116,8 +132,8 @@ def test_un_texto_enorme_se_recorta_y_se_avisa(tmp_path):
                                                       tmp_path / 's')]) is None
 
 
-@CON_PDFKIT
-def test_pdf_con_pdfkit_por_paginas(tmp_path, informe):
+@CON_LECTOR_PDF
+def test_pdf_por_paginas(tmp_path, informe):
     ficha = adjuntos.preparar(informe, tmp_path / 's')
     assert ficha['paginas'] == 2 and 'error' not in ficha
     texto, documentos = adjuntos.para_el_modelo([ficha], pdf_nativo=False)
@@ -125,7 +141,7 @@ def test_pdf_con_pdfkit_por_paginas(tmp_path, informe):
     assert '--- Página 1 ---\nVentas del trimestre' in texto and '--- Página 2 ---\nTotal: 42 unidades' in texto
 
 
-@CON_PDFKIT
+@CON_LECTOR_PDF
 def test_pdf_sin_texto_se_dice(tmp_path):
     vacio = archivos_de_prueba.pdf(tmp_path / 'escaneo.pdf', [''])
     ficha = adjuntos.preparar(vacio, tmp_path / 's')
@@ -150,6 +166,67 @@ def test_pdf_nativo_como_documento_salvo_con_secretos(tmp_path, informe, monkeyp
     assert documentos == [] and 'sk-proyecto-12345678' in texto  # va como texto, que preparar tapa
 
 
+@pytest.fixture
+def poppler(monkeypatch):
+    """Linux con poppler-utils, aunque sea macOS: pdftotext y pdfinfo en el PATH y sin osascript. Las
+    llamadas a aisladas.correr quedan en la lista, y `respuestas` dice qué devuelve cada programa."""
+    programas = {'pdftotext': '/usr/bin/pdftotext', 'pdfinfo': '/usr/bin/pdfinfo'}
+    monkeypatch.setattr(adjuntos.shutil, 'which', lambda nombre: programas.get(nombre))
+    monkeypatch.setattr(adjuntos.sys, 'platform', 'linux')
+    llamadas, respuestas = [], {}
+
+    def correr(argv, *, tope, plazo):
+        llamadas.append(argv)
+        respuesta = respuestas[Path(argv[0]).name]
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return respuesta
+
+    monkeypatch.setattr(aisladas, 'correr', correr)
+    return programas, llamadas, respuestas
+
+
+def test_en_linux_pdftotext_corre_aislado_y_da_una_pagina_por_salto(tmp_path, informe, poppler):
+    _, llamadas, respuestas = poppler
+    respuestas['pdftotext'] = (0, 'Ventas\fTotal: 42 ñandúes\f'.encode(), '')
+    ficha = adjuntos.preparar(informe, tmp_path / 's')
+    assert ficha['paginas'] == 2 and 'error' not in ficha
+    assert '--- Página 2 ---\nTotal: 42 ñandúes' in adjuntos.para_el_modelo([ficha], pdf_nativo=False)[0]
+    assert llamadas == [['/usr/bin/pdftotext', '-enc', 'UTF-8', '-eol', 'unix', ficha['ruta'], '-']]
+
+
+def test_en_linux_un_pdf_enorme_se_corta_y_pdfinfo_cuenta_sus_paginas(tmp_path, informe, poppler):
+    _, llamadas, respuestas = poppler
+    respuestas['pdftotext'] = aisladas.Cortada(b'x' * adjuntos.MAX_SALIDA_PDF)
+    respuestas['pdfinfo'] = (0, b'Title:   informe\nPages:           250\nEncrypted:       no\n', '')
+    ficha = adjuntos.preparar(informe, tmp_path / 's')
+    assert ficha['paginas'] == 250 and ficha['recortado']
+    assert [Path(a[0]).name for a in llamadas] == ['pdftotext', 'pdfinfo']
+    assert adjuntos.para_el_modelo([ficha], pdf_nativo=True)[1] == []  # más de 100 páginas: va su texto
+
+
+def test_en_linux_un_pdf_con_contrasena_o_danado_no_va_como_documento(tmp_path, informe, poppler):
+    _, _, respuestas = poppler
+    respuestas['pdftotext'] = (1, b'', 'Command Line Error: Incorrect password\n')
+    ficha = adjuntos.preparar(informe, tmp_path / 's')
+    assert ficha['error'] == 'está protegido con contraseña' and ficha['sin_documento']
+    respuestas['pdftotext'] = (1, b'', "Syntax Error: Couldn't find trailer dictionary\n")
+    ficha = adjuntos.preparar(archivos_de_prueba.pdf(tmp_path / 'otro.pdf', ['otro']), tmp_path / 's')
+    assert 'dañado' in ficha['error'] and adjuntos.para_el_modelo([ficha], pdf_nativo=True)[1] == []
+
+
+def test_en_linux_sin_sandbox_o_sin_poppler_el_pdf_sigue_yendo_como_documento(tmp_path, informe, poppler):
+    programas, llamadas, respuestas = poppler
+    respuestas['pdftotext'] = SandboxUnavailable('bwrap: setting up uid map: Permission denied')
+    ficha = adjuntos.preparar(informe, tmp_path / 's')
+    assert 'sandbox' in ficha['error'] and 'uid map' in ficha['error'] and not ficha['sin_documento']
+    assert len(adjuntos.para_el_modelo([ficha], pdf_nativo=True)[1]) == 1
+    del programas['pdftotext']
+    ficha = adjuntos.preparar(archivos_de_prueba.pdf(tmp_path / 'otro.pdf', ['otro']), tmp_path / 's')
+    assert adjuntos.INSTALAR_POPPLER in ficha['error'] and len(llamadas) == 1
+    assert len(adjuntos.para_el_modelo([ficha], pdf_nativo=True)[1]) == 1
+
+
 def test_mas_de_100_paginas_va_como_texto(tmp_path, informe, monkeypatch):
     monkeypatch.setattr(adjuntos, '_texto_pdf', lambda copia: (['página'] * 150, 150))
     ficha = adjuntos.preparar(informe, tmp_path / 's')
@@ -157,7 +234,7 @@ def test_mas_de_100_paginas_va_como_texto(tmp_path, informe, monkeypatch):
     assert '150 páginas' in adjuntos.aviso_de_coste([ficha])
 
 
-@CON_PDFKIT  # sin un modelo que lea PDF, el texto se extrae con PDFKit
+@CON_LECTOR_PDF  # sin un modelo que lea PDF, el texto se extrae con PDFKit o pdftotext
 def test_el_runtime_guarda_la_ficha_y_marca_contenido_externo(m, informe):
     rt = NativeRuntime(m, m.task)
     rt.user_message(adjuntos.con_etiquetas('Resume', [str(informe)]))

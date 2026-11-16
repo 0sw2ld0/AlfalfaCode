@@ -20,8 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: bwrap, rg y file
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep file
+      - name: bwrap, rg, file y poppler-utils
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap ripgrep file poppler-utils
       - name: Perfil de AppArmor para bwrap
         run: |
           sudo tee /etc/apparmor.d/bwrap >/dev/null <<'EOF'

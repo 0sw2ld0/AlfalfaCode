@@ -181,7 +181,7 @@ comprobar_mac() {
     Darwin) ;;
     # Este guion instala la app de Mac; en Linux el motor se instala con pipx.
     Linux) falla "este guion instala la app de Mac. En Linux, instala el motor con pipx:
-  sudo apt install -y pipx git bubblewrap
+  sudo apt install -y pipx git bubblewrap poppler-utils
   pipx install \"git+https://github.com/$REPO@v<versión>\"
 Pasos, sandbox y claves: https://github.com/$REPO/blob/main/docs/USO.md#linux" ;;
     *) falla "AlfalfaCode funciona en macOS y en Linux (en Windows, con WSL2)." ;;
