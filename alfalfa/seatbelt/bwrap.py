@@ -26,6 +26,8 @@ PROCEDENCIA.md de esta carpeta): reescrito en Python, sin código copiado.
   io_uring, que abriría sockets sin pasar por `socket()`. Falla con EPERM, «Operation not permitted»,
   como en Seatbelt, y la política on-request lo reconoce como denegación. `network=True` quita las
   dos cosas: es la red completa.
+- Las credenciales de systemd (`/run/credentials`, donde `LoadCredentialEncrypted=` deja descifrada la
+  clave del servicio) quedan vacías dentro del sandbox.
 - Sin capacidades (`--cap-drop ALL`, también si el arnés corre como root), en su propia sesión, con
   sus propios espacios de nombres de usuario, procesos e IPC, y sin poder crear más espacios de usuario
   cuando bwrap lo admite (`--disable-userns`, desde 0.8). Muere con el arnés (`--die-with-parent`),
@@ -80,6 +82,27 @@ NOMBRE_LANZADOR = 'alfalfa-bwrap'
 DE_LA_SHELL = ('OLDPWD', 'SHLVL', '_')
 INSTALAR = 'sudo apt install bubblewrap'
 APPARMOR = '/proc/sys/kernel/apparmor_restrict_unprivileged_userns'
+# Donde systemd deja descifradas las credenciales de un servicio (LoadCredential=, LoadCredentialEncrypted=),
+# legibles por su usuario: el de AlfalfaCode y el de sus órdenes. Las del servicio de usuario, bajo
+# $XDG_RUNTIME_DIR, y la de este proceso, en $CREDENTIALS_DIRECTORY. Dentro del sandbox quedan vacías.
+CREDENCIALES = ('/run/credentials',)
+
+
+def carpetas_de_credenciales():
+    """Las carpetas de credenciales que existen, resueltas y sin una dentro de otra: la de los servicios,
+    la del servicio de usuario y la de este proceso ($CREDENTIALS_DIRECTORY), si systemd la puso en otra ruta."""
+    candidatas = list(CREDENCIALES)
+    for variable, sufijo in (('XDG_RUNTIME_DIR', 'credentials'), ('CREDENTIALS_DIRECTORY', '')):
+        valor = os.environ.get(variable)
+        if valor and os.path.isabs(valor):
+            candidatas.append(os.path.join(valor, sufijo) if sufijo else valor)
+    carpetas = []
+    for candidata in candidatas:
+        real = os.path.realpath(candidata)
+        if os.path.isdir(real) and not any(_contains(o, real) for o in carpetas):
+            carpetas = [o for o in carpetas if not _contains(real, o)] + [real]
+    return carpetas
+
 
 # ------------------------------------------------------------------ seccomp
 
@@ -277,6 +300,9 @@ class BwrapSandbox:
         for hogar in sorted(hogares, key=_profundidad):
             if os.path.lexists(hogar):
                 args += ['--ro-bind', hogar, hogar]
+        for carpeta in carpetas_de_credenciales():
+            # Una clave de systemd-creds no llega a las órdenes: AlfalfaCode ya la leyó al arrancar.
+            args += ['--perms', '0555', '--tmpfs', carpeta, '--remount-ro', carpeta]
         args += ['--cap-drop', 'ALL']
         return args
 
