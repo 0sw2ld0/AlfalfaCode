@@ -275,6 +275,8 @@ class TerminalApproval:
         self.stdin = stdin if stdin is not None else sys.stdin
         self.stdout = stdout if stdout is not None else sys.stdout
         self.denied = 0
+        # Negadas porque no había nadie para responder (sin terminal: cron, un servicio, un guion).
+        self.sin_nadie = 0
 
     async def __call__(self, args):
         from ..auditoria_equipo import marcar_respuesta
@@ -336,5 +338,8 @@ class TerminalApproval:
                 loop.remove_reader(fd)
         if not accepted:
             self.denied += 1
+            if not (self.stdin.isatty() and self.stdout.isatty()):
+                self.sin_nadie += 1
+                print('AlfalfaCode · Sin terminal no hay quien responda: se niega.', file=self.stdout, flush=True)
             raise ValueError('Comando rechazado; no se ejecutó. No lo repitas ni reformules para eludir el rechazo.')
         return site_scope or ('siempre' if always else 'sesion' if session else None)

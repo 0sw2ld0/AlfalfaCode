@@ -1333,6 +1333,23 @@ def signature(args):
     return False if getattr(args, 'sin_firma', False) else None
 
 
+# Código de salida de un encargo que terminó pero negó algún permiso porque no había nadie que respondiera
+# (sin terminal: un temporizador de systemd, cron, un guion), para que quien lo lanza no lo tome por un 0.
+SIN_NADIE = 3
+
+
+def _sin_nadie_delante(manager, codigo):
+    negadas = getattr(manager.approval, 'sin_nadie', 0)
+    if type(negadas) is not int or negadas <= 0:
+        return codigo
+    texto = ((f'{negadas} permisos negados' if negadas > 1 else 'Un permiso negado')
+             + ' sin nadie que respondiera (sin terminal). Decide de antemano qué puede hacer solo con --modo y '
+             'reglas.toml (docs/USO.md, «Linux: sin nadie delante»).')
+    manager.event(manager.task, 'system', texto)
+    print('AlfalfaCode · ' + texto, file=sys.stderr, flush=True)
+    return SIN_NADIE if codigo == 0 else codigo
+
+
 async def execute(args):
     resolve_fork(args)
     cola = getattr(args, 'cola_encargos', None)
@@ -1377,6 +1394,7 @@ async def execute(args):
             return 1
         codigo = await manager.run(args.encargo or 'Continúa el encargo original. Inspecciona las operaciones '
                                                    'inciertas antes de actuar.')
+        codigo = _sin_nadie_delante(manager, codigo)
         # El resultado del turno ya salió entero; el repaso va detrás, acotado y cancelable con Ctrl-C.
         sys.stdout.flush()
         await manager.repasar()

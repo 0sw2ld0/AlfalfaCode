@@ -885,7 +885,9 @@ bubblewrap (`bwrap`), con la misma política que Seatbelt en el Mac:
   niega abrir sockets, también los Unix: así una orden no llega a Docker, a tmux ni al bus
   de la sesión;
 - sin capacidades, también si AlfalfaCode corre como root, y con su propio espacio de
-  procesos: no ve el entorno de AlfalfaCode, donde están las claves.
+  procesos: no ve el entorno de AlfalfaCode, donde están las claves. Las credenciales de
+  systemd (`/run/credentials`) y la clave de firma del código de cortesía
+  (`~/.alfalfa/firma`) también quedan vacías dentro.
 
 Si `bwrap` falta o no arranca, cada orden pide el permiso «SIN SANDBOX», como en el Mac
 cuando falla Seatbelt.
@@ -954,7 +956,173 @@ delante, bash no la guarda en el historial:
 Con `--pacai`, `--stdio` o desde otro programa, el proceso que lanza `alfalfa` le pasa la
 variable en su entorno. Las órdenes del agente no la reciben: el arnés les da un entorno
 mínimo y el sandbox no les deja leer el de AlfalfaCode. `alfalfa --proveedores` dice qué
-proveedores tienen clave, sin enseñarla.
+proveedores tienen clave, sin enseñarla. Para un servicio sin nadie delante, la clave va
+cifrada con `systemd-creds` (en la sección siguiente).
+
+### Linux: sin nadie delante
+
+AlfalfaCode puede trabajar solo en el servidor, sin nadie conectado: un temporizador de
+systemd, un guion u otro programa que lo controla por `--pacai`. Nada se queda esperando
+un permiso que nadie puede dar:
+
+- **`alfalfa "encargo"` sin terminal** (temporizador, cron, un guion): lo que pide permiso
+  se niega en el acto, queda en el registro de la sesión y el proceso termina con código 3.
+- **`alfalfa --pacai`** desde tu programa: los permisos le llegan como `approval_request`.
+  Si puede no contestar, arráncalo con `--caducidad-aprobacion SEGUNDOS` (o
+  `ALFALFA_CADUCIDAD_APROBACION`): pasado el plazo, la petición caduca y se niega. Sin
+  plazo, espera la respuesta.
+- **`alfalfa --stdio`** es para una app con alguien delante: espera al cliente y no caduca.
+
+| Código de `alfalfa "encargo"` | Qué pasó |
+|---|---|
+| 0 | Terminó. |
+| 1 | Quedó bloqueado o falló; el resumen dice por qué. |
+| 3 | Terminó, pero negó al menos un permiso porque no había nadie para responder. |
+| 130 | Se interrumpió. |
+
+**Qué puede hacer solo** se decide de antemano. Todo corre igual dentro de bubblewrap:
+
+- `--modo auto` (el de siempre): las órdenes normales corren en el sandbox sin preguntar,
+  escriben sólo en la carpeta y no salen a la red. Lo peligroso, la red y salir del sandbox
+  piden permiso; sin nadie, se niegan.
+- `--modo plan` sólo lee y propone un plan. `manual` y `ediciones` preguntan casi todo, así
+  que sin nadie lo niegan casi todo.
+- `--modo omitir` lo aprueba todo, también fuera del sandbox: no lo uses sin nadie delante.
+- Las reglas de `~/.alfalfa/reglas.toml` («No volver a preguntar») abren lo concreto. Por
+  ejemplo, `npm install` con red, dentro del sandbox:
+
+  ```toml
+  [[regla]]
+  patron = ["npm", "install"]
+  decision = "permitida"
+  con_red = true
+  justificacion = "Instalar dependencias sin preguntar, en el sandbox."
+  ```
+
+  Una orden peligrosa, una regla `preguntar` o `prohibida` y lo que viene tras leer
+  contenido externo siguen pidiendo permiso. Evita `fuera_del_sandbox = true` en un
+  servidor.
+
+**Receta para Ubuntu con systemd.** Usa un usuario propio y sin sudo para AlfalfaCode, no
+root, e instala `alfalfa` como ese usuario (`sudo -iu alfalfa` y los pasos de «Linux:
+instalar»):
+
+```bash
+sudo adduser --disabled-password --gecos '' alfalfa
+```
+
+La clave la escribes tú, cifrada con `systemd-creds`. `systemd-creds has-tpm2` dice si el
+servidor tiene TPM; sin él (un droplet, por ejemplo) se cifra sólo con la clave del propio
+servidor, `/var/lib/systemd/credential.secret`, que sólo lee root. Así ni el usuario
+`alfalfa` ni el agente pueden descifrarla del disco, pero quien tenga una copia del disco o
+un snapshot del servidor sí, porque esa clave va en él:
+
+```bash
+sudo mkdir -p /etc/credstore.encrypted
+```
+
+```bash
+systemd-ask-password -n 'Clave de Ollama:' | sudo systemd-creds encrypt --name=ollama - /etc/credstore.encrypted/ollama
+```
+
+El servicio, `/etc/systemd/system/alfalfa-encargo.service`. La shell pasa la clave
+descifrada a `OLLAMA_API_KEY` al arrancar (`$$` es un `$` para systemd), y dentro del
+sandbox `/run/credentials` queda vacío, así que las órdenes del agente no la ven:
+
+```ini
+[Unit]
+Description=AlfalfaCode: encargo programado
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=alfalfa
+WorkingDirectory=/home/alfalfa/proyecto
+LoadCredentialEncrypted=ollama:/etc/credstore.encrypted/ollama
+ExecStart=/bin/sh -c 'OLLAMA_API_KEY="$$(cat "$$CREDENTIALS_DIRECTORY/ollama")" exec /home/alfalfa/.local/bin/alfalfa --modelo deepseek-v4.1-flash:cloud "Revisa los cambios de ayer y deja un informe en informes/"'
+# Si una orden se come la memoria, muere AlfalfaCode y no lo demás del servidor.
+MemoryMax=600M
+MemorySwapMax=1G
+Nice=10
+```
+
+Con el **código de cortesía** en lugar de una clave de proveedor, el servidor no guarda
+ninguna clave de pago y el gasto tiene el tope del código. Actívalo una vez como `alfalfa`
+(el párrafo «Fuera de macOS…» del control por JSONL), cifra la clave de firma y el código,
+y dale al servicio las dos credenciales:
+
+```bash
+sudo systemd-creds encrypt --name=alfalfa-firma /home/alfalfa/.alfalfa/firma/clave.pem /etc/credstore.encrypted/alfalfa-firma
+```
+
+```bash
+systemd-ask-password -n 'Código CUY:' | sudo systemd-creds encrypt --name=alfalfa-codigo - /etc/credstore.encrypted/alfalfa-codigo
+```
+
+```ini
+LoadCredentialEncrypted=alfalfa-firma:/etc/credstore.encrypted/alfalfa-firma
+LoadCredentialEncrypted=alfalfa-codigo:/etc/credstore.encrypted/alfalfa-codigo
+Environment=ALFALFA_FIRMA_CLAVE=%d/alfalfa-firma
+ExecStart=/bin/sh -c 'ALFALFA_CODIGO="$$(cat "$$CREDENTIALS_DIRECTORY/alfalfa-codigo")" exec /home/alfalfa/.local/bin/alfalfa --modelo alfalfa/<modelo> "…"'
+```
+
+La carpeta `~/.alfalfa/firma` y el archivo de `ALFALFA_FIRMA_CLAVE` también quedan vacíos
+dentro del sandbox.
+
+En lugar de cron, un temporizador, `/etc/systemd/system/alfalfa-encargo.timer`. Con
+cron la clave tendría que estar en claro en el crontab o en un archivo:
+
+```ini
+[Unit]
+Description=AlfalfaCode: encargo cada noche
+
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now alfalfa-encargo.timer
+```
+
+Para probarlo en el momento, `sudo systemctl start alfalfa-encargo.service`. Lo que
+escribe en pantalla queda en `journalctl -u alfalfa-encargo`. El registro de cada sesión
+queda en `/home/alfalfa/.alfalfa/sesiones/<id>/`: `<id>.jsonl` con los eventos, permisos
+negados incluidos, y `task.json` con el estado. `sudo -iu alfalfa alfalfa --sesiones`
+las lista. Un código 3 sale como fallo en `systemctl status`: se negó algo.
+
+**En un servidor pequeño** (1 GB de RAM, como un droplet de 6 $):
+
+- sólo sirven modelos en la nube (Ollama Cloud u otro proveedor); uno local no cabe;
+- el motor ocupa poco; lo que gasta memoria son las órdenes del agente (`npm install`,
+  compilar, la suite de pruebas). `MemoryMax=` y `MemorySwapMax=` las limitan con lo
+  demás del servicio, también dentro de bubblewrap. Por SSH, lo mismo con un ámbito de
+  systemd:
+
+  ```bash
+  systemd-run --user --scope -p MemoryMax=600M -p MemorySwapMax=1G alfalfa "encargo"
+  ```
+
+  Con `--pacai` desde tu programa, pon el límite en el servicio de tu programa: lo heredan
+  `alfalfa` y sus órdenes;
+- si no tiene swap, uno de 1 a 2 GB evita que se acabe la memoria de golpe:
+
+  ```bash
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  ```
+
+  ```bash
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+
+- una cola de encargos, una tras otra y no en paralelo: `{"encargos": ["…", "…"], "modo":
+  "serie"}` en un archivo y `alfalfa --cola-encargos cola.json`.
+
+En WSL2, systemd tiene que estar activo (`[boot]` con `systemd=true` en `/etc/wsl.conf`).
 
 ### Windows: WSL2
 

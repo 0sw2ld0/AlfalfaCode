@@ -523,3 +523,105 @@ def test_real_lo_que_la_orden_deja_en_segundo_plano_muere_con_ella(tmp_path):
     assert code == 0 and 'lanzado' in output, output
     quedan = subprocess.run(['pgrep', '-f', '^sleep ' + segundos + '$'], capture_output=True, text=True).stdout
     assert quedan == '', quedan
+
+
+def test_las_credenciales_de_systemd_quedan_vacias(tmp_path, monkeypatch):
+    credenciales = tmp_path / 'credentials'
+    (credenciales / 'alfalfa.service').mkdir(parents=True)
+    monkeypatch.setattr(bw, 'CREDENCIALES', (str(credenciales),))
+    monkeypatch.delenv('XDG_RUNTIME_DIR', raising=False)
+    monkeypatch.delenv('CREDENTIALS_DIRECTORY', raising=False)
+    args = BwrapSandbox(str(tmp_path)).montajes()
+    i = args.index('--tmpfs')
+    real = os.path.realpath(credenciales)
+    assert args[i - 2:i + 4] == ['--perms', '0555', '--tmpfs', real, '--remount-ro', real]
+    # Después de las raíces escribibles: /tmp no las reabre.
+    assert i > max(j for j, a in enumerate(args) if a == '--bind')
+    monkeypatch.setattr(bw, 'CREDENCIALES', (str(tmp_path / 'no-existe'),))
+    assert '--tmpfs' not in BwrapSandbox(str(tmp_path)).montajes()
+
+
+def test_tambien_la_carpeta_de_credenciales_de_este_proceso(tmp_path, monkeypatch):
+    """$CREDENTIALS_DIRECTORY puede estar fuera de /run/credentials; dentro de ella no se tapa dos veces."""
+    otra = tmp_path / 'otra-ruta'
+    otra.mkdir()
+    monkeypatch.setattr(bw, 'CREDENCIALES', ())
+    monkeypatch.delenv('XDG_RUNTIME_DIR', raising=False)
+    monkeypatch.setenv('CREDENTIALS_DIRECTORY', str(otra))
+    assert bw.carpetas_de_credenciales() == [os.path.realpath(otra)]
+    comun = tmp_path / 'credentials'
+    (comun / 'alfalfa.service').mkdir(parents=True)
+    monkeypatch.setattr(bw, 'CREDENCIALES', (str(comun),))
+    monkeypatch.setenv('CREDENTIALS_DIRECTORY', str(comun / 'alfalfa.service'))
+    assert bw.carpetas_de_credenciales() == [os.path.realpath(comun)]
+
+
+@real
+def test_real_la_clave_de_systemd_no_llega_a_la_orden(tmp_path, monkeypatch):
+    """LoadCredentialEncrypted= deja la clave descifrada en /run/credentials/<servicio>/, legible por el usuario
+    del servicio, que es el de las órdenes."""
+    credenciales = tmp_path / 'credentials'
+    (credenciales / 'alfalfa.service').mkdir(parents=True)
+    (credenciales / 'alfalfa.service' / 'ollama').write_text('sk-ollama-secreta')
+    monkeypatch.setattr(bw, 'CREDENCIALES', (str(credenciales),))
+    monkeypatch.delenv('CREDENTIALS_DIRECTORY', raising=False)
+    ws = tmp_path / 'ws'
+    ws.mkdir()
+    leer = 'cat "$0"/alfalfa.service/ollama; echo "[$(ls -A "$0")]"'
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/sh', '-c', leer, str(credenciales)], ws)
+    assert 'sk-ollama-secreta' not in output and 'No such file' in output and '[]' in output, output
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/sh', '-c', 'touch "$0"/x', str(credenciales)], ws)
+    assert code != 0 and not (credenciales / 'x').exists(), output
+    # Y la de este proceso, aunque systemd la ponga en otra ruta.
+    propia = tmp_path / 'propia'
+    propia.mkdir()
+    (propia / 'ollama').write_text('sk-ollama-propia')
+    monkeypatch.setattr(bw, 'CREDENCIALES', ())
+    monkeypatch.setenv('CREDENTIALS_DIRECTORY', str(propia))
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(propia / 'ollama')], ws)
+    assert code != 0 and 'sk-ollama-propia' not in output, output
+
+
+def _clave_de_firma():
+    """La clave de firma del código de cortesía donde la crea `--activar-codigo` fuera del Mac."""
+    from alfalfa.proveedores import configuracion
+    from alfalfa.proveedores.alfalfa import CARPETA_FIRMA
+    carpeta = configuracion.ruta().parent / CARPETA_FIRMA
+    carpeta.mkdir(mode=0o700, parents=True)
+    clave = carpeta / 'clave.pem'
+    clave.write_text('-----BEGIN PRIVATE KEY-----\nsecreta-de-firma\n')
+    clave.chmod(0o600)
+    return carpeta, clave
+
+
+def test_la_clave_de_firma_queda_tapada(tmp_path, monkeypatch):
+    monkeypatch.setattr(bw, 'CREDENCIALES', ())
+    monkeypatch.delenv('CREDENTIALS_DIRECTORY', raising=False)
+    monkeypatch.delenv('XDG_RUNTIME_DIR', raising=False)
+    monkeypatch.delenv('ALFALFA_FIRMA_CLAVE', raising=False)
+    carpeta, _ = _clave_de_firma()
+    args = BwrapSandbox(str(tmp_path)).montajes()
+    real = os.path.realpath(carpeta)
+    i = args.index('--tmpfs')
+    assert args[i - 2:i + 4] == ['--perms', '0555', '--tmpfs', real, '--remount-ro', real]
+    # Una clave fuera de esa carpeta (ALFALFA_FIRMA_CLAVE) se tapa con /dev/null.
+    otra = tmp_path / 'otra.pem'
+    otra.write_text('x')
+    monkeypatch.setenv('ALFALFA_FIRMA_CLAVE', str(otra))
+    args = BwrapSandbox(str(tmp_path)).montajes()
+    assert args[args.index(os.path.realpath(otra)) - 2:][:3] == ['--ro-bind', '/dev/null', os.path.realpath(otra)]
+
+
+@real
+def test_real_una_orden_no_lee_la_clave_de_firma(tmp_path, monkeypatch):
+    monkeypatch.delenv('ALFALFA_FIRMA_CLAVE', raising=False)
+    _, clave = _clave_de_firma()
+    externa = tmp_path / 'firma-externa.pem'
+    externa.write_text('secreta-externa')
+    ws = tmp_path / 'ws'
+    ws.mkdir()
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(clave)], ws)
+    assert code != 0 and 'secreta-de-firma' not in output, output
+    monkeypatch.setenv('ALFALFA_FIRMA_CLAVE', str(externa))
+    code, output = sandboxed(BwrapSandbox(str(ws)), ['/bin/cat', str(externa)], ws)
+    assert 'secreta-externa' not in output, output
