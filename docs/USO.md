@@ -295,6 +295,7 @@ PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común
 alfalfa --pacai                      # sesión nueva; el primer encargo llega como `input`
 alfalfa --pacai --reanudar ID        # abre una sesión guardada y espera un `input`
 alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramienta del cliente `browser`)
+alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, un día)
 ```
 
 `--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o `--cola-encargos`: la entrada
@@ -369,7 +370,11 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
   subejecuciones. Una herramienta cortada por una interrupción se cierra con `tool_end` `cancelled`; la subejecución
   termina antes que su madre.
 - **Aprobaciones.** El `digest` es `sha256` de los argumentos canonizados (JCS, RFC 8785) y cubre los mismos
-  argumentos que el `tool_start`. Sin respuesta en 10 minutos (`expires`), el agente declara `expired` y no ejecuta.
+  argumentos que el `tool_start`. Sin respuesta a tiempo (`expires`), el agente declara `expired` y no ejecuta.
+  PACAI 0.2 obliga a poner un plazo: por defecto es **un día**, para que una petición espere al usuario como en
+  la app; `--caducidad-aprobacion SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` lo cambian (más de 0 y
+  hasta un año). Una interrupción, un `close` o EOF niegan lo pendiente en el acto: la herramienta se cierra con
+  `tool_end` `cancelled` (o `error`, si el motor llegó a contestar) y su plazo deja de contar.
   Una respuesta tardía, o un valor que no sea exactamente `approved` o `denied`, no vale. «Aprobar para la sesión»
   (`scope: "session"`) sólo cubre el mismo nombre y los mismos argumentos; cada repetición es un `tool_start` con
   `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.

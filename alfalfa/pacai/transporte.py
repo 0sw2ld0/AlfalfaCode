@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 import sys
 import traceback
 from collections import deque
@@ -29,7 +30,7 @@ from .sobre import Emisor, ahora, nueva_sesion
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
 
-__all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS']
+__all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS', 'caducidad_de', 'ENTORNO_CADUCIDAD']
 
 NOMBRE = 'alfalfa'
 PERFILES = ('work',)
@@ -37,6 +38,9 @@ EXTENSIONES = ('alfalfa',)
 MAX_BYTES = 1024 * 1024
 # Segundos que el cierre de un turno espera a que el cliente cierre sus herramientas abiertas (§4.4).
 GRACIA_CLIENTE = 3.0
+# Variable de entorno con los segundos que espera una aprobación (por defecto, `CADUCIDAD_APROBACION`: un día).
+ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
+CADUCIDAD_MAXIMA = 365 * 24 * 3600
 # Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Los campos son los de v2.
 COMANDOS = {
     'set_settings': 'ajustes', 'compact': 'compactar', 'set_context_mode': 'contexto',
@@ -48,11 +52,30 @@ COMANDOS = {
 }
 
 
+def caducidad_de(valor: Any = None) -> float:
+    """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`, si no un
+    día. Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
+    origen = '--caducidad-aprobacion'
+    if valor is None:
+        valor, origen = os.environ.get(ENTORNO_CADUCIDAD), ENTORNO_CADUCIDAD
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        return float(CADUCIDAD_APROBACION)
+    try:
+        segundos = float(valor)
+    except (TypeError, ValueError):
+        segundos = -1.0
+    if not 0 < segundos <= CADUCIDAD_MAXIMA:
+        raise ValueError(origen + ' necesita un número de segundos mayor que 0 y de hasta '
+                         + str(CADUCIDAD_MAXIMA) + ' (un año); llegó «' + str(valor)[:40] + '».')
+    return segundos
+
+
 class TransportePacai(Transport):
-    def __init__(self, output, *, caducidad: float = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
+    def __init__(self, output, *, caducidad: float | None = None, reloj: Callable[[], datetime] = ahora,
                  gracia_cliente: float = GRACIA_CLIENTE):
         super().__init__(output)
-        self.caducidad, self.reloj, self.gracia_cliente = caducidad, reloj, gracia_cliente
+        self.caducidad = caducidad_de() if caducidad is None else caducidad
+        self.reloj, self.gracia_cliente = reloj, gracia_cliente
         self.emisor = Emisor('agent', nueva_sesion(), reloj=reloj)
         self.t: Traductor | None = None
         self.empezado = False
@@ -114,6 +137,7 @@ class TransportePacai(Transport):
             self._cerrar_sesion()
         else:
             self._enviar_todo(self.t.evento(tipo, campos))
+        self._olvidar_resueltas()
 
     def _enviar_todo(self, mensajes: list[dict]) -> None:
         for m in mensajes:
@@ -190,6 +214,14 @@ class TransportePacai(Transport):
             return
         espera = max(0.0, (a.expira - self.reloj()).total_seconds()) + 0.05
         self._temporizadores[request_id] = loop.call_later(espera, self._caducar, request_id)
+
+    def _olvidar_resueltas(self) -> None:
+        """Una petición ya resuelta (por el cliente, la interrupción, el cierre o el fin de su ejecución) no espera
+        a su `expires`: con una caducidad de un día, su temporizador no debe seguir vivo."""
+        for request_id in list(self._temporizadores):
+            a = self.t.aprobacion(request_id) if self.t else None
+            if a is None or a.estado != 'pending':
+                self._temporizadores.pop(request_id).cancel()
 
     def _caducar(self, request_id: str) -> None:
         self._temporizadores.pop(request_id, None)
@@ -426,6 +458,7 @@ class TransportePacai(Transport):
         elif decision == 'approved' and a.sitio:
             orden['sitio'] = 'una_vez'
         a.estado = 'approved' if decision == 'approved' else 'denied'
+        self._olvidar_resueltas()
         super().receive(json.dumps(orden))
 
     def _c_tool_end(self, m):

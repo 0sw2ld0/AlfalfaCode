@@ -37,10 +37,11 @@ class RelojFalso:
 class Cliente:
     """Un cliente PACAI contra un `TransportePacai` en el mismo proceso. `log` es la transcripción de los dos lados."""
 
-    def __init__(self, perfiles=('work',), extensiones=('alfalfa',), herramientas=(), caducidad=600, reloj=None,
+    def __init__(self, perfiles=('work',), extensiones=('alfalfa',), herramientas=(), caducidad=None, reloj=None,
                  **opciones):
         self.salida = io.StringIO()
-        self.t = TransportePacai(self.salida, caducidad=caducidad, **({'reloj': reloj} if reloj else {}), **opciones)
+        self.t = TransportePacai(self.salida, **({'caducidad': caducidad} if caducidad is not None else {}),
+                                 **({'reloj': reloj} if reloj else {}), **opciones)
         self.log, self.seq, self._leidas = [], 0, 0
         self.hello = dict(versions=['0.2'], profiles=list(perfiles), extensions=list(extensiones),
                           client_tools=[{'name': n, 'input_schema': {'type': 'object'}} for n in herramientas])

@@ -1383,8 +1383,8 @@ def check_command(argv):
 
 def entry(args):
     if getattr(args, 'pacai', False):
-        from .pacai.transporte import TransportePacai
-        transport = TransportePacai(sys.stdout)
+        from .pacai.transporte import TransportePacai, caducidad_de
+        transport = TransportePacai(sys.stdout, caducidad=caducidad_de(getattr(args, 'caducidad_aprobacion', None)))
     else:
         transport = Transport(sys.stdout)
     if getattr(args, 'complementos', False):

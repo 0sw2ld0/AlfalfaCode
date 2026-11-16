@@ -473,6 +473,87 @@ async def test_una_aprobacion_dentro_de_plazo_cancela_el_temporizador_de_caducid
     assert 'approval_result' not in tipos(c.del_agente())
 
 
+def _segundos_hasta(peticion):
+    from datetime import datetime
+    a, b = (datetime.fromisoformat(x.replace('Z', '+00:00'))
+            for x in (peticion['time'], peticion['payload']['expires']))
+    return (b - a).total_seconds()
+
+
+async def test_por_defecto_una_aprobacion_espera_un_dia_y_no_caduca_antes():
+    reloj = RelojFalso()
+    c = Cliente(reloj=reloj)
+    await abrir(c)
+    tarea, peticion = await pedir(c)
+    assert _segundos_hasta(peticion) == 24 * 3600
+    reloj.avanzar(3 * 3600)                               # tres horas después sigue esperando al usuario
+    c.t._caducar(peticion['id'])
+    assert c.drenar() == [] and not tarea.done()
+    responder(c, peticion)
+    assert await asyncio.wait_for(tarea, 1) is None
+    c.t._cerrar_sesion()
+
+
+@pytest.mark.parametrize('valor, segundos', [('90', 90), ('3600.5', 3600.5), ('', 24 * 3600)])
+async def test_la_caducidad_se_cambia_con_alfalfa_caducidad_aprobacion(monkeypatch, valor, segundos):
+    monkeypatch.setenv('ALFALFA_CADUCIDAD_APROBACION', valor)
+    c = Cliente(reloj=RelojFalso())
+    await abrir(c)
+    tarea, peticion = await pedir(c)
+    assert _segundos_hasta(peticion) == segundos
+    tarea.cancel()
+    c.t._cerrar_sesion()
+
+
+@pytest.mark.parametrize('valor', ['0', '-5', 'nunca', 'nan', str(366 * 24 * 3600)])
+def test_una_caducidad_que_no_es_un_numero_razonable_de_segundos_es_un_error(monkeypatch, valor):
+    from alfalfa.pacai.transporte import caducidad_de
+    with pytest.raises(ValueError, match='--caducidad-aprobacion'):
+        caducidad_de(valor)
+    monkeypatch.setenv('ALFALFA_CADUCIDAD_APROBACION', valor)
+    with pytest.raises(ValueError, match='ALFALFA_CADUCIDAD_APROBACION'):
+        caducidad_de()
+
+
+@pytest.mark.parametrize('argumentos', [['--pacai', '--caducidad-aprobacion', '0'],
+                                        ['--caducidad-aprobacion', '60', '--stdio']])
+def test_la_opcion_de_caducidad_se_valida_y_solo_vale_con_pacai(argumentos, capsys):
+    from alfalfa.terminal import main
+    with pytest.raises(SystemExit) as salida:
+        main(argumentos)
+    assert salida.value.code == 2 and '--caducidad-aprobacion' in capsys.readouterr().err
+
+
+async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herramienta_y_olvida_su_plazo():
+    c = Cliente()
+    run = await abrir(c)
+    tarea, peticion = await pedir(c)
+    assert peticion['id'] in c.t._temporizadores
+    c.t.in_turn, c.t.worker = True, tarea                # el turno del motor espera la respuesta
+    c.enviar('interrupt', {'run_id': run})
+    with pytest.raises((ValueError, asyncio.CancelledError)):
+        await asyncio.wait_for(tarea, 1)
+    assert c.t.t.aprobacion(peticion['id']).estado == 'denied'
+    assert c.t._temporizadores == {}                      # nada queda esperando a su `expires`
+    await cerrar(c, 'cortado')
+    assert c.del_agente('tool_end')[-1]['payload'] == {'tool_call_id': peticion['payload']['tool_call_id'],
+                                                       'status': 'cancelled'}
+    assert c.del_agente('run_finished')[-1]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
+    assert 'approval_result' not in tipos(c.del_agente())       # el agente sólo declara `expired`, y no lo era
+    assert codigo(responder(c, peticion)) == 'unknown_approval'  # un sí tardío no vale como aprobación
+    c.comprobar()
+
+
+async def test_cerrar_la_sesion_con_una_aprobacion_pendiente_la_niega_y_olvida_su_plazo():
+    c = Cliente()
+    await abrir(c)
+    tarea, peticion = await pedir(c)
+    c.t.stop()
+    with pytest.raises(ValueError, match='rechazado'):
+        await asyncio.wait_for(tarea, 1)
+    assert c.t.t.aprobacion(peticion['id']).estado == 'denied' and c.t._temporizadores == {}
+
+
 async def test_un_permiso_que_ninguna_herramienta_abierta_explica_abre_la_suya():
     c = Cliente()
     await abrir(c)

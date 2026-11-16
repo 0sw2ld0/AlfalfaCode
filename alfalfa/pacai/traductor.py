@@ -20,8 +20,11 @@ from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
-# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5).
-CADUCIDAD_APROBACION = 600
+# Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5): PACAI 0.2 obliga a mandar
+# `expires`, así que no puede no caducar; un día deja al usuario volver a su mesa (y responder al día siguiente)
+# sin que una petición olvidada quede abierta para siempre. `ALFALFA_CADUCIDAD_APROBACION` o
+# `--caducidad-aprobacion` la cambian.
+CADUCIDAD_APROBACION = 24 * 3600
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # caracteres de texto por `message_delta`
