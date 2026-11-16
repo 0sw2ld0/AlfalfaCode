@@ -291,6 +291,28 @@ public struct McpContextUsage: Equatable, Sendable {
     }
 }
 
+/// Lo que concede «No volver a preguntar» (`prefijo_alcance` del evento `permiso`).
+public enum AlwaysScope: String, Equatable, Sendable {
+    /// Las órdenes con ese prefijo corren fuera del sandbox sin preguntar.
+    case outsideSandbox = "sin_sandbox"
+    /// Siguen en el sandbox, con la red abierta y sin preguntar por ella.
+    case network = "red"
+    /// Siguen en el sandbox, sin red: sólo se quita la pregunta del modo.
+    case sandbox = "sandbox"
+
+    /// El texto de ayuda del botón para el prefijo `command`.
+    public func help(_ command: String) -> String {
+        let what: String
+        switch self {
+        case .outsideSandbox: what = "corren fuera del sandbox"
+        case .network: what = "corren dentro del sandbox con la red abierta"
+        case .sandbox: what = "corren dentro del sandbox, sin red,"
+        }
+        return "Aprueba y, desde ahora, las órdenes que empiecen por «\(command)» \(what) sin preguntar, "
+            + "en todas las sesiones. Se quita en ~/.alfalfa/reglas.toml."
+    }
+}
+
 public struct PermissionRequest: Equatable, Sendable {
     public var id: String
     public var argv: [String]
@@ -314,6 +336,8 @@ public struct PermissionRequest: Equatable, Sendable {
     /// Prefijo que se puede permitir para siempre (`prefijo`), como «Yes, and don't ask again
     /// for commands that start with …» de Codex: la regla se guarda en reglas.toml.
     public var alwaysPrefix: [String]?
+    /// Lo que concede ese «No volver a preguntar». Un motor anterior no lo manda: se deduce de los motivos.
+    public var alwaysScope: AlwaysScope?
     /// Presente sólo al mirar o manejar otra app (motivo `app`).
     public var app: AppTarget?
     /// Lo que cambia al guardar memoria o una habilidad aprendida (motivo `aprendizaje`).
@@ -325,7 +349,7 @@ public struct PermissionRequest: Equatable, Sendable {
                 reasons: [PermissionReason]? = nil, justification: String? = nil, rule: String? = nil,
                 retryOf: String? = nil, detail: String? = nil, mcp: McpCall? = nil, forSession: Bool = false,
                 app: AppTarget? = nil, diff: String? = nil, site: BrowserSitePermission? = nil,
-                alwaysPrefix: [String]? = nil) {
+                alwaysPrefix: [String]? = nil, alwaysScope: AlwaysScope? = nil) {
         self.alwaysPrefix = alwaysPrefix.flatMap { $0.isEmpty ? nil : $0 }
         self.site = site
         self.diff = diff
@@ -341,6 +365,11 @@ public struct PermissionRequest: Equatable, Sendable {
         self.retryOf = retryOf
         self.detail = detail
         self.mcp = mcp
+        if self.alwaysPrefix != nil {
+            self.alwaysScope = alwaysScope
+                ?? (self.reasons.contains(where: \.leavesSandbox) ? .outsideSandbox
+                    : self.reasons.contains(.network) ? .network : .sandbox)
+        }
     }
 
     public var command: String { argv.joined(separator: " ") }
@@ -790,7 +819,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
                                                  mcp: mcpCall(object["mcp"]), forSession: bool(object["para_sesion"]) ?? false,
                                                  app: appTarget(object["app"]), diff: text(object["diff"]),
                                                  site: BrowserSitePermission(object["sitio"]),
-                                                 alwaysPrefix: object["prefijo"] as? [String]))
+                                                 alwaysPrefix: object["prefijo"] as? [String],
+                                                 alwaysScope: (object["prefijo_alcance"] as? String)
+                                                    .flatMap(AlwaysScope.init(rawValue:))))
         case "permiso_resuelto":
             guard let id = object["id"] as? String, let approved = bool(object["aprobado"]) else { return nil }
             return .permissionResolved(id: id, approved: approved, reason: object["motivo"] as? String ?? "",

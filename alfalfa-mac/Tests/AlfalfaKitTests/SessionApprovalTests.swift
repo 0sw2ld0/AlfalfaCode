@@ -51,6 +51,29 @@ final class SessionApprovalTests: XCTestCase {
         XCTAssertNil(permission.alwaysPrefix)
     }
 
+    /// La tarjeta de red y la del modo también lo ofrecen, y la ayuda del botón dice lo que concede:
+    /// antes decía siempre «corren fuera del sandbox», también en la del modo, que sigue dentro.
+    func testAlwaysSaysWhatItGrants() {
+        func decode(_ extra: String) -> PermissionRequest? {
+            let line = #"{"version":2,"tipo":"permiso","id":"p5","argv":["npm","install"],"proposito":"Instalar","prefijo":["npm","install"],"#
+                + extra + "}"
+            guard case let .permission(permission)? = AlfalfaMessage.decode(line: line) else { return nil }
+            return permission
+        }
+        let network = decode(#""motivo":"red","motivos":["red"],"prefijo_alcance":"red""#)
+        XCTAssertEqual(network?.alwaysScope, .network)
+        XCTAssertTrue(network?.alwaysScope?.help("npm install").contains("dentro del sandbox con la red abierta") ?? false)
+        XCTAssertEqual(decode(#""motivo":"modo","prefijo_alcance":"sandbox""#)?.alwaysScope, .sandbox)
+        XCTAssertEqual(decode(#""motivo":"salir_sandbox","prefijo_alcance":"sin_sandbox""#)?.alwaysScope, .outsideSandbox)
+        // Un motor sin `prefijo_alcance`: se deduce de los motivos.
+        XCTAssertEqual(decode(#""motivo":"red""#)?.alwaysScope, .network)
+        XCTAssertEqual(decode(#""motivo":"modo""#)?.alwaysScope, .sandbox)
+        XCTAssertEqual(decode(#""motivo":"reintento""#)?.alwaysScope, .outsideSandbox)
+        XCTAssertEqual(decode(#""motivo":"salir_sandbox","motivos":["salir_sandbox","red"]"#)?.alwaysScope, .outsideSandbox)
+        XCTAssertTrue(AlwaysScope.sandbox.help("make test").contains("dentro del sandbox, sin red"))
+        XCTAssertTrue(AlwaysScope.outsideSandbox.help("git push").contains("fuera del sandbox"))
+    }
+
     func testAlwaysAnswerLine() {
         XCTAssertEqual(AlfalfaCommand.permission(id: "p3", approved: true, always: true).line,
                        #"{"aprobado":true,"id":"p3","siempre":true,"tipo":"permiso"}"# + "\n")

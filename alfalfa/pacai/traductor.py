@@ -49,7 +49,8 @@ RAZON_DE = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outsid
             'reintento': 'sandbox_denied_retry', 'regla': 'policy', 'modo': 'policy'}
 # Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` (en inglés) si se negoció la extensión.
 PERMISO_EXTRA = ('argv', 'proposito', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
-                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo')
+                 'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo',
+                 'prefijo_alcance')
 CODIGOS_DE_ERROR = {'Línea demasiado larga.': 'message_too_large', 'Se requiere UTF-8.': 'invalid_message'}
 
 

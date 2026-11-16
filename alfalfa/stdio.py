@@ -28,8 +28,9 @@ PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'rein
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'para_sesion',
                  # Guardar memoria o una habilidad aprendida (motivo «aprendizaje»): lo que cambia.
                  'diff', 'sitio',
-                 # «No volver a preguntar por órdenes que empiecen por …» (permisos/bajo_demanda.py).
-                 'prefijo')
+                 # «No volver a preguntar por órdenes que empiecen por …» (permisos/bajo_demanda.py) y lo
+                 # que concede: `sin_sandbox`, `red` (dentro del sandbox) o `sandbox` (sin red).
+                 'prefijo', 'prefijo_alcance')
 
 
 # Largo máximo del id que la app da a un mensaje en cola.
