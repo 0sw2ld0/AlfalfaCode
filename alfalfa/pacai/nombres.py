@@ -130,6 +130,8 @@ _ALCANCES = {'usuario': 'user', 'proyecto': 'project', 'carpeta': 'folder', 'tod
              'sesion': 'session', 'entorno': 'environment'}
 VALORES: dict[str, dict[str, str]] = {
     'status': {
+        # el turno que cortó «Enviar ahora» (stdio.run): `run_finished` lo cuenta como `interrupted`
+        'cortado': 'cut',
         # subagentes.py
         'trabajando': 'working', 'iniciando': 'starting', 'terminado': 'completed', 'fallido': 'failed',
         'cerrado': 'closed', 'interrumpido': 'interrupted', 'interrumpida': 'interrupted',

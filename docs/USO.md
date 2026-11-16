@@ -301,8 +301,9 @@ alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramien
 alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, no caducan)
 ```
 
-`--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o `--cola-encargos`: la entrada
-llega siempre como mensajes. stdout lleva **sólo** mensajes PACAI, uno por línea; los registros van a stderr.
+`--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o un archivo de `--cola-encargos`:
+la entrada llega siempre como mensajes. `--cola-encargos` sin archivo sí vale: abre la sesión de una cola, que el
+cliente prepara e inicia con sus mensajes. stdout lleva **sólo** mensajes PACAI, uno por línea; los registros van a stderr.
 Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos pendientes.
 
 ```jsonl
@@ -330,26 +331,28 @@ Lo que llega **antes** del `hello` es `invalid_message`.
 | `--stdio` v2 | PACAI 0.3 |
 |---|---|
 | `sesion` | `session_started` (`agent`); lo demás de la sesión, `alfalfa.session` |
-| entrada `mensaje` | `input` `new_run` (con una ejecución en curso **espera** a que acabe) |
-| entrada `redirigir`, `enviar_ahora` | `input` `steer` con el `run_id` de la ejecución (`alfalfa.send_now` para sacar una entrada de la cola) |
+| entrada `mensaje` | `input` `new_run` (con una ejecución en curso **espera** a que acabe); `imagenes` y `archivos`, bloques `file` con `url` `file://` (`media_type` `image/*` → imagen) |
+| entrada `mensaje` con un turno en marcha | `input` `steer` con el `run_id` raíz y `payload.alfalfa.redirect: false` (entra en la siguiente inferencia del turno, sin cortar la respuesta) |
+| entrada `redirigir`, `enviar_ahora` | `input` `steer` con el `run_id` de la ejecución (mensaje y redirigir a la vez); `alfalfa.redirect` (redirigir sin texto) y `alfalfa.send_now` (sacar una entrada de la cola) |
+| encargo de la orden (sin eco) / `--reanudar` sin encargo | `input` con `payload.alfalfa.echo: false` / `input` sin bloques con `payload.alfalfa.continue: true` |
 | entrada `cancelar` / EOF | `close` del cliente / EOF (niegan lo pendiente) |
 | entrada `interrumpir` | `interrupt` con `run_id` (la raíz o una subejecución) |
 | primer evento de un turno | `run_started` (`payload.input_id`); su `id` es el `run_id` |
-| `turno_terminado` | `run_finished` (`completed`→`success`, `blocked`, `failed`, `cortado`/`interrupted`→`interrupted`) |
-| `evento` `agent` | `message_start` / `message_delta` / `message_end` (`role` `assistant`) |
-| `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella, `alfalfa.notice` |
-| `evento` `user` | no sale: el cliente ya lo mandó |
-| `evento` `tool` (`herramienta.fase` `inicio`/`fin`) | `tool_start` / `tool_end` (`status` `success` o `error` según la clasificación del motor) |
-| `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes` y, si hay plazo, `expires`) |
-| entrada `permiso` | `approval_result` (`approved` o `denied`, `scope` `once` o `session`) |
-| `permiso_resuelto` | no sale si lo resolvió el cliente; si lo negó la interrupción o el fin de la ejecución, `approval_result` `cancelled` del agente; con plazo y sin respuesta, `expired` |
-| `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el desglose, `alfalfa.context` |
+| `turno_terminado` | `run_finished` (`completed`→`success`, `blocked`, `failed`, `cortado`/`interrupted`→`interrupted`); antes, `alfalfa.closing` con el `turno_terminado` entero (`status` exacto, `cut` para `cortado`) |
+| `evento` `agent` | `message_start` / `message_delta` / `message_end` (`role` `assistant`; el `turno`, en `payload.alfalfa.turn`) |
+| `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella (o en cierre), `alfalfa.notice` con el evento entero |
+| `evento` `user` | el núcleo no lo devuelve; `alfalfa.user_message` (`text`, `input_id`, `turn`) dice cuándo entró en la conversación |
+| `evento` `tool` (`herramienta.fase` `inicio`/`fin`) | `tool_start` / `tool_end` (`status` `success` o `error` según la clasificación del motor); `payload.alfalfa` lleva `herramienta` entera (`tool`), el `turno` y, en el inicio, el texto de v2 (`text`). Sin ejecución abierta (o un fin sin su inicio abierto), `alfalfa.notice` |
+| `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes` y, si hay plazo, `expires`); el motivo principal de v2 va en `payload.alfalfa.reason`, y los argumentos de una herramienta MCP, tal cual en `payload.alfalfa.mcp.arguments` |
+| entrada `permiso` | `approval_result` (`approved` o `denied`, `scope` `once` o `session`); «No volver a preguntar» y el sitio para todo el proyecto, `payload.alfalfa.scope` `always` o `project` |
+| `permiso_resuelto` | no sale si lo resolvió el cliente; si lo negó la interrupción o el fin de la ejecución, `approval_result` `cancelled` del agente con el motivo de v2 en `reason`; con plazo y sin respuesta, `expired` |
+| `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el `contexto` entero, `alfalfa.context` |
 | `plan` | `plan_updated` (perfil `work`) |
 | cambios del turno (diff de la instantánea o, sin ella, de git) | `diff_updated` (perfil `work`) |
-| `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id` y el `tool_call_id` del `spawn_agent` o `send_input` que lo lanzó; sus mensajes, herramientas y aprobaciones con su propio `run_id` |
+| `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id`, el `tool_call_id` del `spawn_agent` o `send_input` que lo lanzó y el id del subagente en `payload.alfalfa.agent`; sus mensajes, herramientas y aprobaciones con su propio `run_id`. Lo que no cabe en una subejecución abierta, `alfalfa.subagent_event` |
 | `navegador` / `navegador_respuesta` | `tool_start` con `side: "client"` (herramienta `browser`) / `tool_end` del cliente |
 | `error` | `error` (`code` `alfalfa.engine_error`, o `message_too_large`, `invalid_message`…) |
-| `fin` | `close` (el motivo en `reason`) |
+| `fin` | `close` (el motivo en `reason`; el `fin` entero, en `payload.alfalfa`) |
 | `presupuesto`, `procesos`, `despierto`, `cuota`, `preparando`, `revision_codigo`, `encargos`, `aprendizaje_*`, `quitado_de_cola`, `sesion_cambiada`… | extensión `alfalfa.*` (`alfalfa.budget`, `alfalfa.processes`, `alfalfa.awake`, `alfalfa.quota`, `alfalfa.preparing`, `alfalfa.code_review`, `alfalfa.jobs`, `alfalfa.learning_proposed`…) |
 
 La extensión habla como el núcleo: tipos **y campos** en inglés y `snake_case`. Cada campo de v2 pasa a su nombre
@@ -393,6 +396,13 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
 | `alfalfa.export_browser_test` (`id`, `path`), `alfalfa.stop_process` (`id`) | `exportar_prueba_navegador`, `detener_proceso` |
 | `alfalfa.jobs_command` (`action`: `prepare`, `start`, `pause`, `stop`, `cancel` o `clean`; `jobs`; `mode`: `serial` o `parallel`; `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
 | `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
+| `alfalfa.redirect` | `redirigir`: el modelo lee ya lo que se le mandó con `steer` |
+
+Lo que puede pedir permisos fuera de un turno (guardar una prueba del navegador, iniciar una cola de encargos) va
+como un `input` con un solo bloque `structured` cuyo `schema` es la orden (`alfalfa.export_browser_test` o
+`alfalfa.jobs_command`, con `data` como su payload). Si el motor pone el trabajo en marcha, ese `input` abre una
+ejecución raíz que dura lo que él: sus permisos son `approval_request` de esa ejecución. Un `input` que llega
+mientras corre no espera: el motor para el trabajo y abre el turno, como en v2.
 
 ### Reglas que PACAI exige
 
@@ -438,7 +448,8 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
 
 ### Límites de esta primera versión
 
-- Los `input` admiten bloques de texto; `file` y `structured` se rechazan con `invalid_message`.
+- Los `input` admiten bloques `text`, `file` con `url` `file://` y ruta absoluta (no `data`) y un bloque
+  `structured` de un trabajo (arriba); lo demás se rechaza con `invalid_message`.
 - Los `arguments` de un `tool_start` (y de su `approval_request`) son los argumentos JSON de la llamada del
   modelo, completos, con cada secreto tachado siempre como `"[redacted]"` (el `digest` es el de lo que viaja); lo
   legible va en `title` (la descripción de la app). Si pasan de una cuarta parte de `max_message_bytes` (256 KiB por
@@ -446,8 +457,8 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
   Una llamada truncada no se puede aprobar: si necesita permiso, se niega y termina en `tool_end` `error`. Los
   argumentos de una herramienta del cliente nunca se tachan ni se acortan. `--stdio` v2 no cambia: su evento sigue
   llevando el texto `Inicio <herramienta> · …`.
-- Un permiso que llega fuera de una ejecución (guardar una prueba del navegador entre turnos, o un encargo de la
-  cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
+- Un permiso que llega fuera de una ejecución se niega: PACAI exige atribuirlo a una ejecución activa. Por eso
+  guardar una prueba del navegador y las colas de encargos se piden con un `input` (arriba).
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
   seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
 - `diff_updated` sale al cerrar una ejecución que cambió archivos, y es el **acumulado** de la ejecución (todo desde

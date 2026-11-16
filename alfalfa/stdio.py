@@ -22,6 +22,8 @@ OBJETIVO_PACAI = 'Sesión PACAI'
 # El texto de un mensaje que sólo trae imágenes (también lo usa la app de Mac).
 SOLO_IMAGENES = 'Mira la imagen adjunta.'
 SOLO_ARCHIVOS = 'Lee el archivo adjunto.'
+# Lo que abre el turno al reanudar una sesión sin mensaje (no se devuelve como eco: nadie lo escribió).
+CONTINUAR_ENCARGO = 'Continúa el encargo original.'
 # Campos opcionales del evento `permiso` (política on-request); los clientes v2
 # anteriores los ignoran.
 PERMISO_EXTRA = ('motivo', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
@@ -40,6 +42,10 @@ MAX_ID_EN_COLA = 100
 class EnCola(str):
     """Un mensaje en cola con el id que le dio la app (`{"tipo":"mensaje","id":…}`). Sigue
     siendo su texto: el resto del motor lo trata igual que a un mensaje sin id."""
+
+    # Sin eco (`sin_eco`): el turno que abre no devuelve el mensaje como evento `user`, como el encargo de la orden.
+    # Lo usa `--pacai` (`payload.alfalfa.echo`); v2 no lo pone nunca.
+    sin_eco = False
 
     def __new__(cls, texto, ident):
         mensaje = super().__new__(cls, texto)
@@ -887,7 +893,7 @@ async def run(args, transport):
             loop.add_signal_handler(sig, cierre.senal)
         vigia = asyncio.create_task(cierre.vigilar_padre())
         # Con --esperar la sesión se abre sin turno: el primero lo trae un mensaje.
-        prompt = await transport.next_message() if esperar else (args.encargo or 'Continúa el encargo original.')
+        prompt = await transport.next_message() if esperar else (args.encargo or CONTINUAR_ENCARGO)
         # El encargo inicial ya lo pinta la app; lo que llega después se le devuelve.
         eco = esperar
         # Cada turno termina con turno_terminado; la sesión sigue abierta y un
@@ -967,7 +973,9 @@ async def run(args, transport):
                 manager.save()
             transport.turno_empieza(prompt)
             await transport.antes_del_turno()
-            transport.worker = asyncio.create_task(manager.run(prompt, eco=eco))
+            # Sin eco el que abre un turno del que la app ya pintó el mensaje (`--pacai`: `alfalfa.echo` o `continue`).
+            sin_eco = getattr(prompt, 'sin_eco', False)
+            transport.worker = asyncio.create_task(manager.run(prompt, eco=eco and not sin_eco))
             try:
                 code = await transport.worker
             except asyncio.CancelledError:

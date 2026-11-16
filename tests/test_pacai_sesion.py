@@ -233,7 +233,8 @@ def test_una_sesion_0_3_con_cancelaciones_y_un_subagente_en_segundo_plano(proces
     agente = p.del_agente()
     # La aprobación pendiente se cancela de forma explícita, antes del tool_end `cancelled` de su herramienta.
     cancelada = next(m for m in agente if m['type'] == 'approval_result')
-    assert cancelada['payload'] == {'decision': 'cancelled'} and cancelada['reply_to'] == peticion['id']
+    assert cancelada['payload'] == {'decision': 'cancelled', 'reason': 'Turno interrumpido'}
+    assert cancelada['reply_to'] == peticion['id']
     fin_orden = next(m for m in agente if m['type'] == 'tool_end'
                      and m['payload']['tool_call_id'] == peticion['payload']['tool_call_id'])
     assert fin_orden['payload']['status'] == 'cancelled' and agente.index(cancelada) < agente.index(fin_orden)
@@ -375,7 +376,7 @@ def test_la_sesion_se_guarda_con_el_primer_input_como_encargo(proceso, tmp_path)
 
 
 @pytest.mark.parametrize('argumentos', [['--pacai', 'una tarea'], ['--pacai', '--stdio'],
-                                        ['--pacai', '--cola-encargos'], ['--pacai', '--bifurcar', 'x']])
+                                        ['--pacai', '--cola-encargos', 'cola.json'], ['--pacai', '--bifurcar', 'x']])
 def test_pacai_no_se_combina_con_un_encargo_ni_con_stdio(argumentos, capsys):
     with pytest.raises(SystemExit) as salida:
         main(argumentos)

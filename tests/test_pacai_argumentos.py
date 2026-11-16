@@ -160,7 +160,8 @@ def test_los_argumentos_del_tool_start_son_los_de_la_llamada_sin_secretos(tmp_pa
     orden = inicios['run_command']['payload']
     assert orden['arguments'] == {'argv': [sys.executable, '-c', 'print(len("' + LARGO + '"))', '[redacted]'],
                                   'purpose': 'Contar', 'description': 'Contar una cadena larga', 'needs_network': True}
-    assert orden['title'] == 'Contar una cadena larga' and 'alfalfa' not in orden
+    # La extensión sólo añade lo de v2 que el núcleo no lleva (el texto del evento, `herramienta`, el turno).
+    assert orden['title'] == 'Contar una cadena larga' and set(orden.get('alfalfa', {})) <= {'text', 'tool', 'turn'}
     archivo = inicios['write_file']['payload']
     assert archivo['arguments'] == {'path': 'largo.txt', 'content': CONTENIDO + '[redacted]',
                                     'expected_sha256': 'NEW'}
