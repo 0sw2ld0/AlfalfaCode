@@ -641,6 +641,9 @@ def test_un_linter_roto_no_es_limpio(tmp_path, simulados, sesion):
 
 @pytest.fixture
 def sourcekit(tmp_path, simulados):
+    if sys.platform != 'darwin':
+        pytest.skip('sourcekit-lsp sólo se lanza en macOS: prepara Package.swift con Seatbelt, y fuera de macOS '
+                    'el arnés no lo lanza («no hay con qué aislar Package.swift»)')
     simulados['sourcekit-lsp'] = (str(lanzador(tmp_path / 'bin', 'sourcekit-lsp', SIMULADO)), False)
     return tmp_path / 'metodos.txt'
 

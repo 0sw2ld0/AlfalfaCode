@@ -103,6 +103,9 @@ def _normalizar(valor, tmp_path):
         # Seatbelt en macOS y bwrap en Linux: la misma orden en el sandbox del sistema.
         for etiqueta in AISLADAS:
             valor = valor.replace('"sandbox": "' + etiqueta + '"', '"sandbox": "<sandbox>"')
+        # El texto «Inicio …» se recorta con la ruta del intérprete dentro: cuántas x del relleno caben
+        # depende de lo larga que sea esa ruta (/opt/venv/bin/python frente a la de un venv del Mac).
+        valor = re.sub(r'([xy])\1{19,}', r'<\1…>', valor)
         return re.sub(r'("intento\\*": \\*")[0-9a-f]+', r'\1<intento>', valor)
     return valor
 
@@ -121,7 +124,7 @@ def test_los_eventos_v2_de_una_llamada_no_cambian(tmp_path):
     assert SECRETO not in json.dumps(filas)
     if os.environ.get('REGRABAR_V2'):
         REFERENCIA.write_text(json.dumps(eventos, ensure_ascii=False, indent=1) + '\n')
-    assert eventos == json.loads(REFERENCIA.read_text())
+    assert eventos == _normalizar(json.loads(REFERENCIA.read_text()), tmp_path)
 
 
 def _mensaje(seq, tipo, payload, **sobre):

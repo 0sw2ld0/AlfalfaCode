@@ -3,6 +3,7 @@ import asyncio
 import base64
 import io
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -51,6 +52,8 @@ def test_rechaza_lo_que_no_es_una_imagen(tmp_path, nombre, error):
         imagenes.validar('relativa.png')
 
 
+@pytest.mark.skipif(shutil.which('sips') is None,
+                    reason='mide y reduce con sips, que sólo trae macOS; sin él las imágenes se copian sin reducir')
 def test_reduce_las_grandes_y_no_amplia_las_pequenas(tmp_path, foto):
     grande = tmp_path / 'grande.png'
     subprocess.run(['sips', '-z', '3000', '4000', str(foto), '--out', str(grande)], check=True, capture_output=True)

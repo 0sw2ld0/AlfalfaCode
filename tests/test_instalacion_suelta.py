@@ -1,6 +1,7 @@
 """La CLI suelta: instalar.sh (curl) y la fórmula de Homebrew copian el motor de la app fuera de ella."""
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,9 @@ from alfalfa import empaquetado
 
 RAIZ = Path(__file__).resolve().parents[1]
 INSTALADOR = RAIZ / 'alfalfa' / 'instalar.sh'
+# Instalar (no desinstalar) empieza por comprobar el Mac: baja y verifica el DMG firmado de la app.
+solo_mac = pytest.mark.skipif(sys.platform != 'darwin',
+                              reason='instalar.sh instala la app de Mac (DMG firmado): fuera de macOS se usa pipx')
 
 
 def _suelta(tmp_path, quien='curl', version='0.99.0'):
@@ -170,6 +174,7 @@ def test_desinstalar_no_toca_lo_que_no_instalo(tmp_path):
     assert (raiz / 'algo').exists()
 
 
+@solo_mac
 def test_no_pisa_un_alfalfa_ajeno(tmp_path):
     home = tmp_path / 'home'
     (home / '.local' / 'bin').mkdir(parents=True)
@@ -178,11 +183,13 @@ def test_no_pisa_un_alfalfa_ajeno(tmp_path):
     assert r.returncode != 0 and 'no instaló este guion' in r.stderr
 
 
+@solo_mac
 def test_rechaza_un_feed_que_no_es_https_ni_file(tmp_path):
     r = _sh(tmp_path, ALFALFA_FEED='http://example.com/version.json')
     assert r.returncode != 0 and 'https:// o file://' in r.stderr
 
 
+@solo_mac
 def test_rechaza_una_huella_que_no_coincide(tmp_path):
     dmg = tmp_path / 'AlfalfaCode-9.9.9.dmg'
     dmg.write_bytes(b'no es un dmg')
@@ -193,6 +200,7 @@ def test_rechaza_una_huella_que_no_coincide(tmp_path):
     assert not (tmp_path / 'home' / '.local' / 'share' / 'alfalfa').exists()
 
 
+@solo_mac
 def test_con_feed_local_solo_vale_un_dmg_local(tmp_path):
     feed = tmp_path / 'version.json'
     feed.write_text('{"version": "9.9.9", "url": "https://evil.example/x.dmg", "sha256": "%s"}' % ('0' * 64))

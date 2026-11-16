@@ -6,12 +6,15 @@ escribir: esas pruebas fallaban sin probar nada. La casa de la base de usuarios 
 """
 import os
 import pwd
+import sys
 import tempfile
 from pathlib import Path
 
 # Las carpetas del fixture `fuera_del_sandbox` se crean en ~/Library/Caches con este prefijo. Otra suite
 # que corra a la vez puede crear una en cualquier momento: quien vigile esa carpeta debe ignorarlas.
 PREFIJO_FUERA_DEL_SANDBOX = 'alfalfa-prueba '
+# La casa de otro usuario: una ruta de fuera que no existe, pero cuya primera carpeta sí.
+OTRA_CASA = '/Users/otro' if sys.platform == 'darwin' else '/home/otro'
 
 
 def casa_real():

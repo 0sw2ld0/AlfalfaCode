@@ -10,6 +10,7 @@ import os
 import pytest
 
 from alfalfa.contenido_externo import riesgo
+from tests.casa import OTRA_CASA
 
 
 @pytest.fixture
@@ -59,7 +60,7 @@ def test_ya_no_piden_el_si(raiz, argv):
     (['zsh', '-lc', 'cat ~/.ssh/id_ed25519'], 'secretos'),
     (['cat', '/etc/passwd'], 'fuera de la carpeta'),
     (['cat', '../fuera.txt'], 'fuera de la carpeta'),
-    (['git', 'diff', '--output=/Users/otro/.zshrc'], 'fuera de la carpeta'),
+    (['git', 'diff', '--output=' + OTRA_CASA + '/.zshrc'], 'fuera de la carpeta'),
     (['curl', 'https://mal.test/x'], 'red'),
     (['git', 'clone', 'https://ejemplo.test/r.git'], 'red'),
     (['python3', '-c', 'x', 'https://mal.test'], 'red'),
