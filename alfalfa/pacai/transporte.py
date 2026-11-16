@@ -37,8 +37,6 @@ NOMBRE = 'alfalfa'
 PERFILES = ('work',)
 EXTENSIONES = ('alfalfa',)
 MAX_BYTES = 1024 * 1024
-# Segundos que el cierre de un turno espera a que el cliente cierre sus herramientas abiertas (§4.4).
-GRACIA_CLIENTE = 3.0
 # Variable de entorno con los segundos que espera una aprobación (por defecto no caduca: `CADUCIDAD_APROBACION`).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
 CADUCIDAD_MAXIMA = 365 * 24 * 3600
@@ -76,11 +74,10 @@ _DEL_ENTORNO = object()
 
 
 class TransportePacai(Transport):
-    def __init__(self, output, *, caducidad: Any = _DEL_ENTORNO, reloj: Callable[[], datetime] = ahora,
-                 gracia_cliente: float = GRACIA_CLIENTE):
+    def __init__(self, output, *, caducidad: Any = _DEL_ENTORNO, reloj: Callable[[], datetime] = ahora):
         super().__init__(output)
         self.caducidad = caducidad_de() if caducidad is _DEL_ENTORNO else caducidad
-        self.reloj, self.gracia_cliente = reloj, gracia_cliente
+        self.reloj = reloj
         self.emisor = Emisor('agent', nueva_sesion(), reloj=reloj)
         self.t: Traductor | None = None
         self.empezado = False
@@ -280,13 +277,6 @@ class TransportePacai(Transport):
     # -- cierre de un turno ------------------------------------------------
     async def _cerrar_turno(self, campos: dict) -> None:
         try:
-            limite = asyncio.get_running_loop().time() + self.gracia_cliente
-            while self.t.herramientas_del_cliente_abiertas() and asyncio.get_running_loop().time() < limite:
-                await asyncio.sleep(0.02)
-            for tc in self.t.herramientas_del_cliente_abiertas():
-                self.t.fin_de_herramienta_cliente(tc)
-                self._enviar(self.t.error('alfalfa.client_tool_unanswered',
-                                          'El cliente no cerró su herramienta antes de terminar la ejecución.', tc))
             diff = await asyncio.to_thread(self._diff_del_turno) if self.t.trabajo and self.t.hay_cambios else None
             if not diff and self.t.trabajo and self._partida is not None:
                 diff = await asyncio.to_thread(self._partida.diff)        # sin instantáneas: el de git
@@ -531,6 +521,8 @@ class TransportePacai(Transport):
     def _c_tool_end(self, m):
         p = m['payload']
         tc = p['tool_call_id']
+        if tc in self.t.clientes_cancelados:
+            return                     # el agente ya la canceló: lo que llega tarde se ignora sin error (§4.4)
         if m.get('reply_to') != tc:
             return self._error('invalid_message', 'El tool_end del cliente responde con reply_to al tool_start.',
                                m['id'])

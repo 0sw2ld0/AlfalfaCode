@@ -727,28 +727,29 @@ async def test_una_respuesta_tardia_del_navegador_se_descarta_sin_ruido():
     assert not futuro.done()
 
 
-async def test_el_turno_espera_a_que_el_cliente_cierre_su_herramienta_antes_de_terminar():
-    c = Cliente(herramientas=('browser',), gracia_cliente=2.0)
-    await abrir(c)
-    _, inicio = pedir_navegador(c)
-    c.t.emit('turno_terminado', estado='cortado', resumen='Detenido', codigo_salida=1, tokens=0)
-    await asyncio.sleep(0.1)
-    assert 'run_finished' not in tipos(c.del_agente())      # el run_finished espera al tool_end del cliente
-    c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'cancelled'}, reply_to=inicio[0]['id'])
-    await asyncio.sleep(0.1)
-    assert tipos(c.del_agente())[-1] == 'run_finished'
+async def test_al_terminar_la_ejecucion_el_agente_cancela_la_herramienta_del_cliente_y_el_motor_recibe_un_no():
+    c = Cliente(herramientas=('browser',))
+    run = await abrir(c)
+    futuro, inicio = pedir_navegador(c)
+    cierre = await cerrar(c, 'cortado')                  # sin esperar al cliente
+    assert tipos(cierre) == ['alfalfa.closing', 'tool_end', 'run_finished']
+    fin = cierre[1]
+    assert fin['payload'] == {'tool_call_id': inicio[0]['id'], 'status': 'cancelled'} and 'reply_to' not in fin
+    assert cierre[2]['payload'] == {'run_id': run, 'outcome': 'interrupted'}
+    assert futuro.done() and futuro.result()['ok'] is False
+    # El resultado tardío del cliente se ignora: ni `unknown_tool_call` ni `invalid_message`.
+    assert c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'success'}, reply_to=inicio[0]['id']) == []
     c.comprobar()
 
 
-async def test_si_el_cliente_no_cierra_su_herramienta_el_turno_termina_igual_y_lo_dice():
-    c = Cliente(herramientas=('browser',), gracia_cliente=0.05)
-    run = await abrir(c)
+async def test_si_el_cliente_cierra_su_herramienta_a_tiempo_el_agente_no_la_cancela():
+    c = Cliente(herramientas=('browser',))
+    await abrir(c)
     _, inicio = pedir_navegador(c)
+    c.enviar('tool_end', {'tool_call_id': inicio[0]['id'], 'status': 'success'}, reply_to=inicio[0]['id'])
     cierre = await cerrar(c)
-    assert tipos(cierre) == ['error', 'alfalfa.closing', 'run_finished']
-    assert cierre[0]['payload']['code'] == 'alfalfa.client_tool_unanswered'
-    assert cierre[0]['payload']['ref'] == inicio[0]['id']
-    assert cierre[2]['payload']['run_id'] == run
+    assert 'tool_end' not in tipos(cierre)
+    c.comprobar()
 
 
 async def test_cancelar_un_relevo_avisa_al_cliente_con_la_extension():

@@ -203,7 +203,8 @@ class Traductor:
         self.permisos: dict[str, str] = {}                  # id del permiso v2 → id del approval_request
         self.de_sesion: list[tuple[str, str, str]] = []     # (nombre, digest, approval_id) con alcance session
         self.hay_cambios = False
-        # Quien conteste a v2 cuando PACAI no puede (navegador sin herramienta del cliente): (id v2, texto).
+        self.clientes_cancelados: set[str] = set()          # herramientas del cliente que el agente canceló
+        # Quien conteste a v2 cuando PACAI no puede (navegador no declarado o cancelado): (id v2, texto).
         self.al_rechazar_navegador: Callable[[str, str], None] | None = None
 
     # -- utilidades --------------------------------------------------------
@@ -256,9 +257,10 @@ class Traductor:
         return [m]
 
     def _cerrar_herramientas(self, run_id: str, estado: str = 'cancelled') -> list[dict]:
-        """Cierra las herramientas del agente que siguen abiertas en una ejecución (las del cliente las cierra él)."""
+        """Cierra lo que sigue abierto en una ejecución que termina: las del agente y, con `tool_end` `cancelled` sin
+        `reply_to`, las del cliente (§4.4)."""
         salida = []
-        for tc in [t for t, h in self.herramientas.items() if h.run_id == run_id and h.lado == 'agent']:
+        for tc in [t for t, h in self.herramientas.items() if h.run_id == run_id]:
             salida += self._cerrar(tc, estado)
         return salida
 
@@ -276,8 +278,18 @@ class Traductor:
         if resumen:
             payload['summary'] = resumen[:300]
         if h.lado == 'client':
-            return mensajes
+            return mensajes + self._cancelar_del_cliente(h)
         return mensajes + [self._msg('tool_end', payload)]
+
+    def _cancelar_del_cliente(self, h: Herramienta) -> list[dict]:
+        """El agente cancela una herramienta del cliente que sigue abierta al terminar su ejecución (§4.4): la
+        ejecución entra en cierre, el motor recibe un «no» y el `tool_end` tardío del cliente se ignorará."""
+        self.clientes_cancelados.add(h.id)
+        if h.run_id in self.ejecuciones:
+            self.ejecuciones[h.run_id].cerrando = True
+        if self.al_rechazar_navegador is not None and h.v2id is not None:
+            self.al_rechazar_navegador(h.v2id, 'La ejecución terminó y se canceló la herramienta del cliente.')
+        return [self._msg('tool_end', {'tool_call_id': h.id, 'status': 'cancelled'})]
 
     def _terminar(self, run_id: str, resultado: str, detalle: str | None = None) -> list[dict]:
         ej = self.ejecuciones[run_id]
@@ -290,9 +302,6 @@ class Traductor:
         if ej.agente is not None and self.subagentes.get(ej.agente) == run_id:
             del self.subagentes[ej.agente]
         return salida
-
-    def herramientas_del_cliente_abiertas(self) -> list[str]:
-        return [t for t, h in self.herramientas.items() if h.lado == 'client']
 
     def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
         """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`."""
