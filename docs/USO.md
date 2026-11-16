@@ -328,8 +328,8 @@ Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos 
 
 ```jsonl
 {"pacai":"0.3","id":"c_1","type":"hello","session":"s_0123456789abcdef","sender":"client","seq":1,"time":"2026-11-15T10:00:00Z","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"]}}
-{"pacai":"0.3","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.23"}}}
-{"pacai":"0.3","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.23"}}}
+{"pacai":"0.3","id":"m_a1","type":"hello","session":"s_0123456789abcdef","sender":"agent","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"implementation":{"name":"alfalfa","version":"0.99.24"}}}
+{"pacai":"0.3","id":"m_a2","type":"session_started","reply_to":"c_1","session":"s_0123456789abcdef","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"agent":{"name":"alfalfa","version":"0.99.24"}}}
 {"pacai":"0.3","id":"c_2","type":"input","session":"s_0123456789abcdef","sender":"client","seq":2,"time":"…","payload":{"blocks":[{"type":"text","text":"Corrige el test de login"}]}}
 {"pacai":"0.3","id":"m_a3","type":"run_started","…":"…","payload":{"input_id":"c_2"}}
 {"pacai":"0.3","id":"m_a4","type":"tool_start","…":"…","payload":{"run_id":"m_a3","name":"run_command","arguments":{"argv":["pytest","-q"],"purpose":"Probar"},"side":"agent","title":"Ejecutar pytest -q"}}
@@ -854,10 +854,10 @@ para leer el texto de los PDF adjuntos (más abajo). Con pipx:
 sudo apt update
 sudo apt install -y pipx git bubblewrap poppler-utils
 pipx ensurepath
-pipx install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.22"
+pipx install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.24"
 ```
 
-Cambia `v0.99.22` por la [última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest).
+Cambia `v0.99.24` por la [última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest).
 Abre otra terminal para que `~/.local/bin` entre en el PATH y comprueba con
 `alfalfa --version`. Para actualizar, `pipx install --force` con la versión nueva; para
 quitarlo, `pipx uninstall alfalfa` (tus sesiones de `~/.alfalfa` se quedan).
@@ -866,7 +866,7 @@ Sin pipx, en un venv propio:
 
 ```bash
 python3 -m venv ~/.local/share/alfalfa-venv
-~/.local/share/alfalfa-venv/bin/pip install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.22"
+~/.local/share/alfalfa-venv/bin/pip install "git+https://github.com/0sw2ld0/AlfalfaCode@v0.99.24"
 mkdir -p ~/.local/bin && ln -sf ~/.local/share/alfalfa-venv/bin/alfalfa ~/.local/bin/alfalfa
 ```
 

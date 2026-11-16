@@ -1,2 +1,5 @@
-La app habla con el motor por PACAI 0.3 (alfalfa --pacai). Por fuera se ve y funciona igual que antes.
-Si algo fallara con el protocolo nuevo, «defaults write com.cuycoders.alfalfacode ProtocoloMotor stdio» en la Terminal vuelve al de antes.
+Nuevo: el motor funciona en Linux (probado en Ubuntu 24.04) y en Windows con WSL2. Se instala con pipx y aísla las órdenes con bubblewrap; los pasos están en docs/USO.md, sección «Linux».
+El código de cortesía también sirve fuera del Mac: la clave de firma queda en un archivo protegido y el código va en la variable ALFALFA_CODIGO.
+Para trabajar sin nadie delante: un encargo sin terminal al que se le negó un permiso termina con el código 3 y lo dice, y la guía trae la receta para un servidor con systemd.
+Si tienes la clave de Ollama Cloud pero no Ollama en el equipo, el fallo dice cómo apuntar a la nube.
+En el Mac, la app se ve y funciona igual que en la 0.99.23.
