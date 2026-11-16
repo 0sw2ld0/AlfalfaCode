@@ -315,7 +315,7 @@ async def test_la_peticion_lleva_el_digest_de_los_argumentos_y_sus_campos_obliga
     assert p['run_id'] == run and p['tool_call_id'] == inicio['id'] and p['name'] == 'run_command'
     assert p['arguments'] == inicio['payload']['arguments'] and p['digest'] == digest(p['arguments'])
     assert p['reason'] == 'dangerous' and p['scopes'] == ['once'] and p['expires'] > peticion['time']
-    assert p['alfalfa']['proposito'] == 'p' and p['alfalfa']['justificacion'] == 'Borra archivos'
+    assert p['alfalfa']['purpose'] == 'p' and p['alfalfa']['justification'] == 'Borra archivos'
     responder(c, peticion)
     assert await asyncio.wait_for(tarea, 1) is None
     fin_de_herramienta(c, 'run_command', {'exit_code': 0})
@@ -754,12 +754,12 @@ def test_compactar_ajustes_y_presupuesto_cambian_lo_que_cambiarian_en_v2():
     c = Cliente()
     c.saludar()
     c.t.compact = Mock()
-    c.enviar('alfalfa.compact', {'instrucciones': 'resume'})
+    c.enviar('alfalfa.compact', {'instructions': 'resume'})
     c.t.compact.assert_called_once_with('resume')
-    c.enviar('alfalfa.set_settings', {'modelo': 'ollama/x:cloud', 'esfuerzo': 'high'})
+    c.enviar('alfalfa.set_settings', {'model': 'ollama/x:cloud', 'effort': 'high'})
     assert c.t.pending_settings == {'model': 'ollama/x:cloud', 'effort': 'high'}
     c.t.budget = Mock()
-    c.enviar('alfalfa.set_budget', {'sesion': 5})
+    c.enviar('alfalfa.set_budget', {'session': 5})
     c.t.budget.assert_called_once()
     parada = []
     c.t.stop_process = parada.append
@@ -771,7 +771,7 @@ def test_compactar_ajustes_y_presupuesto_cambian_lo_que_cambiarian_en_v2():
 def test_una_orden_invalida_de_la_extension_da_el_error_de_v2_y_una_desconocida_invalid_message():
     c = Cliente()
     c.saludar()
-    assert c.enviar('alfalfa.set_budget', {'sesion': 5})[0]['payload']['code'] == 'alfalfa.engine_error'
+    assert c.enviar('alfalfa.set_budget', {'session': 5})[0]['payload']['code'] == 'alfalfa.engine_error'
     assert codigo(c.enviar('alfalfa.no_existe', {})) == 'invalid_message'
     assert codigo(c.enviar('otra.cosa', {})) == 'not_negotiated'
 
@@ -784,10 +784,10 @@ async def test_quitar_o_enviar_ahora_una_entrada_que_espera_su_ejecucion():
     c.entrada('tres')
     tercero = c.ultimo['id']
     quitado = c.enviar('alfalfa.dequeue', {'id': segundo})
-    assert tipos(quitado) == ['alfalfa.dequeued'] and quitado[0]['payload'] == {'id': segundo, 'quitado': True}
+    assert tipos(quitado) == ['alfalfa.dequeued'] and quitado[0]['payload'] == {'id': segundo, 'removed': True}
     assert [i for i, _ in c.t._cola] == [tercero]
     nunca = c.enviar('alfalfa.dequeue', {'id': 'nunca-llego'})
-    assert nunca[0]['payload'] == {'id': 'nunca-llego', 'quitado': False, 'motivo': 'desconocido'}
+    assert nunca[0]['payload'] == {'id': 'nunca-llego', 'removed': False, 'reason': 'desconocido'}
     c.t.interrumpir_turno = Mock(return_value=True)
     c.enviar('alfalfa.send_now', {'id': tercero})
     assert c.t.inbox and c.t.inbox[0].id == tercero and not c.t._cola

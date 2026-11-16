@@ -4,7 +4,7 @@
 de mensajes PACAI que le corresponden, ya con su `seq`, su `id` y su hora. Lleva el estado que PACAI exige y v2
 no tiene: ejecuciones (raíz y subejecuciones), herramientas abiertas, aprobaciones pendientes y su digest.
 
-Lo que el núcleo no cubre va como extensión `alfalfa.*` (§8), con los campos de v2 tal cual dentro del payload.
+Lo que el núcleo no cubre va como extensión `alfalfa.*` (§8), con los campos de v2 en inglés (`nombres.py`).
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from .jcs import digest
+from .nombres import TIPOS, en_ingles
 from .sobre import Emisor, ahora, en_segundos
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
@@ -37,20 +38,14 @@ SINTETICA = 'request_permission'
 TERMINADOS = frozenset({'terminado', 'fallido', 'cerrado', 'interrumpido'})
 RESULTADO_DE_TURNO = {'completed': 'success', 'blocked': 'blocked', 'failed': 'failed', 'cortado': 'interrupted',
                       'interrupted': 'interrupted'}
-# Eventos v2 de AlfalfaCode sin equivalente en el núcleo → tipo de la extensión (el resto: `alfalfa.<tipo v2>`).
-EXTENSION_DE = {
-    'sesion': 'session', 'presupuesto': 'budget', 'procesos': 'processes', 'despierto': 'awake', 'cuota': 'quota',
-    'preparando': 'preparing', 'revision_codigo': 'code_review', 'encargos': 'jobs',
-    'aprendizaje_propuesto': 'learning_proposed', 'aprendizaje_resuelto': 'learning_resolved',
-    'quitado_de_cola': 'dequeued', 'sesion_cambiada': 'session_changed',
-}
+# Eventos v2 de AlfalfaCode sin equivalente en el núcleo → tipo de la extensión: `nombres.TIPOS`.
 # `motivo` de un permiso v2 → `reason` de PACAI (§4.5). Los demás van como `alfalfa.<motivo>` si se negoció.
 RAZON_DE = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outside_sandbox',
             'reintento': 'sandbox_denied_retry', 'regla': 'policy', 'modo': 'policy'}
 # Los demás motivos de AlfalfaCode, con nombre en inglés: `alfalfa.<nombre>` si se negoció la extensión.
 RAZON_PROPIA = {'navegador': 'browser', 'edicion': 'edit', 'contenido_externo': 'external_content',
                 'aprendizaje': 'learning'}
-# Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` si se negoció la extensión.
+# Campos de un permiso v2 que PACAI no tiene: viajan en `payload.alfalfa` (en inglés) si se negoció la extensión.
 PERMISO_EXTRA = ('argv', 'proposito', 'motivos', 'justificacion', 'regla', 'intento', 'reintento_de', 'red',
                  'sin_sandbox', 'fallo_sandbox', 'mcp', 'app', 'cwd', 'timeout_seconds', 'diff', 'sitio', 'prefijo')
 CODIGOS_DE_ERROR = {'Línea demasiado larga.': 'message_too_large', 'Se requiere UTF-8.': 'invalid_message'}
@@ -218,7 +213,7 @@ class Traductor:
     def _ext(self, nombre: str, payload: dict) -> list[dict]:
         if 'alfalfa' not in self.extensiones:
             return []
-        return [self.emisor.mensaje('alfalfa.' + nombre, payload)]
+        return [self.emisor.mensaje('alfalfa.' + nombre, en_ingles(payload))]
 
     def _msg(self, tipo: str, payload: dict, reply_to: str | None = None) -> dict:
         return self.emisor.mensaje(tipo, payload, reply_to=reply_to)
@@ -232,7 +227,7 @@ class Traductor:
         manejador = getattr(self, '_v2_' + tipo, None)
         if manejador is not None:
             return manejador(campos)
-        return self._ext(EXTENSION_DE.get(tipo, tipo), {k: v for k, v in campos.items() if k != 'version'})
+        return self._ext(TIPOS.get(tipo, tipo), {k: v for k, v in campos.items() if k != 'version'})
 
     # -- ejecuciones (§4.2) ------------------------------------------------
     def empezar_turno(self, input_id: str) -> list[dict]:
@@ -306,7 +301,7 @@ class Traductor:
         return salida
 
     def _alfalfa(self, datos: dict) -> dict:
-        return {'alfalfa': datos} if datos and 'alfalfa' in self.extensiones else {}
+        return {'alfalfa': en_ingles(datos)} if datos and 'alfalfa' in self.extensiones else {}
 
     def _v2_turno_terminado(self, campos: dict) -> list[dict]:
         return self.cerrar_turno(campos)

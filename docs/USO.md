@@ -344,23 +344,32 @@ declare `versions` recibe el núcleo. Sin versión común, `error` `version_inco
 | `fin` | `close` (el motivo en `reason`) |
 | `presupuesto`, `procesos`, `despierto`, `cuota`, `preparando`, `revision_codigo`, `encargos`, `aprendizaje_*`, `quitado_de_cola`, `sesion_cambiada`… | extensión `alfalfa.*` (`alfalfa.budget`, `alfalfa.processes`, `alfalfa.awake`, `alfalfa.quota`, `alfalfa.preparing`, `alfalfa.code_review`, `alfalfa.jobs`, `alfalfa.learning_proposed`…) |
 
-El payload de las extensiones `alfalfa.*` lleva los campos de v2 tal cual (`texto`, `tokens`, `estado`…); sólo los
-**tipos** están en inglés. Un cliente ignora los tipos que no conozca. Las extensiones sólo se envían si el cliente
-declaró `alfalfa` en su `hello`.
+La extensión habla como el núcleo: tipos **y campos** en inglés y `snake_case`. Cada campo de v2 pasa a su nombre
+inglés a cualquier profundidad (`texto`→`text`, `estado`→`status`, `coste_sesion`→`session_cost`,
+`desglose`→`breakdown`…; la tabla completa está en `alfalfa/pacai/nombres.py`), y lo mismo el bloque
+`payload.alfalfa` que llevan `approval_request` (`purpose`, `justification`, `reasons`, `unsandboxed`…),
+`plan_updated` (`explanation`), `usage` (`turn_tokens`, `total_tokens`), `error` (`reason`, `rejected`) y `close`
+(`status`, `exit_code`, `tokens`, `cost`). Sólo cambian las claves: los **valores** (estados, modos, textos) son los
+de AlfalfaCode, p. ej. `{"type":"alfalfa.budget","payload":{"session":{"spent":1.2,"cap":5},"warning":"sesion"}}`.
+Un cliente ignora los tipos y campos que no conozca. Las extensiones sólo se envían si el cliente declaró `alfalfa`
+en su `hello`. `--stdio` v2 no cambia.
 
 ### Órdenes de AlfalfaCode (extensión `alfalfa`)
 
-Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente. Sus campos son los de v2:
+Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` del cliente, con los campos en inglés
+(el agente los devuelve a v2 antes de dárselos al motor):
 
-| Mensaje | Hace lo de v2 |
+| Mensaje (campos) | Hace lo de v2 |
 |---|---|
-| `alfalfa.set_settings` | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
-| `alfalfa.compact`, `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
-| `alfalfa.set_context_mode`, `alfalfa.set_budget` | `contexto`, `presupuesto` |
-| `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` |
-| `alfalfa.resolve_learning`, `alfalfa.review_code`, `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
-| `alfalfa.export_browser_test`, `alfalfa.jobs_command`, `alfalfa.stop_process` | `exportar_prueba_navegador`, `encargos`, `detener_proceso` |
-| `alfalfa.dequeue`, `alfalfa.send_now` | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
+| `alfalfa.set_settings` (`model`, `effort`, `mode`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
+| `alfalfa.compact` (`instructions`), `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
+| `alfalfa.set_context_mode` (`mode`: `ahorro` o `completo`) | `contexto` |
+| `alfalfa.set_budget` (`session`, `month`, en dólares) | `presupuesto` (`sesion`, `mes`) |
+| `alfalfa.set_keep_awake`, `alfalfa.set_diagnostics`, `alfalfa.set_swift_diagnostics`, `alfalfa.set_signing` (`active`) | `mantener_despierto`, `diagnosticos`, `diagnosticos_swift`, `firma` (`activo`) |
+| `alfalfa.resolve_learning` (`id`, `apply`), `alfalfa.review_code` (`turn`, `model`), `alfalfa.cancel_code_review` | `aprendizaje`, `revisar_codigo`, `cancelar_revision_codigo` |
+| `alfalfa.export_browser_test` (`id`, `path`), `alfalfa.stop_process` (`id`) | `exportar_prueba_navegador`, `detener_proceso` |
+| `alfalfa.jobs_command` (`action`, `jobs`, `mode`, `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
+| `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
 
 ### Reglas que PACAI exige
 

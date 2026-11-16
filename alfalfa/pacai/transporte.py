@@ -26,6 +26,7 @@ from typing import Any, Callable
 from .. import __version__
 from ..stdio import MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
+from .nombres import de_la_orden
 from .sobre import Emisor, ahora, nueva_sesion
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
@@ -41,7 +42,8 @@ GRACIA_CLIENTE = 3.0
 # Variable de entorno con los segundos que espera una aprobación (por defecto, `CADUCIDAD_APROBACION`: un día).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
 CADUCIDAD_MAXIMA = 365 * 24 * 3600
-# Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Los campos son los de v2.
+# Órdenes del cliente propias de AlfalfaCode: tipo de la extensión → `tipo` de v2. Sus campos van en inglés
+# (`nombres.ORDEN` los devuelve a v2).
 COMANDOS = {
     'set_settings': 'ajustes', 'compact': 'compactar', 'set_context_mode': 'contexto',
     'continue_in_new_session': 'continuar_en_nueva', 'set_keep_awake': 'mantener_despierto',
@@ -526,7 +528,7 @@ class TransportePacai(Transport):
         v2 = COMANDOS.get(nombre)
         if v2 is None:
             return self._error('invalid_message', 'Orden desconocida: ' + m['type'], m['id'])
-        super().receive(json.dumps(dict(p, tipo=v2)))
+        super().receive(json.dumps(dict(de_la_orden(p), tipo=v2)))
 
     def _quitar_de_cola(self, ident) -> None:
         """Quitar una entrada que aún espera su ejecución: en la cola de PACAI o, ya entregada, en la del motor."""
