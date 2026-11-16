@@ -94,6 +94,7 @@ class TransportePacai(Transport):
         self._cola: deque[tuple[str, str]] = deque()     # `new_run` que esperan a la ejecución en curso
         self._ultima_entrada: str | None = None
         self._argumentos: tuple[str, Any] | None = None   # los de la herramienta cuyo evento de inicio viene ahora
+        self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -122,6 +123,25 @@ class TransportePacai(Transport):
                      if tipo == 'evento'
                      else str(campos.get('texto') or '').startswith('Inicio ' + nombre + ' · '))
         return dict(campos, _argumentos=argumentos) if es_inicio and campos.get('rol') == 'tool' else campos
+
+    async def antes_del_turno(self) -> None:
+        """Con el perfil `work`, el punto de partida del diff de la ejecución con git (por si no hay instantáneas)."""
+        self._olvidar_partida()
+        if self.t is None or not self.t.trabajo or self.manager is None:
+            return
+        cwd = (getattr(self.manager, 'task', None) or {}).get('cwd')
+        if not cwd:
+            return
+        from .diff_git import PuntoDePartida
+        try:
+            self._partida = await asyncio.to_thread(PuntoDePartida.tomar, cwd)
+        except Exception:  # noqa: BLE001 - sin punto de partida sólo falta el diff
+            traceback.print_exc(file=sys.stderr)
+
+    def _olvidar_partida(self) -> None:
+        if self._partida is not None:
+            self._partida.olvidar()
+            self._partida = None
 
     # -- salida: eventos v2 → mensajes PACAI -------------------------------
     def emit(self, tipo, **campos):
@@ -264,11 +284,14 @@ class TransportePacai(Transport):
                 self._enviar(self.t.error('alfalfa.client_tool_unanswered',
                                           'El cliente no cerró su herramienta antes de terminar la ejecución.', tc))
             diff = await asyncio.to_thread(self._diff_del_turno) if self.t.trabajo and self.t.hay_cambios else None
+            if not diff and self.t.trabajo and self._partida is not None:
+                diff = await asyncio.to_thread(self._partida.diff)        # sin instantáneas: el de git
             self._enviar_todo(self.t.cerrar_turno(campos, diff))
         except Exception:  # noqa: BLE001 - la ejecución se cierra pase lo que pase (§4.2)
             traceback.print_exc(file=sys.stderr)
             self._enviar_todo(self.t.cerrar_turno(campos))
         finally:
+            self._olvidar_partida()
             self._cerrando = None
             self._liberar()
             retenidos, self._retenidos = self._retenidos, []
@@ -286,6 +309,7 @@ class TransportePacai(Transport):
 
     def _cerrar_sesion(self) -> None:
         self.cerrado = True
+        self._olvidar_partida()
         for temporizador in self._temporizadores.values():
             temporizador.cancel()
         self._temporizadores.clear()

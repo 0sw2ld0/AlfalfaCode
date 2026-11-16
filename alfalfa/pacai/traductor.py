@@ -274,7 +274,7 @@ class Traductor:
     def herramientas_del_cliente_abiertas(self) -> list[str]:
         return [t for t, h in self.herramientas.items() if h.lado == 'client']
 
-    def cerrar_turno(self, campos: dict, diff: str | None = None) -> list[dict]:
+    def cerrar_turno(self, campos: dict, diff: str | dict | None = None) -> list[dict]:
         """`turno_terminado` → lo que queda del turno (subejecuciones, uso, cambios) y su `run_finished`."""
         if self.raiz is None:
             return []
@@ -291,9 +291,12 @@ class Traductor:
             extra = {'turn_tokens': campos['tokens_turno']} if isinstance(campos.get('tokens_turno'), int) else {}
             salida.append(self._msg('usage', {'run_id': raiz, **uso, **self._alfalfa(extra)}))
         if self.trabajo and diff:
-            archivos = archivos_del_diff(diff)
+            # Un diff unificado (instantáneas) o ya contado (`diff_git`: `files` y quizá `patch`).
+            archivos, parche = (diff.get('files'), diff.get('patch')) if isinstance(diff, dict) else \
+                (archivos_del_diff(diff), diff)
             if archivos:
-                salida.append(self._msg('diff_updated', {'run_id': raiz, 'files': archivos, 'patch': diff}))
+                salida.append(self._msg('diff_updated', {'run_id': raiz, 'files': archivos,
+                                                         **({'patch': parche} if parche else {})}))
         resto = {k: campos[k] for k in ('turno', 'cierre', 'cache', 'resumen') if k in campos}
         salida += self._ext('closing', {'run_id': raiz, **resto}) if resto else []
         salida += self._terminar(raiz, resultado, str(campos.get('resumen') or ''))

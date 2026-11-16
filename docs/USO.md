@@ -337,7 +337,7 @@ declare `versions` recibe el núcleo. Sin versión común, `error` `version_inco
 | `permiso_resuelto` | no sale (lo resolvió el cliente); si nadie contesta a tiempo, `approval_result` `expired` del agente |
 | `contexto`, `uso_sesion` | `usage` (`context_tokens`, `context_limit`, `cost`); el desglose, `alfalfa.context` |
 | `plan` | `plan_updated` (perfil `work`) |
-| cambios del turno (diff de la instantánea) | `diff_updated` (perfil `work`) |
+| cambios del turno (diff de la instantánea o, sin ella, de git) | `diff_updated` (perfil `work`) |
 | `subagentes`, `subagente_evento` | subejecuciones: `run_started` con `parent_run_id`, sus mensajes, herramientas y aprobaciones con su propio `run_id` |
 | `navegador` / `navegador_respuesta` | `tool_start` con `side: "client"` (herramienta `browser`) / `tool_end` del cliente |
 | `error` | `error` (`code` `alfalfa.engine_error`, o `message_too_large`, `invalid_message`…) |
@@ -409,7 +409,14 @@ Lo que v2 hacía con entradas propias, PACAI lo hace con mensajes `alfalfa.*` de
   cola que lo pide) se niega: PACAI exige atribuirlo a una ejecución activa.
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
   seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
-- `diff_updated` sale al cerrar un turno que editó archivos y sólo con la instantánea de deshacer activa.
+- `diff_updated` sale al cerrar una ejecución que cambió archivos. Con la instantánea de deshacer, es su diff. Sin
+  ella (`ALFALFA_INSTANTANEAS=0`, o un turno que la instantánea no cubre) y en un repo git, lo calcula el propio
+  AlfalfaCode con git, no el agente (ni pasa por el sandbox ni pide permisos): al empezar la ejecución fija el punto
+  de partida con un índice temporal (`GIT_INDEX_FILE`, copiado del tuyo sólo para ir rápido) y `git write-tree`, y
+  al terminar lo compara con `git diff-tree`. No toca tu índice, tu rama ni tus archivos; sólo deja objetos sueltos
+  en `.git/objects` que `git gc` limpia. Cuenta sólo la carpeta de la sesión, respeta `.gitignore`, deja fuera los
+  archivos nuevos de más de 1 MiB, de un binario sólo dice que cambió, y con un parche de más de 200.000
+  caracteres manda la lista de archivos sin `patch`. Fuera de un repo git, sin instantánea no hay diff.
 
 ### Comprobarlo
 
