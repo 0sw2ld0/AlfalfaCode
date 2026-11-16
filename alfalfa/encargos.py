@@ -272,7 +272,7 @@ class ColaEncargos:
             resultados = {}
             for ident, carpeta, rama in trabajo:
                 # Sólo lo que creó esta cola: su carpeta y su nombre de rama, aunque task.json diga otra cosa.
-                if (Path(carpeta).parent != propia
+                if (Path(carpeta).parent.resolve() != propia.resolve()
                         or rama != 'alfalfa/cola-' + cola + '-' + Path(carpeta).name):
                     resultados[ident] = (encargos_worktrees.CONSERVADO, 'no es un worktree creado por esta cola')
                     continue
