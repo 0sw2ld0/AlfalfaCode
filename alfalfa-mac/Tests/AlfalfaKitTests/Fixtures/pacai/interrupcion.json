@@ -1,0 +1,533 @@
+{
+ "escenario": "interrupcion",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "bf7a7e56b8e64bea",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 62,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/Prueba-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+     "hora": 1794812974.8092601,
+     "turno": "ee92d167ac0e4d03",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "inicio",
+      "descripcion": "Ver las ramas remotas",
+      "en_curso": "Viendo las ramas remotas",
+      "orden": "git ls-remote https://ejemplo.com/Prueba-orden-red"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso",
+     "id": "ad3063c3b59940cfb730b0fb589c58d9",
+     "argv": [
+      "git",
+      "ls-remote",
+      "https://ejemplo.com/Prueba-orden-red"
+     ],
+     "proposito": "Ver las ramas remotas",
+     "motivo": "red",
+     "motivos": [
+      "red"
+     ],
+     "intento": "081c5c93ea4246b5",
+     "red": true,
+     "para_sesion": true,
+     "prefijo": [
+      "git",
+      "ls-remote"
+     ],
+     "prefijo_alcance": "red"
+    }
+   },
+   {
+    "orden": {
+     "tipo": "cancel"
+    },
+    "enviado": [
+     {
+      "tipo": "cancelar"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "permiso_resuelto",
+     "id": "ad3063c3b59940cfb730b0fb589c58d9",
+     "aprobado": false,
+     "motivo": "Sesión interrumpida"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "interrupted",
+     "resumen": "Sesión interrumpida; puedes reanudarla.",
+     "codigo_salida": 130,
+     "tokens": 3
+    }
+   }
+  ],
+  "salida": 130
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "Prueba orden-red"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "Prueba orden-red"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_03604e59a1e38e7e",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:09:35.513Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d1f646f68c5068f7",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:09:35.513Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7017961821e28013",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:09:35.514Z",
+     "payload": {
+      "id": "c84c7d5837bd4dc6",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_88db9e30aaa8d3a0",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:09:35.522Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7855d94d2ec3092e",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:09:35.535Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ddf2be29e10e5b13",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:09:35.648Z",
+     "payload": {
+      "run_id": "m_88db9e30aaa8d3a0",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_20766c7e6dea0e64",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:09:35.648Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 62,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ce1af78028e22d2a",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:09:35.648Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6b30718ddf8746a2",
+     "type": "tool_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:09:35.656Z",
+     "payload": {
+      "run_id": "m_88db9e30aaa8d3a0",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "side": "agent",
+      "title": "Ver las ramas remotas",
+      "alfalfa": {
+       "text": "Inicio run_command · {'argv': ['git', 'ls-remote', 'https://ejemplo.com/Prueba-orden-red'], 'purpose': 'Ver las ramas remotas', 'needs_network': True}",
+       "tool": {
+        "name": "run_command",
+        "phase": "start",
+        "description": "Ver las ramas remotas",
+        "ongoing": "Viendo las ramas remotas",
+        "command": "git ls-remote https://ejemplo.com/Prueba-orden-red"
+       },
+       "turn": "7a9b1cdd44aa48d7"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b564631f5d596716",
+     "type": "approval_request",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:09:35.677Z",
+     "payload": {
+      "run_id": "m_88db9e30aaa8d3a0",
+      "tool_call_id": "m_6b30718ddf8746a2",
+      "name": "run_command",
+      "arguments": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "needs_network": true
+      },
+      "digest": "sha256:1d479c7ba22aa7896875d6ba8724a5895eda180828ce88b6cbb746960d4001c4",
+      "reason": "network",
+      "scopes": [
+       "once",
+       "session"
+      ],
+      "alfalfa": {
+       "argv": [
+        "git",
+        "ls-remote",
+        "https://ejemplo.com/Prueba-orden-red"
+       ],
+       "purpose": "Ver las ramas remotas",
+       "reason": "network",
+       "reasons": [
+        "network"
+       ],
+       "attempt": "73b1148690bc4951",
+       "network": true,
+       "prefix": [
+        "git",
+        "ls-remote"
+       ],
+       "prefix_scope": "network",
+       "for_session": true
+      }
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "cancel"
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000003",
+      "type": "close",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 3,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {}
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d84ceaec61f628a5",
+     "type": "approval_result",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:09:35.679Z",
+     "payload": {
+      "decision": "cancelled",
+      "reason": "Sesión interrumpida"
+     },
+     "reply_to": "m_b564631f5d596716"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_0baeaac9937d8fcb",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:09:35.706Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_c36dfa73dd78fac3",
+     "type": "tool_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:09:35.709Z",
+     "payload": {
+      "tool_call_id": "m_6b30718ddf8746a2",
+      "status": "cancelled"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7f9954727511b969",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:09:35.709Z",
+     "payload": {
+      "run_id": "m_88db9e30aaa8d3a0",
+      "outcome": "interrupted"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4eed90955d8c3a32",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:09:35.709Z",
+     "payload": {
+      "reason": "Sesión interrumpida; puedes reanudarla.",
+      "alfalfa": {
+       "status": "interrupted",
+       "summary": "Sesión interrumpida; puedes reanudarla.",
+       "exit_code": 130,
+       "tokens": 3
+      }
+     }
+    }
+   }
+  ],
+  "salida": 130
+ }
+}

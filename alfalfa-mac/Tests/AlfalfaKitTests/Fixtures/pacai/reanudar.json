@@ -1,0 +1,599 @@
+{
+ "escenario": "reanudar",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "fc02e17b5c9f4fe8",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 62,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "tool",
+     "texto": "run_command\n{\"error\": \"No se ejecutó: el turno anterior se interrumpió mientras esperaba el permiso del usuario, que no llegó a contestar. Vuelve a pedirla sólo si el usuario lo sigue queriendo.\"}",
+     "hora": 1794813614.99761,
+     "turno": "cf1e3f1c58dd4830",
+     "herramienta": {
+      "nombre": "run_command",
+      "fase": "fin",
+      "error": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "system",
+     "texto": "El turno anterior se interrumpió: una herramienta pendiente no se ejecutó.",
+     "hora": 1794813614.9979572,
+     "turno": "cf1e3f1c58dd4830"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "contexto",
+     "tokens": 2,
+     "limite": 1048576,
+     "desglose": {
+      "sistema": 0,
+      "herramientas": 2,
+      "mcp": 0,
+      "mensajes": 0,
+      "complementos": 0
+     },
+     "estimado": 21,
+     "umbral": 943718,
+     "memoria": []
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "uso_sesion",
+     "tokens": 6
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "agent",
+     "texto": "Hecho: Continúa el encargo original.",
+     "hora": 1794813615.010877,
+     "turno": "cf1e3f1c58dd4830"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "completed",
+     "resumen": "Hecho: Continúa el encargo original.",
+     "codigo_salida": 0,
+     "tokens": 6,
+     "turno": "cf1e3f1c58dd4830",
+     "tokens_turno": 3
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "completed",
+     "resumen": "Hecho: Continúa el encargo original.",
+     "codigo_salida": 0,
+     "tokens": 6
+    }
+   }
+  ],
+  "salida": 0
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "continue": true
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [],
+       "alfalfa": {
+        "continue": true
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_be290b032b1e030d",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:20:15.820Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e596024f9432da5a",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:20:15.820Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_5928120eb91cb888",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:20:15.821Z",
+     "payload": {
+      "id": "a3b33001d2164232",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6d3aa4ab6be03f1c",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:20:15.821Z",
+     "payload": {
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a75354211b379be4",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:20:15.821Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 62,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1b8dbc0191a2c09d",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:20:15.825Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f3f87f0077112497",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:20:15.833Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_404adf9266768f56",
+     "type": "alfalfa.notice",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:20:15.890Z",
+     "payload": {
+      "role": "tool",
+      "text": "run_command\n{\"error\": \"No se ejecutó: el turno anterior se interrumpió mientras esperaba el permiso del usuario, que no llegó a contestar. Vuelve a pedirla sólo si el usuario lo sigue queriendo.\"}",
+      "time": 1794813615.8903701,
+      "turn": "9ef6d5b8cd3b4d78",
+      "tool": {
+       "name": "run_command",
+       "phase": "end",
+       "error": true
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3f0871312831ab41",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:20:15.890Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "role": "system",
+      "alfalfa": {
+       "turn": "9ef6d5b8cd3b4d78"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_90fd341f638452dd",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:20:15.890Z",
+     "payload": {
+      "message_id": "m_3f0871312831ab41",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "El turno anterior se interrumpió: una herramienta pendiente no se ejecutó."
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_248d045a015265ed",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:20:15.890Z",
+     "payload": {
+      "message_id": "m_3f0871312831ab41"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d446eba73dcd6040",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:20:15.898Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "context_tokens": 2,
+      "context_limit": 1048576
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bfd17dda75605bc7",
+     "type": "alfalfa.context",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:20:15.898Z",
+     "payload": {
+      "tokens": 2,
+      "limit": 1048576,
+      "breakdown": {
+       "system": 0,
+       "tools": 2,
+       "mcp": 0,
+       "messages": 0,
+       "plugins": 0
+      },
+      "estimated": 21,
+      "threshold": 943718,
+      "memory": []
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6c8d238c12355b3a",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:20:15.898Z",
+     "payload": {
+      "alfalfa": {
+       "total_tokens": 6
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_4b4da3d3d36d9d94",
+     "type": "message_start",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:20:15.899Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "role": "assistant",
+      "alfalfa": {
+       "turn": "9ef6d5b8cd3b4d78"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d65293c5ee0d7107",
+     "type": "message_delta",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:20:15.899Z",
+     "payload": {
+      "message_id": "m_4b4da3d3d36d9d94",
+      "blocks": [
+       {
+        "type": "text",
+        "text": "Hecho: Continúa el encargo original."
+       }
+      ]
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_1e22f3162e4be20a",
+     "type": "message_end",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 17,
+     "time": "2026-11-16T07:20:15.899Z",
+     "payload": {
+      "message_id": "m_4b4da3d3d36d9d94"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_7c5742fd6604e603",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 18,
+     "time": "2026-11-16T07:20:15.913Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_cb83bf314912924f",
+     "type": "usage",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 19,
+     "time": "2026-11-16T07:20:15.913Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "alfalfa": {
+       "turn_tokens": 3
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_94371143a050ab34",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 20,
+     "time": "2026-11-16T07:20:15.913Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "status": "completed",
+      "summary": "Hecho: Continúa el encargo original.",
+      "exit_code": 0,
+      "tokens": 6,
+      "turn": "9ef6d5b8cd3b4d78",
+      "turn_tokens": 3
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_6c5b911b40518e33",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 21,
+     "time": "2026-11-16T07:20:15.913Z",
+     "payload": {
+      "run_id": "m_1b8dbc0191a2c09d",
+      "outcome": "success"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_937303c46d7f2c3d",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 22,
+     "time": "2026-11-16T07:20:15.919Z",
+     "payload": {
+      "reason": "Hecho: Continúa el encargo original.",
+      "alfalfa": {
+       "status": "completed",
+       "summary": "Hecho: Continúa el encargo original.",
+       "exit_code": 0,
+       "tokens": 6
+      }
+     }
+    }
+   }
+  ],
+  "salida": 0
+ }
+}

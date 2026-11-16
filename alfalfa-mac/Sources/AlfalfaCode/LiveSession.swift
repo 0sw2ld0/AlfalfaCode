@@ -1,7 +1,7 @@
 import AlfalfaKit
 import Foundation
 
-/// Una sesión con proceso hijo `alfalfa --stdio` propio.
+/// Una sesión con proceso hijo `alfalfa --pacai` propio (o `--stdio` v2, con `ProtocoloMotor = stdio`).
 @MainActor
 final class LiveSession: ObservableObject, Identifiable {
     nonisolated let id = UUID()
@@ -112,19 +112,8 @@ final class LiveSession: ObservableObject, Identifiable {
     func start(launcher: URL, task: String?, images: [URL] = [], wait: Bool = false, queue: Bool = false) {
         self.launcher = launcher
         liveBrowserExport = nil
-        let browserPreferences = BrowserEnginePreferences()
-        let arguments = Launcher.stdioArguments(
-            task: task, resume: resumeID, model: resumeID == nil || settingsChanged ? model : nil,
-            effort: resumeID == nil || settingsChanged ? effort : nil, readOnly: readOnly,
-            images: images.map(\.path), mode: mode, wait: wait,
-            parent: parentSessionID, title: parentSessionID == nil ? nil : title,
-            keepAwake: Preferences().keepAwake, browser: true,
-            budget: Preferences().sessionBudget(for: sessionID), monthlyBudget: Preferences().monthlyBudget,
-            diagnostics: Preferences().diagnostics, swiftDiagnostics: Preferences().swiftDiagnostics,
-            commitSignature: Preferences().commitSignature, queue: queue,
-            browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
-            cuyBrowserFromPath: browserPreferences.fromPath)
-        let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd)
+        let (arguments, pacai) = engineArguments(task: task, images: images, wait: wait, queue: queue)
+        let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd, pacai: pacai)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
         }
@@ -533,6 +522,42 @@ final class LiveSession: ObservableObject, Identifiable {
     /// Hay un proceso vivo esperando órdenes, sin turno ni permiso en curso.
     var isParked: Bool {
         process != nil && !reviewingCode && !workingQueue && ReleasePolicy.isParked(timeline.status)
+    }
+}
+
+// MARK: - Protocolo del motor
+
+extension LiveSession {
+    /// Los argumentos del motor y, con PACAI, su cliente: el encargo, sus adjuntos y reanudar sin mensaje van
+    /// como el primer `input` en vez de en la orden.
+    fileprivate func engineArguments(task: String?, images: [URL], wait: Bool,
+                                     queue: Bool) -> ([String], PacaiClient?) {
+        let browserPreferences = BrowserEnginePreferences()
+        let preferences = Preferences()
+        let model = resumeID == nil || settingsChanged ? model : nil
+        let effort = resumeID == nil || settingsChanged ? effort : nil
+        let title = parentSessionID == nil ? nil : title
+        guard EngineProtocol.current() == .pacai else {
+            return (Launcher.stdioArguments(
+                task: task, resume: resumeID, model: model, effort: effort, readOnly: readOnly,
+                images: images.map(\.path), mode: mode, wait: wait, parent: parentSessionID, title: title,
+                keepAwake: preferences.keepAwake, browser: true, budget: preferences.sessionBudget(for: sessionID),
+                monthlyBudget: preferences.monthlyBudget, diagnostics: preferences.diagnostics,
+                swiftDiagnostics: preferences.swiftDiagnostics, commitSignature: preferences.commitSignature,
+                queue: queue, browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
+                cuyBrowserFromPath: browserPreferences.fromPath), nil)
+        }
+        let arguments = Launcher.pacaiArguments(
+            resume: resumeID, model: model, effort: effort, readOnly: readOnly, mode: mode, parent: parentSessionID,
+            title: title, keepAwake: preferences.keepAwake, browser: true,
+            budget: preferences.sessionBudget(for: sessionID), monthlyBudget: preferences.monthlyBudget,
+            diagnostics: preferences.diagnostics, swiftDiagnostics: preferences.swiftDiagnostics,
+            commitSignature: preferences.commitSignature, queue: queue, browserEngine: browserBackend,
+            cuyBrowserProfile: browserPreferences.profile, cuyBrowserFromPath: browserPreferences.fromPath)
+        // Como `--reanudar ID` sin encargo ni `--esperar` en v2: la sesión sigue sin mensaje.
+        let opening = PacaiClient.Opening(task: task, attachments: images.map(\.path),
+                                          continueWithoutMessage: resumeID != nil && task == nil && !wait && !queue)
+        return (arguments, PacaiClient(opening: opening))
     }
 }
 

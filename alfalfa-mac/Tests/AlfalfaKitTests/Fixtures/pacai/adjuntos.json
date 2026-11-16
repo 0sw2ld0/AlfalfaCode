@@ -1,0 +1,511 @@
+{
+ "escenario": "adjuntos",
+ "stdio": {
+  "pasos": [
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "sesion",
+     "id": "a677ab44706c423e",
+     "cwd": "/proyecto",
+     "modelo": "deepseek-v4.1-flash:cloud",
+     "esfuerzo": "medium",
+     "modo": "auto",
+     "contexto": "ahorro",
+     "tokens": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "failed",
+     "resumen": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+     "codigo_salida": 1,
+     "tokens": 0,
+     "turno": "e6657c46c35a45a0",
+     "tokens_turno": 0
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y esta otra",
+     "id": "cola-ocho-0008",
+     "images": [
+      "/proyecto/otra.png"
+     ]
+    },
+    "enviado": [
+     {
+      "tipo": "mensaje",
+      "texto": "y esta otra",
+      "imagenes": [
+       "/proyecto/otra.png"
+      ],
+      "id": "cola-ocho-0008"
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": true
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "evento",
+     "rol": "user",
+     "texto": "<image name=[Image #1] path=\"/proyecto/otra.png\"></image>\ny esta otra",
+     "hora": 1794813606.292939,
+     "id_cola": "cola-ocho-0008",
+     "turno": "f819d5cfd5234fbd"
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "despierto",
+     "activo": false
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "turno_terminado",
+     "estado": "failed",
+     "resumen": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+     "codigo_salida": 1,
+     "tokens": 0,
+     "turno": "f819d5cfd5234fbd",
+     "tokens_turno": 0
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "error",
+     "texto": "La sesión no terminó correctamente."
+    }
+   },
+   {
+    "recibido": {
+     "version": 2,
+     "tipo": "fin",
+     "estado": "failed",
+     "resumen": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+     "codigo_salida": 1,
+     "tokens": 0
+    }
+   }
+  ],
+  "salida": 1
+ },
+ "pacai": {
+  "pasos": [
+   {
+    "apertura": {
+     "task": "Mira estos adjuntos",
+     "attachments": [
+      "/proyecto/captura.png",
+      "/proyecto/notas.txt"
+     ]
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000001",
+      "type": "hello",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 1,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "versions": [
+        "0.3"
+       ],
+       "profiles": [
+        "work"
+       ],
+       "extensions": [
+        "alfalfa"
+       ],
+       "client_tools": [
+        {
+         "name": "browser",
+         "description": "El navegador propio de la app de Mac",
+         "input_schema": {
+          "type": "object"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "pacai": "0.3",
+      "id": "c_0000000000000002",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 2,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "Mira estos adjuntos"
+        },
+        {
+         "type": "file",
+         "name": "captura.png",
+         "media_type": "image/png",
+         "url": "file:///proyecto/captura.png"
+        },
+        {
+         "type": "file",
+         "name": "notas.txt",
+         "media_type": "text/plain",
+         "url": "file:///proyecto/notas.txt"
+        }
+       ],
+       "alfalfa": {
+        "echo": false
+       }
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ac9f2df88efd3611",
+     "type": "hello",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 1,
+     "time": "2026-11-16T07:20:09.689Z",
+     "payload": {
+      "versions": [
+       "0.3"
+      ],
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "implementation": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_b1d3b05c824cb498",
+     "type": "session_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 2,
+     "time": "2026-11-16T07:20:09.690Z",
+     "payload": {
+      "version": "0.3",
+      "profiles": [
+       "work"
+      ],
+      "extensions": [
+       "alfalfa"
+      ],
+      "agent": {
+       "name": "alfalfa",
+       "version": "0.99.22"
+      }
+     },
+     "reply_to": "c_0000000000000001"
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3413b8c1488670cf",
+     "type": "alfalfa.session",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 3,
+     "time": "2026-11-16T07:20:09.690Z",
+     "payload": {
+      "id": "9c93a039cf3e41d9",
+      "cwd": "/proyecto",
+      "model": "deepseek-v4.1-flash:cloud",
+      "effort": "medium",
+      "mode": "auto",
+      "context": "saving",
+      "tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_d96842e338ff6ec3",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 4,
+     "time": "2026-11-16T07:20:09.720Z",
+     "payload": {
+      "input_id": "c_0000000000000002"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_ee156fb475ed871d",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 5,
+     "time": "2026-11-16T07:20:09.727Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_941ad3195b979128",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 6,
+     "time": "2026-11-16T07:20:11.081Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_e6422633283815e4",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 7,
+     "time": "2026-11-16T07:20:11.081Z",
+     "payload": {
+      "run_id": "m_d96842e338ff6ec3",
+      "status": "failed",
+      "summary": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+      "exit_code": 1,
+      "tokens": 0,
+      "turn": "a4af17f681f243f2",
+      "turn_tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_201a68dbadbcd15a",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 8,
+     "time": "2026-11-16T07:20:11.081Z",
+     "payload": {
+      "run_id": "m_d96842e338ff6ec3",
+      "outcome": "failed",
+      "detail": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes."
+     }
+    }
+   },
+   {
+    "orden": {
+     "tipo": "message",
+     "text": "y esta otra",
+     "id": "cola-ocho-0008",
+     "images": [
+      "/proyecto/otra.png"
+     ]
+    },
+    "enviado": [
+     {
+      "pacai": "0.3",
+      "id": "cola-ocho-0008",
+      "type": "input",
+      "session": "s_0123456789abcdef0123456789abcdef",
+      "sender": "client",
+      "seq": 3,
+      "time": "2026-11-16T10:00:00.000Z",
+      "payload": {
+       "blocks": [
+        {
+         "type": "text",
+         "text": "y esta otra"
+        },
+        {
+         "type": "file",
+         "name": "otra.png",
+         "media_type": "image/png",
+         "url": "file:///proyecto/otra.png"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_f945b11f24c62ed6",
+     "type": "run_started",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 9,
+     "time": "2026-11-16T07:20:11.092Z",
+     "payload": {
+      "input_id": "cola-ocho-0008"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_3398f1b584b1fd1a",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 10,
+     "time": "2026-11-16T07:20:11.098Z",
+     "payload": {
+      "active": true
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_610614d4db94a23a",
+     "type": "alfalfa.user_message",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 11,
+     "time": "2026-11-16T07:20:11.101Z",
+     "payload": {
+      "text": "<image name=[Image #1] path=\"/proyecto/otra.png\"></image>\ny esta otra",
+      "input_id": "cola-ocho-0008",
+      "turn": "fd16c4d8778b4826"
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_2e65f4efb3d9951a",
+     "type": "alfalfa.awake",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 12,
+     "time": "2026-11-16T07:20:11.167Z",
+     "payload": {
+      "active": false
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_bf39aae3f95fb130",
+     "type": "alfalfa.closing",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 13,
+     "time": "2026-11-16T07:20:11.167Z",
+     "payload": {
+      "run_id": "m_f945b11f24c62ed6",
+      "status": "failed",
+      "summary": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+      "exit_code": 1,
+      "tokens": 0,
+      "turn": "fd16c4d8778b4826",
+      "turn_tokens": 0
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_a0462f668c8eb0d5",
+     "type": "run_finished",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 14,
+     "time": "2026-11-16T07:20:11.167Z",
+     "payload": {
+      "run_id": "m_f945b11f24c62ed6",
+      "outcome": "failed",
+      "detail": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes."
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_73c5b24d49241f12",
+     "type": "error",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 15,
+     "time": "2026-11-16T07:20:14.096Z",
+     "payload": {
+      "code": "alfalfa.engine_error",
+      "message": "La sesión no terminó correctamente."
+     }
+    }
+   },
+   {
+    "recibido": {
+     "pacai": "0.3",
+     "id": "m_72cbb93d528c2df4",
+     "type": "close",
+     "session": "s_0123456789abcdef0123456789abcdef",
+     "sender": "agent",
+     "seq": 16,
+     "time": "2026-11-16T07:20:14.096Z",
+     "payload": {
+      "reason": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+      "alfalfa": {
+       "status": "failed",
+       "summary": "El modelo deepseek-v4.1-flash:cloud no ve imágenes, así que no se pueden adjuntar. Cambia a uno que sí las ve, como minimax-m3.1-flash:cloud, mimo-v2.6-pro:cloud, gemma4:31b-cloud, o quita las imágenes.",
+       "exit_code": 1,
+       "tokens": 0
+      }
+     }
+    }
+   }
+  ],
+  "salida": 1
+ }
+}
