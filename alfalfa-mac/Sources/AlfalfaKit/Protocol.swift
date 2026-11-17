@@ -755,6 +755,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case plan(Plan)
     /// `subagente_evento`: un paso de un subagente; no entra en la conversación principal.
     case subagentEvent(agent: String, AgentEvent)
+    /// El texto que el agente va escribiendo (PACAI: `message_delta` antes del `message_end`), entero hasta ahora;
+    /// nil cuando se retira sin respuesta. La respuesta final llega luego como `event` y lo sustituye.
+    case draft(String?)
     /// `despierto`: el arnés tomó (true) o soltó (false) la aserción de macOS que impide que el Mac
     /// se duerma por inactividad mientras trabaja un turno.
     case keepingAwake(Bool)

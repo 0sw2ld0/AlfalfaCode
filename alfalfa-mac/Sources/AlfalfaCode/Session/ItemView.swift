@@ -110,3 +110,20 @@ struct ItemView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
     }
 }
+
+/// Lo que el agente va escribiendo (texto en vivo, `Timeline.draft`): como su respuesta, con la marca de que aún
+/// escribe. Cuando termina, su respuesta entera ocupa su sitio.
+struct DraftReply: View {
+    let text: String
+    let folder: URL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MarkdownView(text: text, folder: folder)
+            Label("Escribiendo…", systemImage: "ellipsis")
+                .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                .accessibilityLabel("El agente está escribiendo")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

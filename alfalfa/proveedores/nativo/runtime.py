@@ -27,6 +27,7 @@ from ...evidencia.registro import RunEvidence
 
 # Vive en el arnés para que la evidencia no tenga que importar el runtime.
 from ...reintentos.fallos import _CREDENCIALES, _sin_credenciales  # noqa: F401
+from .. import escritura
 from .descripciones import datos_de_fin, datos_de_inicio
 from .herramientas import (
     COMPLEMENTOS_TOOLS,
@@ -1079,15 +1080,24 @@ class NativeRuntime:
                 self._log_transport_exhausted(attempt - 1, 'session_deadline')
                 raise self._provider_failure(clas, intentos=attempt - 1)
             self._log_transport_attempt(endpoint, attempt)
+            # Lo que se enseñó letra a letra de un intento anterior ya no vale (escritura.py).
+            escritura.descartar()
             try:
                 async with asyncio.timeout(remaining):
                     async with inference_stream(self.manager, self.task, client, endpoint, payload,
                                                 aliases) as response:
                         # Bound provider responses before parsing; raw thinking is never persisted.
                         raw = bytearray()
+                        # Con `stream: true` (texto en vivo), Ollama da una línea por trozo: se leen según llegan
+                        # y se rehace la respuesta entera. El tope es el del texto, no el de las líneas.
+                        lector = (escritura.LectorNDJSON() if payload.get('stream') is True
+                                  and endpoint == '/api/chat' and response.status_code < 400 else None)
                         async for chunk in response.aiter_bytes():
-                            raw.extend(chunk)
-                            if len(raw) > 4*1024*1024:
+                            if lector is not None:
+                                lector.trozo(chunk)
+                            else:
+                                raw.extend(chunk)
+                            if (lector.tamano if lector is not None else len(raw)) > 4*1024*1024:
                                 raise self._provider_failure(
                                     {'kind': DEFINITIVO, 'cause': 'response_too_large', 'retry': False,
                                      'status_code': None,
@@ -1098,10 +1108,13 @@ class NativeRuntime:
                             error_text = self._provider_error_text(raw)
                             clas = classify_ollama_error(response.status_code, error_text)
                         else:
-                            try:
-                                value = json.loads(bytes(raw))
-                            except ValueError:
-                                value = None
+                            if lector is not None:
+                                value = lector.respuesta()
+                            else:
+                                try:
+                                    value = json.loads(bytes(raw))
+                                except ValueError:
+                                    value = None
                             if not isinstance(value, dict):
                                 # Estado válido pero cuerpo inservible: no se inventa la causa.
                                 raise self._provider_failure(
@@ -2832,6 +2845,13 @@ class NativeRuntime:
     # Evento de «Redirigir» (Transport.redireccion); None fuera de la app.
     redireccion = None
 
+    def _oyente_de_escritura(self):
+        """Quién oye el texto de la respuesta mientras llega: el gestor, si su transporte lo enseña letra a letra
+        (`--pacai`). Sólo el turno principal; un subagente o una sesión sin ese transporte, nadie."""
+        if self.task.get('subagente_de') or getattr(self.manager, 'escribe_en_vivo', False) is not True:
+            return None
+        return self.manager.texto_parcial
+
     async def _redirigible(self, corrutina):
         """Espera la respuesta del modelo; si el usuario redirige, la corta y lanza Redirigido."""
         evento = self.redireccion
@@ -3045,7 +3065,10 @@ class NativeRuntime:
                 opciones = {'num_ctx':context_tokens, **perfil(model).get('options', {}),
                             'num_predict':salida}
                 mensajes = await self._con_archivos(await self._con_imagenes(context, info), info)
-                payload = {'model':model, 'messages':mensajes, 'stream':False,
+                # Con un cliente que enseña el texto mientras se escribe (`alfalfa --pacai`), la respuesta
+                # llega por trozos (escritura.py); el motor sigue trabajando con ella entera.
+                oyente = self._oyente_de_escritura()
+                payload = {'model':model, 'messages':mensajes, 'stream':oyente is not None,
                            'options':opciones}
                 if allowed_tools:
                     payload['tools'] = allowed_tools
@@ -3060,8 +3083,9 @@ class NativeRuntime:
                     self._conversation_response_cap(payload)
                     self.save()
                 try:
-                    response = await self._redirigible(self.request(client, '/api/chat', payload,
-                                                                    session_deadline=session_deadline))
+                    with escritura.escuchando(oyente):
+                        response = await self._redirigible(self.request(client, '/api/chat', payload,
+                                                                        session_deadline=session_deadline))
                 except Redirigido:
                     # «Redirigir» de la app, como steer de Codex: la respuesta en curso se
                     # descarta y el modelo vuelve a empezar con el mensaje nuevo ya dentro.
@@ -3100,8 +3124,9 @@ class NativeRuntime:
                     self.manager.event(self.task, "system", "Respuesta cortada descartada; única recuperación en pasos "
                                                             "menores.")
                     try:
-                        response = await self.request(client, "/api/chat", payload,
-                                                      session_deadline=session_deadline)
+                        with escritura.escuchando(oyente):
+                            response = await self.request(client, "/api/chat", payload,
+                                                          session_deadline=session_deadline)
                     except presupuesto.PresupuestoAgotado:
                         # No salió: no cuenta como recuperación gastada y, con el tope subido,
                         # la sesión puede seguir (si no, el turno siguiente la daría por agotada).

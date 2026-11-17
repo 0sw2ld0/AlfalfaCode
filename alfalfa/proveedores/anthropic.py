@@ -29,7 +29,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from . import Proveedor, elegir_esfuerzo, lista_api, ordenar_por_fecha, sin_instantaneas
+from . import Proveedor, elegir_esfuerzo, escritura, lista_api, ordenar_por_fecha, sin_instantaneas
 from .ollama import validar_url
 from .openai import _json, _mime, _texto
 
@@ -492,6 +492,7 @@ async def juntar(lineas):
             clase = delta.get('type')
             if clase == 'text_delta':
                 bloque['text'] = (bloque.get('text') or '') + (delta.get('text') or '')
+                escritura.escribir(delta.get('text'))          # el texto en vivo, si alguien lo enseña
             elif clase == 'thinking_delta':
                 bloque['thinking'] = (bloque.get('thinking') or '') + (delta.get('thinking') or '')
             elif clase == 'signature_delta':

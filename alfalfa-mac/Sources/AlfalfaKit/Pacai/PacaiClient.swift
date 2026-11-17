@@ -50,6 +50,10 @@ public final class PacaiClient: @unchecked Sendable {
         var text: String
         var time: Double
         var turn: Any?
+        /// El motor lo escribe en vivo (`payload.alfalfa.live`): sus trozos se enseñan como borrador.
+        var live = false
+        /// Se enseñó como borrador mientras se escribía (`AlfalfaMessage.draft`).
+        var drafted = false
     }
 
     // MARK: - Constantes
@@ -213,18 +217,26 @@ public final class PacaiClient: @unchecked Sendable {
         switch type {
         case "message_start":
             guard let run = payload["run_id"] as? String else { return [] }
+            let extra = payload["alfalfa"] as? [String: Any]
             messages[id] = OpenMessage(run: run, role: payload["role"] as? String ?? "assistant", text: "",
-                                       time: time, turn: (payload["alfalfa"] as? [String: Any])?["turn"])
+                                       time: time, turn: extra?["turn"], live: extra?["live"] as? Bool == true)
             return []
         case "message_delta":
-            guard let key = payload["message_id"] as? String else { return [] }
-            messages[key]?.text += Self.text(of: payload["blocks"])
-            return []
+            guard let key = payload["message_id"] as? String, var open = messages[key] else { return [] }
+            open.text += Self.text(of: payload["blocks"])
+            // La respuesta de la ejecución raíz, mientras se escribe: el borrador de la conversación.
+            let draft = open.live && open.role == "assistant" && open.run == rootRun && subruns[open.run] == nil
+            open.drafted = open.drafted || draft
+            messages[key] = open
+            return draft ? [.draft(open.text)] : []
         default:
             guard let key = payload["message_id"] as? String, var open = messages.removeValue(forKey: key) else {
                 return []
             }
-            open.text += Self.text(of: payload["blocks"])
+            // `blocks` en el `message_end` es el contenido final completo (§4.3): sustituye a lo acumulado. Vacío,
+            // la respuesta se retiró (se reintentó o no valía).
+            if payload["blocks"] != nil { open.text = Self.text(of: payload["blocks"]) }
+            if open.text.isEmpty { return open.drafted ? [.draft(nil)] : [] }
             let role = open.role == "assistant" ? "agent" : open.role
             if let agent = subruns[open.run] {
                 return decoded(["tipo": "subagente_evento", "agente": agent, "rol": role, "texto": open.text,

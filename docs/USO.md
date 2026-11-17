@@ -467,6 +467,21 @@ mientras corre no espera: el motor para el trabajo y abre el turno, como en v2.
   (`invalid_message`, `seq_unrecoverable`, `unknown_approval`, `not_negotiated`…) y la sesión sigue, salvo
   `seq_unrecoverable`.
 
+### El texto mientras se escribe
+
+Con `--pacai`, la respuesta del modelo en el turno principal llega **letra a letra**: el motor la pide por trozos
+(Ollama con `stream: true`; Anthropic ya leía su stream) y sigue trabajando con ella entera, como siempre. Lo que
+llega sale cada 50 ms como `message_delta` de un `message_start` con `payload.alfalfa.live: true`:
+
+- **La respuesta entera lo cierra:** `message_end` con el texto final en `blocks`, que es el contenido que vale
+  (§4.3), ya tachado como cualquier evento.
+- **Lo que no llega a respuesta se retira** con un `message_end` con `blocks` vacío: un reintento, una respuesta
+  descartada, o el modelo que pasa a una herramienta o termina el turno sin que su texto cuente.
+- **Secretos:** se tachan sobre el texto acumulado, y lo que podría ser el principio de una clave espera al siguiente
+  trozo, así que nunca sale media clave.
+- **Qué no cambia:** los subagentes, la compactación y las revisiones siguen llegando enteros. OpenAI y los
+  proveedores compatibles, también: su texto sale al final. `--stdio` v2 y la terminal no cambian.
+
 ### Mirar una sesión en vivo (observadores)
 
 Un `alfalfa --pacai` sólo tiene un dueño: el proceso que lo lanzó y le habla por stdio (la app, la skill
