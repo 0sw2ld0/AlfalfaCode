@@ -18,6 +18,8 @@ public final class PacaiObserver: @unchecked Sendable {
         public let sessionID: String?
         /// Lo que está en marcha: permisos pendientes, uso, contexto, plan, subagentes…
         public let state: [AlfalfaMessage]
+        /// Hay una ejecución en marcha: la sesión está trabajando aunque aún no haya llegado nada.
+        public let running: Bool
     }
 
     public enum Failure: Error, Equatable {
@@ -170,10 +172,11 @@ public final class PacaiObserver: @unchecked Sendable {
 
     private func deliver(_ update: PacaiObservation.Update) {
         switch update {
-        case let .ready(sessionID, historyUntil, state):
+        case let .ready(sessionID, historyUntil, state, running):
             guard let opening else { return }
             self.opening = nil
-            opening(.success(Ready(observer: self, historyUntil: historyUntil, sessionID: sessionID, state: state)))
+            opening(.success(Ready(observer: self, historyUntil: historyUntil, sessionID: sessionID, state: state,
+                                   running: running)))
         case let .rejected(reason):
             fail(.rejected(reason))
         case let .messages(messages):

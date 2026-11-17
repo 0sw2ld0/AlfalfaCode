@@ -28,7 +28,8 @@ struct Composer: View {
                 attachButton
                 field
                 if suggestion != nil { tabHint }
-                if session.timeline.status.isRunning { stopButton } else { sendButton }
+                // Lo que trabaja en otro proceso sólo lo detiene quien lo lanzó.
+                if session.timeline.status.isRunning, !session.runningElsewhere { stopButton } else { sendButton }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Theme.field, in: RoundedRectangle(cornerRadius: 18))

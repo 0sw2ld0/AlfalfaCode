@@ -279,6 +279,13 @@ public struct Timeline: Equatable, Sendable {
         answerPriceWarnings()
     }
 
+    /// Una sesión de otro proceso que se mira en vivo con una ejecución en marcha: trabaja (o espera un permiso)
+    /// aunque todavía no haya llegado ningún paso nuevo.
+    public mutating func watchingRun() {
+        guard status == .idle || status == .starting || status == .blocked else { return }
+        status = pendingPermissions.isEmpty ? .working : .waitingPermission
+    }
+
     /// Tokens y coste que da `--sesiones` de una sesión que trabaja fuera.
     public mutating func updateSavedTotals(tokens: Int, cost: Double?) {
         totalTokens = tokens

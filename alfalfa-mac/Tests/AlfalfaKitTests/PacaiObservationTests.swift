@@ -71,10 +71,11 @@ final class PacaiObservationTests: XCTestCase {
         let lines = Self.opening(hello: "o_00000001")
         XCTAssertNil(observation.receive(lines[0]))
         XCTAssertNil(observation.receive(lines[1]))
-        guard case let .ready(sessionID, until, state)? = observation.receive(lines[2]) else {
+        guard case let .ready(sessionID, until, state, running)? = observation.receive(lines[2]) else {
             return XCTFail("sin foto")
         }
         XCTAssertTrue(observation.isReady)
+        XCTAssertTrue(running)
         XCTAssertEqual(sessionID, "0123456789abcdef")
         XCTAssertEqual(until, 1_763_400_000.5)
         // La orden abierta ya está en el historial: no se repite. Sí el uso, el contexto y el permiso pendiente.
@@ -193,6 +194,7 @@ final class PacaiObservationTests: XCTestCase {
         guard case let .success(ready) = result else { return XCTFail("\(result)") }
         XCTAssertEqual(ready.historyUntil, 1_763_400_000.5)
         XCTAssertEqual(ready.sessionID, "0123456789abcdef")
+        XCTAssertTrue(ready.running)
         XCTAssertEqual((agent.hello?["payload"] as? [String: Any])?["observe"] as? Bool, true)
         let received = expectation(description: "lo que llegó tras la foto")
         let closed = expectation(description: "el agente cerró")
@@ -226,6 +228,13 @@ final class PacaiObservationTests: XCTestCase {
         guard case .failure(.timedOut) = await PacaiObserver.connect(to: silent.url, timeout: 0.5) else {
             return XCTFail("sin foto a tiempo no hay observación")
         }
+    }
+
+    func testAWatchedSessionWithARunningTurnIsWorking() {
+        var timeline = Timeline(history: [], wrapUp: nil, running: true)
+        XCTAssertEqual(timeline.status, .idle)
+        timeline.watchingRun()
+        XCTAssertEqual(timeline.status, .working)
     }
 
     func testTheSocketLivesInTheSessionFolder() {

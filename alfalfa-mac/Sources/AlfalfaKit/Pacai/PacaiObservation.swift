@@ -15,8 +15,8 @@ public final class PacaiObservation {
     public enum Update: Equatable {
         /// Llegó la foto. La transcripción en disco vale hasta `historyUntil` (hora de sus filas): lo posterior llega
         /// en vivo. `state` es lo que está en marcha (permisos pendientes, uso, contexto, plan, subagentes…), sin los
-        /// pasos de la conversación, que ya trae el historial.
-        case ready(sessionID: String?, historyUntil: Double?, state: [AlfalfaMessage])
+        /// pasos de la conversación, que ya trae el historial. `running`: hay una ejecución en marcha.
+        case ready(sessionID: String?, historyUntil: Double?, state: [AlfalfaMessage], running: Bool)
         /// Lo que pasa desde la foto.
         case messages([AlfalfaMessage])
         /// El agente no aceptó al observador (otra versión, demasiados observadores…).
@@ -81,7 +81,8 @@ public final class PacaiObservation {
             let extra = payload["alfalfa"] as? [String: Any]
             return .ready(sessionID: extra?["session_id"] as? String,
                           historyUntil: (extra?["history_until"] as? NSNumber)?.doubleValue,
-                          state: Self.watchable(state).filter(Self.isState))
+                          state: Self.watchable(state).filter(Self.isState),
+                          running: !(payload["runs"] as? [Any] ?? []).isEmpty)
         default:
             return nil
         }

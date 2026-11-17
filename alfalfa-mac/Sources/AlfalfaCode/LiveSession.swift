@@ -86,6 +86,7 @@ final class LiveSession: ObservableObject, Identifiable {
         observer = ready.observer
         watchingLive = true
         for message in ready.state { timeline.apply(message) }
+        if ready.running { timeline.watchingRun() }
         ready.observer.attach({ [weak self] messages in
             MainActor.assumeIsolated { self?.applyWatched(messages) }
         }, onClose: { [weak self, weak observer = ready.observer] in
