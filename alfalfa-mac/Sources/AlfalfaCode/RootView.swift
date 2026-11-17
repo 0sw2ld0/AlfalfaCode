@@ -315,7 +315,7 @@ struct PastSessionInfo: View {
                         LeafIcon()
                         Text(summary.task ?? "Sesión \(summary.id)").font(.system(size: 15, weight: .semibold)).lineLimit(1)
                     }
-                    Text(label).foregroundStyle(Theme.warning)
+                    Text(label).foregroundStyle(summary.isRunningElsewhere ? Theme.secondary : Theme.warning)
                     Text(Presentation.abbreviate(summary.cwd ?? "")).font(Theme.mono).foregroundStyle(Theme.secondary)
                     Text("\(Presentation.shortModel(summary.model ?? "—")) · \(Presentation.effortLabel(summary.effort ?? "—")) · \(summary.tokens) tokens"
                          + (summary.cost.map { " · " + CatalogFormat.cost($0) + " estimado" } ?? ""))

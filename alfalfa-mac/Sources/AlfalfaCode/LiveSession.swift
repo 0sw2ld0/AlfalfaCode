@@ -68,6 +68,14 @@ final class LiveSession: ObservableObject, Identifiable {
     private var launcher: URL?
     /// Interrumpida o bloqueada: se puede reanudar sin mensaje. Una completada necesita uno.
     @Published private(set) var resumableWithoutMessage = false
+    /// Otro proceso (la terminal, un cliente PACAI…) la tiene en marcha: se mira, pero no se reanuda ni se le escribe.
+    @Published var runningElsewhere = false
+    /// Mientras trabaja fuera: su transcripción, para añadir cada paso nuevo según llega.
+    var externalLog: SessionLogTail?
+
+    func appendExternal(_ events: [AgentEvent]) { timeline.appendSaved(events) }
+
+    func updateExternalTotals(tokens: Int, cost: Double?) { timeline.updateSavedTotals(tokens: tokens, cost: cost) }
 
     /// Pinta la conversación guardada y espera el mensaje que la continúe.
     func restore(_ history: Timeline, launcher: URL, resumable: Bool) {
@@ -79,7 +87,7 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// Reanuda sin mensaje (sólo sesiones que no terminaron bien: el arnés lo exige).
     func wake(with task: String?, images: [URL] = []) {
-        guard let launcher = dormantLauncher else { return }
+        guard !runningElsewhere, let launcher = dormantLauncher else { return }
         dormantLauncher = nil
         timeline.restart()
         onWake?()

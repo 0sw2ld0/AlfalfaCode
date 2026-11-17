@@ -250,8 +250,10 @@ public struct Timeline: Equatable, Sendable {
 
     /// Conversación de una sesión guardada, lista para seguirla: queda «lista» y el cierre
     /// del último turno conserva sus botones.
+    /// `running`: la sesión trabaja en otro proceso, así que lo que aún no tiene resultado sigue abierto (sus pasos
+    /// llegan después con `appendSaved`).
     public init(history events: [AgentEvent], wrapUp: WrapUp?, context: SavedContext? = nil, tokens: Int = 0,
-                cost: Double? = nil) {
+                cost: Double? = nil, running: Bool = false) {
         for event in events { apply(event) }
         // Un aviso de tarifa guardado ya no espera respuesta: el modo se cambia en el panel o con /contexto.
         answerPriceWarnings()
@@ -265,10 +267,22 @@ public struct Timeline: Equatable, Sendable {
         totalTokens = tokens
         totalCost = cost
         // Una sesión guardada no está trabajando: lo que quedó sin resultado, quedó cortado.
-        closeOpenCalls()
+        if !running { closeOpenCalls() }
         if let wrapUp { appendWrapUp(wrapUp) }
         status = .idle
         compacting = false
+    }
+
+    /// Pasos que otro proceso apunta en la transcripción de una sesión que trabaja fuera (`SessionLogTail`).
+    public mutating func appendSaved(_ events: [AgentEvent]) {
+        for event in events { apply(event) }
+        answerPriceWarnings()
+    }
+
+    /// Tokens y coste que da `--sesiones` de una sesión que trabaja fuera.
+    public mutating func updateSavedTotals(tokens: Int, cost: Double?) {
+        totalTokens = tokens
+        totalCost = cost
     }
 
     /// El proceso vuelve a arrancar sobre una conversación ya pintada. Con `waiting` se abre

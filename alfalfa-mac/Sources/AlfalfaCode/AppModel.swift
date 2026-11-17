@@ -180,6 +180,73 @@ final class AppModel: ObservableObject {
         await loadAlfalfaQuota()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
+        watchSessions()
+    }
+
+    // MARK: - Cambios de fuera
+
+    /// Vigila la carpeta de sesiones del motor: lo que cambia fuera de la app (un encargo lanzado desde la terminal o
+    /// un cliente PACAI) se ve sin reabrirla.
+    private var sessionsWatcher: SessionsWatcher?
+    private var refreshingSessions = false
+    private var touchedSessions: Set<String> = []
+
+    private func watchSessions() {
+        guard sessionsWatcher == nil, launcher != nil else { return }
+        let watcher = SessionsWatcher(latency: 0.5) { [weak self] ids in
+            MainActor.assumeIsolated { self?.sessionsChanged(ids) }
+        }
+        if watcher.start() { sessionsWatcher = watcher }
+    }
+
+    private func sessionsChanged(_ ids: Set<String>) {
+        // Lo de las sesiones que esta app tiene en marcha ya llega por su propio proceso.
+        let own = Set(live.filter { $0.timeline.status.isActive }.compactMap(\.sessionID))
+        let others = ids.subtracting(own)
+        guard !others.isEmpty else { return }
+        // Al momento, sin esperar a releer la lista: los pasos nuevos de las sesiones abiertas que trabajan fuera.
+        for id in others { followExternal(id) }
+        touchedSessions.formUnion(others)
+        guard !refreshingSessions else { return }
+        Task { await refreshSessions() }
+    }
+
+    private func followExternal(_ id: String) {
+        guard let session = dormant[id], session.runningElsewhere, let log = session.externalLog else { return }
+        switch log.read() {
+        case let .events(events):
+            if !events.isEmpty { session.appendExternal(events) }
+        case .restart:
+            session.externalLog = nil   // refreshSessions vuelve a cargar el historial entero
+        }
+    }
+
+    /// Relee la lista (`--sesiones --json`) y el historial de las sesiones guardadas que están abiertas y cambiaron
+    /// fuera, en tandas: el motor reescribe su sesión a menudo mientras trabaja.
+    private func refreshSessions() async {
+        guard let launcher else { return }
+        refreshingSessions = true
+        defer { refreshingSessions = false }
+        while !touchedSessions.isEmpty {
+            let touched = touchedSessions
+            touchedSessions = []
+            guard let messages = try? await AlfalfaProcess.query(launcher: launcher, arguments: ["--sesiones", "--json"],
+                                                                 directory: home) else { return }
+            for case let .sessions(rows) in messages { summaries = rows }
+            for (id, session) in dormant where touched.contains(id) {
+                guard let summary = summaries.first(where: { $0.id == id }) else { continue }
+                let wasRunning = session.runningElsewhere
+                session.runningElsewhere = summary.isRunningElsewhere
+                if session.runningElsewhere { session.updateExternalTotals(tokens: summary.tokens, cost: summary.cost) }
+                // Los pasos llegan por la transcripción (`followExternal`). El historial entero, sólo al empezar o
+                // terminar fuera (para ver el final y poder continuarla) o si se perdió el hilo de la transcripción.
+                if wasRunning != session.runningElsewhere || (session.runningElsewhere && session.externalLog == nil) {
+                    await loadHistory(id, into: session, launcher: launcher,
+                                      resumable: Presentation.resumable(summary.state))
+                }
+            }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
     }
 
     /// El nombre visible de un modelo («GPT-6 Luna - Alfalfa»), o el corto si no está en la lista.
@@ -478,16 +545,27 @@ final class AppModel: ObservableObject {
         dormant[summary.id] = session
         session.pendingDraft = pendingDrafts.removeValue(forKey: summary.id)
         session.searchAnchor = pendingAnchors.removeValue(forKey: summary.id)
+        session.runningElsewhere = summary.isRunningElsewhere
         let resumable = Presentation.resumable(summary.state)
         Task { await loadHistory(summary.id, into: session, launcher: launcher, resumable: resumable) }
     }
 
     private func loadHistory(_ id: String, into session: LiveSession, launcher: URL, resumable: Bool) async {
+        // Si trabaja en otro proceso, lo que su transcripción reciba desde ahora se añade paso a paso
+        // (`followExternal`); lo que ya traiga el historial se salta por la hora.
+        let running = session.runningElsewhere
+        let log = SessionLog.url(sessionID: id)
+        let start = running ? SessionLog.size(of: log) : 0
+        session.externalLog = nil
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
                                                           directory: home)
             for case let .history(_, events, wrapUp, context, tokens, cost) in messages {
-                var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost)
+                if running, session.runningElsewhere {
+                    session.externalLog = SessionLogTail(url: log, offset: start, after: events.map(\.time).max() ?? 0)
+                }
+                var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost,
+                                        running: running)
                 for case var .taskQueue(queue) in messages {
                     queue.recover()
                     timeline.taskQueue = queue
