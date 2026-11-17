@@ -70,6 +70,12 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var resumableWithoutMessage = false
     /// Otro proceso (la terminal, un cliente PACAI…) la tiene en marcha: se mira, pero no se reanuda ni se le escribe.
     @Published var runningElsewhere = false
+    /// Mientras trabaja fuera: su transcripción, para añadir cada paso nuevo según llega.
+    var externalLog: SessionLogTail?
+
+    func appendExternal(_ events: [AgentEvent]) { timeline.appendSaved(events) }
+
+    func updateExternalTotals(tokens: Int, cost: Double?) { timeline.updateSavedTotals(tokens: tokens, cost: cost) }
 
     /// Pinta la conversación guardada y espera el mensaje que la continúe.
     func restore(_ history: Timeline, launcher: URL, resumable: Bool) {

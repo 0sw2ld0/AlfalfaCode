@@ -1013,7 +1013,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     }
 
     /// Un `evento` en vivo o una fila de `historial`, con su compactación o su aviso de tarifa.
-    private static func agentEvent(_ row: [String: Any]) -> AgentEvent? {
+    static func agentEvent(_ row: [String: Any]) -> AgentEvent? {
         guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
         return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
