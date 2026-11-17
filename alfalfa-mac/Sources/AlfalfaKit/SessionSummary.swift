@@ -22,4 +22,12 @@ public struct SessionSummary: Equatable, Identifiable, Sendable {
 
     /// El título propio si lo hay; si no, el encargo.
     public var displayTitle: String? { title ?? task }
+
+    /// Estados de una sesión con un turno en marcha.
+    public static let runningStates: Set<String> = ["running", "waiting", "starting"]
+
+    /// La sesión trabaja ahora en otro proceso (un encargo lanzado desde la terminal, otra app o un cliente PACAI):
+    /// `--sesiones` sólo da estos estados si alguien tiene su cerrojo; si su proceso murió, la da por `interrupted`.
+    /// La app no debe reanudarla ni escribirle mientras tanto: serían dos procesos sobre la misma sesión.
+    public var isRunningElsewhere: Bool { Self.runningStates.contains(state) }
 }

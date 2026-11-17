@@ -58,7 +58,12 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var dormantHint: some View {
-        if session.resumableWithoutMessage {
+        if session.runningElsewhere {
+            Label("En marcha en otro proceso", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                .help("Un encargo lanzado fuera de la app (la terminal, Claude Code…) trabaja en esta sesión. "
+                      + "Se actualiza sola; podrás continuarla aquí cuando termine.")
+        } else if session.resumableWithoutMessage {
             Button { session.wake(with: nil) } label: {
                 Label("Reanudar", systemImage: "arrow.clockwise").font(.system(size: 12.5, weight: .semibold))
                     .padding(.horizontal, 10).frame(minHeight: 26)

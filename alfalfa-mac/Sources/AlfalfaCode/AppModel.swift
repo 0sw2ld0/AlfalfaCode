@@ -180,6 +180,59 @@ final class AppModel: ObservableObject {
         await loadAlfalfaQuota()
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
+        watchSessions()
+    }
+
+    // MARK: - Cambios de fuera
+
+    /// Vigila la carpeta de sesiones del motor: lo que cambia fuera de la app (un encargo lanzado desde la terminal o
+    /// un cliente PACAI) se ve sin reabrirla.
+    private var sessionsWatcher: SessionsWatcher?
+    private var refreshingSessions = false
+    private var touchedSessions: Set<String> = []
+
+    private func watchSessions() {
+        guard sessionsWatcher == nil, launcher != nil else { return }
+        let watcher = SessionsWatcher { [weak self] ids in
+            MainActor.assumeIsolated { self?.sessionsChanged(ids) }
+        }
+        if watcher.start() { sessionsWatcher = watcher }
+    }
+
+    private func sessionsChanged(_ ids: Set<String>) {
+        // Lo de las sesiones que esta app tiene en marcha ya llega por su propio proceso.
+        let own = Set(live.filter { $0.timeline.status.isActive }.compactMap(\.sessionID))
+        let others = ids.subtracting(own)
+        guard !others.isEmpty else { return }
+        touchedSessions.formUnion(others)
+        guard !refreshingSessions else { return }
+        Task { await refreshSessions() }
+    }
+
+    /// Relee la lista (`--sesiones --json`) y el historial de las sesiones guardadas que están abiertas y cambiaron
+    /// fuera, en tandas: el motor reescribe su sesión a menudo mientras trabaja.
+    private func refreshSessions() async {
+        guard let launcher else { return }
+        refreshingSessions = true
+        defer { refreshingSessions = false }
+        while !touchedSessions.isEmpty {
+            let touched = touchedSessions
+            touchedSessions = []
+            guard let messages = try? await AlfalfaProcess.query(launcher: launcher, arguments: ["--sesiones", "--json"],
+                                                                 directory: home) else { return }
+            for case let .sessions(rows) in messages { summaries = rows }
+            for (id, session) in dormant where touched.contains(id) {
+                guard let summary = summaries.first(where: { $0.id == id }) else { continue }
+                let wasRunning = session.runningElsewhere
+                session.runningElsewhere = summary.isRunningElsewhere
+                // Mientras trabaja, para seguirla; al terminar, una vez más para ver el final y poder continuarla.
+                if wasRunning || session.runningElsewhere {
+                    await loadHistory(id, into: session, launcher: launcher,
+                                      resumable: Presentation.resumable(summary.state))
+                }
+            }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
     }
 
     /// El nombre visible de un modelo («GPT-6 Luna - Alfalfa»), o el corto si no está en la lista.
@@ -478,6 +531,7 @@ final class AppModel: ObservableObject {
         dormant[summary.id] = session
         session.pendingDraft = pendingDrafts.removeValue(forKey: summary.id)
         session.searchAnchor = pendingAnchors.removeValue(forKey: summary.id)
+        session.runningElsewhere = summary.isRunningElsewhere
         let resumable = Presentation.resumable(summary.state)
         Task { await loadHistory(summary.id, into: session, launcher: launcher, resumable: resumable) }
     }

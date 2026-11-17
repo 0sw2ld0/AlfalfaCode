@@ -28,12 +28,16 @@ enum Presentation {
         case "corrupta": return ("ilegible", .problem)
         // Una bifurcación recién hecha: espera su primer mensaje.
         case "created": return ("lista", .done)
+        // Trabaja en otro proceso (SessionSummary.isRunningElsewhere): no está interrumpida.
+        case _ where SessionSummary.runningStates.contains(state): return ("en curso", .working)
         default: return ("Interrumpida · se puede reanudar", .attention)
         }
     }
 
-    /// Se puede reanudar sin mensaje: sólo lo que se quedó a medias.
-    static func resumable(_ state: String) -> Bool { !["completed", "corrupta", "created"].contains(state) }
+    /// Se puede reanudar sin mensaje: sólo lo que se quedó a medias, no lo que sigue en marcha en otro proceso.
+    static func resumable(_ state: String) -> Bool {
+        !["completed", "corrupta", "created"].contains(state) && !SessionSummary.runningStates.contains(state)
+    }
 }
 
 /// Lo que enseña el aviso de «Buscar actualización».
