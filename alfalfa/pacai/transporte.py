@@ -35,6 +35,7 @@ from .. import __version__
 from ..stdio import CONTINUAR_ENCARGO, MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
 from .nombres import de_la_orden, respuesta_del_navegador
+from .observadores import NOMBRE_SOCKET
 from .sobre import Emisor, ahora, nueva_sesion
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
@@ -109,10 +110,31 @@ class TransportePacai(Transport):
         self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
         self._trabajo: asyncio.Future | None = None      # el trabajo (`TRABAJOS`) cuya ejecución está abierta
         self._siguiente: str | None = None               # la entrada del turno que espera a que se cierre el anterior
+        self.mirador = None                              # observadores.Mirador: el socket de quien mira en vivo
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
         self.manager = manager
+        self._abrir_mirador(manager)
+
+    def _abrir_mirador(self, manager) -> None:
+        """El socket de los observadores (`<sesiones>/<id>/vivo.sock`): quien lo abre tiene el cerrojo de la sesión.
+        Sin él (ruta demasiado larga, sin bucle…) la sesión sigue igual y la app relee la transcripción."""
+        from pathlib import Path
+
+        from .observadores import Mirador
+        carpeta, task = getattr(manager, 'directory', None), getattr(manager, 'task', None)
+        if not isinstance(carpeta, Path) or not isinstance(task, dict) or not isinstance(task.get('id'), str):
+            return
+        mirador = Mirador(carpeta, task['id'], retenidos=lambda: list(self._retenidos), reloj=self.reloj)
+        if mirador.abrir():
+            self.mirador = mirador
+
+    async def al_salir(self) -> None:
+        """Tras el `fin`: cada observador recibe lo que quede (la copia del `close`) y se borra el socket."""
+        mirador, self.mirador = self.mirador, None
+        if mirador is not None:
+            await mirador.cerrar()
 
     def turno_empieza(self, prompt) -> None:
         """El motor va a empezar un turno: es la ejecución raíz que abre el `input` que lo trajo."""
@@ -226,6 +248,8 @@ class TransportePacai(Transport):
         except (BrokenPipeError, ValueError, OSError):
             self.salida_rota = True
             return
+        if self.mirador is not None:
+            self.mirador.copiar(m)                       # lo mismo, en vivo, a quien mire (observadores.py)
         if m['type'] == 'approval_request':
             self._vigilar_caducidad(m['id'])
 
@@ -447,6 +471,11 @@ class TransportePacai(Transport):
             # La reanudación en red queda fuera: este proceso no retiene una sesión anterior.
             self._error('retention_expired', 'Este agente no retiene sesiones para reanudar.', m['id'])
             return self._negociacion_fallida()
+        if p.get('observe') is True:
+            # Por stdio habla siempre quien lanzó el proceso: el dueño. Para mirar está el socket de la sesión.
+            self._error('invalid_message', 'Por stdio habla quien lanzó la sesión; para sólo mirar, conéctate a su '
+                        'socket (' + NOMBRE_SOCKET + ' en la carpeta de la sesión).', m['id'])
+            return self._negociacion_fallida()
         perfiles = [x for x in p.get('profiles', []) if x in PERFILES]
         extensiones = [x for x in p.get('extensions', []) if x in EXTENSIONES]
         limite = (p.get('limits') or {}).get('max_message_bytes')
@@ -650,6 +679,10 @@ class TransportePacai(Transport):
             orden['sitio'] = 'una_vez'
         a.estado = 'approved' if decision == 'approved' else 'denied'
         self._olvidar_resueltas()
+        if self.mirador is not None:
+            # Quien mira retira la tarjeta: sólo el dueño contesta, el observador se entera.
+            self.mirador.decision(ref, decision, alcance if decision == 'approved' else None,
+                                  {'scope': propio} if decision == 'approved' and propio else None)
         super().receive(json.dumps(orden))
 
     def _c_tool_end(self, m):
@@ -663,6 +696,8 @@ class TransportePacai(Transport):
         h = self.t.fin_de_herramienta_cliente(tc)
         if h is None:
             return self._error('unknown_tool_call', 'No hay una herramienta del cliente abierta con ese id.', m['id'])
+        if self.mirador is not None:
+            self.mirador.herramienta_cliente_cerrada(tc)
         respuesta = self._respuesta_del_navegador(p)
         futuro = self.navegador_pendientes.get(h.v2id)
         if futuro is not None and not futuro.done():     # una respuesta tardía (ya caducó) se descarta sin ruido

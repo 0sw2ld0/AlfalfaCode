@@ -274,6 +274,9 @@ class Transport:
         """Los argumentos (ya sin secretos) de la herramienta cuyo evento de inicio viene ahora. v2 no los emite:
         su evento lleva el texto de siempre; `--pacai` los pone en su `tool_start`."""
 
+    async def al_salir(self):
+        """Tras el último evento (`fin`). v2 no hace nada; `--pacai` cierra a sus observadores y borra su socket."""
+
     def take_compact(self):
         pending, self.compact_pending = self.compact_pending, False
         return pending
@@ -1056,6 +1059,10 @@ async def run(args, transport):
             transport.emit('error', texto='La sesión no terminó correctamente.')
         transport.emit('fin', estado=task.get('status', 'failed'), resumen=task.get('summary', ''),
                        codigo_salida=code, tokens=task.get('total_tokens', 0), **gasto(task))
+        try:
+            await transport.al_salir()
+        except Exception:  # noqa: BLE001 - los observadores no impiden salir
+            pass
     cierre.terminado()
     return code
 

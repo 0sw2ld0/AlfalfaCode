@@ -58,7 +58,12 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var dormantHint: some View {
-        if session.runningElsewhere {
+        if session.watchingLive {
+            Label("En vivo · lo lanzó otro proceso", systemImage: "dot.radiowaves.left.and.right")
+                .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                .help("Un encargo lanzado fuera de la app (la terminal, Claude Code…) trabaja en esta sesión y lo ves "
+                      + "en vivo. Los permisos los contesta quien lo lanzó; podrás continuarla aquí cuando termine.")
+        } else if session.runningElsewhere {
             Label("En marcha en otro proceso", systemImage: "arrow.triangle.2.circlepath")
                 .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 .help("Un encargo lanzado fuera de la app (la terminal, Claude Code…) trabaja en esta sesión. "

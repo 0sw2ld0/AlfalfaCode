@@ -59,6 +59,8 @@ public final class PacaiClient: @unchecked Sendable {
     static let browser = "browser"
     /// El motivo del eco local de una respuesta a un permiso: el mismo que daba v2.
     static let clientAnswer = "Respuesta del cliente"
+    /// El motivo de un permiso que contestó quien lanzó la sesión, visto por quien sólo mira.
+    static let relayedAnswer = "Lo contestó quien lanzó el encargo"
 
     // MARK: - Propiedades
 
@@ -143,9 +145,10 @@ public final class PacaiClient: @unchecked Sendable {
         case "approval_request":
             return Output(events: decoded(PacaiExtension.permission(payload, id: id)))
         case "approval_result":
+            guard let request = message["reply_to"] as? String else { return Output() }
+            if payload["relayed"] as? Bool == true { return Output(events: [Self.relayed(request, payload)]) }
             // Lo que cuenta el agente: la ejecución terminó o se interrumpió sin respuesta, o caducó.
-            guard let request = message["reply_to"] as? String, payload["decision"] as? String != "approved"
-            else { return Output() }
+            guard payload["decision"] as? String != "approved" else { return Output() }
             let reason = payload["reason"] as? String
                 ?? (payload["decision"] as? String == "expired" ? "Sin respuesta a tiempo" : "")
             return Output(events: [.permissionResolved(id: request, approved: false, reason: reason)])
@@ -170,6 +173,17 @@ public final class PacaiClient: @unchecked Sendable {
         let options: JSONSerialization.WritingOptions = [.sortedKeys, .withoutEscapingSlashes]
         let data = (try? JSONSerialization.data(withJSONObject: object, options: options)) ?? Data()
         return String(decoding: data, as: UTF8.self) + "\n"
+    }
+
+    /// La respuesta del dueño a un permiso, que el agente reenvía a quien sólo mira (`relayed`): la tarjeta se cierra
+    /// con lo que decidió él.
+    static func relayed(_ request: String, _ payload: [String: Any]) -> AlfalfaMessage {
+        let approved = payload["decision"] as? String == "approved"
+        let own = (payload["alfalfa"] as? [String: Any])?["scope"] as? String
+        return .permissionResolved(id: request, approved: approved,
+                                   reason: approved ? relayedAnswer : payload["reason"] as? String ?? relayedAnswer,
+                                   session: approved && payload["scope"] as? String == "session",
+                                   always: approved && own == "always")
     }
 
     func decoded(_ object: [String: Any]?) -> [AlfalfaMessage] {

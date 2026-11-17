@@ -28,6 +28,8 @@ _ANSWERS = {'session_started': 'hello', 'approval_result': 'approval_request', '
 _BEFORE_START = {'hello', 'session_started', 'error', 'close', 'heartbeat'}
 # Trabajo nuevo que una ejecución en cierre ya no admite (§4.2).
 _NEW_WORK = {'message_start', 'message_delta', 'tool_start', 'approval_request', 'expression'}
+# Lo único que envía un observador (propuesta §6.1): mira, no participa.
+_OBSERVER_SENDS = {'hello', 'heartbeat', 'error', 'close'}
 
 
 def _instant(texto: Any) -> Any:
@@ -92,6 +94,10 @@ class Session:
         self._pipelined: list[tuple[str, str]] = []     # (dónde, tipo) del cliente antes de session_started
         self._resume_hello: str | None = None
         self._needs_snapshot = False
+        # Sesión de un observador (hello con observe: true, propuesta §6.1): solo mira; el agente le manda la foto
+        # inicial (snapshot) y la copia de lo que ve el dueño, con sus decisiones reenviadas (relayed).
+        self.observer = False
+        self._client_hello_id: str | None = None
         self._count = 0
 
     # -- consultas ---------------------------------------------------------
@@ -143,6 +149,8 @@ class Session:
         self._check_seq(m, t, emisor, p, fallo)
         self._check_reply(t, emisor, ref, p, fallo)
         self.seen[mid] = m
+        if self.observer and emisor == 'client' and t not in _OBSERVER_SENDS:
+            fallo(f'un observador solo envía heartbeat, error y close, no {t}')
 
         encadenado = False
         if not self.started and t not in _BEFORE_START:
@@ -223,7 +231,8 @@ class Session:
         if ref is None:
             return
         previo = self.seen.get(ref)
-        propio_permitido = t == 'approval_result' and p.get('decision') in ('expired', 'cancelled')
+        propio_permitido = t == 'approval_result' and (p.get('decision') in ('expired', 'cancelled')
+                                                       or (p.get('relayed') is True and emisor == 'agent'))
         if previo is None:
             fallo('reply_to a un mensaje inexistente')
         elif previo.get('sender') == emisor and not propio_permitido:
@@ -236,6 +245,9 @@ class Session:
         if emisor == 'client':
             self.client_tools |= {h.get('name') for h in p.get('client_tools', []) if isinstance(h, dict)}
         if not self.started:
+            if emisor == 'client' and self._client_hello_id is None:
+                self._client_hello_id = m.get('id')
+                self.observer = p.get('observe') is True
             return
         if emisor == 'agent':
             fallo('el agente repite hello; al reanudar solo contesta con session_started')
@@ -265,7 +277,8 @@ class Session:
     def _on_run_started(self, m, p, emisor, ref, fallo):
         madre_id, tc = p.get('parent_run_id'), p.get('tool_call_id')
         if madre_id is None:
-            if p.get('input_id') not in self.inputs:
+            # El input que la abrió es del dueño: un observador no lo ve.
+            if p.get('input_id') not in self.inputs and not self.observer:
                 fallo('input_id no corresponde a un input del cliente')
             raiz = self.active_root_run
             if raiz:
@@ -400,6 +413,14 @@ class Session:
         self.approvals_by_tool.setdefault(tc, []).append(m['id'])
 
     def _on_approval_result(self, m, p, emisor, ref, fallo):
+        if p.get('relayed') is True:
+            # La decisión del dueño que el agente reenvía a un observador (§6.1): cuenta como la del cliente.
+            if emisor != 'agent' or not self.observer:
+                fallo('relayed solo lo envía el agente, en la sesión de un observador')
+                return
+            emisor = 'client'
+        elif self.observer and emisor == 'client':
+            return  # un observador no contesta permisos: ya se marcó como fallo y el agente lo ignora
         a = self.approvals.get(ref)
         if a is None:
             return  # reply_to ya se marcó; el agente contestaría unknown_approval
@@ -454,8 +475,9 @@ class Session:
 
     # -- reanudación (§6) --------------------------------------------------
     def _on_snapshot(self, m, p, emisor, ref, fallo):
-        if self._resume_hello is None or ref != self._resume_hello:
-            fallo('snapshot fuera de una reanudación')
+        inicial = self.observer and ref == self._client_hello_id and ref is not None
+        if not inicial and (self._resume_hello is None or ref != self._resume_hello):
+            fallo('snapshot fuera de una reanudación o del saludo de un observador')
         self._needs_snapshot = False
         estados = {r.get('run_id'): r for r in p.get('runs', []) if isinstance(r, dict)}
         for rid in self.active_runs:
@@ -485,7 +507,12 @@ class Session:
             return
         self.seen[mid] = previo
         p = previo.get('payload') if isinstance(previo.get('payload'), dict) else {}
-        if t == 'tool_start':
+        if t == 'run_started':
+            info = self.runs.setdefault(mid, RunInfo(mid, p.get('parent_run_id')))
+            info.tool_call_id = p.get('tool_call_id')
+            if info.parent_run_id in self.runs:
+                self.runs[info.parent_run_id].children.add(mid)
+        elif t == 'tool_start':
             self._open_tool(mid, p)
         elif t == 'tool_end':
             tc = p.get('tool_call_id')
