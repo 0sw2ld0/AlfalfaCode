@@ -846,6 +846,63 @@ async def test_quitar_o_enviar_ahora_una_entrada_que_espera_su_ejecucion():
     c.t.interrumpir_turno.assert_called()
 
 
+async def test_quitar_una_entrada_entregada_antes_de_su_ejecucion_deja_pasar_las_siguientes():
+    # Llega con el motor compactando entre turnos: el motor ya la tiene, pero su ejecución aún no empezó. Quitarla
+    # dejaba el transporte «ocupado» y todo lo que llegaba después esperaba en la cola para siempre.
+    c = Cliente()
+    c.saludar()
+    c.entrada('Sí, súbelos')
+    primera = c.ultimo['id']
+    c.entrada('Y luego esto')
+    segunda = c.ultimo['id']
+    assert [m.id for m in c.t.inbox] == [primera] and [i for i, _ in c.t._cola] == [segunda]
+    quitado = c.enviar('alfalfa.dequeue', {'id': primera})
+    assert tipos(quitado) == ['alfalfa.dequeued'] and quitado[0]['payload'] == {'id': primera, 'removed': True}
+    assert [m.id for m in c.t.inbox] == [segunda] and not c.t._cola           # la siguiente pasa al motor
+    c.t.turno_empieza(await asyncio.wait_for(c.t.next_message(), 1))
+    assert c.drenar()[-1]['payload'] == {'input_id': segunda}
+    await cerrar(c)
+    c.entrada('Tercero')
+    assert [m.id for m in c.t.inbox] == [c.ultimo['id']] and not c.t._cola
+    c.comprobar()
+
+
+async def test_quitar_lo_que_corrige_la_ejecucion_en_curso_no_la_da_por_terminada():
+    c = Cliente()
+    run = await abrir(c, 'uno')
+    c.entrada('mejor así', mode='steer', run_id=run, alfalfa={'redirect': False})
+    corrige = c.ultimo['id']
+    assert c.enviar('alfalfa.dequeue', {'id': corrige})[0]['payload'] == {'id': corrige, 'removed': True}
+    c.entrada('dos')
+    assert [i for i, _ in c.t._cola] == [c.ultimo['id']]          # espera a que termine la ejecución en curso
+    await cerrar(c)
+    assert [m.id for m in c.t.inbox] == [c.ultimo['id']]
+    c.comprobar()
+
+
+async def test_la_respuesta_a_quitar_no_espera_al_cierre_del_turno():
+    c = Cliente()
+    await abrir(c)
+    c.entrada('dos')
+    segunda = c.ultimo['id']
+    soltar = asyncio.Event()
+    cerrar_turno = c.t._cerrar_turno
+
+    async def diff_lento(campos):
+        await soltar.wait()                                       # el diff de un turno grande tarda
+        await cerrar_turno(campos)
+
+    c.t._cerrar_turno = diff_lento
+    c.t.emit('turno_terminado', estado='completed', resumen='Hecho', codigo_salida=0, tokens=10)
+    assert c.t._cerrando is not None and c.drenar() == []
+    quitado = c.enviar('alfalfa.dequeue', {'id': segunda})
+    assert tipos(quitado) == ['alfalfa.dequeued'] and quitado[0]['payload'] == {'id': segunda, 'removed': True}
+    soltar.set()
+    await asyncio.wait_for(asyncio.shield(c.t._cerrando), 5)
+    assert tipos(c.drenar())[-1] == 'run_finished' and not c.t.inbox and not c.t._cola
+    c.comprobar()
+
+
 # -- tamaño (§4.1, §4.8) ---------------------------------------------------
 async def test_ningun_mensaje_supera_max_message_bytes():
     c = Cliente()

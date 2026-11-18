@@ -573,9 +573,10 @@ extension LiveSession {
 
 extension LiveSession {
     /// «Quitar» (X) y «Editar» de un mensaje en cola. Se pide al motor, que sólo lo saca si aún
-    /// no entró en el contexto; sin proceso no hay cola en el motor y se quita ya.
+    /// no entró en el contexto; sin proceso no hay cola en el motor y se quita ya. Tampoco la hay si el
+    /// proceso ya no lee (se está cerrando): la orden no llegaría y se quedaba en «quitando…».
     func unqueue(item: Int, action: UnqueueAction) {
-        if process == nil {
+        if process == nil || process?.acceptsInput == false {
             if let text = timeline.removeQueued(item: item), action == .edit { returnToComposer(text) }
             return
         }

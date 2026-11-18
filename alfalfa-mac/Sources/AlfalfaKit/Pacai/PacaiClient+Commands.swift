@@ -96,6 +96,7 @@ extension PacaiClient {
             payload["alfalfa"] = ["redirect": false]
         } else {
             awaitingRun = true
+            awaitingInput = id
         }
         return Output(lines: [envelope("input", payload, id: id)])
     }

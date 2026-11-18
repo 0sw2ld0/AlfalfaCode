@@ -75,6 +75,9 @@ public final class PacaiClient: @unchecked Sendable {
     /// Se mandó un `input` que abre ejecución y aún no llegó su `run_started`: lo que se escriba mientras espera
     /// entra en esa ejecución (como en v2, donde el mensaje se sumaba al turno que empezaba).
     var awaitingRun = false
+    /// El id con el que salió ese `input`, si lo tenía: quitarlo de la cola antes de que empiece su ejecución
+    /// (`alfalfa.dequeued`) también deja de esperarla.
+    var awaitingInput: String?
     var held: [AlfalfaCommand] = []
     /// Herramientas del cliente (`browser`) abiertas: sólo ésas reciben respuesta.
     var clientTools: Set<String> = []
@@ -131,7 +134,10 @@ public final class PacaiClient: @unchecked Sendable {
         let payload = message["payload"] as? [String: Any] ?? [:]
         let time = Self.seconds(message["time"])
         if type.hasPrefix("alfalfa.") {
-            return Output(events: extensionEvent(String(type.dropFirst("alfalfa.".count)), payload, time))
+            let name = String(type.dropFirst("alfalfa.".count))
+            var output = Output(events: extensionEvent(name, payload, time))
+            if name == "dequeued" { output.append(dequeued(payload)) }
+            return output
         }
         switch type {
         case "run_started": return runStarted(id, payload)
@@ -283,6 +289,17 @@ public final class PacaiClient: @unchecked Sendable {
             output.append(releaseHeld())
         }
         return output
+    }
+
+    /// Se quitó de la cola el `input` que iba a abrir la ejecución antes de que empezara (llegó mientras el motor
+    /// compactaba, por ejemplo): su `run_started` ya no llegará. Sin esto, lo que se escribía después se quedaba
+    /// aquí «en cola» para siempre; ahora sale ya, como mensaje nuevo.
+    private func dequeued(_ payload: [String: Any]) -> Output {
+        guard awaitingRun, payload["removed"] as? Bool == true, let id = payload["id"] as? String,
+              id == awaitingInput else { return Output() }
+        awaitingRun = false
+        awaitingInput = nil
+        return releaseHeld()
     }
 
     private func closed(_ payload: [String: Any]) -> [AlfalfaMessage] {
