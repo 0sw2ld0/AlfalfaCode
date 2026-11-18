@@ -1,3 +1,5 @@
-Si quitabas un mensaje en cola antes de que empezara su turno (por ejemplo, mientras se compactaba la conversación), la sesión se quedaba atascada y todo lo que escribías después se quedaba «en cola». Ya no: lo siguiente se envía con normalidad.
-«Quitar» un mensaje en cola ya no se queda en «quitando…» mientras se cierra el turno anterior ni cuando el motor de la sesión ya se está cerrando.
-Por lo demás, la app y el motor funcionan igual que en la 0.99.25.
+Lo que AlfalfaCode encuentra en Codex, OpenCode o Claude Code sin autorizar (servidores MCP, agentes y órdenes «/») se autoriza ahora desde el propio aviso de la sesión: «Revisar y autorizar…» abre una lista con una casilla por cada uno.
+Atajo nuevo en la barra lateral («5 MCP sin autorizar», mientras la carpeta tenga algo pendiente) y en Archivo ▸ Revisar lo importado sin autorizar… (⇧⌘I).
+Después de autorizar, la app te ofrece empezar una sesión nueva en la misma carpeta, porque la sesión que ya estaba abierta no carga lo recién autorizado.
+El aviso de lo importado ya no sale repetido en la conversación.
+Por lo demás, la app y el motor funcionan igual que en la 0.99.26.
