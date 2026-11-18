@@ -1,4 +1,3 @@
-En el Mac, una sesión que trabaja en otro proceso (un encargo lanzado desde la terminal o desde otra app, como Claude Code) sale «en curso» en lugar de «interrumpida», y mientras sigue en marcha no ofrece «Reanudar» ni deja escribirle, para no abrir un segundo proceso sobre ella.
-La app se actualiza sola cuando otro proceso crea o cambia una sesión: ya no hace falta cerrarla y volver a abrirla para ver los encargos nuevos o cómo terminaron.
-Si tienes abierta una sesión que trabaja fuera, cada paso y cada mensaje aparecen según ocurren, con el gasto al día. El texto mientras se escribe todavía no: el mensaje aparece entero al terminarlo.
-El motor funciona igual que en la 0.99.24.
+Si quitabas un mensaje en cola antes de que empezara su turno (por ejemplo, mientras se compactaba la conversación), la sesión se quedaba atascada y todo lo que escribías después se quedaba «en cola». Ya no: lo siguiente se envía con normalidad.
+«Quitar» un mensaje en cola ya no se queda en «quitando…» mientras se cierra el turno anterior ni cuando el motor de la sesión ya se está cerrando.
+Por lo demás, la app y el motor funcionan igual que en la 0.99.25.
