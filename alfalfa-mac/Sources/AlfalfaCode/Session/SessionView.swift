@@ -134,9 +134,13 @@ struct SessionView: View {
                         PlanCard(plan: plan, fromBefore: session.timeline.planIsFromBeforeLastMessage).id("plan")
                     }
                     if session.timeline.compacting { CompactingLine().id("compactando") }
+                    // Lo que el agente va escribiendo, letra a letra; su respuesta entera lo sustituye.
+                    if let draft = session.timeline.draft, !draft.isEmpty {
+                        DraftReply(text: draft, folder: session.cwd).id("borrador")
+                    }
                     // Sin herramienta en curso: el modelo piensa desde el último mensaje.
                     if liveWork == nil, status.isRunning, status != .waitingPermission, !session.timeline.compacting,
-                       session.timeline.taskQueue?.running != true {
+                       session.timeline.taskQueue?.running != true, session.timeline.draft == nil {
                         LiveActivityRow(activity: .thinking(since: session.timeline.thinkingSince,
                                                          preparing: session.timeline.preparingUndo)).id("pensando")
                     }
@@ -150,6 +154,10 @@ struct SessionView: View {
                 .frame(maxWidth: .infinity)
             }
             .trackingBottom($atBottom)
+            .onChange(of: session.timeline.draft) {
+                // El texto crece: si estabas abajo, lo sigue (sin animar cada trozo).
+                if atBottom, session.timeline.draft != nil { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+            }
             .onChange(of: session.timeline.items.count) {
                 // Abierta desde la búsqueda de la barra lateral: al mensaje encontrado, no al final.
                 if scrollToSearch(proxy) { return }

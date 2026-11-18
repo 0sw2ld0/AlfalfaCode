@@ -584,6 +584,22 @@ class TerminalManager:
         else:
             print('AlfalfaCode · ' + role + ': ' + text, flush=True)
 
+    @property
+    def escribe_en_vivo(self):
+        """¿Su transporte enseña el texto de la respuesta mientras llega (`--pacai`)?"""
+        return getattr(self.transport, 'texto_en_vivo', False) is True
+
+    def texto_parcial(self, que, texto=''):
+        """Lo que el proveedor va recibiendo de la respuesta (proveedores/escritura.py): un trozo de texto o el aviso
+        de que lo escrito ya no vale. El transporte lo tacha como cualquier evento antes de mandarlo."""
+        if not self.escribe_en_vivo:
+            return
+        if que == 'descartar':
+            self.transport.texto_descartado()
+        else:
+            mcp = getattr(self, 'mcp', None)
+            self.transport.texto_parcial(texto, mcp.limpiar if mcp is not None else None)
+
     def tool_event(self, task, text, datos):
         """Evento de una herramienta con su descripción (`herramienta`)."""
         self.event(task, 'tool', text, herramienta=datos if isinstance(datos, dict) else None)

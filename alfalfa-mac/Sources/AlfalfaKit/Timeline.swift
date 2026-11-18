@@ -187,6 +187,8 @@ public struct Timeline: Equatable, Sendable {
     public private(set) var contextDetails: ContextDetails?
     /// El motor está compactando la conversación (entre turnos o dentro de uno).
     public private(set) var compacting = false
+    /// Lo que el agente va escribiendo ahora (texto en vivo): se pinta al final y lo sustituye su respuesta.
+    public private(set) var draft: String?
     /// El arnés mantiene el Mac despierto: sólo mientras trabaja un turno y con el ajuste encendido.
     public private(set) var keepingAwake = false
     /// «Preparando deshacer…» mientras el motor guarda la instantánea del turno; nil si no.
@@ -296,6 +298,7 @@ public struct Timeline: Equatable, Sendable {
     /// sin turno (`--esperar`): sigue «lista» hasta que llegue un mensaje.
     public mutating func restart(waiting: Bool = false) {
         status = waiting ? .idle : .starting
+        draft = nil
         finished = false
     }
 
@@ -549,7 +552,11 @@ public struct Timeline: Equatable, Sendable {
             items.append(.notice(id: nextID(), text: text))
         case let .messageRejected(rejection):
             reject(rejection)
+        case let .draft(text):
+            draft = text
+            if text != nil, status == .idle || status == .starting || status == .blocked { status = .working }
         case let .turnFinished(outcome):
+            draft = nil
             runningPermission = nil
             compacting = false
             keepingAwake = false
@@ -580,6 +587,7 @@ public struct Timeline: Equatable, Sendable {
             }
             if let wrapUp = outcome.wrapUp { appendWrapUp(wrapUp) }
         case let .finished(outcome):
+            draft = nil
             runningPermission = nil
             compacting = false
             keepingAwake = false
@@ -649,6 +657,7 @@ public struct Timeline: Equatable, Sendable {
     }
 
     private mutating func apply(_ event: AgentEvent) {
+        if event.role == "agent" { draft = nil }       // la respuesta entera sustituye a lo que se escribía
         if let undo = event.undo {
             addUndo(undo)
             return
@@ -799,6 +808,7 @@ public struct Timeline: Equatable, Sendable {
 
     /// El proceso salió. Si no hubo `fin`, o salió con 130, la sesión queda interrumpida.
     public mutating func processExited(code: Int32) {
+        draft = nil
         taskQueue?.recover()
         runningPermission = nil
         // Sin proceso nadie responderá: «Quitar» y «Editar» vuelven a valer (y ya quitan aquí).

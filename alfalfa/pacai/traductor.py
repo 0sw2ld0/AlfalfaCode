@@ -224,6 +224,8 @@ class Traductor:
         self.permisos: dict[str, str] = {}                  # id del permiso v2 → id del approval_request
         self.de_sesion: list[tuple[str, str, str]] = []     # (nombre, digest, approval_id) con alcance session
         self.hay_cambios = False
+        # El mensaje del asistente que se va escribiendo en cada ejecución (texto en vivo): run_id → message_id.
+        self.escribiendo: dict[str, str] = {}
         self.clientes_cancelados: set[str] = set()          # herramientas del cliente que el agente canceló
         self.motivo_rechazo: str | None = None              # por qué `permiso` devolvió None, si no es lo de siempre
         self.fines_ignorados: dict[tuple[str, str], int] = {}  # (run_id, nombre): fines del motor ya cerrados aquí
@@ -322,7 +324,7 @@ class Traductor:
 
     def _terminar(self, run_id: str, resultado: str, detalle: str | None = None) -> list[dict]:
         ej = self.ejecuciones[run_id]
-        salida = self._cerrar_herramientas(run_id)
+        salida = self._retirar(run_id) + self._cerrar_herramientas(run_id)
         payload = {'run_id': run_id, 'outcome': resultado}
         if resultado in ('failed', 'blocked'):
             payload['detail'] = (detalle or 'sin detalle')[:1000]
@@ -348,7 +350,7 @@ class Traductor:
         if self.raiz is None:
             return []
         raiz = self.raiz
-        salida: list[dict] = []
+        salida: list[dict] = self._retirar(raiz)         # lo que se escribía y no llegó a respuesta
         for run_id, ej in list(self.ejecuciones.items()):
             if ej.activa and ej.agente is not None:      # de las hojas a la raíz (§4.6, §4.9)
                 salida += self._terminar(run_id, 'interrupted')
@@ -402,11 +404,47 @@ class Traductor:
         nombre, campos = aviso if aviso is not None else ('notice', por_defecto)
         return self._ext(nombre, campos)
 
+    # -- el texto mientras se escribe ---------------------------------------
+    def _v2_texto_parcial(self, campos: dict) -> list[dict]:
+        """Un trozo nuevo de la respuesta del modelo: abre el mensaje del asistente con el primero (§4.3) y lo demás
+        va en `message_delta`. La respuesta entera lo cierra con `message_end` (`_mensaje`)."""
+        texto, run_id = campos.get('texto'), self.raiz
+        if not isinstance(texto, str) or not texto or not self._abierta(run_id):
+            return []
+        salida: list[dict] = []
+        if run_id not in self.escribiendo:
+            # `alfalfa.live`: este mensaje se escribe en vivo (lo demás llega entero de una vez).
+            inicio = self._msg('message_start', {'run_id': run_id, 'role': 'assistant',
+                                                 **self._alfalfa({'live': True, **({'turn': campos['turno']}
+                                                                                   if campos.get('turno') else {})})})
+            self.escribiendo[run_id] = inicio['id']
+            salida.append(inicio)
+        salida.append(self._msg('message_delta', {'message_id': self.escribiendo[run_id],
+                                                  'blocks': [{'type': 'text', 'text': texto}]}))
+        return salida
+
+    def _v2_texto_descartado(self, campos: dict) -> list[dict]:
+        return self._retirar(self.raiz)
+
+    def _retirar(self, run_id: str | None) -> list[dict]:
+        """El mensaje que se iba escribiendo no vale (se reintentó, se descartó o pasó a otra cosa): se cierra con
+        `message_end` y `blocks` vacío, que es su contenido final (§4.3), y el cliente lo retira."""
+        ident = self.escribiendo.pop(run_id, None) if run_id is not None else None
+        return [self._msg('message_end', {'message_id': ident, 'blocks': []})] if ident else []
+
     def _mensaje(self, run_id: str, rol: str, texto: str, extra: dict | None = None,
                  aviso: tuple[str, dict] | None = None) -> list[dict]:
-        """`extra`: lo de v2 que el núcleo no lleva (el `turno`), en `payload.alfalfa` del `message_start`."""
+        """`extra`: lo de v2 que el núcleo no lleva (el `turno`), en `payload.alfalfa` del `message_start`.
+
+        Si la respuesta se iba escribiendo (texto en vivo), su `message_end` la cierra con el texto entero en
+        `blocks`: es el contenido final (§4.3), ya tachado como siempre."""
         if not texto:
             return []
+        if rol == 'assistant' and run_id in self.escribiendo and self._activa(run_id):
+            return [self._msg('message_end', {'message_id': self.escribiendo.pop(run_id),
+                                              'blocks': [{'type': 'text', 'text': texto}]})]
+        if run_id in self.escribiendo:
+            return self._retirar(run_id) + self._mensaje(run_id, rol, texto, extra, aviso)
         if not self._abierta(run_id):
             # En cierre no empieza un mensaje nuevo (§4.2): lo que diga el motor va como aviso de la extensión.
             return self._aviso(aviso, {'run_id': run_id, 'role': rol, 'text': texto})
@@ -452,6 +490,9 @@ class Traductor:
 
         `extra`: lo de v2 que el núcleo no lleva (el texto del evento, `herramienta` entera y el `turno`), en
         `payload.alfalfa`. `aviso`: sin ejecución abierta, el evento de v2 sale así, en la extensión."""
+        if run_id in self.escribiendo:
+            # El modelo pasó a una herramienta sin que su texto llegara como respuesta: no valía.
+            return self._retirar(run_id) + self._tool_start(run_id, texto, datos, argumentos, extra, aviso)
         if not self._abierta(run_id):
             return self._ext(*aviso) if aviso is not None else []     # sin `tool_start`, su fin tampoco sale
         nombre = str(datos.get('nombre') or 'tool')

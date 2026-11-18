@@ -83,9 +83,26 @@ def caducidad_de(valor: Any = None) -> float | None:
 
 
 _DEL_ENTORNO = object()
+# Cada cuánto sale el texto que el modelo va escribiendo: junta los trozos (Ollama manda uno por token).
+ESPERA_TEXTO = 0.05
+
+
+def reserva_de_secretos(texto: str, secretos) -> int:
+    """Cuántos caracteres del final de `texto` podrían ser el principio de un secreto: no salen todavía, por si el
+    resto del secreto llega en el siguiente trozo (entonces se tacha entero)."""
+    reserva = 0
+    for secreto in secretos:
+        for largo in range(min(len(secreto), len(texto)), reserva, -1):
+            if texto.endswith(secreto[:largo]):
+                reserva = largo
+                break
+    return reserva
 
 
 class TransportePacai(Transport):
+    # El motor le pasa el texto de la respuesta mientras llega (proveedores/escritura.py): sale como `message_delta`.
+    texto_en_vivo = True
+
     def __init__(self, output, *, caducidad: Any = _DEL_ENTORNO, reloj: Callable[[], datetime] = ahora):
         super().__init__(output)
         self.caducidad = caducidad_de() if caducidad is _DEL_ENTORNO else caducidad
@@ -111,6 +128,10 @@ class TransportePacai(Transport):
         self._trabajo: asyncio.Future | None = None      # el trabajo (`TRABAJOS`) cuya ejecución está abierta
         self._siguiente: str | None = None               # la entrada del turno que espera a que se cierre el anterior
         self.mirador = None                              # observadores.Mirador: el socket de quien mira en vivo
+        self._parcial = ''                               # texto de la respuesta en curso, tal como llega
+        self._parcial_enviado = 0                        # cuánto de él (ya tachado) salió
+        self._parcial_temporizador: asyncio.TimerHandle | None = None
+        self._parcial_limpiar: Callable[[str], str] | None = None
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -198,10 +219,59 @@ class TransportePacai(Transport):
             self._partida.olvidar()
             self._partida = None
 
+    # -- el texto mientras se escribe (proveedores/escritura.py) ------------
+    def texto_parcial(self, trozo: str, limpiar: Callable[[str], str] | None = None) -> None:
+        """Un trozo del texto de la respuesta en curso. Se junta y sale cada `ESPERA_TEXTO` segundos."""
+        if self.cerrado or not trozo:
+            return
+        self._parcial += trozo
+        self._parcial_limpiar = limpiar
+        if self._parcial_temporizador is None:
+            try:
+                self._parcial_temporizador = asyncio.get_running_loop().call_later(ESPERA_TEXTO, self._soltar_texto)
+            except RuntimeError:
+                self._soltar_texto()
+
+    def texto_descartado(self) -> None:
+        """Lo escrito ya no vale (la petición se reintenta): el cliente lo retira."""
+        hubo = self._parcial_enviado > 0
+        self._olvidar_texto()
+        if hubo:
+            self.emit('texto_descartado')
+
+    def _soltar_texto(self) -> None:
+        """Lo nuevo del texto, ya tachado como cualquier evento. Lo que podría ser el principio de un secreto espera
+        al siguiente trozo, para no enseñar media clave."""
+        self._parcial_temporizador = None
+        if self.cerrado:
+            return
+        from .. import proveedores
+        secretos = sorted(set(self.secretos) | set(proveedores.secretos()), key=len, reverse=True)
+        limpio = self._parcial
+        for secreto in secretos:
+            limpio = limpio.replace(secreto, '[REDACTADO]')
+        if self._parcial_limpiar is not None:
+            limpio = self._parcial_limpiar(limpio)
+        hasta = len(limpio) - reserva_de_secretos(limpio, secretos)
+        if hasta <= self._parcial_enviado:
+            return
+        nuevo, self._parcial_enviado = limpio[self._parcial_enviado:hasta], hasta
+        turno = (getattr(self.manager, 'task', None) or {}).get('turno_actual')
+        self.emit('texto_parcial', texto=nuevo, **({'turno': turno} if turno else {}))
+
+    def _olvidar_texto(self) -> None:
+        if self._parcial_temporizador is not None:
+            self._parcial_temporizador.cancel()
+            self._parcial_temporizador = None
+        self._parcial, self._parcial_enviado = '', 0
+
     # -- salida: eventos v2 → mensajes PACAI -------------------------------
     def emit(self, tipo, **campos):
         if getattr(self, 'salida_rota', False) or self.cerrado:
             return
+        if tipo == 'evento' and campos.get('rol') in ('agent', 'assistant'):
+            # Llega la respuesta entera: cierra la que se iba escribiendo (traductor._mensaje).
+            self._olvidar_texto()
         campos = self._con_argumentos(tipo, self.clean(campos))
         if not self.empezado:
             if tipo == 'fin':
@@ -361,6 +431,7 @@ class TransportePacai(Transport):
 
     def _cerrar_sesion(self) -> None:
         self.cerrado = True
+        self._olvidar_texto()
         self._olvidar_partida()
         for temporizador in self._temporizadores.values():
             temporizador.cancel()
