@@ -50,6 +50,34 @@ final class PacaiClientTests: XCTestCase {
         XCTAssertEqual(payload["alfalfa"] as? [String: Bool], ["redirect": false])
     }
 
+    func testRemovingTheInputThatWasToOpenTheRunLetsTheHeldMessagesOut() throws {
+        // «Sí, súbelos» mientras el motor compacta: sale para abrir la ejecución y se quita antes de que empiece.
+        let client = PacaiClient()
+        _ = client.start()
+        XCTAssertEqual(client.send(.message("Sí, súbelos", id: "cola-uno-0001")).lines.count, 1)
+        XCTAssertTrue(client.send(.message("Y la etiqueta", id: "cola-dos-0002")).lines.isEmpty)
+        XCTAssertEqual(client.send(.unqueue("cola-uno-0001")).lines.count, 1)        // ya salió: lo quita el motor
+        let output = client.receive(agent("alfalfa.dequeued", ["id": "cola-uno-0001", "removed": true]))
+        XCTAssertEqual(output.events, [.unqueued(id: "cola-uno-0001", removed: true, reason: nil)])
+        // Su ejecución ya no empezará: lo que esperaba sale como mensaje nuevo, que abre la suya.
+        let released = try output.lines.map(parsed)
+        XCTAssertEqual(released.map { $0["id"] as? String }, ["cola-dos-0002"])
+        XCTAssertNil((released.first?["payload"] as? [String: Any])?["mode"])
+        XCTAssertTrue(client.send(.message("tres", id: "cola-tres-0003")).lines.isEmpty)   // espera a la nueva
+    }
+
+    func testAnInputTheModelAlreadyReadOrAnotherOneKeepsTheWait() throws {
+        let client = PacaiClient()
+        _ = client.start()
+        _ = client.send(.message("uno", id: "cola-uno-0001"))
+        _ = client.send(.message("dos", id: "cola-dos-0002"))
+        let read = client.receive(agent("alfalfa.dequeued", ["id": "cola-uno-0001", "removed": false,
+                                                              "reason": "delivered"]))
+        XCTAssertTrue(read.lines.isEmpty)
+        XCTAssertTrue(client.receive(agent("alfalfa.dequeued", ["id": "otra-0009", "removed": true])).lines.isEmpty)
+        XCTAssertTrue(client.send(.message("tres", id: "cola-tres-0003")).lines.isEmpty)
+    }
+
     func testARejectedInputLetsTheHeldMessagesOut() throws {
         let client = PacaiClient(opening: .init(task: "Uno"))
         _ = client.start()

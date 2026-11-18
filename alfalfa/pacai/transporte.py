@@ -187,7 +187,9 @@ class TransportePacai(Transport):
             else:
                 self._retenidos.append((tipo, campos))
             return
-        if self._cerrando is not None:
+        if self._cerrando is not None and tipo != 'quitado_de_cola':
+            # La respuesta a «Quitar» no es de la ejecución que se cierra: sale ya, para que la app no se quede en
+            # «quitando…» mientras se calcula el diff del turno.
             self._retenidos.append((tipo, campos))
             return
         self._procesar(tipo, campos)
@@ -718,7 +720,21 @@ class TransportePacai(Transport):
             if propio == ident:
                 del self._cola[n]
                 return self.emit('quitado_de_cola', id=ident, quitado=True)
+        entregada = self._en_el_motor(ident)
         super().receive(json.dumps({'tipo': 'quitar_de_cola', 'id': ident}))
+        if entregada and not self._en_el_motor(ident) and not self.inbox and self._sin_ejecucion():
+            # Se entregó para abrir una ejecución que ya no empezará (se quitó mientras el motor compactaba, por
+            # ejemplo): sin esto la entrada seguía «ocupando» el motor y todo lo que llegaba después esperaba en
+            # la cola para siempre.
+            self._liberar()
+
+    def _en_el_motor(self, ident) -> bool:
+        return any(getattr(mensaje, 'id', None) == ident for mensaje in self.inbox)
+
+    def _sin_ejecucion(self) -> bool:
+        """Ni ejecución raíz abierta, ni trabajo, ni un turno cerrándose o esperando a abrirse."""
+        return (self.t is not None and self.t.raiz is None and self._trabajo is None and self._cerrando is None
+                and self._siguiente is None)
 
     def _enviar_ahora(self, ident) -> None:
         for n, (propio, (texto, imagenes, archivos, eco)) in enumerate(self._cola):
