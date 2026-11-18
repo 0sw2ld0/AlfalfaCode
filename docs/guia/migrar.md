@@ -43,7 +43,16 @@ contenido, y la autorización no vale en otro repositorio ni si el binario cambi
 la definición declara un PATH, se busca con él, y un tramo vacío cuenta como la
 carpeta del proceso. Por último, la carpeta que podrá escribir, si
 tendrá internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
-Al empezar una sesión, un aviso dice qué queda sin autorizar.
+Al empezar una sesión, un aviso dice qué queda sin autorizar. El evento lleva en
+`importadas` la clave y la huella de cada pendiente (también en `--historial`). En la
+app, el aviso trae «Revisar y autorizar…»: una casilla por cada servidor MCP, agente u
+orden «/», con su definición plegada y el interruptor de internet (encendido, como en
+Ajustes). Antes de autorizar vuelve a leer la lista, así que autoriza la huella de lo
+que ves. La sesión abierta no carga lo que autorizas ahí: lo importado se lee y los
+servidores MCP se conectan al empezar la sesión. Por eso ofrece empezar una sesión
+nueva en la misma carpeta. La misma hoja se abre desde la barra lateral, donde sale
+«5 MCP sin autorizar» mientras la carpeta en la que trabajas tenga algo pendiente, y
+desde Archivo ▸ Revisar lo importado sin autorizar… (⇧⌘I).
 
 ```bash
 alfalfa --importar                                # qué hay, su definición y su huella

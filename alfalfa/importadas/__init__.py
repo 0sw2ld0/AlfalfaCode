@@ -629,6 +629,23 @@ class Importadas:
     def autorizables(self):
         return [e for e in self.elementos if e.tipo in REQUIEREN_AUTORIZACION and e.estado in ('pendiente', 'cambio')]
 
+    def aviso(self):
+        """El aviso que da la sesión al empezar si hay algo sin autorizar: (texto, datos) o None.
+
+        Los datos van en el campo `importadas` del evento: la clave, la huella, el tipo, el nombre, la herramienta y
+        el estado de cada pendiente. Con ellos la app ofrece «Revisar y autorizar…» sin leer el texto; la huella
+        sólo dice qué se avisó: la app vuelve a pedir la lista (`--importar --json`) antes de autorizar nada."""
+        pendientes = self.autorizables()
+        if not pendientes:
+            return None
+        texto = ('Importar · ' + ', '.join(e.tipo + ' ' + e.nombre + ' (' + e.herramienta + ')' for e in pendientes[:6])
+                 + (' y ' + str(len(pendientes) - 6) + ' más' if len(pendientes) > 6 else '')
+                 + ' sin autorizar: no se activan hasta que los autorices con alfalfa --importar '
+                 'o en Ajustes ▸ Importar.')
+        datos = {'pendientes': [dict(clave=e.clave, huella=e.huella, tipo=e.tipo, nombre=e.nombre,
+                                     herramienta=e.herramienta, estado=e.estado) for e in pendientes]}
+        return texto, datos
+
     def autorizar(self, elementos, red=True):
         for elemento in elementos:
             self.autorizaciones.autorizar(elemento, red=red)

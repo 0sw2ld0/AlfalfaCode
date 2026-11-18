@@ -70,6 +70,7 @@ CAMPOS = {
     'herramientas_mcp_diferidas_tokens': 'mcp_tools_deferred_tokens', 'herramientas_mcp_exacto': 'mcp_tools_exact',
     'herramientas_mcp_lista': 'mcp_tools_list', 'herramientas_mcp_metodo': 'mcp_tools_method', 'hora': 'time',
     'huella': 'fingerprint', 'identidad': 'identity', 'ignoradas': 'ignored', 'importada_de': 'imported_from',
+    'importadas': 'imported',
     'indice_al_dia': 'index_up_to_date', 'informe': 'report', 'inicio': 'start', 'instalacion': 'installation',
     'instalada': 'installed', 'instrucciones': 'instructions', 'instrucciones_mcp': 'mcp_instructions',
     'intento': 'attempt', 'irreversibles': 'irreversible', 'justificacion': 'justification', 'limite': 'limit',

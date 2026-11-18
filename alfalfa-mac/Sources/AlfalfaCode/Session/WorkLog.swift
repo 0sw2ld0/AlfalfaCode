@@ -37,7 +37,11 @@ struct WorkLog: View, Equatable {
             } else {
                 summaryRow(title: title(calls: calls, entries: entries), onlyNotes: calls.isEmpty)
             }
-            if expanded {
+            if expanded, !running, calls.isEmpty, entries.count == 1, case let .note(event)? = entries.first {
+                // Un aviso solo: la fila del grupo ya es su título; al abrirla, su texto entero, no el mismo título
+                // otra vez debajo.
+                NoteText(event: event).padding(.leading, 24).padding(.top, 2)
+            } else if expanded {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(entries) { entry in
                         switch entry {
@@ -269,15 +273,21 @@ private struct NoteRow: View {
                 .padding(.vertical, 4).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if open {
-                Text(TextPreview(event.text).shown)
-                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
-                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
-                    .padding(.leading, 22)
-            }
+            if open { NoteText(event: event).padding(.leading, 22) }
         }
+    }
+}
+
+/// El texto entero de un aviso del sistema, acotado (TextPreview).
+private struct NoteText: View {
+    let event: ToolEvent
+
+    var body: some View {
+        Text(TextPreview(event.text).shown)
+            .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.secondary)
+            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

@@ -47,6 +47,11 @@ enum PacaiExtension {
         PacaiV2.fix(&object, in: "compactacion", "motivo", field: "reason", among: ["auto", "manual", "umbral"])
         PacaiV2.fix(&object, in: "tarifa", "modo", field: "mode", among: PacaiV2.contextModes)
         PacaiV2.fix(&object, in: "herramienta", "fase", field: "phase", among: ["inicio", "fin"])
+        if var imported = object["importadas"] as? [String: Any] {
+            PacaiV2.fixRows(&imported, "pendientes", "tipo", field: "type", among: ["agente", "comando"])
+            PacaiV2.fixRows(&imported, "pendientes", "estado", field: "status", among: ["pendiente", "cambio"])
+            object["importadas"] = imported
+        }
         return object
     }
 

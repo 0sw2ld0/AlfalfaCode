@@ -26,7 +26,7 @@ public enum SessionLog {
             saved["compactacion"] = compaction
         }
         if let turn = row["turno"] as? String, !turn.isEmpty { saved["turno"] = turn }
-        for key in ["herramienta", "deshacer", "tarifa"] {
+        for key in ["herramienta", "deshacer", "tarifa", "importadas"] {
             if let value = row[key] as? [String: Any] { saved[key] = value }
         }
         return AlfalfaMessage.agentEvent(saved)

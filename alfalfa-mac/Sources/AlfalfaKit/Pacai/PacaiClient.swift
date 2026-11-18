@@ -85,6 +85,9 @@ public final class PacaiClient: @unchecked Sendable {
     private var tools: [String: OpenTool] = [:]
     private var messages: [String: OpenMessage] = [:]
     private var closings: [String: [String: Any]] = [:]
+    /// Lo de v2 que trae un `message_start` en `payload.alfalfa` además del turno, por id del mensaje: sale en el
+    /// `evento` de su `message_end`.
+    private var messageFields: [String: [String: Any]] = [:]
 
     // MARK: - Inicializadores
 
@@ -143,6 +146,7 @@ public final class PacaiClient: @unchecked Sendable {
         case "run_started": return runStarted(id, payload)
         case "run_finished": return Output(events: runFinished(payload))
         case "message_start", "message_delta", "message_end":
+            if type == "message_start" { keepFields(of: id, payload) }
             return Output(events: streamed(type, id, payload, time))
         case "tool_start": return Output(events: toolStarted(id, payload, time))
         case "tool_end": return Output(events: toolEnded(payload, time))
@@ -224,8 +228,16 @@ public final class PacaiClient: @unchecked Sendable {
             }
             var event: [String: Any] = ["rol": role, "texto": open.text, "hora": open.time]
             event["turno"] = open.turn
+            event.merge(messageFields.removeValue(forKey: key) ?? [:]) { current, _ in current }
             return decoded(PacaiExtension.agentEvent(event))
         }
+    }
+
+    /// Lo importado sin autorizar (`imported`) viaja en el `message_start` del aviso: el texto es para cualquier
+    /// cliente y los datos, para que la app ofrezca «Revisar y autorizar…».
+    private func keepFields(of id: String, _ payload: [String: Any]) {
+        guard let imported = (payload["alfalfa"] as? [String: Any])?["imported"] else { return }
+        messageFields[id] = ["importadas": PacaiV2.fields(imported)]
     }
 
     private func toolStarted(_ id: String, _ payload: [String: Any], _ time: Double) -> [AlfalfaMessage] {

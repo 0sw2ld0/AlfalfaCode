@@ -103,6 +103,14 @@ struct SidebarView: View {
                     searching.toggle()
                     if !searching { model.search = ""; model.contentSearch = nil }
                 }
+                // Sólo si la carpeta en la que se trabaja trae algo sin autorizar: abre «Revisar y autorizar…».
+                if let pending = model.pendingImports, let title = ImportReview.shortcutTitle(pending.items) {
+                    sidebarButton("puzzlepiece.extension", title, selected: model.importReview != nil,
+                                  tint: Theme.warning) { model.reviewImports() }
+                        .help(ImportReview.headline(pending.items) + " en " + pending.folder.lastPathComponent
+                              + ". Revisar y autorizar (⇧⌘I)")
+                        .accessibilityLabel(ImportReview.headline(pending.items) + ". Revisar y autorizar")
+                }
                 if searching {
                     TextField("Buscar sesiones", text: $model.search)
                         .textFieldStyle(.plain)
@@ -146,6 +154,10 @@ struct SidebarView: View {
         }
         .background(Theme.sidebar)
         .task(id: model.search) { await model.searchContent(searching ? model.search : "") }
+        .task(id: model.importFolder?.path) { await model.refreshPendingImports() }
+        .sheet(item: $model.importReview) { request in
+            ImportReviewSheet(folder: request.folder).environmentObject(model)
+        }
         .alert("Renombrar sesión", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Título", text: $newTitle)
             Button("Renombrar") { if let row = renaming { model.rename(row, to: newTitle) }; renaming = nil }
@@ -205,10 +217,11 @@ struct SidebarView: View {
         }
     }
 
-    private func sidebarButton(_ symbol: String, _ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func sidebarButton(_ symbol: String, _ title: String, selected: Bool, tint: Color? = nil,
+                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: symbol).frame(width: 16)
+                Image(systemName: symbol).frame(width: 16).foregroundStyle(tint ?? Theme.text)
                 Text(title)
                 Spacer()
             }

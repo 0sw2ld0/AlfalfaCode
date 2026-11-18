@@ -34,6 +34,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var undo: UndoStep? = nil
     /// El id del mensaje en cola que entrega este eco; permite distinguir textos idénticos.
     public var queueID: String? = nil
+    /// Lo que trae la carpeta sin autorizar (`importadas`): la conversación lo pinta con «Revisar y autorizar…».
+    public var importNotice: ImportNotice? = nil
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -1012,13 +1014,15 @@ public enum AlfalfaMessage: Equatable, Sendable {
                            tokens: integer(object["tokens"]), cost: amount(object["coste"]))
     }
 
-    /// Un `evento` en vivo o una fila de `historial`, con su compactación o su aviso de tarifa.
+    /// Un `evento` en vivo o una fila de `historial`, con su compactación, su aviso de tarifa o lo importado sin
+    /// autorizar.
     static func agentEvent(_ row: [String: Any]) -> AgentEvent? {
         guard let role = row["rol"] as? String, let text = row["texto"] as? String else { return nil }
         return AgentEvent(role: role, text: text, time: number(row["hora"]) ?? 0, turn: Self.text(row["turno"]),
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
                           compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]),
-                          undo: UndoStep.parse(row["deshacer"], text: text), queueID: Self.text(row["id_cola"]))
+                          undo: UndoStep.parse(row["deshacer"], text: text), queueID: Self.text(row["id_cola"]),
+                          importNotice: role == "system" ? ImportNotice.parse(row["importadas"], text: text) : nil)
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.

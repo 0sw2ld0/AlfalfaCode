@@ -441,6 +441,8 @@ class Traductor:
         if rol in ('agent', 'assistant') and self._activa(self.raiz):
             return self._mensaje(self.raiz, 'assistant', texto, extra, ('notice', dict(propio, run_id=self.raiz)))
         if rol == 'system' and self._activa(self.raiz) and 'compactacion' not in campos and 'tarifa' not in campos:
+            # Lo importado sin autorizar es texto para cualquier cliente; sus datos, en `payload.alfalfa.imported`.
+            extra['importadas'] = campos.get('importadas')
             return self._mensaje(self.raiz, 'system', texto, extra, ('notice', dict(propio, run_id=self.raiz)))
         return self._ext('notice', propio)
 

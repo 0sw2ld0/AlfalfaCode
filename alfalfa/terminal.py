@@ -604,13 +604,13 @@ class TerminalManager:
             self.transport.emit('plan', pasos=[{'paso': p['step'], 'estado': p['status']} for p in pasos],
                                 **({'explicacion': explicacion} if explicacion else {}))
 
-    def compaction_event(self, task, text, datos):
-        """Como `event`, con los datos de la compactación (`compactacion`): la app pinta la
-        marca «Conversación compactada» con antes, después y el resumen."""
+    def _aviso_con_datos(self, task, text, campo, datos):
+        """Un aviso del sistema con datos para la app en `campo` (`compactacion`, `tarifa`, `importadas`): se apunta
+        en la transcripción y sale en el `evento`; sin transporte, sólo el texto."""
         if self.transport:
             text = self.transport.clean(text)
             datos = self.transport.clean(datos)
-        row = dict(role='system', text=text, time=time.time(), compactacion=datos)
+        row = dict(role='system', text=text, time=time.time(), **{campo: datos})
         if task.get('turno_actual'):
             row['turno'] = task['turno_actual']
         path = self.directory / (task['id'] + '.jsonl')
@@ -618,10 +618,15 @@ class TerminalManager:
         with os.fdopen(fd, 'a') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
         if self.transport:
-            self.transport.emit('evento', rol='system', texto=text, hora=row['time'], compactacion=datos,
+            self.transport.emit('evento', rol='system', texto=text, hora=row['time'], **{campo: datos},
                                 **({'turno': row['turno']} if 'turno' in row else {}))
         else:
             print('AlfalfaCode · system: ' + text, flush=True)
+
+    def compaction_event(self, task, text, datos):
+        """Como `event`, con los datos de la compactación (`compactacion`): la app pinta la
+        marca «Conversación compactada» con antes, después y el resumen."""
+        self._aviso_con_datos(task, text, 'compactacion', datos)
 
     def aviso_tarifa(self, task, text, datos):
         """El aviso de tarifa por contexto largo (`tarifa` en el evento): la app lo enseña con
@@ -633,16 +638,12 @@ class TerminalManager:
                          + ' --contexto completo "…".')
             self.event(task, 'system', text)
             return
-        text, datos = self.transport.clean(text), self.transport.clean(datos)
-        row = dict(role='system', text=text, time=time.time(), tarifa=datos)
-        if task.get('turno_actual'):
-            row['turno'] = task['turno_actual']
-        path = self.directory / (task['id'] + '.jsonl')
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'a') as stream:
-            stream.write(json.dumps(row, ensure_ascii=False) + '\n')
-        self.transport.emit('evento', rol='system', texto=text, hora=row['time'], tarifa=datos,
-                            **({'turno': row['turno']} if 'turno' in row else {}))
+        self._aviso_con_datos(task, text, 'tarifa', datos)
+
+    def aviso_importadas(self, task, text, datos):
+        """Lo que trae la carpeta de OpenCode, Codex o Claude Code sin autorizar (`importadas` en el evento, de
+        `Importadas.aviso`): la app lo enseña con «Revisar y autorizar…»."""
+        self._aviso_con_datos(task, text, 'importadas', datos)
 
     def elegir_contexto(self, modo):
         """`--contexto ahorro|completo` al abrir la sesión: queda guardado con ella."""
@@ -1105,13 +1106,9 @@ class TerminalManager:
         if not getattr(self, '_importadas_avisadas', False):
             # Una vez por sesión: lo que trae el proyecto de OpenCode, Codex o Claude Code sin autorizar.
             self._importadas_avisadas = True
-            pendientes = self.importadas.autorizables()
-            if pendientes:
-                self.event(self.task, 'system', 'Importar · ' + ', '.join(
-                    e.tipo + ' ' + e.nombre + ' (' + e.herramienta + ')' for e in pendientes[:6])
-                    + (' y ' + str(len(pendientes) - 6) + ' más' if len(pendientes) > 6 else '')
-                    + ' sin autorizar: no se activan hasta que los autorices con alfalfa --importar '
-                    'o en Ajustes ▸ Importar.')
+            aviso = self.importadas.aviso()
+            if aviso is not None:
+                self.aviso_importadas(self.task, *aviso)
         if self.hooks is not None and not self._hooks_avisados:
             self._hooks_avisados = True
             for diagnostico in self.hooks.motor.diagnosticos:
