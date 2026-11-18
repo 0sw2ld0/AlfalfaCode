@@ -32,6 +32,12 @@ También vale bajar el DMG de la
 [última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest) y
 arrastrar la app a Aplicaciones.
 
+**En un Mac con Intel** (también macOS 14 o posterior), Homebrew todavía no sirve: usa
+`instalar.sh`, que baja solo la versión para Intel, o el DMG `AlfalfaCode-<versión>-intel.dmg`
+de la release. La app de Intel se actualiza sola con los DMG de Intel. Sin chip T2 no hay
+Secure Enclave, así que el código de cortesía del proveedor Alfalfa no se puede activar;
+los demás proveedores funcionan igual.
+
 Las tres formas usan el mismo DMG de la release, firmado y notarizado:
 
 - **El cask** instala la app. Se actualiza sola, así que `brew upgrade` no la toca.

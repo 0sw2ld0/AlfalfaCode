@@ -32,7 +32,9 @@ while [ $# -gt 0 ]; do
   case "$1" in -o) destino=$2; shift ;; http*|file*) url=$1 ;; esac
   shift
 done
+[ -n "$FALSO_REGISTRO" ] && echo "$url" >> "$FALSO_REGISTRO"
 case "$url" in
+  */version-intel.json) [ -z "$FALSO_SIN_INTEL" ] || exit 22; cp "$FALSO_JSON" "$destino" ;;
   */version.json) cp "$FALSO_JSON" "$destino" ;;
   *.dmg)
     # FALSO_SENAL: la terminal se cierra (HUP) o el usuario pulsa Ctrl-C (INT) a mitad de la descarga.
@@ -49,6 +51,14 @@ done
 exec /usr/bin/codesign "$@"
 '''
 SPCTL = '#!/bin/sh\nexit ${FALSO_SPCTL:-0}\n'
+# Un Mac con Intel: uname -m y hw.optional.arm64 como los da uno de verdad.
+UNAME_INTEL = '#!/bin/sh\n[ "$1" = -m ] && { echo x86_64; exit 0; }\nexec /usr/bin/uname "$@"\n'
+SYSCTL_INTEL = '''#!/bin/sh
+for a in "$@"; do [ "$a" = hw.optional.arm64 ] && { echo 0; exit 0; }; done
+exec /usr/sbin/sysctl "$@"
+'''
+ROSETTA = sys.platform == 'darwin' and subprocess.run(['/usr/bin/arch', '-x86_64', '/usr/bin/true'],
+                                                      capture_output=True).returncode == 0
 HDIUTIL_OCUPADO = '''#!/bin/sh
 # hdiutil de verdad, salvo «detach» sin -force: el disco está ocupado, como bajo carga.
 if [ "$1" = detach ] && ! printf '%s\\n' "$@" | grep -qx -- -force; then
@@ -81,17 +91,24 @@ def _ejecutable(ruta, texto):
     os.chmod(ruta, 0o755)
 
 
-def _crear_release(base, version_cuy=None, version_ejecutable=None):
-    """DMG firmado ad hoc con un motor mínimo y, si corresponde, un ayudante Mach-O."""
+def _compilar(destino, texto, arq=None):
+    """Un ejecutable Mach-O de verdad (de este procesador, o de `arq`)."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    fuente = f'#include <stdio.h>\nint main(void) {{ puts("{texto}"); }}\n'
+    subprocess.run(['/usr/bin/clang', *(['-arch', arq] if arq else []), '-x', 'c', '-', '-o', str(destino)],
+                   check=True, input=fuente, text=True, capture_output=True)
+
+
+def _crear_release(base, version_cuy=None, version_ejecutable=None, arq=None):
+    """DMG firmado ad hoc con un motor mínimo y, si corresponde, un ayudante Mach-O. `arq`
+    («x86_64» o «arm64») fija el procesador del ejecutable de la app y de CuyBrowser."""
     app = base / 'dmg' / 'AlfalfaCode.app' / 'Contents'
-    _ejecutable(app / 'MacOS' / 'AlfalfaCode', '#!/bin/sh\nexit 0\n')
+    _compilar(app / 'MacOS' / 'AlfalfaCode', 'app', arq)
     _ejecutable(app / 'Resources' / 'motor' / 'alfalfa', f'#!/bin/sh\necho "AlfalfaCode {VERSION}"\n')
     _ejecutable(app / 'Resources' / 'motor' / 'python' / 'bin' / 'python3', '#!/bin/sh\nexit 0\n')
     _ejecutable(app / 'Helpers' / 'alfalfa-firma-abc', '#!/bin/sh\nexit 0\n')
     if version_ejecutable:
-        fuente = f'#include <stdio.h>\nint main(void) {{ puts("{version_ejecutable}"); }}\n'
-        subprocess.run(['/usr/bin/clang', '-x', 'c', '-', '-o', str(app / 'Helpers' / 'cuybrowser')],
-                       check=True, input=fuente, text=True, capture_output=True)
+        _compilar(app / 'Helpers' / 'cuybrowser', version_ejecutable, arq)
     clave_cuy = f'<key>AlfalfaCuyBrowserVersion</key><string>{version_cuy}</string>' if version_cuy else ''
     (app / 'Info.plist').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -293,6 +310,49 @@ def test_una_firma_rota_no_pasa(entorno, tmp_path, release):
     assert r.returncode != 0 and 'firma de la app no es válida' in r.stderr
 
 
+def _como_intel(env, tmp_path):
+    """El mismo entorno, pero en un Mac con Intel, y con registro de lo que se baja."""
+    bin_ = Path(env['PATH'].split(':')[0])
+    _ejecutable(bin_ / 'uname', UNAME_INTEL)
+    _ejecutable(bin_ / 'sysctl', SYSCTL_INTEL)
+    registro = tmp_path / 'bajado.txt'
+    return {**env, 'FALSO_REGISTRO': str(registro)}, registro
+
+
+def test_en_apple_silicon_lee_version_json(entorno, tmp_path):
+    env, _, _ = entorno
+    registro = tmp_path / 'bajado.txt'
+    assert _instalar(env, FALSO_REGISTRO=str(registro)).returncode == 0
+    assert registro.read_text().splitlines()[0].endswith('/releases/latest/download/version.json')
+
+
+def test_en_intel_lee_version_intel_y_no_instala_el_dmg_de_apple_silicon(entorno, tmp_path):
+    env, home, _ = entorno
+    env, registro = _como_intel(env, tmp_path)
+    r = _instalar(env)
+    assert registro.read_text().splitlines()[0].endswith('/releases/latest/download/version-intel.json')
+    assert r.returncode != 0 and 'para otro procesador' in r.stderr and 'x86_64' in r.stderr
+    assert not (home / '.local' / 'share' / 'alfalfa').exists()
+
+
+def test_en_intel_avisa_si_la_release_aun_no_trae_la_version_de_intel(entorno, tmp_path):
+    env, _, _ = entorno
+    env, _ = _como_intel(env, tmp_path)
+    r = _instalar(env, FALSO_SIN_INTEL='1')
+    assert r.returncode != 0 and 'todavía no trae la versión para Mac con Intel' in r.stderr
+
+
+@pytest.mark.skipif(not ROSETTA, reason='hace falta Rosetta para arrancar el CuyBrowser de Intel')
+def test_en_intel_instala_el_dmg_de_intel(entorno, tmp_path):
+    env, home, escribir = entorno
+    dmg, huella = _crear_release(tmp_path / 'intel', VERSION_CUY, VERSION_CUY, arq='x86_64')
+    escribir(sha256=huella, url=f'{BASE}/AlfalfaCode-{VERSION}-intel.dmg')
+    env, _ = _como_intel(env, tmp_path)
+    r = _instalar(env, FALSO_DMG=str(dmg))
+    assert r.returncode == 0, r.stderr
+    assert (home / '.local' / 'share' / 'alfalfa' / 'instalacion').read_text() == f'curl\n{VERSION}\n'
+
+
 def test_botella_tiene_la_forma_de_la_formula(release, tmp_path):
     dmg, _ = release
     r = subprocess.run([str(BOTELLA), str(dmg), VERSION, str(tmp_path)], capture_output=True, text=True,
@@ -311,6 +371,19 @@ def test_botella_tiene_la_forma_de_la_formula(release, tmp_path):
     # Sin BOTELLA_SIN_EQUIPO exige el equipo (esta app va firmada ad hoc).
     r = subprocess.run([str(BOTELLA), str(dmg), VERSION, str(tmp_path / 'otra')], capture_output=True, text=True)
     assert r.returncode != 0 and 'equipo FZ8TW9AWLE' in r.stderr
+
+
+@pytest.mark.skipif(not ROSETTA, reason='hace falta Rosetta para arrancar el CuyBrowser de Intel')
+def test_botella_de_intel(tmp_path, release):
+    dmg, _ = _crear_release(tmp_path / 'intel', VERSION_CUY, VERSION_CUY, arq='x86_64')
+    env = {**os.environ, 'BOTELLA_SIN_EQUIPO': '1', 'BOTELLA_ETIQUETA': 'sonoma'}
+    r = subprocess.run([str(BOTELLA), str(dmg), VERSION, str(tmp_path / 'b')], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / 'b' / f'alfalfa-{VERSION}.sonoma.bottle.tar.gz').exists()
+    # El DMG de Apple Silicon no sirve para el bottle de Intel.
+    r = subprocess.run([str(BOTELLA), str(release[0]), VERSION, str(tmp_path / 'c')], capture_output=True,
+                       text=True, env=env)
+    assert r.returncode != 0 and 'no es para x86_64' in r.stderr
 
 
 def _tap(entorno, destino, **extra):

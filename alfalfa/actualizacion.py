@@ -19,6 +19,7 @@ instalado y cada una se actualiza a su manera:
   cambiarla por debajo dejaría a Homebrew creyendo que tiene otra versión.
 """
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -115,16 +116,26 @@ def ultima_version_https(url, get=None):
 
 
 FEED_RELEASE = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version.json'
+FEED_RELEASE_INTEL = 'https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version-intel.json'
 
 
-def ultima_release(get=None):
-    """La versión de la última release (`version.json`, el mismo que lee instalar.sh), como
-    etiqueta `vX.Y.Z`; None si no la hay. Una etiqueta sin release todavía no se puede instalar."""
+def feed_release(sistema=None, maquina=None):
+    """El feed de la release para este motor: el de Intel si es el motor x86_64 de macOS (el de
+    la app para Intel), y si no el de Apple Silicon. Cada motor sólo se actualiza con su DMG."""
+    sistema = sistema or sys.platform
+    maquina = maquina or platform.machine()
+    return FEED_RELEASE_INTEL if sistema == 'darwin' and maquina == 'x86_64' else FEED_RELEASE
+
+
+def ultima_release(get=None, feed=None):
+    """La versión de la última release (`version.json`, o `version-intel.json` en Intel: el mismo
+    que lee instalar.sh), como etiqueta `vX.Y.Z`; None si no la hay. Una etiqueta sin release
+    todavía no se puede instalar, y una release sin la versión de Intel no es nada nuevo para ella."""
     if get is None:
         import httpx
         get = httpx.get
     try:
-        r = get(FEED_RELEASE, headers={'User-Agent': f'AlfalfaCode/{__version__}'}, timeout=20,
+        r = get(feed or feed_release(), headers={'User-Agent': f'AlfalfaCode/{__version__}'}, timeout=20,
                 follow_redirects=True)
         if r.status_code == 404:
             return None

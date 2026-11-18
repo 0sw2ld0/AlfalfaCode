@@ -81,3 +81,19 @@ def test_sin_git_el_agente_lo_sabe_desde_el_principio(tmp_path, monkeypatch):
     # Con un git normal en una carpeta sin repositorio no se dice nada de esto.
     monkeypatch.setenv('PATH', '/usr/bin:/bin')
     assert 'no está en este Mac' not in entorno(proyecto)
+
+
+def _fijadas(nombre):
+    ruta = os.path.join(os.path.dirname(__file__), '..', 'alfalfa-mac', nombre)
+    with open(ruta, encoding='utf-8') as f:
+        return {l.split('==')[0]: l.strip() for l in f if '==' in l and not l.startswith('#')}
+
+
+def test_el_motor_de_intel_lleva_lo_mismo_salvo_cryptography():
+    """cryptography 49 y posteriores no publican ruedas para Mac con Intel: en la app de Intel se
+    queda en la 48.x. Todo lo demás tiene que ser exactamente lo de la app de Apple Silicon."""
+    arm, intel = _fijadas('motor-requisitos.txt'), _fijadas('motor-requisitos-x86_64.txt')
+    assert set(arm) == set(intel)
+    assert {n for n in arm if arm[n] != intel[n]} <= {'cryptography'}
+    mayor = int(intel['cryptography'].split('==')[1].split('.')[0])
+    assert mayor < 49

@@ -4,11 +4,12 @@
 #   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh
 #
 # Qué hace:
-#   1. Lee version.json de la última release de github.com/0sw2ld0/AlfalfaCode.
+#   1. Lee version.json de la última release de github.com/0sw2ld0/AlfalfaCode (en un Mac
+#      con Intel, version-intel.json, que apunta al DMG de Intel).
 #   2. Baja el DMG de esa release y comprueba su huella SHA-256 con la de version.json.
 #   3. Lo monta (sólo lectura) y comprueba la app de dentro: firma Developer ID intacta
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
-#      con el identificador com.cuycoders.alfalfacode y la misma versión.
+#      con el identificador com.cuycoders.alfalfacode, la misma versión y el procesador de este Mac.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
 #      ayudantes, incluido CuyBrowser si viene en el DMG, a ~/.local/share/alfalfa y
 #      deja ~/.local/bin/alfalfa. Si algo falla,
@@ -44,7 +45,7 @@ main() {
   LANZADOR="$BIN/alfalfa"
   MARCA_LANZADOR="# AlfalfaCode: lo dejó instalar.sh"
   MARCA_PATH="# AlfalfaCode (instalar.sh)"
-  FEED="${ALFALFA_FEED:-https://github.com/$REPO/releases/latest/download/version.json}"
+  FEED="${ALFALFA_FEED:-}"
 
   case "${1:-}" in
     --desinstalar) desinstalar; return 0 ;;
@@ -54,6 +55,7 @@ main() {
   esac
 
   comprobar_mac
+  [ -n "$FEED" ] || FEED="https://github.com/$REPO/releases/latest/download/$NOMBRE_FEED"
   if [ -e "$LANZADOR" ] && ! grep -q "$MARCA_LANZADOR" "$LANZADOR" 2>/dev/null; then
     falla "ya hay otro $LANZADOR que no instaló este guion; quítalo o usa ALFALFA_PREFIJO=otra/carpeta."
   fi
@@ -78,7 +80,13 @@ main() {
     file://*) PRUEBA=1; aviso "modo de prueba: feed local $FEED" ;;
     *) falla "ALFALFA_FEED tiene que ser https:// o file://" ;;
   esac
-  bajar "$FEED" "$TMP/version.json"
+  if [ "$ARQ_MAC" = x86_64 ] && [ -z "$PRUEBA" ]; then
+    # Las releases anteriores a la app de Intel no traen version-intel.json.
+    curl -fsSL --proto '=https' --tlsv1.2 --retry 2 -o "$TMP/version.json" "$FEED" 2>/dev/null \
+      || falla "la última release de AlfalfaCode todavía no trae la versión para Mac con Intel."
+  else
+    bajar "$FEED" "$TMP/version.json"
+  fi
   VERSION="$(campo version)"
   URL="$(campo url)"
   HUELLA="$(campo sha256 | tr 'A-F' 'a-f')"
@@ -123,6 +131,9 @@ main() {
   if [ -z "$PRUEBA" ]; then
     spctl --assess --type execute "$APP" 2>/dev/null || falla "Apple no la tiene notarizada (spctl la rechaza)"
   fi
+  # `file` viene con macOS (lipo es de las herramientas de línea de órdenes).
+  file -b "$APP/Contents/MacOS/AlfalfaCode" 2>/dev/null | grep -q "$ARQ_MAC" \
+    || falla "este DMG es para otro procesador: este Mac necesita la versión para $ARQ_MAC"
   MOTOR="$APP/Contents/Resources/motor"
   [ -x "$MOTOR/alfalfa" ] && [ -x "$MOTOR/python/bin/python3" ] || falla "la app no trae el motor"
   if [ -n "$PRUEBA" ]; then
@@ -173,7 +184,11 @@ main() {
   echo "  Actualizar:    alfalfa --actualizar"
   echo "  Desinstalar:   curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh -s -- --desinstalar"
   echo "                 (tus sesiones y ajustes de ~/.alfalfa se quedan)"
-  echo "  La app de Mac: https://alfalfacode.cuycoders.dev  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
+  if [ "$ARQ_MAC" = x86_64 ]; then
+    echo "  La app de Mac: el DMG AlfalfaCode-<versión>-intel.dmg de https://github.com/$REPO/releases/latest"
+  else
+    echo "  La app de Mac: https://alfalfacode.cuycoders.dev  ·  brew install --cask 0sw2ld0/tap/alfalfacode"
+  fi
 }
 
 comprobar_mac() {
@@ -186,9 +201,12 @@ comprobar_mac() {
 Pasos, sandbox y claves: https://github.com/$REPO/blob/main/docs/USO.md#linux" ;;
     *) falla "AlfalfaCode funciona en macOS y en Linux (en Windows, con WSL2)." ;;
   esac
-  # Bajo Rosetta, uname -m dice x86_64 aunque el Mac sea Apple Silicon.
-  [ "$(uname -m)" = "arm64" ] || [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ] \
-    || falla "AlfalfaCode necesita un Mac con Apple Silicon (M1 o posterior)."
+  # Bajo Rosetta, uname -m dice x86_64 aunque el Mac sea Apple Silicon: allí va la de Apple Silicon.
+  if [ "$(uname -m)" = "arm64" ] || [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ]; then
+    ARQ_MAC="arm64"; NOMBRE_FEED="version.json"
+  else
+    ARQ_MAC="x86_64"; NOMBRE_FEED="version-intel.json"
+  fi
   MAYOR="$(sw_vers -productVersion | cut -d. -f1)"
   [ "$MAYOR" -ge 14 ] 2>/dev/null || falla "AlfalfaCode necesita macOS 14 (Sonoma) o posterior."
 }

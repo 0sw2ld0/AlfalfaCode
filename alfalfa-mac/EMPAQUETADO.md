@@ -23,7 +23,7 @@ AlfalfaCode.app/Contents/
   MacOS/AlfalfaCode                 la app de Mac (SwiftUI)
   Helpers/alfalfa-firma-<huella>    firmante.swift ya compilado (Secure Enclave, proveedor Alfalfa)
   Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (control de apps)
-  Helpers/cuybrowser              CuyBrowser autónomo 0.6.0, macOS arm64
+  Helpers/cuybrowser              CuyBrowser autónomo 0.6.0, macOS arm64 (o x64 en la de Intel)
   Resources/AppIcon.icns
   Resources/motor/alfalfa           lanzador: python3 -I -B -m alfalfa.terminal
   Resources/motor/bin/rg            ripgrep 15.2.0 oficial (fijado por huella), al final del PATH
@@ -50,14 +50,46 @@ AlfalfaCode.app/Contents/
 - Las preferencias de la app compilada con `swift run` (dominio `AlfalfaCode`) se copian una
   vez al de la app empaquetada (`com.cuycoders.alfalfacode`).
 
-## Sólo Apple Silicon
+## Apple Silicon e Intel: un DMG para cada uno
 
-La app sale para arm64. El Python de uv no se publica en versión universal: hacerla a mano
+No hay app universal. El Python de uv no se publica en versión universal: hacerla a mano
 obliga a unir con `lipo` el intérprete, `libpython` y cada extensión nativa (pydantic-core,
-rpds-py, cryptography, cffi) de dos instalaciones distintas, y a probar las dos. macOS 26 es el
-último que corre en Intel, Ollama local en Intel va muy lento y el Secure Enclave del proveedor
-Alfalfa sólo existe en Intel con chip T2. Si hiciera falta Intel, lo razonable es un segundo
-DMG x86_64 hecho con el mismo script (`PYTHON_CLAVE` x86_64 y `--arch x86_64`), no uno universal.
+rpds-py, cryptography, cffi) de dos instalaciones distintas. En su lugar, los mismos guiones
+hacen dos apps:
+
+- `./publicar.sh` → `AlfalfaCode-<versión>.dmg` (arm64), como siempre.
+- `ARQ=x86_64 ./publicar.sh` → `AlfalfaCode-<versión>-intel.dmg`, `AlfalfaCode-intel.dmg`,
+  `version-intel.json` y `alfalfa-<versión>.sonoma.bottle.tar.gz`, para la misma release
+  (el guion enseña el `gh release upload`). La app sale en `dist/x86_64/`.
+
+Con `ARQ=x86_64`, `build-app.sh` usa el Python `cpython-…-macos-x86_64-none`, el
+`cuybrowser-macos-x64`, el ripgrep `x86_64-apple-darwin` (los dos fijados por huella),
+`swift build --arch x86_64` y los ayudantes con `-target x86_64-apple-macos14`, y fija el motor
+con `motor-requisitos-x86_64.txt`: las mismas versiones que `motor-requisitos.txt` salvo
+`cryptography`, que desde la 49 sólo publica ruedas de Mac para arm64. En Intel se queda en la
+48.0.1, la última con rueda universal2 (llega con `mcp` por `pyjwt[crypto]`; el motor la usa
+para firmar fuera del Mac). Cuando haya que subirla, toca compilarla o dejar la app de Intel.
+Al final comprueba que **todos**
+los binarios son del procesador pedido, y arranca el motor; en un Mac con Apple Silicon lo hace
+con Rosetta (si falta: `softwareupdate --install-rosetta`).
+
+Cada app se queda en su procesador:
+
+- **El actualizador** de la app lee `version.json` en Apple Silicon y `version-intel.json` en
+  Intel (`AppUpdatePolicy.feed`). Además rechaza un DMG cuyo ejecutable no corre aquí
+  (`runsHere`). Una release sin `version-intel.json` no es un error para la app de Intel:
+  simplemente no hay nada nuevo para ella.
+- **`instalar.sh`** elige el feed por el procesador del Mac (bajo Rosetta, en un Apple Silicon,
+  sigue eligiendo Apple Silicon) y comprueba con `file` que la app del DMG es la de este Mac.
+- **`alfalfa --actualizar`** de la CLI suelta (curl) mira `version-intel.json` si el motor es el
+  x86_64 de macOS (`actualizacion.feed_release`).
+- **Homebrew** sigue siendo sólo para Apple Silicon. El bottle de Intel ya sale de
+  `publicar.sh` (`BOTELLA_ETIQUETA=sonoma` en `botella.sh`), pero el cask, la fórmula y
+  `actualizar-tap.sh` todavía no lo usan.
+
+Límites en Intel: macOS 26 es el último que corre en Intel, Ollama local va muy lento y el
+Secure Enclave del proveedor Alfalfa sólo existe en los Mac Intel con chip T2 (sin él,
+`firmante.swift` dice que este Mac no lo tiene y el código de cortesía no se activa).
 
 ## Firma y notarización
 
@@ -220,7 +252,8 @@ repositorio sólo avisa.
 El tap `0sw2ld0/homebrew-tap` existe desde v0.99.2, la primera release con bottle. Las
 plantillas de `distribucion/homebrew` apuntan a esa versión. Cada release lleva además una
 copia del DMG llamada `AlfalfaCode.dmg`: el botón «Descargar para Mac» de la web enlaza a
-`releases/latest/download/AlfalfaCode.dmg` (`publicar.sh` la deja en `dist/`).
+`releases/latest/download/AlfalfaCode.dmg` (`publicar.sh` la deja en `dist/`). La de Intel se
+llama `AlfalfaCode-intel.dmg`; la web aún no la enlaza.
 
 `.github/workflows/tap.yml` lo hace solo al publicar una release, o a mano con su versión:
 

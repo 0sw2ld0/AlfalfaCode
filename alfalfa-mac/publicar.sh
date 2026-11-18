@@ -15,21 +15,32 @@
 #       ./publicar.sh --local     → DMG con firma ad hoc y sin notarizar, sólo para probar en este Mac
 #                                   (en otro Mac Gatekeeper no lo deja abrir)
 #       CONFIGURACION=debug ./publicar.sh --local → DMG con una app de depuración
+#       ARQ=x86_64 ./publicar.sh  → lo mismo para Mac con Intel (también con --local)
 #
 # Escribe también dist/version.json (versión, URL del DMG en la release, huella, tamaño y las notas
 # de NOTAS-VERSION.txt) y el bottle de Homebrew de la CLI (alfalfa-<versión>.arm64_sonoma.bottle.tar.gz),
 # y enseña la orden para publicar los tres en GitHub. No publica nada.
+#
+# Con ARQ=x86_64 todo lleva su propio nombre, para ir en la misma release que lo de Apple Silicon:
+# AlfalfaCode-<versión>-intel.dmg, AlfalfaCode-intel.dmg, version-intel.json (lo leen el
+# actualizador y instalar.sh en Intel) y alfalfa-<versión>.sonoma.bottle.tar.gz.
 set -euo pipefail
 cd "$(dirname "$0")"
+ARQ="${ARQ:-arm64}"
+case "$ARQ" in
+  arm64)  SUFIJO="";       FEED="dist/version.json";       ETIQUETA_BOTELLA="arm64_sonoma"; APP="dist/AlfalfaCode.app" ;;
+  x86_64) SUFIJO="-intel"; FEED="dist/version-intel.json"; ETIQUETA_BOTELLA="sonoma";       APP="dist/x86_64/AlfalfaCode.app" ;;
+  *) echo "✗ ARQ debe ser arm64 o x86_64" >&2; exit 1 ;;
+esac
+export ARQ
 . ../distribucion/cuybrowser.sh
 
 LOCAL=""
 [ "${1:-}" = "--local" ] && LOCAL=1
 PERFIL="${PERFIL:-AlfalfaCode}"
 VERSION="${VERSION:-$(sed -n "s/^__version__ = '\(.*\)'$/\1/p" ../alfalfa/__init__.py)}"
-APP="dist/AlfalfaCode.app"
-DMG="dist/AlfalfaCode-$VERSION.dmg"
-[ -n "$LOCAL" ] && DMG="dist/AlfalfaCode-$VERSION-local.dmg"
+DMG="dist/AlfalfaCode-$VERSION$SUFIJO.dmg"
+[ -n "$LOCAL" ] && DMG="dist/AlfalfaCode-$VERSION$SUFIJO-local.dmg"
 
 # --- Comprobaciones previas: fallar pronto y explicando qué falta ---------------------------
 if [ -n "$LOCAL" ]; then
@@ -82,7 +93,7 @@ mkdir -p "$TMP/dmg"
 ditto "$APP" "$TMP/dmg/AlfalfaCode.app"
 ln -s /Applications "$TMP/dmg/Aplicaciones"
 rm -f "$DMG"
-hdiutil create -volname "AlfalfaCode $VERSION" -srcfolder "$TMP/dmg" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "AlfalfaCode $VERSION${SUFIJO:+ (Intel)}" -srcfolder "$TMP/dmg" -ov -format UDZO "$DMG" >/dev/null
 if [ -n "$LOCAL" ]; then
   echo "✓ DMG de prueba (firma ad hoc, sin notarizar; sólo para este Mac): $DMG ($(du -h "$DMG" | cut -f1))"
   shasum -a 256 "$DMG"
@@ -116,9 +127,9 @@ shasum -a 256 "$DMG"
 
 # --- 6. version.json: lo lee el actualizador de la app (AppUpdater) en la última release ----------
 ETIQUETA="v$VERSION"
-/usr/bin/python3 - "$DMG" "$VERSION" "$ETIQUETA" dist/version.json <<'PY'
+/usr/bin/python3 - "$DMG" "$VERSION" "$ETIQUETA" "$FEED" "$ARQ" <<'PY'
 import datetime, hashlib, json, os, sys
-dmg, version, etiqueta, destino = sys.argv[1:5]
+dmg, version, etiqueta, destino, arquitectura = sys.argv[1:6]
 notas = []
 if os.path.exists("NOTAS-VERSION.txt"):
     notas = [l.strip().lstrip("-• ").strip() for l in open("NOTAS-VERSION.txt", encoding="utf-8") if l.strip()]
@@ -129,18 +140,25 @@ json.dump({
     "tamano": os.path.getsize(dmg),
     "fecha": datetime.date.today().isoformat(),
     "notas": notas,
+    "arquitectura": arquitectura,
 }, open(destino, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print("version.json →", destino)
 PY
 # --- 7. Bottle de Homebrew de la CLI: el motor del DMG tal cual (ver distribucion/botella.sh) ----
-BOTELLA="dist/alfalfa-$VERSION.arm64_sonoma.bottle.tar.gz"
-echo "bottle de la fórmula alfalfa → $BOTELLA ($(../distribucion/botella.sh "$DMG" "$VERSION" dist))"
+BOTELLA="dist/alfalfa-$VERSION.$ETIQUETA_BOTELLA.bottle.tar.gz"
+echo "bottle de la fórmula alfalfa → $BOTELLA ($(BOTELLA_ETIQUETA="$ETIQUETA_BOTELLA" ../distribucion/botella.sh "$DMG" "$VERSION" dist))"
 
 # --- 8. Copia con nombre fijo: el botón «Descargar para Mac» de la web apunta a
 #        releases/latest/download/AlfalfaCode.dmg, que sólo existe si cada release la trae.
-FIJO="dist/AlfalfaCode.dmg"
+FIJO="dist/AlfalfaCode$SUFIJO.dmg"
 cp "$DMG" "$FIJO"
 echo
+if [ "$ARQ" = x86_64 ]; then
+  echo "Para añadirlo a la release $ETIQUETA (la de Apple Silicon, ya publicada o recién creada):"
+  echo "  gh release upload $ETIQUETA $DMG $FIJO $FEED $BOTELLA --repo 0sw2ld0/AlfalfaCode"
+  echo "Homebrew aún no ofrece Intel: el cask y la fórmula siguen siendo sólo para Apple Silicon."
+  exit 0
+fi
 echo "Para publicarlo (la release tiene que quedar como «Latest»; el actualizador lee releases/latest):"
 echo "  gh release create $ETIQUETA $DMG $FIJO dist/version.json $BOTELLA --latest --repo 0sw2ld0/AlfalfaCode --title \"AlfalfaCode $VERSION\" --notes-file NOTAS-VERSION.txt"
 echo "Al publicarla, .github/workflows/tap.yml pone el tap 0sw2ld0/homebrew-tap (cask y fórmula) en $VERSION."

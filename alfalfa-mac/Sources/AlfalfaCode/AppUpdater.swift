@@ -98,6 +98,14 @@ final class AppUpdater: ObservableObject {
             var request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
             request.setValue("AlfalfaCode/\(Self.installedVersion)", forHTTPHeaderField: "User-Agent")
             let (data, response) = try await URLSession.shared.data(for: request)
+            // Una release que aún no trae la app para Intel no tiene version-intel.json: para esta
+            // app no hay nada nuevo, no es un fallo de la conexión.
+            if let http = response as? HTTPURLResponse, http.statusCode == 404, feed == AppUpdatePolicy.intelFeed {
+                lastCheck = Date()
+                UserDefaults.standard.set(lastCheck, forKey: Self.lastKey)
+                state = manual ? .upToDate : .idle
+                return
+            }
             if let http = response as? HTTPURLResponse, http.statusCode != 200 { throw UpdateError.server }
             let release = try JSONDecoder().decode(ReleaseInfo.self, from: data)
             lastCheck = Date()
@@ -209,6 +217,9 @@ final class AppUpdater: ObservableObject {
         let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
         guard info?["CFBundleIdentifier"] as? String == AppUpdatePolicy.bundleIdentifier,
               info?["CFBundleShortVersionString"] as? String == version else { throw UpdateError.content }
+        // Del mismo procesador que esta: la de Apple Silicon no abre en un Mac con Intel.
+        guard AppUpdatePolicy.runsHere(cpuTypes: Bundle(url: app)?.executableArchitectures?.map(\.intValue) ?? [])
+        else { throw UpdateError.architecture }
         progress(2)
 
         // Notarización: la misma comprobación que hace Gatekeeper al abrirla. La app lleva el ticket
@@ -274,13 +285,14 @@ final class AppUpdater: ObservableObject {
 }
 
 enum UpdateError: Error {
-    case server, digest, content, signature, notarization, permissions, translocated
+    case server, digest, content, architecture, signature, notarization, permissions, translocated
 
     var message: String {
         switch self {
         case .server: return "El servidor de actualizaciones no respondió. Inténtalo más tarde."
         case .digest: return "La descarga no coincide con la huella publicada. No se instaló nada."
         case .content: return "El archivo descargado no contiene la versión esperada. No se instaló nada."
+        case .architecture: return "La descarga es para otro procesador (Apple Silicon o Intel). No se instaló nada."
         case .signature: return "La app descargada no está firmada por CuyCoders. No se instaló nada."
         case .notarization: return "Apple no ha validado (notarizado) esta descarga. No se instaló nada."
         case .permissions:

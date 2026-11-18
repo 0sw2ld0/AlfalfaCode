@@ -3,12 +3,14 @@
 # `alfalfa` con sus dependencias (httpx, mcp, jsonschema, cuysearch). Quien la instale no
 # necesita clonar el repositorio, ni un .venv, ni pip, ni las herramientas de línea de órdenes.
 #
-# Sólo Apple Silicon (arm64): el Python de uv (python-build-standalone) no se publica en
-# versión universal, y hacerla a mano obliga a unir con lipo el intérprete y cada extensión
-# nativa (pydantic-core, rpds-py, cryptography, cffi) de dos instalaciones distintas, y a
-# probar las dos. macOS 26 es el último que corre en Intel. Ver alfalfa-mac/EMPAQUETADO.md.
+# Un procesador por app: Apple Silicon (arm64, por defecto) o Intel (ARQ=x86_64), no universal.
+# El Python de uv (python-build-standalone) no se publica en versión universal, y hacerla a mano
+# obliga a unir con lipo el intérprete y cada extensión nativa (pydantic-core, rpds-py,
+# cryptography, cffi) de dos instalaciones distintas. Ver alfalfa-mac/EMPAQUETADO.md.
 #
 # Uso:  ./build-app.sh                       → firma Developer ID si hay certificado, si no ad hoc
+#       ARQ=x86_64 ./build-app.sh            → la app para Intel, en dist/x86_64/ (en Apple
+#                                              Silicon, con Rosetta para comprobar el motor)
 #       IDENTIDAD=- ./build-app.sh           → firma ad hoc aunque haya certificado (para este Mac)
 #       IDENTIDAD=- CONFIGURACION=debug ./build-app.sh → compila una app de depuración
 #       REGENERAR_REQUISITOS=1 ./build-app.sh → vuelve a fijar las versiones de motor-requisitos.txt
@@ -16,15 +18,23 @@ set -euo pipefail
 cd "$(dirname "$0")"
 MAC="$(pwd)"
 RAIZ="$(cd .. && pwd)"
+ARQ="${ARQ:-arm64}"
+case "$ARQ" in
+  arm64)  PYTHON_ARQ="aarch64"; APP="dist/AlfalfaCode.app" ;;
+  x86_64) PYTHON_ARQ="x86_64";  APP="dist/x86_64/AlfalfaCode.app"
+          # Las comprobaciones del final arrancan el motor: en Apple Silicon, con Rosetta.
+          arch -x86_64 /usr/bin/true 2>/dev/null \
+            || { echo "✗ para la app de Intel en Apple Silicon hace falta Rosetta: softwareupdate --install-rosetta" >&2; exit 1; } ;;
+  *) echo "✗ ARQ debe ser arm64 o x86_64" >&2; exit 1 ;;
+esac
 . "$RAIZ/distribucion/cuybrowser.sh"
 
-APP="dist/AlfalfaCode.app"
 CACHE=".build/empaquetado"
 REQUISITOS="motor-requisitos.txt"
 VERSION="${VERSION:-$(sed -n "s/^__version__ = '\(.*\)'$/\1/p" "$RAIZ/alfalfa/__init__.py")}"
 COMPILACION="${COMPILACION:-$(date +%Y%m%d%H%M)}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.13.14}"
-PYTHON_CLAVE="cpython-$PYTHON_VERSION-macos-aarch64-none"
+PYTHON_CLAVE="cpython-$PYTHON_VERSION-macos-$PYTHON_ARQ-none"
 PYTHON_MENOR="${PYTHON_VERSION%.*}"
 CONFIGURACION="${CONFIGURACION:-release}"
 [ -n "$VERSION" ] || { echo "✗ no se pudo leer __version__ de alfalfa/__init__.py" >&2; exit 1; }
@@ -34,7 +44,7 @@ case "$CONFIGURACION" in
   *) echo "✗ CONFIGURACION debe ser debug o release" >&2; exit 1 ;;
 esac
 
-CUYBROWSER_ORIGEN="$CACHE/cuybrowser-$CUYBROWSER_VERSION-macos-arm64"
+CUYBROWSER_ORIGEN="$CACHE/$CUYBROWSER_ASSET-$CUYBROWSER_VERSION"
 cuybrowser_preparar "$CUYBROWSER_ORIGEN"
 
 # --- 1. Python propio (en caché: sólo se descarga la primera vez) ---------------------
@@ -44,19 +54,33 @@ if [ ! -x "$PYTHON_ORIGEN/bin/python3" ]; then
 fi
 
 # --- 2. Versiones fijadas del motor ----------------------------------------------------
-# Se versionan: la app que se publica lleva exactamente lo que se probó.
+# Se versionan: la app que se publica lleva exactamente lo que se probó. La de Intel tiene su
+# archivo: cryptography dejó de publicar ruedas para Mac con Intel en la 49 (sólo arm64), así que
+# allí se queda en la última que las trae. Lo demás es igual en las dos.
+if [ "$ARQ" = x86_64 ]; then
+  REQUISITOS="motor-requisitos-x86_64.txt"
+  CABECERA=("# Versiones que lleva el motor de la app para Intel (ARQ=x86_64 ./build-app.sh): las mismas que"
+            "# motor-requisitos.txt salvo cryptography, que desde la 49 ya no publica ruedas para Mac con Intel"
+            "# (sólo arm64). Para cambiarlas: ARQ=x86_64 REGENERAR_REQUISITOS=1 ./build-app.sh")
+  mkdir -p "$CACHE"
+  echo 'cryptography<49' > "$CACHE/restricciones-x86_64.txt"
+  RESTRICCIONES=(--constraint "$CACHE/restricciones-x86_64.txt")
+else
+  CABECERA=("# Versiones que lleva el motor de AlfalfaCode.app (build-app.sh). Para cambiarlas:"
+            "# REGENERAR_REQUISITOS=1 ./build-app.sh")
+  RESTRICCIONES=()
+fi
 if [ ! -f "$REQUISITOS" ] || [ -n "${REGENERAR_REQUISITOS:-}" ]; then
-  { printf '%s\n' "# Versiones que lleva el motor de AlfalfaCode.app (build-app.sh). Para cambiarlas:" \
-                  "# REGENERAR_REQUISITOS=1 ./build-app.sh" ""
-    uv pip compile "$RAIZ/pyproject.toml" --python-version "$PYTHON_MENOR" \
-       --python-platform aarch64-apple-darwin --no-header --no-annotate --quiet
+  { printf '%s\n' "${CABECERA[@]}" ""
+    uv pip compile "$RAIZ/pyproject.toml" --python-version "$PYTHON_MENOR" ${RESTRICCIONES[@]+"${RESTRICCIONES[@]}"} \
+       --python-platform "$PYTHON_ARQ-apple-darwin" --no-header --no-annotate --quiet
   } > "$REQUISITOS.tmp"
   mv "$REQUISITOS.tmp" "$REQUISITOS"
 fi
 
 # --- 3. La app de Mac ------------------------------------------------------------------
-swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch arm64
-BIN="$(swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch arm64 --show-bin-path)/AlfalfaCode"
+swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch "$ARQ"
+BIN="$(swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch "$ARQ" --show-bin-path)/AlfalfaCode"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
@@ -85,7 +109,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>        <string>APPL</string>
   <key>CFBundleIconFile</key>           <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>     <string>14.0</string>
-  <key>LSArchitecturePriority</key>     <array><string>arm64</string></array>
+  <key>LSArchitecturePriority</key>     <array><string>$ARQ</string></array>
   <key>NSHighResolutionCapable</key>    <true/>
   <key>NSHumanReadableCopyright</key>   <string>© CuyCoders · MIT</string>
   <!-- Un agente puede usar osascript; macOS pregunta antes en nombre de la app. -->
@@ -131,8 +155,12 @@ rm -rf "$LIB/site-packages/bin"   # los lanzadores de pip apuntan a rutas de est
 
 # rg (ripgrep): el binario oficial, fijado por versión y huella. Sólo enlaza bibliotecas de macOS.
 RG_VERSION="15.2.0"
-RG_SHA256="3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
-RG_NOMBRE="ripgrep-$RG_VERSION-aarch64-apple-darwin"
+if [ "$ARQ" = x86_64 ]; then
+  RG_SHA256="af7825fcc69a2afc7a7aea55fc9af90e26421d8f20fe59df32e233c0b8a231c1"
+else
+  RG_SHA256="3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+fi
+RG_NOMBRE="ripgrep-$RG_VERSION-$PYTHON_ARQ-apple-darwin"
 RG_TGZ="$CACHE/$RG_NOMBRE.tar.gz"
 rg_valido() { [ -f "$RG_TGZ" ] && [ "$(shasum -a 256 "$RG_TGZ" | cut -d' ' -f1)" = "$RG_SHA256" ]; }
 if ! rg_valido; then
@@ -183,8 +211,8 @@ huella() { shasum -a 256 "$1" | cut -c1-12; }
 FIRMANTE="$LIB/site-packages/alfalfa/proveedores/firmante.swift"
 AYUDANTE="$LIB/site-packages/alfalfa/apps/ayudante.swift"
 export CLANG_MODULE_CACHE_PATH="$MAC/$CACHE/clang"
-swiftc -O -target arm64-apple-macos14 "$FIRMANTE" -o "$APP/Contents/Helpers/alfalfa-firma-$(huella "$FIRMANTE")"
-swiftc -O -target arm64-apple-macos14 "$AYUDANTE" -o "$APP/Contents/Helpers/alfalfa-apps-$(huella "$AYUDANTE")"
+swiftc -O -target "$ARQ-apple-macos14" "$FIRMANTE" -o "$APP/Contents/Helpers/alfalfa-firma-$(huella "$FIRMANTE")"
+swiftc -O -target "$ARQ-apple-macos14" "$AYUDANTE" -o "$APP/Contents/Helpers/alfalfa-apps-$(huella "$AYUDANTE")"
 
 # --- 6. Firma: de dentro hacia fuera --------------------------------------------------------
 # Con «Developer ID Application»: hardened runtime y sello de tiempo en cada binario, que es
@@ -219,6 +247,13 @@ codesign --verify --deep --strict "$APP"
 echo "firmados $n binarios del motor y la app con: $([ "$IDENTIDAD" = "-" ] && echo 'ad hoc (sólo este Mac)' || echo "$IDENTIDAD")"
 
 # --- 7. Comprobación: el motor arranca desde la app y no escribe en ella ---------------------
+# Cada binario tiene que correr en $ARQ: una rueda de otra plataforma no avisa hasta que se carga.
+echo "$APP/Contents/MacOS/AlfalfaCode" >> "$BINARIOS"
+while IFS= read -r f; do
+  lipo -archs "$f" | tr ' ' '\n' | grep -qx "$ARQ" \
+    || { echo "✗ $f no es para $ARQ ($(lipo -archs "$f"))" >&2; exit 1; }
+done < "$BINARIOS"
+echo "todos los binarios son para $ARQ"
 MARCA="$(mktemp)"
 PRUEBA_HOME="$(mktemp -d)"
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$MOTOR/alfalfa" --version

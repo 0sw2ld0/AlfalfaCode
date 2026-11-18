@@ -39,7 +39,29 @@ final class AppUpdateTests: XCTestCase {
         XCTAssertFalse(AppUpdatePolicy.isTrustedDownload(dmg, feed: feed))
         // Un feed de internet distinto del de GitHub no se acepta como sustituto.
         XCTAssertEqual(AppUpdatePolicy.feed(environment: [AppUpdatePolicy.feedOverrideKey: "https://evil.example/v.json"]),
-                       AppUpdatePolicy.feed)
+                       AppUpdatePolicy.feed(environment: [:]))
+    }
+
+    /// Cada procesador lee su feed de la misma release: la app de Intel nunca recibe el DMG de Apple Silicon.
+    func testEachArchitectureReadsItsOwnFeed() {
+        XCTAssertEqual(AppUpdatePolicy.feed(environment: [:], architecture: "arm64"), AppUpdatePolicy.feed)
+        XCTAssertEqual(AppUpdatePolicy.feed(environment: [:], architecture: "x86_64"), AppUpdatePolicy.intelFeed)
+        XCTAssertEqual(AppUpdatePolicy.intelFeed.lastPathComponent, "version-intel.json")
+        // Un feed local de prueba manda en los dos.
+        let local = [AppUpdatePolicy.feedOverrideKey: "file:///tmp/version.json"]
+        XCTAssertTrue(AppUpdatePolicy.feed(environment: local, architecture: "x86_64").isFileURL)
+        // Esta app es de uno de los dos.
+        XCTAssertTrue(["arm64", "x86_64"].contains(AppUpdatePolicy.architecture))
+    }
+
+    func testOnlyInstallsAnAppForThisProcessor() {
+        let arm = [NSBundleExecutableArchitectureARM64], intel = [NSBundleExecutableArchitectureX86_64]
+        XCTAssertTrue(AppUpdatePolicy.runsHere(cpuTypes: arm, architecture: "arm64"))
+        XCTAssertFalse(AppUpdatePolicy.runsHere(cpuTypes: arm, architecture: "x86_64"))
+        XCTAssertTrue(AppUpdatePolicy.runsHere(cpuTypes: intel, architecture: "x86_64"))
+        XCTAssertFalse(AppUpdatePolicy.runsHere(cpuTypes: intel, architecture: "arm64"))
+        XCTAssertTrue(AppUpdatePolicy.runsHere(cpuTypes: arm + intel, architecture: "x86_64"))
+        XCTAssertFalse(AppUpdatePolicy.runsHere(cpuTypes: [], architecture: "arm64"))
     }
 
     func testOffersOnlyNewerAndRespectsSkippedVersionWhenAutomatic() {

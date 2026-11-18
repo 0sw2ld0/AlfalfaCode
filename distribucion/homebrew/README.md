@@ -5,7 +5,8 @@ brew install --cask 0sw2ld0/tap/alfalfacode   # la app de Mac de AlfalfaCode
 brew install 0sw2ld0/tap/alfalfa              # la CLI `alfalfa`
 ```
 
-Sólo Apple Silicon y macOS 14 (Sonoma) o posterior.
+Sólo Apple Silicon y macOS 14 (Sonoma) o posterior. En un Mac con Intel, instala AlfalfaCode con
+`curl -fsSL https://alfalfacode.cuycoders.dev/instalar.sh | sh` o con el DMG `-intel` de la release.
 
 - **alfalfacode** (cask): el DMG firmado y notarizado de la última release de
   [AlfalfaCode](https://github.com/0sw2ld0/AlfalfaCode). La app se actualiza sola

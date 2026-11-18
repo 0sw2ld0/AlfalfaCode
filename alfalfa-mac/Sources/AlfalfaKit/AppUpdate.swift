@@ -29,7 +29,18 @@ public enum AppUpdatePolicy {
     // MARK: - Constantes
 
     /// `releases/latest` es la última release publicada (no borradores ni versiones previas).
+    /// Es el de la app para Apple Silicon.
     public static let feed = URL(string: "https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version.json")!
+    /// El de la app para Intel: va en la misma release, con su propio DMG (`ARQ=x86_64 ./publicar.sh`).
+    public static let intelFeed = URL(string: "https://github.com/0sw2ld0/AlfalfaCode/releases/latest/download/version-intel.json")!
+    /// El procesador para el que se compiló esta app: cada una se actualiza con el DMG de la suya.
+    public static var architecture: String {
+        #if arch(x86_64)
+        return "x86_64"
+        #else
+        return "arm64"
+        #endif
+    }
     public static let releasesPage = URL(string: "https://github.com/0sw2ld0/AlfalfaCode/releases/latest")!
     /// Sólo se instala lo firmado con este equipo de desarrollador (CuyCoders).
     public static let teamID = "FZ8TW9AWLE"
@@ -41,10 +52,18 @@ public enum AppUpdatePolicy {
 
     // MARK: - Métodos
 
-    /// El feed de este arranque: el de GitHub, o uno local (file://) si se pidió para una prueba.
-    public static func feed(environment: [String: String]) -> URL {
+    /// El feed de este arranque: el de GitHub para este procesador, o uno local (file://) si se
+    /// pidió para una prueba.
+    public static func feed(environment: [String: String], architecture: String = architecture) -> URL {
         if let value = environment[feedOverrideKey], let url = URL(string: value), url.isFileURL { return url }
-        return feed
+        return architecture == "x86_64" ? intelFeed : feed
+    }
+
+    /// ¿Corre aquí la app descargada? `cpuTypes` es `Bundle.executableArchitectures` de su
+    /// ejecutable. Así un DMG del otro procesador nunca sustituye a la app que funciona.
+    public static func runsHere(cpuTypes: [Int], architecture: String = architecture) -> Bool {
+        let tipo = architecture == "x86_64" ? NSBundleExecutableArchitectureX86_64 : NSBundleExecutableArchitectureARM64
+        return cpuTypes.contains(tipo)
     }
 
     /// «0.10.0» es más nueva que «0.9.9»; lo que no son números cuenta como 0.

@@ -17,6 +17,12 @@ También vale bajar el DMG de la
 [última release](https://github.com/0sw2ld0/AlfalfaCode/releases/latest) y
 arrastrar la app a Aplicaciones.
 
+**En un Mac con Intel** (también macOS 14 o posterior), Homebrew todavía no sirve: usa
+`instalar.sh`, que baja solo la versión para Intel, o el DMG `AlfalfaCode-<versión>-intel.dmg`
+de la release. La app de Intel se actualiza sola con los DMG de Intel. Sin chip T2 no hay
+Secure Enclave, así que el código de cortesía del proveedor Alfalfa no se puede activar;
+los demás proveedores funcionan igual.
+
 Las tres formas usan el mismo DMG de la release, firmado y notarizado:
 
 - **El cask** instala la app. Se actualiza sola (`auto_updates`), así que
@@ -26,11 +32,11 @@ Las tres formas usan el mismo DMG de la release, firmado y notarizado:
   del equipo FZ8TW9AWLE.
   No compila nada.
 - **`instalar.sh`** ([alfalfa/instalar.sh](../../alfalfa/instalar.sh)) hace esto:
-  1. Lee `version.json` de la última release.
+  1. Lee `version.json` de la última release (en Intel, `version-intel.json`).
   2. Baja el DMG y comprueba su huella SHA-256.
   3. Monta el DMG en sólo lectura y comprueba la firma de la app: que sea del
      equipo FZ8TW9AWLE, con el identificador `com.cuycoders.alfalfacode`, la
-     misma versión y notarizada (`spctl`).
+     misma versión, notarizada (`spctl`) y del procesador de este Mac.
   4. Copia el motor a `~/.local/share/alfalfa` y deja `~/.local/bin/alfalfa`.
   5. Si hace falta, añade `~/.local/bin` al `PATH` en `~/.zshrc`, entre marcas.
      Con `ALFALFA_SIN_PATH=1` no toca ese archivo.

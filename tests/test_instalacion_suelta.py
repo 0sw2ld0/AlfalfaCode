@@ -218,3 +218,19 @@ def test_en_linux_dice_como_instalar_el_motor_con_pipx(tmp_path):
     assert r.returncode != 0
     assert 'pipx install' in r.stderr and 'bubblewrap' in r.stderr and 'docs/USO.md#linux' in r.stderr
     assert not (tmp_path / 'home' / '.local').exists()
+
+
+def test_cada_motor_mira_la_release_de_su_procesador():
+    assert act.feed_release('darwin', 'arm64') == act.FEED_RELEASE
+    assert act.feed_release('darwin', 'x86_64') == act.FEED_RELEASE_INTEL
+    assert act.FEED_RELEASE_INTEL.endswith('/version-intel.json')
+    # En Linux x86_64 no hay DMG: el feed no cambia.
+    assert act.feed_release('linux', 'x86_64') == act.FEED_RELEASE
+    pedidas = []
+
+    def get(url, **kw):
+        pedidas.append(url)
+        return _R(404)
+    # Una release sin la versión de Intel: para el motor de Intel no hay nada nuevo.
+    assert act.ultima_release(get, feed=act.FEED_RELEASE_INTEL) is None
+    assert pedidas == [act.FEED_RELEASE_INTEL]

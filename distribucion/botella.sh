@@ -5,7 +5,8 @@
 #   distribucion/botella.sh AlfalfaCode-0.99.0.dmg 0.99.0 carpeta/de/salida
 #
 # Deja `alfalfa-<versión>.arm64_sonoma.bottle.tar.gz` y escribe su huella SHA-256 en la
-# salida estándar. Va en la release junto al DMG; la fórmula lo declara con
+# salida estándar. Con el DMG de Intel, `BOTELLA_ETIQUETA=sonoma` (la etiqueta de Homebrew para
+# x86_64 en Sonoma). El procesador de la app del DMG tiene que ser el de la etiqueta. Va en la release junto al DMG; la fórmula lo declara con
 # `cellar: :any_skip_relocation`, así que Homebrew lo vierte sin reescribir los binarios
 # (no rompe su firma) y no pide las herramientas de línea de órdenes al día. Sirve en
 # Sonoma y en cualquier macOS posterior (Homebrew usa el bottle más nuevo que no pase del suyo).
@@ -19,7 +20,8 @@ set -euo pipefail
 DMG="${1:?uso: botella.sh <dmg> <versión> <salida>}"
 VERSION="${2:?falta la versión}"
 SALIDA="${3:?falta la carpeta de salida}"
-ETIQUETA="arm64_sonoma"
+ETIQUETA="${BOTELLA_ETIQUETA:-arm64_sonoma}"
+case "$ETIQUETA" in arm64_*) ARQ_BOTELLA=arm64 ;; *) ARQ_BOTELLA=x86_64 ;; esac
 EQUIPO="FZ8TW9AWLE"
 NOMBRE="alfalfa-$VERSION.$ETIQUETA.bottle.tar.gz"
 
@@ -36,6 +38,8 @@ if [ -z "${BOTELLA_SIN_EQUIPO:-}" ]; then
 fi
 [ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION" ] \
   || { echo "✗ la app del DMG no es la versión $VERSION" >&2; exit 1; }
+lipo -archs "$APP/Contents/MacOS/AlfalfaCode" | tr ' ' '\n' | grep -qx "$ARQ_BOTELLA" \
+  || { echo "✗ la app del DMG no es para $ARQ_BOTELLA (bottle $ETIQUETA)" >&2; exit 1; }
 cuybrowser_comprobar_app "$APP" "$TMP"
 
 KEG="$TMP/alfalfa/$VERSION"

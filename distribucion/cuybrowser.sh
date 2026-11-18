@@ -1,7 +1,15 @@
-# Versión del ayudante de AlfalfaCode.app para Apple Silicon.
+# Versión del ayudante de AlfalfaCode.app. ARQ elige el procesador: arm64 (Apple Silicon, por
+# defecto) o x86_64 (Intel). Las huellas son las de SHA256SUMS de la release de CuyBrowser.
 CUYBROWSER_VERSION="0.6.0"
-CUYBROWSER_SHA256="f28949c7b00d654d62d710c7dee378c94bd2962766b512f0cfca677e1cfd2d3f"
-CUYBROWSER_ASSET="cuybrowser-macos-arm64"
+case "${ARQ:-arm64}" in
+  arm64)
+    CUYBROWSER_SHA256="f28949c7b00d654d62d710c7dee378c94bd2962766b512f0cfca677e1cfd2d3f"
+    CUYBROWSER_ASSET="cuybrowser-macos-arm64" ;;
+  x86_64)
+    CUYBROWSER_SHA256="e8d4b4895aac521ad3320d324e8b86e0f3bf0e03c4e8f40ebe3f6a5d8a0d15aa"
+    CUYBROWSER_ASSET="cuybrowser-macos-x64" ;;
+  *) echo "✗ ARQ debe ser arm64 o x86_64, no ${ARQ}" >&2; return 1 2>/dev/null || exit 1 ;;
+esac
 
 cuybrowser_huella_correcta() {
   [ -f "$1" ] && [ ! -L "$1" ] && [ "$(shasum -a 256 "$1" | cut -d' ' -f1)" = "$CUYBROWSER_SHA256" ]
