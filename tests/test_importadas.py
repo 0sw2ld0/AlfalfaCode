@@ -517,6 +517,23 @@ def test_cli_importar_de_verdad_con_home_de_demo(demo, casa, tmp_path):
     assert sin_importar.returncode == 2 and 'sólo valen con --importar' in sin_importar.stderr
 
 
+def test_el_aviso_de_la_sesion_lleva_todos_los_pendientes_con_su_huella(demo, tmp_path):
+    imp = Importadas(demo, tmp_path / 'alfalfa')
+    texto, datos = imp.aviso()
+    assert texto.startswith('Importar · ') and 'Ajustes ▸ Importar' in texto
+    assert [f['clave'] for f in datos['pendientes']] == [e.clave for e in imp.autorizables()]
+    assert all(f['huella'] == elemento(imp, f['tipo'], f['nombre']).huella for f in datos['pendientes'])
+    # El texto nombra seis; los datos, todos, para que la app los ofrezca.
+    muchos = [elemento(imp, 'mcp', 'eco')] * 8
+    imp.autorizables = lambda: muchos
+    texto, datos = imp.aviso()
+    assert texto.count('mcp eco') == 6 and ' y 2 más sin autorizar' in texto and len(datos['pendientes']) == 8
+    # Autorizado lo pendiente (o que cambió), no hay aviso.
+    imp = Importadas(demo, tmp_path / 'alfalfa')
+    imp.autorizar(imp.autorizables())
+    assert Importadas(demo, tmp_path / 'alfalfa').aviso() is None
+
+
 # ------------------------------------------------------------------ la sesión de verdad
 
 def test_sesion_sin_autorizar_avisa_y_no_inicia_nada(demo, tmp_path, monkeypatch):
@@ -534,6 +551,18 @@ def test_sesion_sin_autorizar_avisa_y_no_inicia_nada(demo, tmp_path, monkeypatch
     aviso = [t for t in sistema_eventos if 'Importar ·' in t]
     assert len(aviso) == 1 and 'mcp eco (OpenCode)' in aviso[0] and 'agente revisor' in aviso[0]
     assert 'comando probar' in aviso[0]
+    # Con sus datos: la app ofrece «Revisar y autorizar…» con la clave y la huella de cada pendiente.
+    datos = next(e['importadas'] for e in eventos if e.get('rol') == 'system' and 'importadas' in e)
+    imp = Importadas(demo, tmp_path / 'alfalfa')
+    assert datos == {'pendientes': [dict(clave=e.clave, huella=e.huella, tipo=e.tipo, nombre=e.nombre,
+                                         herramienta=e.herramienta, estado='pendiente') for e in imp.autorizables()]}
+    assert {(f['tipo'], f['nombre']) for f in datos['pendientes']} >= {('mcp', 'eco'), ('agente', 'revisor'),
+                                                                       ('comando', 'probar')}
+    # Y al reabrir la sesión (`--historial`) siguen ahí.
+    from alfalfa.stdio import history
+    monkeypatch.setenv('ALFALFA_HOME', str(sesion.home))
+    historial = history(sesion.m.task['id'])
+    assert [e['importadas'] for e in historial['eventos'] if 'importadas' in e] == [datos]
     # La orden sin autorizar va tal cual, avisando, y su plantilla no llega al modelo.
     assert any('La orden /probar del proyecto (OpenCode) no está autorizada' in t for t in sistema_eventos)
     usuario = [m['content'] for m in guion.payloads['principal'][0]['messages'] if m['role'] == 'user'][-1]

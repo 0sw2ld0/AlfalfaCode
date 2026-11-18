@@ -360,7 +360,7 @@ Lo que llega **antes** del `hello` es `invalid_message`.
 | primer evento de un turno | `run_started` (`payload.input_id`); su `id` es el `run_id` |
 | `turno_terminado` | `run_finished` (`completed`→`success`, `blocked`, `failed`, `cortado`/`interrupted`→`interrupted`); antes, `alfalfa.closing` con el `turno_terminado` entero (`status` exacto, `cut` para `cortado`) |
 | `evento` `agent` | `message_start` / `message_delta` / `message_end` (`role` `assistant`; el `turno`, en `payload.alfalfa.turn`) |
-| `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella (o en cierre), `alfalfa.notice` con el evento entero |
+| `evento` `system` | `message_*` con `role` `system` en una ejecución; fuera de ella (o en cierre), `alfalfa.notice` con el evento entero. El aviso de lo importado sin autorizar lleva sus datos (`importadas`: clave, huella, tipo, nombre, herramienta y estado de cada pendiente) en `payload.alfalfa.imported` del `message_start` |
 | `evento` `user` | el núcleo no lo devuelve; `alfalfa.user_message` (`text`, `input_id`, `turn`) dice cuándo entró en la conversación |
 | `evento` `tool` (`herramienta.fase` `inicio`/`fin`) | `tool_start` / `tool_end` (`status` `success` o `error` según la clasificación del motor); `payload.alfalfa` lleva `herramienta` entera (`tool`), el `turno` y, en el inicio, el texto de v2 (`text`). Sin ejecución abierta (o un fin sin su inicio abierto), `alfalfa.notice` |
 | `permiso` | `approval_request` (`digest` JCS de los argumentos, `reason`, `scopes` y, si hay plazo, `expires`); el motivo principal de v2 va en `payload.alfalfa.reason`, y los argumentos de una herramienta MCP, tal cual en `payload.alfalfa.mcp.arguments` |

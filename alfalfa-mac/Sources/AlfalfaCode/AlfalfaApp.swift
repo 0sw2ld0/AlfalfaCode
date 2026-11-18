@@ -102,6 +102,12 @@ struct AlfalfaApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Buscar actualización…") { model.checkForUpdate() }
             }
+            // El mismo atajo que la barra lateral: lo que trae sin autorizar la carpeta en la que se trabaja.
+            CommandGroup(after: .newItem) {
+                Button("Revisar lo importado sin autorizar…") { model.reviewImports() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                    .disabled(model.importFolder == nil)
+            }
         }
         .defaultSize(width: 1280, height: 800)
 

@@ -51,6 +51,8 @@ struct ItemView: View {
             UndoMarker(step: step, redone: redone, session: session)
         case let .learning(_, proposal, state):
             LearningCard(proposal: proposal, state: state, session: session)
+        case let .importNotice(_, notice, authorized):
+            ImportNoticeCard(notice: notice, authorized: authorized, session: session)
         }
     }
 

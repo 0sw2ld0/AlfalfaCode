@@ -116,12 +116,16 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     case undo(id: Int, UndoStep, redone: Bool)
     /// Lo que la revisión al cerrar el turno propone guardar (memoria o habilidad), con su diff.
     case learning(id: Int, LearningProposal, state: LearningProposalState)
+    /// Lo que trae la carpeta sin autorizar, con «Revisar y autorizar…»; `authorized`: lo que se autorizó desde
+    /// aquí, que esta sesión no carga.
+    case importNotice(id: Int, ImportNotice, authorized: [String])
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
              let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
-             let .priceWarning(id, _, _), let .undo(id, _, _), let .learning(id, _, _): return id
+             let .priceWarning(id, _, _), let .undo(id, _, _), let .learning(id, _, _),
+             let .importNotice(id, _, _): return id
         }
     }
 }
@@ -437,6 +441,18 @@ public struct Timeline: Equatable, Sendable {
         }
     }
 
+    /// Se autorizó desde el aviso de lo importado (`names`, como se enseñan): la tarjeta explica que esta sesión no
+    /// los carga y ofrece una sesión nueva.
+    public mutating func importsAuthorized(_ names: [String]) {
+        for index in items.indices {
+            if case let .importNotice(id, notice, authorized) = items[index] {
+                items[index] = .importNotice(id: id, notice, authorized: authorized + names.filter {
+                    !authorized.contains($0)
+                })
+            }
+        }
+    }
+
     /// Cada cierre trae su propia sugerencia: la descartada del anterior no la tapa.
     private mutating func appendWrapUp(_ wrapUp: WrapUp) {
         items.append(.wrapUp(id: nextID(), wrapUp, answered: false))
@@ -478,6 +494,7 @@ public struct Timeline: Equatable, Sendable {
             case let .priceWarning(_, warning, _): parts.append("> " + warning.text)
             case let .undo(_, step, _): parts.append("> " + step.text)
             case let .learning(_, proposal, _): parts.append("> **Aprendizaje propuesto:** " + proposal.title)
+            case let .importNotice(_, notice, _): parts.append("> " + notice.text)
             default: break
             }
         }
@@ -648,6 +665,15 @@ public struct Timeline: Equatable, Sendable {
         }
         if let warning = event.priceWarning {
             items.append(.priceWarning(id: nextID(), warning, answered: warning.mode == .full))
+            return
+        }
+        if let notice = event.importNotice {
+            // Cada proceso de la sesión avisa al empezar su primer turno: el mismo aviso no se repite.
+            let shown = items.contains { item in
+                if case let .importNotice(_, other, _) = item { return other.isSame(as: notice) }
+                return false
+            }
+            if !shown { items.append(.importNotice(id: nextID(), notice, authorized: [])) }
             return
         }
         if let compaction = event.compaction {

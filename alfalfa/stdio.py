@@ -1365,6 +1365,9 @@ def history(ident):
             if isinstance(row.get('tarifa'), dict):
                 # El aviso de tarifa: la app lo pinta ya contestado (sin botones vivos).
                 evento['tarifa'] = row['tarifa']
+            if isinstance(row.get('importadas'), dict):
+                # Lo importado sin autorizar: la app vuelve a ofrecer «Revisar y autorizar…».
+                evento['importadas'] = row['importadas']
             por_turno.setdefault(row['turno'], []).append(evento) if row.get('turno') else sueltos.append(evento)
     eventos = []
     if task.get('objective') and (not turnos or sueltos):

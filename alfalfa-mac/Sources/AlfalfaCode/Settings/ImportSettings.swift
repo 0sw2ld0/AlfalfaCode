@@ -23,35 +23,35 @@ struct ImportSettings: View {
                               + "archivos se copia.") {
                 header
             }
-            if let error {
+            if let error = authorizer.error {
                 Text(error).font(.system(size: 12)).foregroundStyle(Theme.danger)
             }
-            if let config {
+            if let config = authorizer.config {
                 content(config)
             }
         }
         .task(id: model.folder) { await load() }
         .confirmationDialog(confirmTitle, isPresented: $confirmingAll) {
-            Button("Autorizar " + String(config?.pending.count ?? 0)) {
-                Task { await change(authorize: (config?.pending ?? []).map(\.authorizationKey)) }
+            Button("Autorizar " + String(authorizer.config?.pending.count ?? 0)) {
+                Task { await change(authorize: (authorizer.config?.pending ?? []).map(\.authorizationKey)) }
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text("Cada uno es código o instrucciones que trae la carpeta: revisa antes su definición en la lista. "
-                 + (network ? "Los servidores MCP tendrán internet." : "Los servidores MCP no tendrán internet."))
+                 + (authorizer.network ? "Los servidores MCP tendrán internet."
+                    : "Los servidores MCP no tendrán internet."))
         }
     }
 
     // MARK: - Propiedades privadas
 
-    @State private var config: ImportedConfig?
-    @State private var error: String?
-    @State private var busy = false
-    @State private var network = true
+    @StateObject private var authorizer = ImportAuthorizer()
     @State private var confirmingAll = false
 
+    private var busy: Bool { authorizer.busy }
+
     private var confirmTitle: String {
-        let names = (config?.pending ?? []).map { ($0.kind == .comando ? "/" : "") + $0.name }
+        let names = (authorizer.config?.pending ?? []).map { ($0.kind == .comando ? "/" : "") + $0.name }
         return "¿Autorizar " + names.joined(separator: ", ") + "?"
     }
 
@@ -64,9 +64,9 @@ struct ImportSettings: View {
                 .lineLimit(1).truncationMode(.middle)
             HStack(spacing: 10) {
                 Button("Autorizar todo…") { confirmingAll = true }
-                    .disabled(busy || (config?.pending.isEmpty ?? true))
+                    .disabled(busy || (authorizer.config?.pending.isEmpty ?? true))
                 Button("Volver a leer") { Task { await load() } }.disabled(busy || folder == nil)
-                Toggle("Los servidores MCP que autorices tienen internet", isOn: $network)
+                Toggle("Los servidores MCP que autorices tienen internet", isOn: $authorizer.network)
                     .toggleStyle(.checkbox).font(.system(size: 12))
                 if busy { ProgressView().controlSize(.small) }
             }
@@ -96,28 +96,7 @@ struct ImportSettings: View {
 
     private func row(_ item: ImportedItem) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text((item.kind == .comando ? "/" : "") + item.name).font(.system(size: 13, design: .monospaced))
-                    Text(item.stateTitle).font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(item.needsAuthorization || item.state == "invalido" ? Theme.warning
-                                         : Theme.secondary)
-                }
-                Text(item.tool + " · " + item.place).font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                ForEach(notes(item), id: \.self) { note in
-                    Text(note).font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                ForEach(item.definition, id: \.self) { line in
-                    Text(line).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let preview = item.preview {
-                    Text(preview).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.secondary)
-                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        .padding(6).background(Theme.background, in: RoundedRectangle(cornerRadius: 6))
-                }
-            }
+            ImportedItemDetails(item: item)
             Spacer()
             if item.needsAuthorization {
                 Button("Autorizar") { Task { await change(authorize: [item.authorizationKey]) } }.disabled(busy)
@@ -129,12 +108,6 @@ struct ImportSettings: View {
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func notes(_ item: ImportedItem) -> [String] {
-        var lines = [item.detail, item.problem ?? ""] + item.warnings
-        if let coveredBy = item.coveredBy { lines.append("Lo tapa " + coveredBy) }
-        return lines.filter { !$0.isEmpty }
-    }
-
     // MARK: - Métodos privados
 
     private func load() async {
@@ -142,14 +115,6 @@ struct ImportSettings: View {
     }
 
     private func change(authorize: [String] = [], revoke: [String] = []) async {
-        guard let folder else {
-            config = nil
-            return
-        }
-        busy = true
-        let result = await model.importedConfig(in: folder, authorize: authorize, revoke: revoke, network: network)
-        busy = false
-        if let fresh = result.config { config = fresh }
-        error = result.error
+        await authorizer.change(in: folder, using: model, authorize: authorize, revoke: revoke)
     }
 }

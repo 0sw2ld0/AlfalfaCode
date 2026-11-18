@@ -63,6 +63,34 @@ async def test_un_aviso_del_sistema_dentro_de_la_ejecucion_es_un_mensaje_system_
     c.comprobar()
 
 
+async def test_lo_importado_sin_autorizar_es_texto_system_y_sus_datos_van_en_la_extension():
+    """Un cliente cualquiera ve el aviso como mensaje `system`; la app recibe además las claves y huellas en
+    `payload.alfalfa.imported` del `message_start` para ofrecer «Revisar y autorizar…»."""
+    datos = {'pendientes': [{'clave': 'mcp:docs@/casa/.codex/config.toml', 'huella': '0123456789abcdef',
+                             'tipo': 'mcp', 'nombre': 'docs', 'herramienta': 'Codex', 'estado': 'pendiente'},
+                            {'clave': 'comando:probar@/proyecto/opencode.json', 'huella': 'fedcba9876543210',
+                             'tipo': 'comando', 'nombre': 'probar', 'herramienta': 'OpenCode', 'estado': 'cambio'}]}
+    for extensiones in (('alfalfa',), ()):
+        c = Cliente(extensiones=extensiones)
+        await abrir(c)
+        c.t.emit('evento', rol='system', texto='Importar · mcp docs (Codex) sin autorizar', hora=1.0, turno='t1',
+                 importadas=datos)
+        inicio, delta, fin = c.drenar()
+        assert [inicio['type'], delta['type'], fin['type']] == ['message_start', 'message_delta', 'message_end']
+        assert inicio['payload']['role'] == 'system'
+        assert delta['payload']['blocks'][0]['text'].startswith('Importar · mcp docs')
+        if extensiones:
+            assert inicio['payload']['alfalfa'] == {'turn': 't1', 'imported': {'pending': [
+                {'key': 'mcp:docs@/casa/.codex/config.toml', 'fingerprint': '0123456789abcdef', 'type': 'mcp',
+                 'name': 'docs', 'tool': 'Codex', 'status': 'pending'},
+                {'key': 'comando:probar@/proyecto/opencode.json', 'fingerprint': 'fedcba9876543210',
+                 'type': 'command', 'name': 'probar', 'tool': 'OpenCode', 'status': 'changed'}]}}
+        else:
+            assert 'alfalfa' not in inicio['payload']
+        await cerrar(c)
+        c.comprobar()
+
+
 # -- ejecuciones (§4.2) ----------------------------------------------------
 @pytest.mark.parametrize('estado, resultado', [('completed', 'success'), ('blocked', 'blocked'), ('failed', 'failed'),
                                                ('cortado', 'interrupted'), ('interrupted', 'interrupted')])

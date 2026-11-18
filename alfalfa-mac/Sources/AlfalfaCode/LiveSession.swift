@@ -397,6 +397,13 @@ final class LiveSession: ObservableObject, Identifiable {
         onChange?()
     }
 
+    /// Se autorizó desde el aviso de lo importado: la tarjeta lo cuenta y ofrece una sesión nueva, porque esta no
+    /// lo carga.
+    func importsAuthorized(_ names: [String]) {
+        timeline.importsAuthorized(names)
+        onChange?()
+    }
+
     /// Se puede compactar: hay conversación y no se está compactando ya.
     var canCompact: Bool {
         !timeline.compacting && sessionID != nil && (isDormant || timeline.status.isActive)

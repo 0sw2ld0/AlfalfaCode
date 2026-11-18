@@ -56,6 +56,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var models: [ModelInfo] = []
     /// Un modelo elegido cuyo proveedor no tiene clave: la hoja explica cuál falta y la guarda.
     @Published var keyRequest: KeyRequest?
+    /// Lo que trae sin autorizar la carpeta en la que se trabaja (`importFolder`): el atajo de la barra lateral.
+    @Published var pendingImports: PendingImports?
+    /// La hoja «Revisar y autorizar…» abierta desde la barra lateral o el menú.
+    @Published var importReview: ImportReviewRequest?
     /// Sin ningún proveedor configurado: los gratis con los que empezar (`--primera-vez`).
     @Published var firstRun: FirstRun?
     /// Esperando a que el usuario autorice en el navegador (`--conectar`).
