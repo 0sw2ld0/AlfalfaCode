@@ -86,7 +86,7 @@ def test_sin_git_el_agente_lo_sabe_desde_el_principio(tmp_path, monkeypatch):
 def _fijadas(nombre):
     ruta = os.path.join(os.path.dirname(__file__), '..', 'alfalfa-mac', nombre)
     with open(ruta, encoding='utf-8') as f:
-        return {l.split('==')[0]: l.strip() for l in f if '==' in l and not l.startswith('#')}
+        return {linea.split('==')[0]: linea.strip() for linea in f if '==' in linea and not linea.startswith('#')}
 
 
 def test_el_motor_de_intel_lleva_lo_mismo_salvo_cryptography():
