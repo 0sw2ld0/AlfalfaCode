@@ -1,4 +1,4 @@
-El agente puede generar imágenes con OpenAI (gpt-image-1.5) usando tu clave de OpenAI: pide tu aprobación y enseña el precio estimado antes de cada imagen. Lo hizo AlfalfaCode.
-Pegar un texto largo en el cuadro (un log, un registro…) ya no congela la app: se adjunta como «Texto pegado ….txt».
-Primera versión que se publica a la vez para Mac con Apple Silicon y con Intel: cada app se actualiza con la de su procesador.
-Por lo demás, la app y el motor funcionan igual que en la 0.99.27.
+Al activar un código de cortesía sin ningún otro proveedor, Alfalfa queda como proveedor por defecto y la app empieza con su modelo: ya no pide instalar Ollama.
+Si al activar el código no hay conexión con el servicio, AlfalfaCode lo dice en una línea en vez de enseñar un error técnico largo.
+Clic derecho en el nombre de una carpeta de la barra lateral: nuevo encargo ahí, copiar su nombre o su ruta, mostrarla en Finder, revisar lo importado o quitarla de la lista (sus sesiones se archivan, no se borra nada).
+Por lo demás, la app y el motor funcionan igual que en la 0.99.28.
