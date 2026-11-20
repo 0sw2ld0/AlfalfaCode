@@ -217,13 +217,19 @@ final class AppModel: ObservableObject {
         guard !others.isEmpty else { return }
         // Al momento, sin esperar a releer la lista: los pasos nuevos de las sesiones abiertas que trabajan fuera.
         for id in others { followExternal(id) }
-        touchedSessions.formUnion(others)
+        externalChanged(others)
+    }
+
+    private func externalChanged(_ ids: Set<String>) {
+        touchedSessions.formUnion(ids)
         guard !refreshingSessions else { return }
         Task { await refreshSessions() }
     }
 
+    /// Sin verla en vivo (`LiveSession.watch`): lo nuevo de su transcripción.
     private func followExternal(_ id: String) {
-        guard let session = dormant[id], session.runningElsewhere, let log = session.externalLog else { return }
+        guard let session = dormant[id], session.runningElsewhere, !session.watchingLive,
+              let log = session.externalLog else { return }
         switch log.read() {
         case let .events(events):
             if !events.isEmpty { session.appendExternal(events) }
@@ -248,10 +254,15 @@ final class AppModel: ObservableObject {
                 guard let summary = summaries.first(where: { $0.id == id }) else { continue }
                 let wasRunning = session.runningElsewhere
                 session.runningElsewhere = summary.isRunningElsewhere
-                if session.runningElsewhere { session.updateExternalTotals(tokens: summary.tokens, cost: summary.cost) }
-                // Los pasos llegan por la transcripción (`followExternal`). El historial entero, sólo al empezar o
-                // terminar fuera (para ver el final y poder continuarla) o si se perdió el hilo de la transcripción.
-                if wasRunning != session.runningElsewhere || (session.runningElsewhere && session.externalLog == nil) {
+                // En vivo, el uso llega al momento; si no, el que da `--sesiones`.
+                if session.runningElsewhere, !session.watchingLive {
+                    session.updateExternalTotals(tokens: summary.tokens, cost: summary.cost)
+                }
+                // Los pasos llegan en vivo (`LiveSession.watch`) o por la transcripción (`followExternal`). El
+                // historial entero, sólo al empezar o terminar fuera (para ver el final y poder continuarla) o si se
+                // perdió el hilo (la transcripción encogió, o se cortó la conexión en vivo).
+                let lost = session.runningElsewhere && session.externalLog == nil && !session.watchingLive
+                if wasRunning != session.runningElsewhere || lost {
                     await loadHistory(id, into: session, launcher: launcher,
                                       resumable: Presentation.resumable(summary.state))
                 }
@@ -571,14 +582,21 @@ final class AppModel: ObservableObject {
         session.pendingDraft = pendingDrafts.removeValue(forKey: summary.id)
         session.searchAnchor = pendingAnchors.removeValue(forKey: summary.id)
         session.runningElsewhere = summary.isRunningElsewhere
+        session.onWatchEnded = { [weak self] in self?.externalChanged([summary.id]) }
         let resumable = Presentation.resumable(summary.state)
         Task { await loadHistory(summary.id, into: session, launcher: launcher, resumable: resumable) }
     }
 
     private func loadHistory(_ id: String, into session: LiveSession, launcher: URL, resumable: Bool) async {
-        // Si trabaja en otro proceso, lo que su transcripción reciba desde ahora se añade paso a paso
-        // (`followExternal`); lo que ya traiga el historial se salta por la hora.
         let running = session.runningElsewhere
+        session.stopWatching()
+        // Si trabaja en otro proceso que abre el socket de la sesión (`alfalfa --pacai`), se mira en vivo por PACAI: el
+        // historial en disco hasta el corte que da la foto y, desde ahí, lo que llega. Si no, lo que su transcripción
+        // reciba desde ahora se añade paso a paso (`followExternal`); lo que ya traiga el historial se salta por la hora.
+        var live: PacaiObserver.Ready?
+        if running, case let .success(ready) = await PacaiObserver.connect(to: PacaiObserver.socketURL(sessionID: id)) {
+            live = ready
+        }
         let log = SessionLog.url(sessionID: id)
         let start = running ? SessionLog.size(of: log) : 0
         session.externalLog = nil
@@ -586,10 +604,11 @@ final class AppModel: ObservableObject {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--historial", id, "--json"],
                                                           directory: home)
             for case let .history(_, events, wrapUp, context, tokens, cost) in messages {
-                if running, session.runningElsewhere {
+                if live == nil, running, session.runningElsewhere {
                     session.externalLog = SessionLogTail(url: log, offset: start, after: events.map(\.time).max() ?? 0)
                 }
-                var timeline = Timeline(history: events, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost,
+                let shown = live?.historyUntil.map { until in events.filter { $0.time <= until } } ?? events
+                var timeline = Timeline(history: shown, wrapUp: wrapUp, context: context, tokens: tokens, cost: cost,
                                         running: running)
                 for case var .taskQueue(queue) in messages {
                     queue.recover()
@@ -597,6 +616,9 @@ final class AppModel: ObservableObject {
                 }
                 session.restore(timeline,
                                 launcher: launcher, resumable: resumable)
+                if let live {
+                    if session.runningElsewhere { session.watch(live) } else { live.observer.close() }
+                }
                 historyError[id] = nil
                 return
             }
@@ -604,6 +626,7 @@ final class AppModel: ObservableObject {
         } catch {
             historyError[id] = error.localizedDescription
         }
+        live?.observer.close()
         // Sin historial se puede seguir igual: la sesión queda vacía pero continuable.
         session.restore(Timeline(history: [], wrapUp: nil), launcher: launcher, resumable: resumable)
     }

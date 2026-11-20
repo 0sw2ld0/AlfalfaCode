@@ -309,8 +309,9 @@ y la app también para sus consultas de una pasada (`--json`) y para los Ajustes
 
 PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común entre un **agente** y un **cliente**
 (app, móvil, widget, terminal…). AlfalfaCode es su primera implementación: **PACAI-Core + perfil `work` + extensión
-`alfalfa`**, sobre el transporte stdio. Quedan fuera por ahora la reanudación en red, WebSocket y SSE, y los perfiles
-`voice`, `shared_state` y `expression`.
+`alfalfa`**, sobre el transporte stdio. Quien quiera **mirar** una sesión en marcha se conecta a su socket Unix
+local ([abajo](#mirar-una-sesión-en-vivo-observadores)). Quedan fuera por ahora la reanudación en red, WebSocket y SSE,
+y los perfiles `voice`, `shared_state` y `expression`.
 
 ### Cómo se usa
 
@@ -465,6 +466,50 @@ mientras corre no espera: el motor para el trabajo y abre el turno, como en v2.
   contenido, un `approval_result` sin petición pendiente o una extensión no negociada reciben su `error`
   (`invalid_message`, `seq_unrecoverable`, `unknown_approval`, `not_negotiated`…) y la sesión sigue, salvo
   `seq_unrecoverable`.
+
+### Mirar una sesión en vivo (observadores)
+
+Un `alfalfa --pacai` sólo tiene un dueño: el proceso que lo lanzó y le habla por stdio (la app, la skill
+`encargar-a-alfalfa` de Claude Code, un guion). Para que otros vean lo que hace **en el momento**, abre además un
+socket Unix en la carpeta de la sesión, `$ALFALFA_HOME/sesiones/<id>/vivo.sock` (o `~/.alfalfa/sesiones/…`), en
+`0600` dentro de una carpeta `0700`: sólo tu usuario llega a él. Lo abre el proceso que tiene el cerrojo de la sesión
+y lo borra al terminar (uno viejo, de un proceso que murió, lo sustituye el siguiente). Si la ruta pasa de 103 bytes
+(el límite de macOS para un socket) no hay socket y la sesión sigue igual.
+
+El socket habla PACAI 0.3 en JSONL, como stdio, con la propuesta de observadores para PACAI (§6.1 del borrador):
+
+1. El observador abre **su propia sesión PACAI** (su `session`, sus `seq`) con un `hello` que lleva `observe: true`.
+   Un `hello` sin él recibe `invalid_message` y se cierra; uno con `resume_after_seq`, `retention_expired` (se vuelve
+   a conectar y ya). Como mucho 8 a la vez (`alfalfa.too_many_observers`).
+2. El agente contesta su `hello`, `session_started` con `observe: true` y un **`snapshot`** con `reply_to` a su
+   `hello`: las ejecuciones activas (`runs`), los permisos pendientes (`pending_approvals`) y en `last_messages` lo
+   necesario para seguir: el `run_started` de cada ejecución activa, cada `tool_start` abierto, el mensaje a medias y
+   el último de cada estado (`usage`, `plan_updated`, `alfalfa.context`, `alfalfa.budget`, `alfalfa.session`,
+   `alfalfa.subagents`, `alfalfa.processes`…). Con la extensión, `payload.alfalfa` lleva `session_id` (el id de la
+   sesión de AlfalfaCode) e `history_until`: hasta qué hora (`time` de sus filas) vale la transcripción en disco
+   (`<id>.jsonl`). Lo posterior llega en vivo: así se pinta el historial y lo que viene después sin huecos ni repetidos.
+3. Después, **copia** de cada mensaje que el agente manda al dueño, con el mismo `id`, `type`, `time`, `reply_to` y
+   `payload` (los `run_id`, `message_id`, `tool_call_id` y `approval_id` siguen valiendo) y el `session` y la `seq` del
+   observador, filtrados por lo que negoció. No se copian el saludo del dueño, los errores que contestan a sus mensajes
+   ni sus herramientas del cliente (`browser`).
+4. **Sólo el dueño contesta los permisos**, escribe o interrumpe. Cuando contesta un permiso, el observador lo sabe
+   por un `approval_result` del agente con `relayed: true` y la decisión del dueño (`approved` o `denied`). Lo que el
+   observador mande aparte de `heartbeat`, `error` y `close` recibe `error` `read_only` y no llega al motor.
+5. **Nunca frena al motor.** Si un observador no lee y se le acumulan 16 MB, se le corta la conexión. Al terminar la
+   sesión recibe la copia del `close` y se cierra el socket.
+
+```jsonl
+{"pacai":"0.3","id":"o_1","type":"hello","session":"s_obs…","sender":"client","seq":1,"time":"…","payload":{"versions":["0.3"],"profiles":["work"],"extensions":["alfalfa"],"observe":true}}
+{"pacai":"0.3","id":"m_…","type":"session_started","reply_to":"o_1","session":"s_obs…","sender":"agent","seq":2,"time":"…","payload":{"version":"0.3","profiles":["work"],"extensions":["alfalfa"],"observe":true,"agent":{"name":"alfalfa","version":"…"}}}
+{"pacai":"0.3","id":"m_…","type":"snapshot","reply_to":"o_1","session":"s_obs…","sender":"agent","seq":3,"time":"…","payload":{"runs":[{"run_id":"m_a3","status":"active"}],"pending_approvals":[{"…":"…","type":"approval_request","id":"m_a5"}],"last_messages":["…"],"alfalfa":{"session_id":"0123456789abcdef","history_until":1763420000.25}}}
+{"pacai":"0.3","id":"m_b1","type":"approval_result","reply_to":"m_a5","session":"s_obs…","sender":"agent","seq":4,"time":"…","payload":{"decision":"approved","scope":"once","relayed":true}}
+{"pacai":"0.3","id":"m_a6","type":"tool_end","session":"s_obs…","sender":"agent","seq":5,"time":"…","payload":{"tool_call_id":"m_a4","status":"success","…":"…"}}
+```
+
+La **app de Mac** lo usa para las sesiones que trabajan fuera: al abrir una «en curso» se conecta, pinta el historial
+hasta el corte y aplica lo que llega (texto, herramientas, gasto, contexto, plan, subagentes y permisos, éstos sin
+botones: «Lo contesta quien lanzó el encargo»). Sin socket (un motor anterior, `--stdio`, una ruta larga) sigue la
+transcripción en disco. `alfalfa "encargo"` en la terminal y `--stdio` v2 no abren socket: no hablan PACAI.
 
 ### Límites de esta primera versión
 

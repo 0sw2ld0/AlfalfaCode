@@ -115,6 +115,9 @@
               },
               "required": [],
               "additionalProperties": true
+            },
+            "observe": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -166,6 +169,9 @@
             "resume_after_seq": {
               "type": "integer",
               "minimum": 0
+            },
+            "observe": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -681,6 +687,9 @@
                 },
                 "reason": {
                   "type": "string"
+                },
+                "relayed": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -721,6 +730,18 @@
             "properties": {
               "sender": {
                 "const": "agent"
+              },
+              "payload": {
+                "not": {
+                  "properties": {
+                    "relayed": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "relayed"
+                  ]
+                }
               }
             }
           },

@@ -50,7 +50,13 @@ struct PermissionCard: View {
             if let running = session.timeline.runningPermission, running.id == request.id {
                 RunningLine(since: running.since)
             }
-            if case .pending = state {
+            if case .pending = state, session.runningElsewhere {
+                // Una sesión de otro proceso que se mira en vivo: sólo contesta quien la lanzó.
+                Label("Lo contesta quien lanzó el encargo", systemImage: "person.badge.clock")
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    .help("Este encargo se lanzó fuera de la app (la terminal, Claude Code…). Lo ves en vivo, pero "
+                          + "los permisos los contesta quien lo lanzó.")
+            } else if case .pending = state {
                 if request.site != nil {
                     BrowserSitePermissionButtons(request: request, session: session)
                 } else {

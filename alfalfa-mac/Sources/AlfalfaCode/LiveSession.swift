@@ -70,8 +70,46 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var resumableWithoutMessage = false
     /// Otro proceso (la terminal, un cliente PACAI…) la tiene en marcha: se mira, pero no se reanuda ni se le escribe.
     @Published var runningElsewhere = false
-    /// Mientras trabaja fuera: su transcripción, para añadir cada paso nuevo según llega.
+    /// Mientras trabaja fuera: su transcripción, para añadir cada paso nuevo según llega. Sólo si no se puede mirar
+    /// en vivo (`watch`).
     var externalLog: SessionLogTail?
+    /// Mientras trabaja fuera y su proceso abre el socket de la sesión (`alfalfa --pacai`): lo que pasa, en vivo, por
+    /// PACAI. Llegan también los permisos pendientes, el uso, el contexto, el plan y los subagentes, que no van a disco.
+    private var observer: PacaiObserver?
+    @Published private(set) var watchingLive = false
+    /// La sesión de fuera dejó de verse en vivo (terminó o se cortó): la app relee su estado.
+    var onWatchEnded: (() -> Void)?
+
+    /// Empieza a mirarla en vivo: lo que está en marcha (la foto) y, desde ahí, cada mensaje según llega.
+    func watch(_ ready: PacaiObserver.Ready) {
+        stopWatching()
+        observer = ready.observer
+        watchingLive = true
+        for message in ready.state { timeline.apply(message) }
+        if ready.running { timeline.watchingRun() }
+        ready.observer.attach({ [weak self] messages in
+            MainActor.assumeIsolated { self?.applyWatched(messages) }
+        }, onClose: { [weak self, weak observer = ready.observer] in
+            MainActor.assumeIsolated {
+                guard let self, self.observer === observer else { return }
+                self.observer = nil
+                self.watchingLive = false
+                self.onWatchEnded?()
+            }
+        })
+    }
+
+    func stopWatching() {
+        observer?.close()
+        observer = nil
+        watchingLive = false
+    }
+
+    private func applyWatched(_ messages: [AlfalfaMessage]) {
+        guard watchingLive else { return }
+        for message in messages { timeline.apply(message) }
+        onChange?()
+    }
 
     func appendExternal(_ events: [AgentEvent]) { timeline.appendSaved(events) }
 
@@ -251,7 +289,8 @@ final class LiveSession: ObservableObject, Identifiable {
 
     /// Sólo se llama desde un botón: la app nunca aprueba por su cuenta.
     func answer(_ id: String, approved: Bool, session: Bool = false, always: Bool = false) {
-        guard !answered.contains(id) else { return }
+        // Los permisos de una sesión de otro proceso los contesta quien la lanzó.
+        guard !answered.contains(id), !runningElsewhere else { return }
         answered.insert(id)
         process?.send(.permission(id: id, approved: approved, session: session, always: always))
     }
