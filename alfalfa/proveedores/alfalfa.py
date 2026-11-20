@@ -304,6 +304,17 @@ def este_equipo():
     return 'este Mac' if sys.platform == 'darwin' else 'este equipo'
 
 
+def sin_conexion(url, exc):
+    host = urlparse(url).hostname or url
+    if isinstance(exc, httpx.TimeoutException):
+        motivo = 'no respondió a tiempo'
+    elif isinstance(exc, httpx.ConnectError) and ('nodename' in str(exc) or 'Name or service' in str(exc)):
+        motivo = 'este equipo no encuentra esa dirección'
+    else:
+        motivo = 'no se pudo abrir la conexión'
+    return f'No se pudo conectar con el servicio Alfalfa ({host}): {motivo}. Revisa tu conexión a internet.'
+
+
 def falta_codigo():
     if sys.platform == 'darwin':
         return 'Falta el código de cortesía: actívalo en Proveedores.'
@@ -451,8 +462,13 @@ class Alfalfa(Proveedor):
         datos = json.dumps(cuerpo, ensure_ascii=False).encode() if cuerpo is not None else b''
         encabezados = cabeceras(codigo, self.firmante.firmar, metodo, ruta, datos)
         encabezados['Content-Type'] = 'application/json'
-        with cliente_de_lista() as cliente:
-            respuesta = cliente.request(metodo, (url or self.url()) + ruta, content=datos, headers=encabezados)
+        destino = url or self.url()
+        try:
+            with cliente_de_lista() as cliente:
+                respuesta = cliente.request(metodo, destino + ruta, content=datos, headers=encabezados)
+        except httpx.TransportError as exc:
+            # Sin red, un nombre que no existe o un servicio caído: un aviso claro, no el traceback de httpx.
+            raise ErrorDeAlfalfa(sin_conexion(destino, exc)) from None
         try:
             valor = respuesta.json()
         except ValueError:
@@ -489,8 +505,18 @@ class Alfalfa(Proveedor):
         if not codigo.startswith('CUY-') or len(codigo) < 10:
             raise ErrorDeAlfalfa('El código de cortesía empieza por CUY-.')
         publica = self.firmante.publica()
-        valor = self._pedir('POST', '/activar', {'codigo': codigo, 'clave_publica': publica, 'equipo': _equipo()},
-                            codigo=codigo, url=servicio)
+        # Si no hay otro proveedor (ni elegido ni con clave, ni Ollama en este Mac), el código pasa a ser el
+        # proveedor por defecto: si no, la primera sesión se iba a Ollama y pedía instalarlo.
+        from .. import primera_vez
+        elegir = primera_vez.sin_proveedor()
+        try:
+            valor = self._pedir('POST', '/activar', {'codigo': codigo, 'clave_publica': publica, 'equipo': _equipo()},
+                                codigo=codigo, url=servicio)
+        except ErrorDeAlfalfa as exc:
+            if servicio and str(exc).startswith('No se pudo conectar'):
+                raise ErrorDeAlfalfa(str(exc) + ' Si pegaste el código, comprueba que esté entero: lo que va tras '
+                                     'la arroba es la dirección del servicio.') from None
+            raise
         if servicio:
             configuracion.cambiar('alfalfa', 'url', servicio)
         extra = {}
@@ -500,8 +526,14 @@ class Alfalfa(Proveedor):
             if sys.platform == 'darwin':
                 raise  # en el Mac es un fallo del Llavero de verdad
             extra['variable'] = 'ALFALFA_CODIGO'
-        return {'nombre': valor.get('nombre'), 'caduca': valor.get('caduca'),
-                'modelos': [m.get('name') for m in valor.get('modelos') or []],
+        modelos = [m.get('name') for m in valor.get('modelos') or [] if isinstance(m, dict) and m.get('name')]
+        if elegir:
+            configuracion.cambiar(None, 'por_defecto', self.id)
+            elegido = self.modelo_por_defecto if self.modelo_por_defecto in modelos or not modelos else modelos[0]
+            if elegido != self.modelo_por_defecto:
+                configuracion.cambiar(self.id, 'modelo', elegido)
+            extra['modelo'] = self.id + '/' + elegido
+        return {'nombre': valor.get('nombre'), 'caduca': valor.get('caduca'), 'modelos': modelos,
                 'cuotas': _cuotas(valor) or [], **extra}
 
     def estado(self):

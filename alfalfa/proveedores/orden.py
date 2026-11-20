@@ -74,6 +74,8 @@ def orden(args, entrada=None):
             hecho = Alfalfa().activar(codigo)
             texto = ('Código activado en ' + este_equipo() + (' para ' + hecho['nombre'] if hecho.get('nombre') else '')
                      + '. Modelos: ' + ', '.join(hecho['modelos']) + '.')
+            if hecho.get('modelo'):
+                texto += '\nEs tu proveedor por defecto: las sesiones nuevas usan ' + hecho['modelo'] + '.'
             if hecho.get('variable'):
                 texto += ('\nAquí no hay Llavero: para usarlo, pon el código (sin lo que va tras la arroba) en la '
                           'variable de entorno ' + hecho['variable'] + ' (docs/USO.md).')

@@ -55,6 +55,8 @@ final class ProtocolTests: XCTestCase {
                                                                          usedPercent: 42.5, renews: "2026-12-01")]))
         let activated = #"{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","modelos":["gpt-6-luna"],"cuotas":[]}"#
         XCTAssertEqual(AlfalfaMessage.decode(line: activated), .activated(name: "Ana", quotas: []))
+        let chosen = #"{"version":2,"tipo":"activado","servicio":"alfalfa","nombre":"Ana","modelos":["gpt-6-luna"],"cuotas":[],"modelo":"alfalfa/gpt-6-luna"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: chosen), .activated(name: "Ana", quotas: [], model: "alfalfa/gpt-6-luna"))
         let sent = #"{"version":2,"tipo":"reporte","enviado":true,"id":7,"soporte":"ayuda@example.com"}"#
         XCTAssertEqual(AlfalfaMessage.decode(line: sent),
                        .reported(ReportResult(sent: true, id: 7, support: "ayuda@example.com")))

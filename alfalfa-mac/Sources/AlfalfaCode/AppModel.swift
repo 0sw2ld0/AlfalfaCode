@@ -322,10 +322,15 @@ final class AppModel: ObservableObject {
                                                           directory: home, input: clean)
             for message in messages {
                 if case let .error(text) = message { providersError = text; return false }
-                if case let .activated(_, quotas) = message {
+                if case let .activated(_, quotas, chosen) = message {
                     alfalfaQuotas = quotas
                     providersError = nil
                     await reload()
+                    // No había otro proveedor: el código queda por defecto y la app empieza con su modelo.
+                    if let chosen {
+                        model = chosen
+                        defaultModel = chosen
+                    }
                     return true
                 }
             }

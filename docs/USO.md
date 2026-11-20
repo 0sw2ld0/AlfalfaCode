@@ -229,7 +229,11 @@ el OAuth de OpenRouter en el navegador:
 
 El código de cortesía queda atado a este Mac: `--activar-codigo` crea una clave en
 el Secure Enclave (`alfalfa/proveedores/firmante.swift`, compilado con `swiftc` la
-primera vez) y cada petición al servicio va firmada con ella.
+primera vez) y cada petición al servicio va firmada con ella. Si no hay ningún otro
+proveedor (ni elegido, ni con clave, ni Ollama en este Mac), el código pasa a ser el
+proveedor por defecto y la respuesta trae `"modelo"`, el de las sesiones nuevas. Sin
+conexión con el servicio, el error lo dice en una línea («No se pudo conectar con el
+servicio Alfalfa (…)») y no se guarda nada.
 
 Fuera de macOS (un servidor Linux) no hay Secure Enclave ni Llavero. `--activar-codigo`
 crea una clave P-256 en `~/.alfalfa/firma/clave.pem` (carpeta 0700, archivo 0600) y firma

@@ -731,8 +731,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case cuyBrowserPreparation(CuyBrowserPreparation)
     /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
     case quota([Quota])
-    /// `--activar-codigo`: el código quedó atado a este Mac.
-    case activated(name: String?, quotas: [Quota])
+    /// `--activar-codigo`: el código quedó atado a este Mac. `model`, si pasó a ser el proveedor por
+    /// defecto porque no había otro: el modelo con el que empiezan las sesiones nuevas.
+    case activated(name: String?, quotas: [Quota], model: String? = nil)
     /// `--primera-vez --json`.
     case firstRun(FirstRun)
     /// `--conectar`: la URL de autorización que se abrió en el navegador (por si no se abrió).
@@ -894,7 +895,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
             guard let rows = object["cuotas"] as? [[String: Any]] else { return nil }
             return .quota(quotas(rows))
         case "activado":
-            return .activated(name: text(object["nombre"]), quotas: quotas(object["cuotas"] as? [[String: Any]] ?? []))
+            return .activated(name: text(object["nombre"]), quotas: quotas(object["cuotas"] as? [[String: Any]] ?? []),
+                              model: text(object["modelo"]))
         case "primera_vez":
             let rows = object["proveedores"] as? [[String: Any]] ?? []
             return .firstRun(FirstRun(

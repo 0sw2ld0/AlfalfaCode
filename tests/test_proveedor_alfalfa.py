@@ -362,3 +362,68 @@ def test_las_cuotas_traen_el_tope_de_hoy_y_el_nombre_del_servicio():
                         'renueva': '2026-12-01', 'dia': {'usado_pct': 90.0, 'renueva': '2026-11-09T00:00:00+00:00'}}
     # Un servicio viejo no manda `dia` ni `nombre`: queda como antes.
     assert filas[1] == {'proveedor': 'openai', 'nombre': 'GPT-6 Luna', 'usado_pct': 1.0, 'renueva': '2026-12-01'}
+
+
+def test_sin_otro_proveedor_el_codigo_queda_por_defecto(servicio, monkeypatch):
+    from alfalfa import primera_vez
+    monkeypatch.setattr(primera_vez, 'sin_proveedor', lambda get=None: True)
+    hecho = proveedores.obtener('alfalfa').activar(CODIGO)
+    assert hecho['modelo'] == 'alfalfa/gpt-6-luna'
+    assert configuracion.por_defecto() == 'alfalfa'
+    from alfalfa.terminal import modelo_por_defecto
+    assert modelo_por_defecto() == 'alfalfa/gpt-6-luna'
+
+
+def test_sin_el_modelo_de_siempre_elige_el_primero_del_codigo(servicio, monkeypatch):
+    from alfalfa import primera_vez
+    monkeypatch.setattr(primera_vez, 'sin_proveedor', lambda get=None: True)
+    monkeypatch.setattr(alfalfa.Alfalfa, 'modelo_por_defecto', 'modelo-que-no-trae')
+    hecho = proveedores.obtener('alfalfa').activar(CODIGO)
+    assert hecho['modelo'] == 'alfalfa/gpt-6-luna'
+    assert configuracion.de('alfalfa')['modelo'] == 'gpt-6-luna'
+
+
+def test_con_otro_proveedor_no_cambia_el_de_por_defecto(servicio, monkeypatch):
+    from alfalfa import primera_vez
+    monkeypatch.setattr(primera_vez, 'sin_proveedor', lambda get=None: False)
+    hecho = proveedores.obtener('alfalfa').activar(CODIGO)
+    assert 'modelo' not in hecho
+    assert 'por_defecto' not in configuracion.leer()
+
+
+@pytest.mark.parametrize('fallo, motivo', [
+    (httpx.ConnectError('[Errno 8] nodename nor servname provided, or not known'), 'no encuentra esa dirección'),
+    (httpx.ConnectTimeout('timed out'), 'no respondió a tiempo'),
+    (httpx.ConnectError('Connection refused'), 'no se pudo abrir la conexión'),
+])
+def test_sin_conexion_da_un_aviso_claro_y_no_guarda_nada(servicio, monkeypatch, fallo, motivo):
+    def falla(request):
+        raise fallo
+    configuracion.cambiar('alfalfa', 'url', None)
+    monkeypatch.setattr(alfalfa, 'cliente_de_lista', lambda: httpx.Client(transport=httpx.MockTransport(falla)))
+    with pytest.raises(alfalfa.ErrorDeAlfalfa) as error:
+        proveedores.obtener('alfalfa').activar(CODIGO + '@alfalfa.example.com:8444')
+    texto = str(error.value)
+    assert 'alfalfa.example.com' in texto and motivo in texto and 'tras la arroba' in texto
+    assert not llavero.leer('alfalfa') and not configuracion.de('alfalfa').get('url')
+    assert 'por_defecto' not in configuracion.leer()
+
+
+def test_la_orden_sin_conexion_no_suelta_el_traceback(servicio, monkeypatch, capsys):
+    from alfalfa.terminal import main
+    def falla(request):
+        raise httpx.ConnectError('[Errno 8] nodename nor servname provided, or not known')
+    monkeypatch.setattr(alfalfa, 'cliente_de_lista', lambda: httpx.Client(transport=httpx.MockTransport(falla)))
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(CODIGO + '\n'))
+    assert main(['--activar-codigo']) == 1
+    salida = capsys.readouterr()
+    assert 'No se pudo conectar con el servicio Alfalfa' in salida.err and 'Traceback' not in salida.err
+
+
+def test_la_orden_dice_que_queda_por_defecto(servicio, monkeypatch, capsys):
+    from alfalfa import primera_vez
+    from alfalfa.terminal import main
+    monkeypatch.setattr(primera_vez, 'sin_proveedor', lambda get=None: True)
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(CODIGO + '\n'))
+    assert main(['--activar-codigo']) == 0
+    assert 'Es tu proveedor por defecto' in capsys.readouterr().out
