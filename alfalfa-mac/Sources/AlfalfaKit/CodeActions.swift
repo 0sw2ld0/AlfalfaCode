@@ -81,6 +81,32 @@ public enum Attachments {
         return url
     }
 
+    /// Un texto pegado así de largo va como adjunto «Texto pegado ….txt», no dentro del cuadro:
+    /// el `TextField` de SwiftUI vuelve a medir todo su texto en cada cambio y con un registro de
+    /// 50 KB la app se queda congelada segundos (con 180 KB, casi un minuto).
+    public static let longPasteCharacters = 3_000
+    public static let longPasteLines = 40
+
+    public static func isLongPaste(_ text: String) -> Bool {
+        if text.utf16.count >= longPasteCharacters { return true }
+        var lines = 1
+        for byte in text.utf8 where byte == 10 {
+            lines += 1
+            if lines >= longPasteLines { return true }
+        }
+        return false
+    }
+
+    /// Guarda un texto pegado como `Texto pegado <id>.txt`; el motor lo lee como cualquier
+    /// archivo de texto adjunto (dentro del mensaje, como datos y con los secretos tapados).
+    public static func store(text: String, in directory: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        let url = directory.appendingPathComponent("Texto pegado \(UUID().uuidString.prefix(6)).txt")
+        try Data(text.utf8).write(to: url, options: .atomic)
+        return url
+    }
+
     /// `$ALFALFA_HOME/adjuntos`, o `~/.alfalfa/adjuntos`.
     public static func directory(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
         let home = environment["ALFALFA_HOME"].map { URL(fileURLWithPath: $0) }

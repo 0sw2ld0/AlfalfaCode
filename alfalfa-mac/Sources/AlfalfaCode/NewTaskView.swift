@@ -288,6 +288,7 @@ struct ReadOnlyToggleStyle: ToggleStyle {
 /// El cuadro de Nuevo encargo. Observa sólo el texto (`DraftText`): escribir no redibuja el resto.
 private struct NewTaskTextField: View {
     @ObservedObject var draft: DraftText
+    @EnvironmentObject private var model: AppModel
     var focused: FocusState<Bool>.Binding
     let onSubmit: () -> Void
     let onChange: (String, String) -> Void
@@ -295,6 +296,9 @@ private struct NewTaskTextField: View {
     var body: some View {
         TextField("Describe una tarea o haz una pregunta", text: $draft.text, axis: .vertical)
             .textFieldStyle(.plain).lineLimit(1...5).focused(focused)
+            // Con el foco aquí, ⌘V con un texto largo lo adjunta (AppModel) en vez de meterlo en el cuadro.
+            .onChange(of: focused.wrappedValue) { _, now in model.composerFocused = now }
+            .onDisappear { if focused.wrappedValue { model.composerFocused = false } }
             .accessibilityLabel("Encargo")
             .onChange(of: draft.text) { old, new in onChange(old, new) }
             .onSubmit(onSubmit)

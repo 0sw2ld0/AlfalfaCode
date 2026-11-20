@@ -119,6 +119,8 @@ final class AppModel: ObservableObject {
     /// «Este modelo no ve imágenes» en el cuadro del encargo nuevo.
     let newImageNotice = ImageNotice()
     private var pasteMonitor: Any?
+    /// El cuadro de la sesión o el de Nuevo encargo tiene el foco: un texto largo pegado ahí se adjunta.
+    var composerFocused = false
 
     let launcher: URL?
     let home = FileManager.default.homeDirectoryForCurrentUser
@@ -130,12 +132,17 @@ final class AppModel: ObservableObject {
         applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
         // ⌘V con una imagen (o un archivo copiado en Finder) la adjunta al compositor visible, como en Codex.
+        // Un texto largo, también, pero sólo con el foco en el cuadro: en Ajustes u otros campos se pega.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-                  event.charactersIgnoringModifiers == "v", let self,
-                  let url = ImagePicker.pastedImage() else { return event }
-            MainActor.assumeIsolated { self.attachPasted(url) }
-            return nil
+                  event.charactersIgnoringModifiers == "v", let self else { return event }
+            let attached = MainActor.assumeIsolated { () -> Bool in
+                guard let url = ImagePicker.pastedImage()
+                        ?? (self.composerFocused ? ImagePicker.pastedLongText() : nil) else { return false }
+                self.attachPasted(url)
+                return true
+            }
+            return attached ? nil : event
         }
     }
 

@@ -70,6 +70,7 @@ struct Composer: View {
     @State private var askingAboutImages = false
     /// Lo que trae la carpeta de OpenCode, Codex y Claude Code: sus órdenes «/» salen en el menú.
     @State private var imported: ImportedConfig?
+    @FocusState private var focused: Bool
 
     /// Con un modelo que se sabe que no ve imágenes no se adjuntan; si no se sabe, sí.
     private var allowsImages: Bool { app.allowsImages(session.model) }
@@ -100,6 +101,10 @@ struct Composer: View {
     private var field: some View {
         TextField(suggestion ?? "Añade una indicación", text: $text, axis: .vertical)
             .textFieldStyle(.plain).lineLimit(1...8).font(Theme.body)
+            .focused($focused)
+            // Con el foco aquí, ⌘V con un texto largo lo adjunta (AppModel) en vez de meterlo en el cuadro.
+            .onChange(of: focused) { _, now in app.composerFocused = now }
+            .onDisappear { if focused { app.composerFocused = false } }
             .accessibilityLabel("Indicación para el agente")
             .accessibilityHint(suggestion.map { "Sugerencia: \($0). Tab la escribe en el cuadro." } ?? "")
             // Escribir encima (o aceptarla) la retira hasta el siguiente cierre.
