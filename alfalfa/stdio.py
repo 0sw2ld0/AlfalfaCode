@@ -988,14 +988,16 @@ async def run(args, transport):
                 manager.task.update(status='interrupted', summary='Sesión interrumpida; puedes reanudarla.')
                 break
             estado = manager.task.get('status', 'failed')
+            codigo_turno = code
             if transport.turno_cortado:
-                # Sólo se cortó el turno («Enviar ahora»): la sesión sigue lista para el siguiente.
+                # El turno se cortó, pero la sesión puede seguir o cerrarse normalmente.
                 manager.task.update(status='interrupted', summary='Turno interrumpido por el usuario.')
-                estado, code = 'cortado', 1
+                estado, codigo_turno = 'cortado', 1
+                code = 0
                 manager.save()
             ultimo = (manager.task.get('turnos') or [{}])[-1]
             transport.emit('turno_terminado', estado=estado,
-                           resumen=manager.task.get('summary', ''), codigo_salida=code,
+                           resumen=manager.task.get('summary', ''), codigo_salida=codigo_turno,
                            tokens=manager.task.get('total_tokens', 0),
                            **({'turno': ultimo['id']} if ultimo.get('id') else {}),
                            **gasto(manager.task, ultimo),

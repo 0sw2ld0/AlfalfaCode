@@ -264,6 +264,29 @@ def test_negar_el_permiso_no_ejecuta_la_orden(proceso, tmp_path):
     assert problemas(p.log) == []
 
 
+def test_cerrar_despues_de_interrumpir_una_aprobacion_sale_sin_error(proceso):
+    p = proceso()
+    p.saludar()
+    p.entrada('Prueba una orden')
+    run = p.tipo('run_started')
+    peticion = p.tipo('approval_request')
+    p.enviar('interrupt', {'run_id': run['id']})
+    cancelada = p.tipo('approval_result')
+    assert cancelada['reply_to'] == peticion['id'] and cancelada['payload']['decision'] == 'cancelled'
+    herramienta = p.tipo('tool_end')['payload']
+    assert herramienta['tool_call_id'] == peticion['payload']['tool_call_id']
+    assert herramienta['status'] == 'cancelled'
+    assert p.tipo('run_finished')['payload']['outcome'] == 'interrupted'
+    cierre_turno = p.del_agente('alfalfa.closing')[-1]['payload']
+    assert cierre_turno['status'] == 'cut' and cierre_turno['exit_code'] == 1
+    p.enviar('close')
+    p.terminar()
+    assert p.proc.returncode == 0
+    assert p.del_agente('error') == []
+    assert p.del_agente('close')[-1]['payload']['alfalfa']['exit_code'] == 0
+    assert problemas(p.log) == []
+
+
 def test_cerrar_la_entrada_con_un_permiso_pendiente_lo_niega_y_nada_se_ejecuta(proceso):
     p = proceso()
     p.saludar()
