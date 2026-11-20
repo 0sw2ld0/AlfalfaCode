@@ -81,6 +81,24 @@ Todo lo dicho, paso a paso, está en la [primera vez, sin claves](docs/guia/prim
 Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
 (por defecto `~/.alfalfa`).
 
+## Generar imágenes con OpenAI
+
+Configura tu clave de OpenAI en Ajustes, con `alfalfa --guardar-clave openai`
+en macOS o mediante `OPENAI_API_KEY`. No pegues la clave en el chat. El modelo
+que usa el agente para conversar puede ser de otro proveedor.
+
+Ejemplo: «Genera una acuarela de un zorro en la nieve y guárdala como `zorro.png`».
+El agente principal usa `generate_image` con `gpt-image-1.5`: puedes elegir tamaño
+cuadrado, vertical u horizontal y calidad baja, media o alta. Guarda un PNG por
+llamada, en una carpeta existente y sin sobrescribir archivos.
+
+Antes de enviar el prompt, AlfalfaCode pide aprobación y muestra el precio estimado
+(por ejemplo, USD 0.034 para 1024 × 1024 en calidad media, más el texto de entrada).
+Después devuelve la ruta, dimensiones, tamaño, uso disponible y costo estimado.
+El importe no es un cargo confirmado: consulta la [tarifa de OpenAI](https://platform.openai.com/docs/pricing)
+y tu facturación. No está disponible en Plan, solo lectura, revisión, subagentes
+ni proyectos con reglas de equipo (todavía no se integra en su presupuesto).
+
 ## Proveedores
 
 El modelo dice con quién se habla:

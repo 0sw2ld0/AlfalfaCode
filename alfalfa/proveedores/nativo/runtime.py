@@ -2161,7 +2161,7 @@ class NativeRuntime:
         # pasaba el día parado.
         # Tras leer contenido externo, una orden que safe_command da por inofensiva
         # (git status, pwd, --version…) tampoco necesita el sí extra: no cambia nada.
-        if self.task.get('permission_mode') == 'auto' and (
+        if args.get('motivo') != 'generar_imagen' and self.task.get('permission_mode') == 'auto' and (
                 args.get('motivo') != 'contenido_externo' or args.get('herramienta') in ('run_command', 'run_checks')):
             from ...permisos.ordenes import python_en_linea_seguro, rutas_citadas, safe_command
             orden = shlex.join(str(a) for a in args.get('argv') or [])
@@ -3011,9 +3011,11 @@ class NativeRuntime:
                 except ValueError:
                     await self.compact(client,model,session_deadline=session_deadline)
                     context = self.context()
+                from .imagenes import restringida as imagen_restringida
                 allowed_tools = ([] if self.task.get('conversation_only') else
                                  [t for t in self.tool_specs if t['function']['name'] not in self.excluded_tools
                                   and (t['function']['name'] != 'inspect_image' or self._puede_ver())
+                                  and (t['function']['name'] != 'generate_image' or not imagen_restringida(self))
                                   and (not self.task.get('review') or
                                   t['function']['name'] not in ('write_file','edit_file','run_command','run_checks',
                                                                 'apply_patch'))])

@@ -83,7 +83,8 @@ class AprobacionConModo:
     async def __call__(self, args):
         # Omitir permisos es una elección expresa del usuario: tampoco pregunta tras leer
         # contenido externo, pero lo deja dicho en la conversación con su origen.
-        if modo_de(self.manager.task) == OMITIR and not args.get('_equipo'):
+        if (modo_de(self.manager.task) == OMITIR and not args.get('_equipo')
+                and args.get('motivo') != 'generar_imagen'):
             import shlex
 
             from ..auditoria_equipo import marcar_respuesta

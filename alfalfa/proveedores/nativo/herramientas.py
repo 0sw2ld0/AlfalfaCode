@@ -23,6 +23,7 @@ from ...evidencia.operaciones import classify_operation, is_forbidden_merge_head
 from ...permisos.rutas import PRIVADOS_DEL_ESPACIO, privado_del_espacio
 from ...procesos import esperar_salida, leer_con_gracia, registro_de_grupo
 from ...reintentos.politica import expensive_operation_identity, expensive_operation_needs_cause, retry_guard_key
+from . import imagenes
 
 MAX_FILE = 1024 * 1024
 MAX_LECTURA = 16000  # caracteres de texto que devuelve read_file de una vez
@@ -380,6 +381,13 @@ TOOLS = [
                             'read image bytes as text.',
            {'path': STRING, 'question': STRING}, ['path', 'question'],
            example=TOOL_ARGUMENT_EXAMPLES['inspect_image']),
+    schema('generate_image', 'Generate one PNG with OpenAI only when the user asks for an image. Shows the estimated '
+           'USD price and requests approval before sending the prompt. Returns path, dimensions, usage and estimated '
+           'cost, not a confirmed charge. Show the saved image using Markdown. Do not retry ambiguous failures.',
+           {'prompt': STRING, 'path': {**STRING, 'description': 'New relative PNG path in an existing directory.'},
+            'size': {**STRING, 'enum': list(imagenes.PRECIOS)},
+            'quality': {**STRING, 'enum': list(imagenes.CALIDADES)}}, ['prompt', 'path'],
+           example={'prompt': 'A watercolor red fox in a snowy forest', 'path': 'fox.png', 'quality': 'medium'}),
     schema('update_plan', 'Keep the task list the user sees under your messages, like Codex update_plan. '
            'For work of several steps send the whole list in order with short imperative steps; exactly one '
            'step is in_progress while you work and none when everything is done. Send it again when a step '
@@ -1116,6 +1124,9 @@ class WorkspaceTools:
         # Se trabaja con la versión normalizada; lo que envió el modelo queda intacto.
         catalogo = list(self.runtime.tool_specs) + list(getattr(self.runtime, 'complementos_tools', ()))
         args = self.validate(name, args, catalogo)
+        if name == 'generate_image':
+            # Su tarjeta obligatoria ya cubre el envío tras leer contenido externo.
+            return await imagenes.generar(self, args)
         if self.runtime.task.get('review') and name in ('write_file', 'edit_file', 'run_command', 'run_checks',
                                                         'apply_patch', 'app_action'):
             raise ValueError('Revisión de solo lectura: esta herramienta está deshabilitada.')
