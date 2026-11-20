@@ -94,6 +94,7 @@ struct SidebarView: View {
     @State private var renaming: SidebarRow?
     @State private var newTitle = ""
     @State private var trashing: SidebarRow?
+    @State private var removing: SidebarGroup?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -137,6 +138,7 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.plain)
                         .help(group.folder)
+                        .contextMenu { folderMenu(for: group) }
                         if !collapsed.contains(group.folder) {
                             // Las sesiones hijas (propose_session) van debajo de su padre, con sangría.
                             ForEach(nested(group.rows), id: \.row.id) { item in
@@ -171,6 +173,15 @@ struct SidebarView: View {
             Button("Cancelar", role: .cancel) { trashing = nil }
         } message: { row in
             Text("«\(row.title)» desaparece de AlfalfaCode. Puedes recuperarla desde la Papelera mientras no la vacíes.")
+        }
+        .alert("¿Quitar la carpeta de la lista?", isPresented: Binding(get: { removing != nil },
+                                                                       set: { if !$0 { removing = nil } }),
+               presenting: removing) { group in
+            Button("Quitar de la lista") { model.removeFromList(group); removing = nil }
+            Button("Cancelar", role: .cancel) { removing = nil }
+        } message: { group in
+            Text(FolderMenu.removalMessage(name: group.name, sessions: group.rows.filter { !$0.running && !$0.archived }.count,
+                                           running: group.rows.filter(\.running).count))
         }
         .alert("No se pudo cambiar la sesión", isPresented: Binding(get: { model.sessionError != nil },
                                                                      set: { if !$0 { model.sessionError = nil } })) {
@@ -214,6 +225,29 @@ struct SidebarView: View {
                 .disabled(row.running)
         } else {
             Text("La sesión todavía está empezando")
+        }
+    }
+
+    /// Clic derecho en el título de una carpeta: lo que se hace con el proyecto entero.
+    @ViewBuilder private func folderMenu(for group: SidebarGroup) -> some View {
+        if FolderMenu.applies(to: group) {
+            let url = URL(fileURLWithPath: group.folder, isDirectory: true)
+            let exists = FileManager.default.fileExists(atPath: group.folder)
+            Button { model.newChat(in: url) } label: { Label("Nuevo encargo aquí", systemImage: "plus") }
+                .disabled(!exists)
+            Divider()
+            Menu {
+                Button("Nombre") { model.copy(group.name) }
+                Button("Ruta") { model.copy(group.folder) }
+            } label: { Label("Copiar", systemImage: "doc.on.doc") }
+            Button { NSWorkspace.shared.open(url) } label: { Label("Mostrar en Finder", systemImage: "folder") }
+                .disabled(!exists)
+            Button { model.importReview = ImportReviewRequest(folder: url) } label: {
+                Label("Revisar lo importado…", systemImage: "puzzlepiece.extension")
+            }
+            .disabled(!exists)
+            Divider()
+            Button { removing = group } label: { Label("Quitar de la lista…", systemImage: "archivebox") }
         }
     }
 

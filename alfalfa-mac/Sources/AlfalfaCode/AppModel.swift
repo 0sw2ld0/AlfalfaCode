@@ -470,6 +470,20 @@ final class AppModel: ObservableObject {
         Task { await refreshNewPanel() }
     }
 
+    /// «Quitar de la lista» (clic derecho en una carpeta de la barra lateral): archiva sus sesiones
+    /// (se recuperan con «Mostrar archivadas») y la quita de las recientes. Las que trabajan, las
+    /// fijadas y la carpeta en sí no se tocan.
+    func removeFromList(_ group: SidebarGroup) {
+        let ids = group.rows.filter { !$0.running && !$0.archived }.compactMap(\.sessionID)
+        recents.removeAll { $0 == group.folder }
+        UserDefaults.standard.set(recents, forKey: Self.recentsKey)
+        guard !ids.isEmpty else { return }
+        if case let .past(id) = route, ids.contains(id) { route = .new }
+        Task {
+            for id in ids { await manage(["--marcar", id, "archivada", "sí"]) }
+        }
+    }
+
     func refreshNewPanel() async {
         guard let folder else { newSnapshot = nil; return }
         async let git = Workspace.snapshot(of: URL(fileURLWithPath: folder))
@@ -795,4 +809,8 @@ extension AppModel {
         }
         return true
     }
+}
+
+extension FolderMenu {
+    static func applies(to group: SidebarGroup) -> Bool { applies(folder: group.folder, title: group.title) }
 }
