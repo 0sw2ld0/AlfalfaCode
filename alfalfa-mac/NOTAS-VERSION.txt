@@ -1,1 +1,2 @@
-Al interrumpir un turno de PACAI con una aprobación pendiente, AlfalfaCode cancela la aprobación y permite cerrar la sesión sin mostrar un error de motor.
+PACAI entrega las respuestas completas aunque el cliente anuncie un límite pequeño por mensaje y envía los mensajes de cierre dentro de ese límite.
+Después de un fallo recuperable en un turno de PACAI, puedes continuar la sesión o cerrarla normalmente. El resultado del turno sigue indicando el fallo.
