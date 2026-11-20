@@ -1,5 +1,4 @@
-Lo que AlfalfaCode encuentra en Codex, OpenCode o Claude Code sin autorizar (servidores MCP, agentes y órdenes «/») se autoriza ahora desde el propio aviso de la sesión: «Revisar y autorizar…» abre una lista con una casilla por cada uno.
-Atajo nuevo en la barra lateral («5 MCP sin autorizar», mientras la carpeta tenga algo pendiente) y en Archivo ▸ Revisar lo importado sin autorizar… (⇧⌘I).
-Después de autorizar, la app te ofrece empezar una sesión nueva en la misma carpeta, porque la sesión que ya estaba abierta no carga lo recién autorizado.
-El aviso de lo importado ya no sale repetido en la conversación.
-Por lo demás, la app y el motor funcionan igual que en la 0.99.26.
+El agente puede generar imágenes con OpenAI (gpt-image-1.5) usando tu clave de OpenAI: pide tu aprobación y enseña el precio estimado antes de cada imagen. Lo hizo AlfalfaCode.
+Pegar un texto largo en el cuadro (un log, un registro…) ya no congela la app: se adjunta como «Texto pegado ….txt».
+Primera versión que se publica a la vez para Mac con Apple Silicon y con Intel: cada app se actualiza con la de su procesador.
+Por lo demás, la app y el motor funcionan igual que en la 0.99.27.
