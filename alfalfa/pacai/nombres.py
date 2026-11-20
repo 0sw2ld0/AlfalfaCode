@@ -122,7 +122,7 @@ _MODOS = {'auto': 'auto', 'manual': 'manual', 'ediciones': 'accept_edits', 'plan
 _MOTIVOS = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outside_sandbox',
             'reintento': 'sandbox_retry', 'regla': 'rule', 'modo': 'mode', 'edicion': 'edit',
             'navegador': 'browser', 'contenido_externo': 'external_content', 'aprendizaje': 'learning',
-            'app': 'app', 'mcp': 'mcp', 'diagnosticos_swift': 'swift_diagnostics',
+            'generar_imagen': 'image_generation', 'app': 'app', 'mcp': 'mcp', 'diagnosticos_swift': 'swift_diagnostics',
             'sin_vision': 'no_vision', 'desconocido': 'unknown', 'entregado': 'delivered',
             'continuacion': 'continuation', 'detenida': 'stopped', 'ajeno': 'not_by_agent',
             'editado_despues': 'edited_later', 'umbral': 'threshold', 'auto': 'auto', 'manual': 'manual',

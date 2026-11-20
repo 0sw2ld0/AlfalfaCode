@@ -389,7 +389,7 @@ tipos de subagente como `explorador`, ids) no se traducen. Los más usados:
 |---|---|
 | `status` | subagentes: `working`, `completed`, `failed`, `closed`, `interrupted`; cola de encargos: `ready`, `running`, `pausing`, `paused`, `completed`, `cancelled` (cada encargo: `pending`, `running`, `cancelled`, `interrupted`…; su `cleanup`: `removed`, `kept`, `branch_kept`); revisión de código: `available`, `reviewing`, `completed`, `failed`, `no_budget`…; compactación: `in_progress`, `done`, `failed` |
 | `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
-| `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
+| `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `image_generation`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
 | `warning`, `exhausted` | `session`, `month` |
 | `prefix_scope` | lo que concede «No volver a preguntar» (`prefix`) en un `approval_request`: `outside_sandbox`, `network`, `sandbox` |
 | `kind`, `store`, `scope`, `origin`, `action`, `step`, `phase` | `memory`/`skill`; `user`/`project`/`environment`; `folder`, `all`…; `agent`, `external`…; `create`, `restore`…; `undo`/`redo`; `start`/`end` |
