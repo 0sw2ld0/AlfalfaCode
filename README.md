@@ -1,5 +1,7 @@
 # AlfalfaCode
 
+Español · [English](README.en.md)
+
 Arnés de agentes de programación para modelos de Ollama (local o Ollama Cloud), de
 OpenAI, de Anthropic (Claude), OpenRouter, OpenCode Zen u otro proveedor compatible
 con OpenAI con tu propia clave, o de un servicio Alfalfa. Recibe un encargo, trabaja
