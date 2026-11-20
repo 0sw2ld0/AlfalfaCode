@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 from .jcs import digest
 from .nombres import TIPOS, en_ingles, peticion_del_navegador, razon
-from .sobre import Emisor, ahora, en_segundos
+from .sobre import MAX_BYTES, Emisor, ahora, bytes_de_linea, codificar, en_segundos, prefijo_que_cabe
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
@@ -27,7 +27,7 @@ __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR'
 CADUCIDAD_APROBACION: float | None = None
 # La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
 NAVEGADOR = 'browser'
-TROZO = 4000                  # caracteres de texto por `message_delta`
+TROZO = 4000                  # máximo de caracteres antes de ajustar al límite de bytes
 MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)
 RECORTADO = '… [recortado]'
 # Cómo se tacha un secreto en los argumentos de una herramienta del agente (§4.4): siempre igual, para que el digest
@@ -211,8 +211,9 @@ def _fallo(datos: dict) -> bool:
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
                  caducidad: float | None = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
-                 max_argumentos: int = MAX_ARGUMENTOS):
+                 max_argumentos: int = MAX_ARGUMENTOS, max_bytes: int = MAX_BYTES):
         self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
+        self.max_bytes = max_bytes
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
         self.herramientas_cliente = set(herramientas_cliente)
         self.caducidad = caducidad
@@ -413,9 +414,17 @@ class Traductor:
         inicio = self._msg('message_start', {'run_id': run_id, 'role': rol,
                                              **self._alfalfa({k: v for k, v in (extra or {}).items() if v})})
         salida = [inicio]
-        for n in range(0, len(texto), TROZO):
-            salida.append(self._msg('message_delta', {'message_id': inicio['id'],
-                                                      'blocks': [{'type': 'text', 'text': texto[n:n + TROZO]}]}))
+        n = 0
+        while n < len(texto):
+            bloque = {'type': 'text', 'text': ''}
+            delta = self._msg('message_delta', {'message_id': inicio['id'], 'blocks': [bloque]})
+            espacio = self.max_bytes - bytes_de_linea(codificar(delta))
+            bloque['text'] = prefijo_que_cabe(texto[n:n + TROZO], espacio)
+            if not bloque['text']:
+                # El sobre deja menos de un carácter. El transporte notificará lo que no cabe.
+                bloque['text'] = texto[n:]
+            n += len(bloque['text'])
+            salida.append(delta)
         salida.append(self._msg('message_end', {'message_id': inicio['id']}))
         return salida
 

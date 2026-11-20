@@ -923,6 +923,25 @@ async def test_ningun_mensaje_supera_max_message_bytes():
     c.comprobar()
 
 
+async def test_un_detalle_de_fallo_grande_no_reemplaza_el_cierre_de_la_ejecucion():
+    c = Cliente()
+    c.saludar(limits={'max_message_bytes': 1024})
+    c.entrada()
+    c.t.turno_empieza(await c.t.next_message())
+    inicio = c.drenar()[0]
+    detalle = ('🌱"\\' + chr(9)) * 330  # UTF-8 y caracteres que JSON escapa
+    c.t.emit('turno_terminado', estado='failed', resumen=detalle, codigo_salida=1)
+    await asyncio.shield(c.t._cerrando)
+    cierre, fin = c.drenar()[-2:]
+    assert cierre['type'] == 'alfalfa.closing' and cierre['payload']['exit_code'] == 1
+    assert fin['type'] == 'run_finished'
+    assert fin['payload']['run_id'] == inicio['id'] and fin['payload']['outcome'] == 'failed'
+    assert fin['payload']['detail'] and detalle.startswith(fin['payload']['detail'])
+    assert all(len(linea.encode('utf-8')) <= 1024 for linea in c.salida.getvalue().splitlines(keepends=True))
+    await cerrar(c)
+    c.comprobar()
+
+
 async def test_stdout_lleva_solo_mensajes_pacai_y_con_seq_correlativa():
     c = Cliente()
     await abrir(c)

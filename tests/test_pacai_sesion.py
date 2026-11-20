@@ -15,10 +15,11 @@ from tests.pacai_comun import SESION, problemas
 
 # Inferencia sustituida: pide una orden que necesita permiso (modo `tool`) o lanza un subagente (`sub`) y luego
 # contesta con el último mensaje.
+TEXTO_LARGO = '🌱' * 4000
 MODELO = '''
 import json, sys
 from unittest.mock import patch
-from alfalfa.terminal import main
+from alfalfa.terminal import TerminalManager, main
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 async def inference(self, client, endpoint, payload, **kwargs):
     if endpoint == '/api/show':
@@ -48,9 +49,15 @@ async def inference(self, client, endpoint, payload, **kwargs):
             elif 'dos' in mensajes[ultimo]['content']:
                 calls = [dict(function=dict(name='browser_read', arguments=dict(mode='text')))]
     last = payload['messages'][-1]
-    return dict(message=dict(role='assistant', content='' if calls else 'Hecho: ' + last['content'][:60],
+    texto = '🌱' * 4000 if sys.argv[1] == 'texto_largo' else 'Hecho: ' + last['content'][:60]
+    return dict(message=dict(role='assistant', content='' if calls else texto,
                              tool_calls=calls), done=True, done_reason='stop', prompt_eval_count=1, eval_count=1)
-with patch.object(NativeRuntime, 'request', inference):
+run_original = TerminalManager.run
+async def run(self, prompt, **kwargs):
+    if sys.argv[1] == 'fallo' and prompt == 'Este turno falla':
+        raise RuntimeError('Fallo simulado del turno')
+    return await run_original(self, prompt, **kwargs)
+with patch.object(NativeRuntime, 'request', inference), patch.object(TerminalManager, 'run', run):
     sys.exit(main(['--pacai'] + (['--navegador'] if sys.argv[1] == 'completa' else [])))
 '''
 
@@ -62,10 +69,12 @@ class Proceso:
         self.proc = subprocess.Popen([sys.executable, '-c', MODELO, modo], cwd=tmp_path, env=env,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.log, self.seq, self.cola = [], 0, queue.Queue()
+        self.tamanos = []
         threading.Thread(target=self._leer, daemon=True).start()
 
     def _leer(self):
         for linea in self.proc.stdout:
+            self.tamanos.append(len(linea.encode('utf-8')))
             self.cola.put(linea)
         self.cola.put(None)
 
@@ -284,6 +293,46 @@ def test_cerrar_despues_de_interrumpir_una_aprobacion_sale_sin_error(proceso):
     assert p.proc.returncode == 0
     assert p.del_agente('error') == []
     assert p.del_agente('close')[-1]['payload']['alfalfa']['exit_code'] == 0
+    assert problemas(p.log) == []
+
+
+@pytest.mark.parametrize('limite', [1024, 4096])
+def test_texto_completo_y_cierre_con_un_limite_pequeno(proceso, limite):
+    p = proceso('texto_largo')
+    p.saludar(limits={'max_message_bytes': limite})
+    p.entrada('Devuelve el texto largo')
+    asistente = p.hasta(lambda m: m['type'] == 'message_start' and m['payload']['role'] == 'assistant')
+    assert p.tipo('run_finished')['payload']['outcome'] == 'success'
+    p.enviar('close')
+    p.terminar()
+    deltas = [m['payload'] for m in p.del_agente('message_delta') if m['payload']['message_id'] == asistente['id']]
+    assert len(deltas) > 1
+    assert ''.join(b['text'] for d in deltas for b in d['blocks']) == TEXTO_LARGO
+    assert max(p.tamanos) <= limite
+    assert p.del_agente('alfalfa.closing')[-1]['payload']['exit_code'] == 0
+    assert p.del_agente()[-1]['type'] == 'close'
+    assert p.del_agente('close')[-1]['payload']['alfalfa']['exit_code'] == p.proc.returncode == 0
+    assert p.del_agente('error') == []
+    assert problemas(p.log) == []
+
+
+@pytest.mark.parametrize('otro_turno', [False, True])
+def test_un_fallo_recuperable_del_turno_no_es_un_fallo_del_proceso(proceso, otro_turno):
+    p = proceso('fallo')
+    p.saludar()
+    p.entrada('Este turno falla')
+    assert p.tipo('run_finished')['payload']['outcome'] == 'failed'
+    cierre = p.del_agente('alfalfa.closing')[-1]['payload']
+    assert cierre['status'] == 'failed' and cierre['exit_code'] == 1
+    if otro_turno:
+        p.entrada('Este turno continúa')
+        assert p.tipo('run_finished')['payload']['outcome'] == 'success'
+    p.enviar('close')
+    p.terminar()
+    assert p.del_agente()[-1]['type'] == 'close'
+    assert p.del_agente('close')[-1]['payload']['alfalfa']['exit_code'] == p.proc.returncode == 0
+    errores = p.del_agente('error')
+    assert len(errores) == 1 and 'Fallo simulado del turno' in errores[0]['payload']['message']
     assert problemas(p.log) == []
 
 

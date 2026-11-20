@@ -977,24 +977,24 @@ async def run(args, transport):
             sin_eco = getattr(prompt, 'sin_eco', False)
             transport.worker = asyncio.create_task(manager.run(prompt, eco=eco and not sin_eco))
             try:
-                code = await transport.worker
+                codigo_turno = await transport.worker
             except asyncio.CancelledError:
-                code = 130
+                codigo_turno = 130
             except Exception as exc:  # noqa: BLE001 — un fallo del arnés en un turno no cierra la sesión
-                code = _turno_que_revento(manager, transport, exc)
+                codigo_turno = _turno_que_revento(manager, transport, exc)
             eco = True
             if transport.interrupted:
                 code = 130
                 manager.task.update(status='interrupted', summary='Sesión interrumpida; puedes reanudarla.')
                 break
             estado = manager.task.get('status', 'failed')
-            codigo_turno = code
             if transport.turno_cortado:
                 # El turno se cortó, pero la sesión puede seguir o cerrarse normalmente.
                 manager.task.update(status='interrupted', summary='Turno interrumpido por el usuario.')
                 estado, codigo_turno = 'cortado', 1
-                code = 0
                 manager.save()
+            # PACAI publica el resultado del turno en run_finished; el proceso informa el resultado de la sesión.
+            code = 0 if pacai or transport.turno_cortado else codigo_turno
             ultimo = (manager.task.get('turnos') or [{}])[-1]
             transport.emit('turno_terminado', estado=estado,
                            resumen=manager.task.get('summary', ''), codigo_salida=codigo_turno,

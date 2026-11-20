@@ -35,7 +35,7 @@ from .. import __version__
 from ..stdio import CONTINUAR_ENCARGO, MAX_ID_EN_COLA, MAX_MENSAJE, Transport
 from .esquema import validar
 from .nombres import de_la_orden, respuesta_del_navegador
-from .sobre import Emisor, ahora, nueva_sesion
+from .sobre import MAX_BYTES, Emisor, ahora, bytes_de_linea, codificar, nueva_sesion, prefijo_que_cabe
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
 
@@ -44,7 +44,6 @@ __all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS', 'caducidad_
 NOMBRE = 'alfalfa'
 PERFILES = ('work',)
 EXTENSIONES = ('alfalfa',)
-MAX_BYTES = 1024 * 1024
 # Variable de entorno con los segundos que espera una aprobación (por defecto no caduca: `CADUCIDAD_APROBACION`).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
 CADUCIDAD_MAXIMA = 365 * 24 * 3600
@@ -220,10 +219,10 @@ class TransportePacai(Transport):
         if getattr(self, 'salida_rota', False):
             return
         try:
-            linea = json.dumps(m, ensure_ascii=False, separators=(',', ':'), default=str)
-            if len(linea.encode('utf-8')) > self.max_bytes:
+            linea = codificar(m)
+            if bytes_de_linea(linea) > self.max_bytes:
                 m = self._acortar(m)
-                linea = json.dumps(m, ensure_ascii=False, separators=(',', ':'), default=str)
+                linea = codificar(m)
             print(linea, file=self.output, flush=True)
         except (BrokenPipeError, ValueError, OSError):
             self.salida_rota = True
@@ -233,6 +232,10 @@ class TransportePacai(Transport):
 
     def _acortar(self, m: dict) -> dict:
         """Recorta el texto más largo hasta que el mensaje cabe en `max_message_bytes` (§4.8); si ni así, un error."""
+        if m['type'] in ('close', 'run_finished', 'alfalfa.closing'):
+            cierre = self._acortar_cierre(m)
+            if bytes_de_linea(codificar(cierre)) <= self.max_bytes:
+                return cierre
         m = copy.deepcopy(m)              # el original lo guarda el traductor (el digest va con sus argumentos)
         for _ in range(60):
             cadenas: list[tuple[Any, Any]] = []
@@ -248,13 +251,34 @@ class TransportePacai(Transport):
                 break
             contenedor, clave = max(cadenas, key=lambda par: len(par[0][par[1]]))
             contenedor[clave] = contenedor[clave][:len(contenedor[clave]) // 2] + '… [recortado]'
-            if len(json.dumps(m, ensure_ascii=False, separators=(',', ':'), default=str).encode()) <= self.max_bytes:
+            if bytes_de_linea(codificar(m)) <= self.max_bytes:
                 return m
         # No cabe ni recortado: sale un error con su misma `seq` (un hueco en la numeración sería otro error).
         aviso = {k: v for k, v in m.items() if k != 'reply_to'}
         aviso.update(type='error', payload={'code': 'message_too_large',
                                             'message': 'Un mensaje (' + m['type'] + ') superó max_message_bytes.'})
         return aviso
+
+    def _acortar_cierre(self, m: dict) -> dict:
+        """Conserva el resultado y su correlación; el texto ocupa sólo el espacio restante."""
+        original = m['payload']
+        metadatos = ('status', 'exit_code', 'tokens', 'turn', 'cost', 'turn_tokens', 'turn_cost')
+        if m['type'] == 'close':
+            campo = 'reason'
+            extra = original.get('alfalfa', {})
+            payload = {'alfalfa': {k: extra[k] for k in metadatos if k in extra}} if extra else {}
+        elif m['type'] == 'run_finished':
+            campo = 'detail'
+            payload = {k: original[k] for k in ('run_id', 'outcome')}
+        else:
+            campo = 'summary'
+            payload = {k: original[k] for k in ('run_id', *metadatos) if k in original}
+        corto = dict(m, payload=payload)
+        if campo in original:
+            payload[campo] = ''
+            espacio = self.max_bytes - bytes_de_linea(codificar(corto))
+            payload[campo] = prefijo_que_cabe(original[campo], espacio)
+        return corto
 
     # -- permisos y su caducidad (§4.5) ------------------------------------
     def _diferir_permiso(self, campos: dict) -> None:
@@ -459,7 +483,8 @@ class TransportePacai(Transport):
         max_argumentos = max(1024, self.max_bytes // 4)
         herramientas = [h['name'] for h in p.get('client_tools', []) if isinstance(h, dict) and h.get('name')]
         self.t = Traductor(self.emisor, perfiles=perfiles, extensiones=extensiones, herramientas_cliente=herramientas,
-                           caducidad=self.caducidad, reloj=self.reloj, max_argumentos=max_argumentos)
+                           caducidad=self.caducidad, reloj=self.reloj, max_argumentos=max_argumentos,
+                           max_bytes=self.max_bytes)
         self.t.al_rechazar_navegador = self._rechazar_navegador
         agente = {'name': NOMBRE, 'version': __version__}
         self._enviar(self.emisor.mensaje('hello', {'versions': [VERSION], 'profiles': list(PERFILES),
