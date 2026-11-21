@@ -123,6 +123,7 @@ final class LiveSession: ObservableObject, Identifiable {
         let (arguments, pacai) = engineArguments(task: task, images: images, wait: wait, queue: queue)
         var environment = ProcessInfo.processInfo.environment
         environment["ALFALFA_VISTA_APPS"] = "1"
+        environment["ALFALFA_VISTA_APPS_SOLICITUD"] = AppControlScreenPermission.launchID
         let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd,
                                    environment: environment, pacai: pacai)
         child.onMessage = { [weak self] message in

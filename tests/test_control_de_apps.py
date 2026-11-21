@@ -392,6 +392,7 @@ def test_vista_previa_local_despues_de_la_accion(tmp_path, monkeypatch):
             if orden == 'estado' and (ruta := argumentos.get('captura')):
                 if self.problema:
                     resultado['captura_error'] = self.problema
+                    resultado['captura_pide_permiso'] = True
                 else:
                     ruta.write_bytes(b'captura de prueba')
                     resultado['captura'] = str(ruta)
@@ -401,6 +402,7 @@ def test_vista_previa_local_despues_de_la_accion(tmp_path, monkeypatch):
         pass
 
     monkeypatch.setenv('ALFALFA_VISTA_APPS', '1')
+    monkeypatch.setenv('ALFALFA_VISTA_APPS_SOLICITUD', 'prueba-app-actual')
     monkeypatch.setattr(apps, '_a_puntos', sin_remuestrear)
     rt = Runtime(['sesion'])
     rt.directory = tmp_path
@@ -429,6 +431,8 @@ def test_vista_previa_local_despues_de_la_accion(tmp_path, monkeypatch):
     previa = json.loads(archivo.read_text())
     assert resultado['hecho'] and 'captura_error' not in resultado
     assert previa['captura'] is None and previa['aviso'] == ayudante.problema
+    assert previa['solicitud_permiso'] == 'prueba-app-actual'
+    assert 'captura_pide_permiso' not in resultado
 
 
 def test_vista_previa_respeta_el_permiso_de_la_app(tmp_path, monkeypatch):

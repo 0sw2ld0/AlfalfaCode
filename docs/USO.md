@@ -752,6 +752,9 @@ Al mirar una ventana autorizada o completar una acción sobre ella, la sección
 y, cuando macOS la permite, una captura ampliable. Las capturas adicionales del
 panel son locales a la sesión y no se envían al modelo. Si no hay imagen, puedes
 seguir viendo la actividad en texto.
+La primera vez que una captura autorizada necesita el permiso de grabación,
+AlfalfaCode muestra la solicitud de macOS al estar en primer plano. También
+puedes abrir los ajustes de grabación desde el panel si el permiso sigue pendiente.
 
 ## Capturas antes y después
 

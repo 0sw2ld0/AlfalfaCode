@@ -212,6 +212,7 @@ func estado() -> Never {
     ]
     if let ruta = argumentos["captura"] {
         if !CGPreflightScreenCaptureAccess() {
+            resultado["captura_pide_permiso"] = true
             resultado["captura_error"] = "Falta el permiso de Grabación de pantalla (Ajustes del Sistema → Privacidad y seguridad)."
         } else if let id = idDeVentana(pid: pid, marco: origen, titulo: texto(raiz, kAXTitleAttribute as String)) {
             let proceso = Process()

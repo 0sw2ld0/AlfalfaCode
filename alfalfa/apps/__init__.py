@@ -354,6 +354,8 @@ class ControlDeApps:
         datos = {'app': str(app.get('nombre') or app.get('bundle') or 'App')[:160],
                  'accion': accion, 'captura': nombre,
                  'aviso': str(resultado.get('captura_error') or resultado.get('aviso') or '')[:300]}
+        if resultado.pop('captura_pide_permiso', False):
+            datos['solicitud_permiso'] = os.environ.get('ALFALFA_VISTA_APPS_SOLICITUD')
         try:
             atomic_json(self.directorio / 'vista-control-apps.json', datos)
             carpeta = self.directorio / 'capturas'
@@ -398,6 +400,8 @@ class ControlDeApps:
             resultado['captura'] = datos['captura']
         elif datos.get('captura_error'):
             resultado['captura_error'] = datos['captura_error']
+            if self.vista_previa and datos.get('captura_pide_permiso') is True:
+                resultado['captura_pide_permiso'] = True
         pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
         if pruebas is not None and not solo_vista:
             await pruebas.app(self.runtime, app, resultado)

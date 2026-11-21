@@ -4,6 +4,7 @@ public struct AppControlPreview: Decodable, Equatable, Sendable {
     public let app: String
     public let action: String
     public let notice: String
+    public let permissionRequest: String?
     fileprivate let capture: String?
 
     enum CodingKeys: String, CodingKey {
@@ -11,6 +12,7 @@ public struct AppControlPreview: Decodable, Equatable, Sendable {
         case action = "accion"
         case notice = "aviso"
         case capture = "captura"
+        case permissionRequest = "solicitud_permiso"
     }
 }
 
