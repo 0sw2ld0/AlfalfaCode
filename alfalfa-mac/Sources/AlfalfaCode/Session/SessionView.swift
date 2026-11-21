@@ -112,7 +112,7 @@ struct SessionView: View {
         let firstPending = session.timeline.pendingPermissions.first?.id
         return ScrollViewReader { proxy in
             ScrollView {
-                let items = session.timeline.items
+                let items = session.timeline.visibleConversation
                 // Sólo el último grupo de acciones es el que está trabajando ahora, y sólo si es de
                 // este turno: el de antes del último mensaje ya no corre. Si el agente escribió
                 // después, el grupo terminó y lo que sigue es pensar (la fila de abajo).

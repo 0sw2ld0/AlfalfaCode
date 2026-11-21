@@ -28,6 +28,7 @@ struct SidePanel: View {
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
     @AppStorage("panel.entorno.abierto") private var environmentOpen = true
     @AppStorage("panel.cambios.abierto") private var changesOpen = true
+    @AppStorage("panel.avisosMCP.abierto") private var mcpNoticesOpen = false
     @AppStorage("panel.contexto.mcp.abierto") private var mcpListOpen = false
     @AppStorage("panel.contexto.memoria.abierto") private var memoryListOpen = false
     @AppStorage("panel.procesos.abierto") private var processesOpen = true
@@ -39,6 +40,17 @@ struct SidePanel: View {
                 if let timeline {
                     PanelSection(title: "Contexto", open: $contextOpen) { context(timeline) }
                     separator
+                    let notices = timeline.mcpNotices
+                    if !notices.isEmpty {
+                        PanelSection(title: "Avisos de MCP", open: $mcpNoticesOpen) {
+                            ForEach(notices) { notice in
+                                Text(notice.text.dropFirst("MCP · ".count))
+                                    .font(.caption).foregroundStyle(Theme.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        separator
+                    }
                     if !timeline.subagents.isEmpty {
                         PanelSection(title: "Subagentes", open: $subagentsOpen, trailing: { subagentCount(timeline) }) {
                             subagents(timeline)

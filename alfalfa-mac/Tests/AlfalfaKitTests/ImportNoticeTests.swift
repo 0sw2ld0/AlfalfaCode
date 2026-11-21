@@ -120,6 +120,28 @@ final class ImportNoticeTests: XCTestCase {
         XCTAssertTrue(timeline.markdown(title: "S").contains("> " + text))
     }
 
+    func testMCPNoticesLeaveTheChatButRemainInHistoryAndTheSidebar() throws {
+        var timeline = Timeline()
+        let imported = try decodedV2()
+        var mcpOnly = imported
+        mcpOnly.importNotice?.pending.removeAll { $0.kind != .mcp }
+        timeline.apply(.event(mcpOnly))
+        let notice = try decoded(["tipo": "evento", "rol": "system", "texto": "MCP · Aviso de importación"])
+        timeline.apply(.event(notice))
+        timeline.apply(.event(notice))
+        XCTAssertTrue(timeline.visibleConversation.isEmpty)
+        XCTAssertEqual(timeline.mcpNotices.map(\.text), ["MCP · Aviso de importación"])
+        XCTAssertFalse(timeline.items.isEmpty)
+
+        timeline.apply(.event(imported))
+        let cards = timeline.visibleConversation.compactMap { item -> ImportNotice? in
+            if case let .importNotice(_, notice, _) = item { return notice }
+            return nil
+        }
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertFalse(try XCTUnwrap(cards.first).pending.contains { $0.kind == .mcp })
+    }
+
     func testTheReviewOffersWhatIsStillPendingWithTheNoticeFirst() throws {
         let notice = try XCTUnwrap(decodedV2().importNotice)
         let line = """

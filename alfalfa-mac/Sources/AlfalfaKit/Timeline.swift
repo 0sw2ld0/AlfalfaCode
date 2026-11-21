@@ -58,6 +58,8 @@ public struct ToolEvent: Equatable, Identifiable, Sendable {
     /// Lo que el motor dice de la llamada (`herramienta`); nil en motores anteriores.
     public var tool: ToolInfo? = nil
 
+    fileprivate var isMCPNotice: Bool { role == "system" && text.hasPrefix("MCP · ") }
+
     /// Segundos entre el primer y el último evento de un grupo, o nil si no hay horas.
     public static func duration(of events: [ToolEvent]) -> Double? {
         let times = events.map(\.time).filter { $0 > 0 }
@@ -179,6 +181,32 @@ public struct RunningCommand: Equatable, Sendable {
 
 public struct Timeline: Equatable, Sendable {
     public private(set) var items: [TimelineItem] = []
+    /// Los mensajes MCP de configuración se consultan en el panel, incluso en el historial antiguo.
+    public var visibleConversation: [TimelineItem] {
+        items.compactMap { item in
+            switch item {
+            case let .events(id, events):
+                let conversation = events.filter { !$0.isMCPNotice }
+                return conversation.isEmpty ? nil : .events(id: id, conversation)
+            case let .importNotice(id, notice, authorized):
+                let pending = notice.pending.filter { $0.kind != .mcp }
+                guard !pending.isEmpty else { return nil }
+                let names = Set(pending.map(\.displayName))
+                return .importNotice(id: id, ImportNotice(pending: pending, text: notice.text),
+                                     authorized: authorized.filter { names.contains($0) })
+            default: return item
+            }
+        }
+    }
+
+    public var mcpNotices: [ToolEvent] {
+        var seen: Set<String> = []
+        return items.flatMap { item -> [ToolEvent] in
+            guard case let .events(_, events) = item else { return [] }
+            return events.filter { $0.isMCPNotice && seen.insert($0.text).inserted }
+        }
+    }
+
     public private(set) var status: SessionStatus = .starting
     public private(set) var session: SessionInfo?
     public private(set) var contextTokens = 0
