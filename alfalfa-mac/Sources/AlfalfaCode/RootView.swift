@@ -172,7 +172,9 @@ struct SidebarView: View {
             Button("Mover a la Papelera", role: .destructive) { model.trash(row); trashing = nil }
             Button("Cancelar", role: .cancel) { trashing = nil }
         } message: { row in
-            Text("«\(row.title)» desaparece de AlfalfaCode. Puedes recuperarla desde la Papelera mientras no la vacíes.")
+            let title = row.title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            let preview = title.count > 120 ? String(title.prefix(120)) + "…" : title
+            Text("«\(preview)» desaparece de AlfalfaCode. Puedes recuperarla desde la Papelera mientras no la vacíes.")
         }
         .alert("¿Quitar la carpeta de la lista?", isPresented: Binding(get: { removing != nil },
                                                                        set: { if !$0 { removing = nil } }),
