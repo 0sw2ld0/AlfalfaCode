@@ -1,2 +1,1 @@
-La sección «Control de apps» del panel derecho muestra la última acción del agente y una captura ampliable de la ventana cuando está disponible.
-La confirmación para mover una sesión a la Papelera mantiene visibles los botones aunque el título sea largo.
+Control de apps incluye AlfalfaDesktop 0.1.1. El cursor virtual usa una hoja de 18 puntos con un halo más fino, y la vista previa lateral se actualiza después de cada acción.
