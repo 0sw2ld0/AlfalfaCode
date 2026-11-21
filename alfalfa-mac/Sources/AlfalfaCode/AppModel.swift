@@ -102,6 +102,7 @@ final class AppModel: ObservableObject {
         if hasText != draftHasText { draftHasText = hasText }
     }
     @Published private(set) var recents: [String]
+    @Published private(set) var removedFolders: Set<String>
     @Published var folder: String?
     @Published private(set) var newSnapshot: GitSnapshot?
     @Published private(set) var newOllama: Bool?
@@ -125,10 +126,12 @@ final class AppModel: ObservableObject {
     let launcher: URL?
     let home = FileManager.default.homeDirectoryForCurrentUser
     private static let recentsKey = "recentFolders"
+    private static let removedFoldersKey = "removedRecentFolders"
 
     init() {
         launcher = Launcher.locate()
         recents = UserDefaults.standard.stringArray(forKey: Self.recentsKey) ?? []
+        removedFolders = Set(UserDefaults.standard.stringArray(forKey: Self.removedFoldersKey) ?? [])
         applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
         // ⌘V con una imagen (o un archivo copiado en Finder) la adjunta al compositor visible, como en Codex.
@@ -163,19 +166,7 @@ final class AppModel: ObservableObject {
 
     func reload() async {
         guard let launcher else { return }
-        do {
-            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--sesiones", "--json"], directory: home)
-            for case let .sessions(rows) in messages { summaries = rows }
-            loadError = nil
-            // Para revisar la interfaz sin clics: ALFALFA_ABRIR_SESION=ID abre esa sesión al arrancar.
-            if let wanted = ProcessInfo.processInfo.environment["ALFALFA_ABRIR_SESION"], !openedAtLaunch,
-               summaries.contains(where: { $0.id == wanted }) {
-                openedAtLaunch = true
-                route = .past(wanted)
-            }
-        } catch {
-            loadError = "No se pudieron leer las sesiones: \(error.localizedDescription)"
-        }
+        await reloadSessionList()
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--modelos", "--json"], directory: home)
             for case let .models(rows) in messages { models = rows }
@@ -192,6 +183,23 @@ final class AppModel: ObservableObject {
         if folder == nil { folder = folderChoices.first }
         await refreshNewPanel()
         watchSessions()
+    }
+
+    private func reloadSessionList() async {
+        guard let launcher else { return }
+        do {
+            let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--sesiones", "--json"], directory: home)
+            for case let .sessions(rows) in messages { summaries = rows }
+            loadError = nil
+            // Para revisar la interfaz sin clics: ALFALFA_ABRIR_SESION=ID abre esa sesión al arrancar.
+            if let wanted = ProcessInfo.processInfo.environment["ALFALFA_ABRIR_SESION"], !openedAtLaunch,
+               summaries.contains(where: { $0.id == wanted }) {
+                openedAtLaunch = true
+                route = .past(wanted)
+            }
+        } catch {
+            loadError = "No se pudieron leer las sesiones: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Cambios de fuera
@@ -393,12 +401,12 @@ final class AppModel: ObservableObject {
     /// Recientes elegidas por el usuario y carpetas de sesiones anteriores.
     var folderChoices: [String] {
         var seen = Set<String>()
-        let fromSessions = summaries.sorted { $0.date > $1.date }.compactMap(\.cwd)
+        let fromSessions = summaries.filter { !$0.archived }.sorted { $0.date > $1.date }.compactMap(\.cwd)
         let all = (recents + fromSessions).filter { path in
-            FileManager.default.fileExists(atPath: path) && seen.insert(path).inserted
+            !removedFolders.contains(path) && FileManager.default.fileExists(atPath: path) && seen.insert(path).inserted
         }
         var result = Array(all.prefix(5))
-        if let folder, !result.contains(folder) { result.insert(folder, at: 0) }
+        if let folder, !removedFolders.contains(folder), !result.contains(folder) { result.insert(folder, at: 0) }
         return result
     }
 
@@ -469,6 +477,9 @@ final class AppModel: ObservableObject {
     }
 
     func select(folder path: String) {
+        if removedFolders.remove(path) != nil {
+            UserDefaults.standard.set(removedFolders.sorted(), forKey: Self.removedFoldersKey)
+        }
         folder = path
         recents = ([path] + recents.filter { $0 != path }).prefix(8).map { $0 }
         UserDefaults.standard.set(recents, forKey: Self.recentsKey)
@@ -482,10 +493,17 @@ final class AppModel: ObservableObject {
         let ids = group.rows.filter { !$0.running && !$0.archived }.compactMap(\.sessionID)
         recents.removeAll { $0 == group.folder }
         UserDefaults.standard.set(recents, forKey: Self.recentsKey)
-        guard !ids.isEmpty else { return }
+        removedFolders.insert(group.folder)
+        UserDefaults.standard.set(removedFolders.sorted(), forKey: Self.removedFoldersKey)
+        let selectedFolderWasRemoved = folder == group.folder
+        if selectedFolderWasRemoved { folder = folderChoices.first }
         if case let .past(id) = route, ids.contains(id) { route = .new }
         Task {
-            for id in ids { await manage(["--marcar", id, "archivada", "true"]) }
+            if !ids.isEmpty {
+                for id in ids { _ = await runSessionCommand(["--marcar", id, "archivada", "true"]) }
+                await reloadSessionList()
+            }
+            if selectedFolderWasRemoved { await refreshNewPanel() }
         }
     }
 
@@ -641,12 +659,21 @@ final class AppModel: ObservableObject {
 
     func trash(_ row: SidebarRow) {
         guard let id = row.sessionID, !row.running else { return }
-        if case let .live(uuid) = row.route, let session = session(uuid) {
-            session.shutdown(interrupt: false)
-            live.removeAll { $0.id == uuid }
+        Task {
+            let open = live.first { $0.sessionID == id }
+            if let open, !(await open.releaseProcess()) {
+                sessionError = "El motor todavía tiene abierta la sesión. Espera a que termine antes de moverla a la Papelera."
+                return
+            }
+            guard let messages = await runSessionCommand(["--eliminar-sesion", id]) else { return }
+            for case let .sessionChanged(changedID, _) in messages where changedID == id {
+                live.removeAll { $0.sessionID == id }
+                dormant.removeValue(forKey: id)
+                if route == row.route { route = .new }
+                break
+            }
+            await reloadSessionList()
         }
-        if route == row.route { route = .new }
-        Task { await manage(["--eliminar-sesion", id]) }
     }
 
     /// Crea la sesión bifurcada desde el último turno terminado y la abre, lista para otra indicación.
@@ -730,11 +757,16 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     func manage(_ arguments: [String]) async -> [AlfalfaMessage]? {
+        guard let messages = await runSessionCommand(arguments) else { return nil }
+        await reload()
+        return messages
+    }
+
+    private func runSessionCommand(_ arguments: [String]) async -> [AlfalfaMessage]? {
         guard let launcher else { return nil }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: arguments, directory: home)
             for case let .error(text) in messages { sessionError = text }
-            await reload()
             return messages
         } catch {
             sessionError = error.localizedDescription
