@@ -126,7 +126,9 @@ extension AppModel {
     /// Al arrancar: la carpeta, el modelo, el esfuerzo y el modo que se guardaron en Ajustes.
     func applyPreferences() {
         let saved = preferences
-        folder = saved.startFolder(recents: recents)
+        folder = saved.startFolder(recents: recents) {
+            !removedFolders.contains($0) && FileManager.default.fileExists(atPath: $0)
+        }
         if let value = saved.defaultModel { model = value }
         if let value = saved.defaultEffort { effort = value }
         if let value = saved.defaultMode { mode = value.rawValue }
