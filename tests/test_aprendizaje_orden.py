@@ -122,6 +122,15 @@ def test_ajustes_y_proyecto(cli):
     assert fila['aprende_aqui'] is True
 
 
+@pytest.mark.parametrize('afirmativo', ['sí', 'si\u0301', 'true'])
+def test_alternar_aprendizaje_desde_la_app(cli, afirmativo):
+    for valor, esperado in [('false', False), (afirmativo, True)]:
+        codigo, fila = cli('--aprendido', 'ajustes', 'memoria', valor)
+        assert codigo == 0 and fila['ajustes']['memoria'] is esperado
+        codigo, fila = cli('--aprendido', 'proyecto', valor)
+        assert codigo == 0 and fila['aprende_aqui'] is esperado
+
+
 def test_el_texto_llega_por_la_entrada_estandar(cli, monkeypatch):
     """Así lo manda la app: el texto no queda en los argumentos (se verían en la lista de procesos)."""
     import io

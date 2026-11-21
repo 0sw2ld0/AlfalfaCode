@@ -27,6 +27,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from . import BOOLEANOS, apagado_en_proyecto, cambiar_proyecto, guardar_ajustes, leer_ajustes, raiz_de_proyecto
@@ -166,7 +167,7 @@ def _texto_aprendido(estado):
 
 
 def _booleano(valor):
-    valor = str(valor).lower()
+    valor = unicodedata.normalize('NFC', str(valor).lower())
     if valor in SI:
         return True
     if valor in NO:
