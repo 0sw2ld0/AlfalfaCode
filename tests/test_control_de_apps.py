@@ -126,7 +126,7 @@ def test_se_pregunta_una_vez_por_app_con_permitir_en_esta_sesion():
     pedido = rt.pedidos[0]
     assert pedido['motivo'] == 'app' and pedido['para_sesion'] is True
     assert pedido['app']['bundle'] == 'com.alfalfacode.demo.contador'
-    assert rt.task[sesion.CAMPO] == [apps.clave_de_app(CONTADOR)]
+    assert rt.task[sesion.CAMPO] == [sesion.huella(apps.clave_de_app(CONTADOR))]
     correr(c.accion({'app': 'com.alfalfacode.demo.contador', 'action': 'click', 'element': 1}))
     assert len(rt.pedidos) == 1
 
