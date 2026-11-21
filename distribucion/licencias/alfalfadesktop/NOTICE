@@ -1,0 +1,5 @@
+The macOS window control and pointer implementation was extracted from
+AlfalfaCode (https://github.com/0sw2ld0/AlfalfaCode), commit
+8dc5f9cdf404a1b847021061d40aee2c85945217, alfalfa/apps/ayudante.swift.
+
+Copyright (c) 2026 Oswaldo Leon. See LICENSE.

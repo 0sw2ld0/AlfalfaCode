@@ -36,9 +36,9 @@ Mejoras sobre Codex:
   Acceso a Llaveros, Ajustes del Sistema y los propios agentes nunca se manejan:
   escribir en una terminal sería salir del sandbox sin preguntar.
 
-El ayudante nativo (`ayudante.swift`) se compila con `swiftc` la primera vez y se
-guarda por su huella en `$ALFALFA_HOME/bin`. Usa los permisos de Accesibilidad y de
-Grabación de pantalla de la app que lanzó AlfalfaCode; si faltan, lo dice.
+La app empaquetada usa AlfalfaDesktop para leer y actuar en una ventana. El ayudante
+local mantiene el inventario de apps y ventanas y las operaciones anteriores que
+AlfalfaDesktop 0.1.1 todavía no ofrece. Ambos usan los permisos de macOS de su lanzador.
 """
 from __future__ import annotations
 
@@ -53,6 +53,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .. import empaquetado
+from . import desktop
 
 FUENTE = Path(__file__).with_name('ayudante.swift')
 MAX_SALIDA = 24000
@@ -219,7 +220,13 @@ class Ayudante:
             return self.ruta
 
     async def llamar(self, orden, **argumentos):
-        ruta = await self.asegurar()
+        if desktop.compatible(orden, argumentos):
+            incluido = empaquetado.ayudante(desktop.NOMBRE)
+            if incluido:
+                return await desktop.llamar(self._ejecutar, incluido, orden, argumentos)
+        return await self._ejecutar(await self.asegurar(), orden, argumentos)
+
+    async def _ejecutar(self, ruta, orden, argumentos, env=None):
         argv = [str(ruta), orden]
         for clave, valor in argumentos.items():
             if valor is True:
@@ -228,7 +235,7 @@ class Ayudante:
                 argv.append('--' + clave + '=' + str(valor))
         proc = await asyncio.create_subprocess_exec(*argv, stdin=asyncio.subprocess.DEVNULL,
                                                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                                                    start_new_session=True)
+                                                    start_new_session=True, env=env)
         try:
             salida, errores = await asyncio.wait_for(proc.communicate(), ORDEN_SEGUNDOS)
         except asyncio.TimeoutError:
@@ -236,13 +243,21 @@ class Ayudante:
             await proc.wait()
             raise ValueError('La app no respondió a tiempo (' + str(ORDEN_SEGUNDOS)
                              + ' s); puede estar colgada.') from None
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.kill()
+            await proc.wait()
+            raise
+        # AlfalfaDesktop devuelve los errores estructurados por stderr.
         try:
-            datos = json.loads(salida.decode(errors='replace').strip().splitlines()[-1])
+            datos = json.loads((salida or errores).decode(errors='replace').strip().splitlines()[-1])
         except (IndexError, ValueError):
             raise ValueError('Respuesta inválida del ayudante de apps: '
                              + (errores or salida).decode(errors='replace')[-300:]) from None
         if isinstance(datos, dict) and datos.get('error'):
             raise ValueError(str(datos['error']))
+        if proc.returncode:
+            raise ValueError('Falló el ayudante de apps: ' + (errores or salida).decode(errors='replace')[-300:])
         return datos
 
 
@@ -481,11 +496,8 @@ class ControlDeApps:
             except ValueError as exc:
                 resultado = {'hechos': hechos, 'fallo': {'paso': n, 'action': paso.get('action'), 'error': str(exc)},
                              'nota': 'Se pararon los pasos en el ' + str(n) + '; los anteriores sí se hicieron.'}
-                try:
-                    resultado.update(await self._leer(app, _numero(args, 'window') or 0, captura=False))
-                except ValueError:
-                    pass
-                if hechos:
+                if ultimo is not None:
+                    resultado.update(ultimo)
                     self._publicar_vista(app, 'Lote de acciones interrumpido', resultado)
                 return resultado
             hechos.append({'paso': n, 'action': paso.get('action'), 'como': ultimo.get('como')})

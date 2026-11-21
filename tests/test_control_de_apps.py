@@ -210,6 +210,13 @@ def test_lote_hace_varios_pasos_y_para_en_el_que_falla():
         correr(c.accion({'app': 'Contador Demo', 'steps': []}))
 
 
+def test_denegar_el_primer_paso_no_lee_la_ventana():
+    c, _ = control('no')
+    resultado = correr(c.accion({'app': 'Contador Demo', 'steps': [{'action': 'click', 'x': 1, 'y': 1}]}))
+    assert resultado['hechos'] == [] and 'usuario' in resultado['fallo']['error']
+    assert [orden for orden, _ in c.ayudante.llamadas] == ['lista']
+
+
 def test_una_accion_sin_efecto_lo_dice():
     c, rt = control('sesion')
     correr(c.estado({'app': 'Contador Demo'}))

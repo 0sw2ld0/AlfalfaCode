@@ -747,6 +747,12 @@ la detiene conservando el estado para reanudarla.
 
 ## Vista previa del control de apps en macOS
 
+La app y la CLI instaladas desde la distribución de macOS incluyen AlfalfaDesktop
+para inspeccionar ventanas y actuar sobre ellas. El cursor virtual de hoja
+muestra el punto de la acción en segundo plano. AlfalfaCode sigue pidiendo
+aprobación por app y mantiene el inventario de ventanas y las pulsaciones AX
+explícitas con el ayudante de compatibilidad.
+
 Al mirar una ventana autorizada o completar una acción sobre ella, la sección
 «Control de apps» del panel derecho muestra la aplicación, la última acción
 y, cuando macOS la permite, una captura ampliable. Las capturas adicionales del

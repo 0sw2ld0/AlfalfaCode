@@ -34,6 +34,7 @@ case "$ARQ" in
 esac
 export ARQ
 . ../distribucion/cuybrowser.sh
+. ../distribucion/alfalfadesktop.sh
 
 LOCAL=""
 [ "${1:-}" = "--local" ] && LOCAL=1
@@ -89,6 +90,9 @@ fi
 test "$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$APP/Contents/Info.plist")" = "$CUYBROWSER_VERSION" \
   || { echo "✗ la app no declara el CuyBrowser fijado ($CUYBROWSER_VERSION)" >&2; exit 1; }
 cuybrowser_comprobar_app "$APP" "$TMP"
+test "$(plutil -extract AlfalfaDesktopVersion raw -o - "$APP/Contents/Info.plist")" = "$ALFALFADESKTOP_VERSION" \
+  || { echo "✗ la app no declara el AlfalfaDesktop fijado ($ALFALFADESKTOP_VERSION)" >&2; exit 1; }
+alfalfadesktop_comprobar_app "$APP" "$TMP"
 mkdir -p "$TMP/dmg"
 ditto "$APP" "$TMP/dmg/AlfalfaCode.app"
 ln -s /Applications "$TMP/dmg/Aplicaciones"

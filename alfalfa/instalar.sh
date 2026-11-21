@@ -11,7 +11,7 @@
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
 #      con el identificador com.cuycoders.alfalfacode, la misma versión y el procesador de este Mac.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
-#      ayudantes, incluido CuyBrowser si viene en el DMG, a ~/.local/share/alfalfa y
+#      ayudantes, incluidos CuyBrowser y AlfalfaDesktop cuando están en el DMG, a ~/.local/share/alfalfa y
 #      deja ~/.local/bin/alfalfa. Si algo falla,
 #      la copia que hubiera no se toca.
 #   5. Si ~/.local/bin no está en el PATH, lo añade a ~/.zshrc (o ~/.bash_profile) entre
@@ -106,7 +106,7 @@ main() {
   fi
 
   # --- 2. DMG y su huella ---------------------------------------------------------------------
-  paso "Bajando AlfalfaCode $VERSION…"
+  paso "Bajando AlfalfaCode ${VERSION}…"
   bajar "$URL" "$TMP/AlfalfaCode.dmg"
   CALCULADA="$(shasum -a 256 "$TMP/AlfalfaCode.dmg" | cut -d' ' -f1)"
   [ "$CALCULADA" = "$HUELLA" ] || falla "la huella del DMG no coincide con la publicada (esperada $HUELLA, bajada $CALCULADA)"
@@ -123,7 +123,7 @@ main() {
   [ -d "$APP" ] || falla "el DMG no trae AlfalfaCode.app"
   codesign --verify --deep --strict "$APP" 2>/dev/null || falla "la firma de la app no es válida"
   EQUIPO_APP="$(codesign -dv --verbose=2 "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
-  [ "$EQUIPO_APP" = "$EQUIPO" ] || falla "la app no está firmada por el equipo $EQUIPO (es «$EQUIPO_APP»)"
+  [ "$EQUIPO_APP" = "$EQUIPO" ] || falla "la app no está firmada por el equipo $EQUIPO (es «${EQUIPO_APP}»)"
   [ "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "$IDENTIFICADOR" ] \
     || falla "la app no es $IDENTIFICADOR"
   [ "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION" ] \
@@ -141,7 +141,8 @@ main() {
   else
     paso "Firma correcta (Developer ID del equipo $EQUIPO, notarizada)."
   fi
-  comprobar_cuybrowser
+  comprobar_ayudante AlfalfaCuyBrowserVersion cuybrowser CuyBrowser ''
+  comprobar_ayudante AlfalfaDesktopVersion alfalfa-desktop AlfalfaDesktop 'AlfalfaDesktop '
 
   # --- 4. Copiar el motor ---------------------------------------------------------------------
   mkdir -p "$PREFIJO/share" "$BIN"
@@ -211,21 +212,24 @@ Pasos, sandbox y claves: https://github.com/$REPO/blob/main/docs/USO.md#linux" ;
   [ "$MAYOR" -ge 14 ] 2>/dev/null || falla "AlfalfaCode necesita macOS 14 (Sonoma) o posterior."
 }
 
-comprobar_cuybrowser() {
+comprobar_ayudante() {
+  CLAVE_AYUDANTE="$1" BIN_AYUDANTE="$2" NOMBRE_AYUDANTE="$3" PREFIJO_VERSION="$4"
   PLIST="$APP/Contents/Info.plist"
-  # Los DMG anteriores a CuyBrowser no declaran la clave.
-  TIPO_CUY="$(plutil -type AlfalfaCuyBrowserVersion "$PLIST" 2>/dev/null)" || return 0
-  [ "$TIPO_CUY" = string ] || falla "AlfalfaCuyBrowserVersion no es un texto"
-  VERSION_CUY="$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$PLIST")"
-  printf '%s' "$VERSION_CUY" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
-    || falla "AlfalfaCuyBrowserVersion no es una versión válida"
-  CUY="$APP/Contents/Helpers/cuybrowser"
-  [ -f "$CUY" ] && [ -x "$CUY" ] && [ ! -L "$CUY" ] || falla "la app no trae CuyBrowser $VERSION_CUY"
-  CUY="$(CDPATH= cd -- "$APP/Contents/Helpers" && pwd)/cuybrowser"
-  codesign --verify --strict "$CUY" 2>/dev/null || falla "la firma de CuyBrowser no es válida"
-  SALIDA_CUY="$(cd "$TMP" && env -i HOME="$PWD" PATH=/usr/bin:/bin "$CUY" --version)" \
-    && [ "$SALIDA_CUY" = "$VERSION_CUY" ] || falla "el ejecutable no declara CuyBrowser $VERSION_CUY"
-  paso "CuyBrowser $VERSION_CUY incluido."
+  # Los DMG anteriores a cada ayudante no declaran su clave.
+  TIPO_AYUDANTE="$(plutil -type "$CLAVE_AYUDANTE" "$PLIST" 2>/dev/null)" || return 0
+  [ "$TIPO_AYUDANTE" = string ] || falla "$CLAVE_AYUDANTE no es un texto"
+  VERSION_AYUDANTE="$(plutil -extract "$CLAVE_AYUDANTE" raw -o - "$PLIST")"
+  printf '%s' "$VERSION_AYUDANTE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || falla "$CLAVE_AYUDANTE no es una versión válida"
+  AYUDANTE="$APP/Contents/Helpers/$BIN_AYUDANTE"
+  [ -f "$AYUDANTE" ] && [ -x "$AYUDANTE" ] && [ ! -L "$AYUDANTE" ] \
+    || falla "la app no trae $NOMBRE_AYUDANTE $VERSION_AYUDANTE"
+  AYUDANTE="$(CDPATH= cd -- "$APP/Contents/Helpers" && pwd)/$BIN_AYUDANTE"
+  codesign --verify --strict "$AYUDANTE" 2>/dev/null || falla "la firma de $NOMBRE_AYUDANTE no es válida"
+  SALIDA_AYUDANTE="$(cd "$TMP" && env -i HOME="$PWD" PATH=/usr/bin:/bin "$AYUDANTE" --version)" \
+    && [ "$SALIDA_AYUDANTE" = "$PREFIJO_VERSION$VERSION_AYUDANTE" ] \
+    || falla "el ejecutable no declara $NOMBRE_AYUDANTE $VERSION_AYUDANTE"
+  paso "$NOMBRE_AYUDANTE $VERSION_AYUDANTE incluido."
 }
 
 bajar() {   # bajar <url> <destino>

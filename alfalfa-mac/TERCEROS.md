@@ -47,3 +47,6 @@ La app empaquetada lleva además programas de terceros sin cambios, cada uno con
   CuyBrowser, Playwright, Bun y sus componentes van en `motor/licencias/cuybrowser/`.
   [Fuentes de CuyBrowser](https://github.com/0sw2ld0/cuybrowser/tree/v0.6.0)
   [Fuentes de Bun](https://github.com/oven-sh/bun/tree/bun-v1.4.4)
+- **AlfalfaDesktop** 0.1.1, binario oficial de la arquitectura de la app (MIT).
+  Su licencia y sus avisos van en `motor/licencias/alfalfadesktop/`.
+  [Fuentes de AlfalfaDesktop](https://github.com/0sw2ld0/AlfalfaDesktop/tree/v0.1.1)

@@ -28,6 +28,7 @@ case "$ARQ" in
   *) echo "✗ ARQ debe ser arm64 o x86_64" >&2; exit 1 ;;
 esac
 . "$RAIZ/distribucion/cuybrowser.sh"
+. "$RAIZ/distribucion/alfalfadesktop.sh"
 
 CACHE=".build/empaquetado"
 REQUISITOS="motor-requisitos.txt"
@@ -46,6 +47,8 @@ esac
 
 CUYBROWSER_ORIGEN="$CACHE/$CUYBROWSER_ASSET-$CUYBROWSER_VERSION"
 cuybrowser_preparar "$CUYBROWSER_ORIGEN"
+ALFALFADESKTOP_ORIGEN="$CACHE/$ALFALFADESKTOP_ASSET-$ALFALFADESKTOP_VERSION"
+alfalfadesktop_preparar "$ALFALFADESKTOP_ORIGEN"
 
 # --- 1. Python propio (en caché: sólo se descarga la primera vez) ---------------------
 PYTHON_ORIGEN="$CACHE/python/$PYTHON_CLAVE"
@@ -89,6 +92,10 @@ CUYBROWSER="$APP/Contents/Helpers/cuybrowser"
 install -m 755 "$CUYBROWSER_ORIGEN" "$CUYBROWSER"
 cuybrowser_huella_correcta "$CUYBROWSER" \
   || { echo "✗ CuyBrowser copiado no coincide con su huella SHA-256 fijada" >&2; exit 1; }
+ALFALFADESKTOP="$APP/Contents/Helpers/alfalfa-desktop"
+install -m 755 "$ALFALFADESKTOP_ORIGEN" "$ALFALFADESKTOP"
+alfalfadesktop_huella_correcta "$ALFALFADESKTOP" \
+  || { echo "✗ AlfalfaDesktop copiado no coincide con su huella SHA-256 fijada" >&2; exit 1; }
 # El icono va en Resources: la app empaquetada no usa la carpeta de recursos de SwiftPM.
 cp Sources/AlfalfaCode/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
@@ -105,6 +112,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key>            <string>$COMPILACION</string>
   <key>CFBundleShortVersionString</key> <string>$VERSION</string>
   <key>AlfalfaCuyBrowserVersion</key>    <string>$CUYBROWSER_VERSION</string>
+  <key>AlfalfaDesktopVersion</key>       <string>$ALFALFADESKTOP_VERSION</string>
   <key>CFBundleExecutable</key>         <string>AlfalfaCode</string>
   <key>CFBundlePackageType</key>        <string>APPL</string>
   <key>CFBundleIconFile</key>           <string>AppIcon</string>
@@ -127,6 +135,7 @@ LIB="$MOTOR/python/lib/python$PYTHON_MENOR"
 mkdir -p "$MOTOR"
 ditto "$PYTHON_ORIGEN" "$MOTOR/python"
 ditto "$RAIZ/distribucion/licencias/cuybrowser" "$MOTOR/licencias/cuybrowser"
+ditto "$RAIZ/distribucion/licencias/alfalfadesktop" "$MOTOR/licencias/alfalfadesktop"
 
 # Lo que un motor sin interfaz gráfica ni compilador no usa: menos peso y menos binarios que firmar.
 rm -rf "$MOTOR/python/include" "$MOTOR/python/share" "$MOTOR/python/lib/pkgconfig" \
@@ -238,6 +247,7 @@ while IFS= read -r f; do
   case "$f" in
     *.so|*.dylib) ;;
     */python/bin/*) firmar "$f" Motor.entitlements; n=$((n+1)) ;;
+    "$ALFALFADESKTOP") codesign --verify --strict "$f" ;; # conserva la firma Developer ID original
     "$CUYBROWSER") cuybrowser_firmar "$f" "$IDENTIDAD" CuyBrowser.entitlements; n=$((n+1)) ;;
     *) firmar "$f"; n=$((n+1)) ;;
   esac
@@ -261,6 +271,8 @@ env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$PY" -I -B -c \
   'import alfalfa.terminal, alfalfa.empaquetado as e, cuysearch, mcp, jsonschema, httpx; assert e.en_la_app(), "no se ve dentro de la app"'
 cuybrowser_comprobar_app "$APP" "$PRUEBA_HOME"
 echo "CuyBrowser $CUYBROWSER_VERSION: firma y arranque comprobados."
+alfalfadesktop_comprobar_app "$APP" "$PRUEBA_HOME"
+echo "AlfalfaDesktop $ALFALFADESKTOP_VERSION: firma y arranque comprobados."
 "$MOTOR/bin/rg" --version | head -1
 # Sin otro git en el PATH, el de sustitución explica y falla; nunca llama a /usr/bin/git.
 AVISO_GIT="$(env -i PATH=/usr/bin:/bin "$MOTOR/sin-herramientas/git" status 2>&1 || true)"

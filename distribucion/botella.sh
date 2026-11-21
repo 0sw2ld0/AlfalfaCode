@@ -16,6 +16,7 @@
 # bin/alfalfa. Si cambias uno, cambia el otro.
 set -euo pipefail
 . "$(dirname "$0")/cuybrowser.sh"
+. "$(dirname "$0")/alfalfadesktop.sh"
 
 DMG="${1:?uso: botella.sh <dmg> <versión> <salida>}"
 VERSION="${2:?falta la versión}"
@@ -41,6 +42,7 @@ fi
 lipo -archs "$APP/Contents/MacOS/AlfalfaCode" | tr ' ' '\n' | grep -qx "$ARQ_BOTELLA" \
   || { echo "✗ la app del DMG no es para $ARQ_BOTELLA (bottle $ETIQUETA)" >&2; exit 1; }
 cuybrowser_comprobar_app "$APP" "$TMP"
+alfalfadesktop_comprobar_app "$APP" "$TMP"
 
 KEG="$TMP/alfalfa/$VERSION"
 mkdir -p "$KEG/libexec/Resources" "$KEG/bin"

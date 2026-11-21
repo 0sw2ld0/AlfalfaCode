@@ -22,7 +22,8 @@ en «Instalar en una orden».
 AlfalfaCode.app/Contents/
   MacOS/AlfalfaCode                 la app de Mac (SwiftUI)
   Helpers/alfalfa-firma-<huella>    firmante.swift ya compilado (Secure Enclave, proveedor Alfalfa)
-  Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (control de apps)
+  Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (inventario y compatibilidad)
+  Helpers/alfalfa-desktop         AlfalfaDesktop 0.1.1 (control de ventanas y cursor)
   Helpers/cuybrowser              CuyBrowser autónomo 0.6.0, macOS arm64 (o x64 en la de Intel)
   Resources/AppIcon.icns
   Resources/motor/alfalfa           lanzador: python3 -I -B -m alfalfa.terminal
@@ -47,6 +48,10 @@ AlfalfaCode.app/Contents/
   binario original. El ensamblado comprueba la huella antes de firmar y vuelve a probar
   el ayudante firmado. Los avisos de CuyBrowser, sus dependencias y Bun van en
   `motor/licencias/cuybrowser`.
+- `distribucion/alfalfadesktop.sh` fija la versión y las huellas de AlfalfaDesktop para Apple Silicon
+  e Intel. Se conserva la firma oficial de Developer ID. La versión va en `AlfalfaDesktopVersion`
+  del Info.plist y las licencias en `motor/licencias/alfalfadesktop`. Los instaladores de la CLI copian
+  el ayudante a `Helpers/alfalfa-desktop` y comprueban la firma y la versión.
 - Las preferencias de la app compilada con `swift run` (dominio `AlfalfaCode`) se copian una
   vez al de la app empaquetada (`com.cuycoders.alfalfacode`).
 
