@@ -32,10 +32,13 @@ def test_usa_la_cli_incluida_y_respeta_la_compatibilidad(tmp_path, monkeypatch):
     assert [(ruta, orden) for ruta, orden, *_ in llamadas[1:]] == [(anterior, 'lista'), (anterior, 'accion')]
 
 
-@pytest.mark.parametrize('situacion', ['imagen', 'permiso', 'externa'])
+@pytest.mark.parametrize('situacion', ['imagen', 'temporal_macos', 'permiso', 'externa'])
 def test_captura_del_ayudante_va_al_archivo_de_la_sesion(tmp_path, monkeypatch, situacion):
     desktop = tmp_path / 'alfalfa-desktop'
     destino = tmp_path / 'vista-app.png'
+    temporal_macos = tmp_path / 'temporal-macos'
+    temporal_macos.mkdir()
+    monkeypatch.setattr(apps.desktop, '_temporal_macos', lambda: temporal_macos)
     fuera = tmp_path / 'fuera.png'
     fuera.write_bytes(b'original')
     ayudante = apps.Ayudante(tmp_path)
@@ -47,8 +50,11 @@ def test_captura_del_ayudante_va_al_archivo_de_la_sesion(tmp_path, monkeypatch, 
         assert ruta == desktop and orden == 'inspect'
         assert argumentos == {'pid': 7, 'window': 0, 'max': 400, 'approve': True, 'capture': True}
         temporal = Path(env['TMPDIR'])
-        imagen = temporal / 'alfalfa-desktop-fixture' / 'window.png'
-        imagen.parent.mkdir()
+        if situacion == 'temporal_macos':
+            imagen = temporal_macos / 'alfalfa-desktop-00000000-0000-0000-0000-000000000000' / 'window.png'
+        else:
+            imagen = temporal / 'alfalfa-desktop-fixture' / 'window.png'
+        imagen.parent.mkdir(mode=0o700)
         imagen.write_bytes(b'captura')
         datos = {'window': 0, 'tree': '[0] Window', 'height': 140, 'width': 250,
                  'elements': [{'index': 1, 'path': '0', 'role': 'AXButton', 'title': 'Sumar'}]}
@@ -61,13 +67,14 @@ def test_captura_del_ayudante_va_al_archivo_de_la_sesion(tmp_path, monkeypatch, 
     assert estado['elementos'] == [{'i': 1, 'ruta': '0', 'rol': 'AXButton', 'titulo': 'Sumar'}]
     assert estado['ancho'] == 250 and temporal is not None and not temporal.exists()
     assert fuera.read_bytes() == b'original'
-    if situacion == 'imagen':
+    assert not list(temporal_macos.iterdir())
+    if situacion in ('imagen', 'temporal_macos'):
         assert estado['captura'] == str(destino) and destino.read_bytes() == b'captura'
     elif situacion == 'permiso':
         assert estado['captura_pide_permiso'] and 'Grabación de pantalla' in estado['captura_error']
     else:
         assert 'ruta de captura inválida' in estado['captura_error']
-    assert destino.exists() == (situacion == 'imagen')
+    assert destino.exists() == (situacion in ('imagen', 'temporal_macos'))
 
 
 def test_error_json_de_la_cli_no_repite_la_accion_con_el_ayudante_anterior(tmp_path, monkeypatch):

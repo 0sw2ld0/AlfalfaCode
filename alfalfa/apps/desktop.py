@@ -1,6 +1,11 @@
 """Adapta la CLI de AlfalfaDesktop incluida al formato de Control de apps."""
 
 import os
+import re
+import shutil
+import subprocess
+import sys
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -39,25 +44,65 @@ async def llamar(ejecutar, ruta, orden, opciones):
                   'approve': True, 'capture': destino is not None}
     if destino is None:
         return _estado(await ejecutar(ruta, 'inspect', argumentos))
-    # La CLI elige su propia ruta de captura. Dale un temporal privado junto al destino para
-    # mover sólo el PNG de esta invocación y poder limpiar también los intentos fallidos.
+    # La CLI elige su propia ruta de captura. El ejecutable firmado puede usar el
+    # temporal del usuario de macOS en vez del TMPDIR de esta invocación.
     with TemporaryDirectory(prefix='.alfalfa-desktop-', dir=destino.parent) as carpeta:
+        temporal = Path(carpeta)
         datos = await ejecutar(ruta, 'inspect', argumentos, env={**os.environ, 'TMPDIR': carpeta})
         estado = _estado(datos)
-        if datos.get('capture'):
-            png = Path(datos['capture'])
-            if (png.parent.parent.resolve() != Path(carpeta).resolve()
-                    or not png.parent.name.startswith('alfalfa-desktop-') or png.name != 'window.png'
-                    or png.parent.is_symlink() or png.is_symlink() or not png.is_file()):
-                estado['captura_error'] = 'AlfalfaDesktop devolvió una ruta de captura inválida.'
-            else:
-                try:
-                    png.replace(destino)
-                except OSError:
-                    estado['captura_error'] = 'No se pudo guardar la captura de AlfalfaDesktop.'
-                else:
-                    estado['captura'] = str(destino)
+        if origen := datos.get('capture'):
+            _guardar_captura(Path(origen), destino, temporal, estado)
         return estado
+
+
+@lru_cache(maxsize=1)
+def _temporal_macos():
+    if sys.platform == 'darwin':
+        try:
+            carpeta = subprocess.check_output(
+                ['/usr/bin/getconf', 'DARWIN_USER_TEMP_DIR'], text=True, timeout=2, stderr=subprocess.DEVNULL
+            ).strip()
+            if carpeta:
+                return Path(carpeta).resolve()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return None
+
+
+def _guardar_captura(png, destino, temporal, estado):
+    carpeta = png.parent
+    local = carpeta.parent.resolve() == temporal.resolve()
+    if (png.name != 'window.png' or png.is_symlink() or carpeta.is_symlink() or not png.is_file()
+            or not carpeta.name.startswith('alfalfa-desktop-')):
+        estado['captura_error'] = 'AlfalfaDesktop devolvió una ruta de captura inválida.'
+        return
+    if not local:
+        # Para el temporal de macOS se acepta sólo el directorio privado con UUID de la CLI.
+        patron_uuid = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+        info = carpeta.stat()
+        if (carpeta.parent.resolve() != _temporal_macos()
+                or not re.fullmatch('alfalfa-desktop-' + patron_uuid, carpeta.name, re.IGNORECASE)
+                or info.st_uid != os.getuid() or info.st_mode & 0o077 or png.stat().st_uid != os.getuid()):
+            estado['captura_error'] = 'AlfalfaDesktop devolvió una ruta de captura inválida.'
+            return
+    try:
+        if local:
+            png.replace(destino)
+        else:
+            copia = temporal / 'window.png'
+            shutil.copyfile(png, copia)
+            copia.replace(destino)
+    except OSError:
+        estado['captura_error'] = 'No se pudo guardar la captura de AlfalfaDesktop.'
+    else:
+        estado['captura'] = str(destino)
+    finally:
+        if not local:
+            try:
+                png.unlink(missing_ok=True)
+                carpeta.rmdir()
+            except OSError:
+                pass
 
 
 def _estado(datos):
