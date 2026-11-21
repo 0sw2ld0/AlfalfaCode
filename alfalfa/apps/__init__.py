@@ -50,6 +50,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from uuid import uuid4
 
 from .. import empaquetado
 
@@ -252,6 +253,7 @@ class ControlDeApps:
         self.runtime = runtime
         hogar = getattr(runtime.manager, 'home', None) or Path.home() / '.alfalfa'
         self.directorio = getattr(runtime, 'directory', None)
+        self.vista_previa = self.directorio is not None and os.environ.get('ALFALFA_VISTA_APPS') == '1'
         self.ayudante = ayudante or Ayudante(hogar)
         # (pid, ventana) → {número: (ruta, rol)} y el árbol de la última lectura.
         self._elementos = {}
@@ -342,9 +344,34 @@ class ControlDeApps:
         carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
         return carpeta
 
-    async def _leer(self, app, ventana, captura=True, maximo=MAX_ELEMENTOS, zoom=None):
+    def _publicar_vista(self, app, accion, resultado):
+        if not self.vista_previa:
+            return
+        from ..proveedores.nativo.herramientas import atomic_json
+
+        ruta = resultado.get('captura')
+        nombre = Path(ruta).name if ruta else None
+        datos = {'app': str(app.get('nombre') or app.get('bundle') or 'App')[:160],
+                 'accion': accion, 'captura': nombre,
+                 'aviso': str(resultado.get('captura_error') or resultado.get('aviso') or '')[:300]}
+        try:
+            atomic_json(self.directorio / 'vista-control-apps.json', datos)
+            carpeta = self.directorio / 'capturas'
+            for previa in carpeta.glob('vista-app-*.png'):
+                if previa.name != nombre:
+                    previa.unlink(missing_ok=True)
+        except OSError:
+            # El panel es opcional. Un fallo al escribirlo no cambia la acción ni su resultado.
+            pass
+
+    async def _leer(self, app, ventana, captura=True, maximo=MAX_ELEMENTOS, zoom=None, solo_vista=False):
         ruta = None
-        if captura or zoom:
+        if solo_vista:
+            try:
+                ruta = self._carpeta_de_capturas() / ('vista-app-' + uuid4().hex + '.png')
+            except OSError:
+                pass
+        elif captura or zoom:
             ruta = self._carpeta_de_capturas() / (str(app.get('pid')) + '-' + str(int(time.time() * 1000)) + '.png')
         datos = await self.ayudante.llamar('estado', pid=app['pid'], ventana=ventana, captura=ruta, max=maximo)
         clave = (app['pid'], datos.get('ventana', 0))
@@ -372,7 +399,7 @@ class ControlDeApps:
         elif datos.get('captura_error'):
             resultado['captura_error'] = datos['captura_error']
         pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)
-        if pruebas is not None:
+        if pruebas is not None and not solo_vista:
             await pruebas.app(self.runtime, app, resultado)
         return resultado
 
@@ -401,6 +428,7 @@ class ControlDeApps:
                 resultado['espera'] = '«' + esperar.strip() + '» ya aparece.'
             else:
                 resultado['espera'] = previo.get('espera') or '«' + esperar.strip() + '» no apareció.'
+        self._publicar_vista(app, 'Mirar la ventana', resultado)
         await self._mirar(resultado, args.get('question'))
         resultado['nota'] = ('Los números [i] del árbol sirven como element en app_action; target busca por texto. '
                              'x e y son puntos desde la esquina superior izquierda de la ventana; la captura está a '
@@ -453,6 +481,8 @@ class ControlDeApps:
                     resultado.update(await self._leer(app, _numero(args, 'window') or 0, captura=False))
                 except ValueError:
                     pass
+                if hechos:
+                    self._publicar_vista(app, 'Lote de acciones interrumpido', resultado)
                 return resultado
             hechos.append({'paso': n, 'action': paso.get('action'), 'como': ultimo.get('como')})
             espera = paso.get('pause_seconds')
@@ -549,11 +579,16 @@ class ControlDeApps:
             despues['como'] = hecho.get('como')
             return despues
         # Como mejora sobre Codex: la ventana ya cambiada, para comprobar el efecto sin otra llamada.
+        captura = args.get('screenshot') is True or bool(args.get('question'))
+        solo_vista = self.vista_previa and not captura
         try:
-            despues = await self._leer(app, ventana,
-                                       captura=args.get('screenshot') is True or bool(args.get('question')))
+            despues = await self._leer(app, ventana, captura=captura, solo_vista=solo_vista)
         except ValueError as exc:
             despues = {'aviso': 'Hecho, pero no se pudo volver a leer la ventana: ' + str(exc)}
+        self._publicar_vista(app, _NOMBRE_ACCION[accion].capitalize(), despues)
+        if solo_vista:
+            despues.pop('captura', None)
+            despues.pop('captura_error', None)
         await self._mirar(despues, args.get('question'))
         if antes is not None and 'arbol' in despues:
             despues['cambios'] = cambios(antes, despues['arbol'])

@@ -23,6 +23,7 @@ struct SidePanel: View {
     /// El tope propio de la sesión (nil: sigue el de Ajustes) y cómo cambiarlo desde el panel.
     var sessionCap: SessionCap?
     var onSessionCap: ((SessionCap?) -> Void)?
+    var appControlPreviewStore: AppControlPreviewStore?
 
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
     @AppStorage("panel.entorno.abierto") private var environmentOpen = true
@@ -50,6 +51,10 @@ struct SidePanel: View {
                         }
                         separator
                     }
+                }
+                if let store = appControlPreviewStore {
+                    AppControlPreviewView(store: store, running: timeline?.status.isRunning == true)
+                        .id(store)
                 }
                 PanelSection(title: "Entorno", open: $environmentOpen) { environment }
                 separator

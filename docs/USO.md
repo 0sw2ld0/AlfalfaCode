@@ -745,6 +745,14 @@ La CLI muestra el ID de la sesión de la cola al empezar. Con
 `alfalfa --reanudar ID --cola-encargos` continúas una cola guardada. Ctrl-C
 la detiene conservando el estado para reanudarla.
 
+## Vista previa del control de apps en macOS
+
+Al mirar una ventana autorizada o completar una acción sobre ella, la sección
+«Control de apps» del panel derecho muestra la aplicación, la última acción
+y, cuando macOS la permite, una captura ampliable. Las capturas adicionales del
+panel son locales a la sesión y no se envían al modelo. Si no hay imagen, puedes
+seguir viendo la actividad en texto.
+
 ## Capturas antes y después
 
 Al probar una interfaz, abre su estado inicial antes de editar. Si durante el turno

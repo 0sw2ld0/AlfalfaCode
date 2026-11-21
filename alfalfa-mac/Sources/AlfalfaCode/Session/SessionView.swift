@@ -33,7 +33,8 @@ struct SessionView: View {
                               onCompact: { session.compact() }, onStopProcess: { session.stopProcess($0) },
                               onContextMode: { session.setContextMode($0) },
                               sessionCap: session.sessionCap,
-                              onSessionCap: session.sessionID == nil ? nil : { session.setSessionCap($0) })
+                              onSessionCap: session.sessionID == nil ? nil : { session.setSessionCap($0) },
+                              appControlPreviewStore: appControlPreviewStore)
                 }
             }
         }
@@ -44,6 +45,11 @@ struct SessionView: View {
     private var activityStore: BrowserActivityStore? {
         guard let id = session.sessionID else { return nil }
         return BrowserActivityStore(home: Attachments.directory().deletingLastPathComponent(), sessionID: id)
+    }
+
+    private var appControlPreviewStore: AppControlPreviewStore? {
+        guard let id = session.sessionID else { return nil }
+        return AppControlPreviewStore(home: SessionsWatcher.directory().deletingLastPathComponent(), sessionID: id)
     }
 
     /// Abre en Finder la carpeta del proyecto, no la del historial de la sesión.

@@ -15,7 +15,7 @@ public struct BrowserActivityLog: Decodable, Sendable {
     // MARK: - Métodos internos
 
     func validated() throws -> Self {
-        guard esquema == 1, eventos.count <= 200 else { throw BrowserActivityFileError.invalid }
+        guard esquema == 1, eventos.count <= 200 else { throw SessionActivityFileError.invalid }
         var ids = Set<String>()
         let accepted = eventos.filter { $0.valid && ids.insert($0.id).inserted }
         return Self(esquema: 1, eventos: accepted, recortado: recortado || accepted.count != eventos.count)

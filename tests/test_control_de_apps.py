@@ -1,5 +1,6 @@
 """Control de apps del Mac (app_list, app_state, app_action), como Computer Use de Codex."""
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -380,3 +381,63 @@ def test_respuesta_invalida_del_ayudante_cuenta_lo_que_dijo(tmp_path):
     ayudante.asegurar = asegurar
     with pytest.raises(ValueError, match='se rompió el ayudante'):
         asyncio.run(ayudante.llamar('lista'))
+
+
+def test_vista_previa_local_despues_de_la_accion(tmp_path, monkeypatch):
+    class ConCaptura(Falso):
+        problema = None
+
+        async def llamar(self, orden, **argumentos):
+            resultado = await super().llamar(orden, **argumentos)
+            if orden == 'estado' and (ruta := argumentos.get('captura')):
+                if self.problema:
+                    resultado['captura_error'] = self.problema
+                else:
+                    ruta.write_bytes(b'captura de prueba')
+                    resultado['captura'] = str(ruta)
+            return resultado
+
+    async def sin_remuestrear(*args):
+        pass
+
+    monkeypatch.setenv('ALFALFA_VISTA_APPS', '1')
+    monkeypatch.setattr(apps, '_a_puntos', sin_remuestrear)
+    rt = Runtime(['sesion'])
+    rt.directory = tmp_path
+    ayudante = ConCaptura()
+    control = apps.ControlDeApps(rt, ayudante)
+    archivo = tmp_path / 'vista-control-apps.json'
+    args = {'app': 'Contador Demo', 'action': 'click', 'x': 10, 'y': 10}
+
+    estado = correr(control.estado({'app': 'Contador Demo'}))
+    assert json.loads(archivo.read_text())['captura'] == Path(estado['captura']).name
+    resultado = correr(control.accion(args))
+    assert resultado['hecho'] and 'captura' not in resultado
+    previa = json.loads(archivo.read_text())
+    assert previa['app'] == 'Contador Demo' and previa['accion'] == 'Hacer clic'
+    assert previa['captura'].startswith('vista-app-') and archivo.stat().st_mode & 0o077 == 0
+    anterior = tmp_path / 'capturas' / previa['captura']
+    assert anterior.is_file()
+
+    resultado = correr(control.accion(dict(args, screenshot=True)))
+    assert json.loads(archivo.read_text())['captura'] == Path(resultado['captura']).name
+    assert not anterior.exists()
+    assert Path(estado['captura']).exists()
+
+    ayudante.problema = 'Falta el permiso de Grabación de pantalla.'
+    resultado = correr(control.accion(args))
+    previa = json.loads(archivo.read_text())
+    assert resultado['hecho'] and 'captura_error' not in resultado
+    assert previa['captura'] is None and previa['aviso'] == ayudante.problema
+
+
+def test_vista_previa_respeta_el_permiso_de_la_app(tmp_path, monkeypatch):
+    monkeypatch.setenv('ALFALFA_VISTA_APPS', '1')
+    rt = Runtime(['no'])
+    rt.directory = tmp_path
+    ayudante = Falso()
+    control = apps.ControlDeApps(rt, ayudante)
+    with pytest.raises(ValueError, match='El usuario no dejó controlar'):
+        correr(control.estado({'app': 'Contador Demo'}))
+    assert [orden for orden, _ in ayudante.llamadas] == ['lista']
+    assert not (tmp_path / 'vista-control-apps.json').exists()

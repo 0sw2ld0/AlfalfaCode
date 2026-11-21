@@ -70,11 +70,11 @@ struct BrowserActivityTests {
             let other = directory.appendingPathComponent("otro.json")
             try Data("privado".utf8).write(to: other)
             try FileManager.default.createSymbolicLink(at: path, withDestinationURL: other)
-            #expect(throws: BrowserActivityFileError.self) { try store.load() }
+            #expect(throws: SessionActivityFileError.self) { try store.load() }
             try FileManager.default.removeItem(at: path)
             try Data(repeating: 0, count: 512 * 1024 + 1).write(to: path)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
-            #expect(throws: BrowserActivityFileError.self) { try store.load() }
+            #expect(throws: SessionActivityFileError.self) { try store.load() }
             #expect(BrowserActivityStore(home: directory, sessionID: "../otro") == nil)
         }
     }

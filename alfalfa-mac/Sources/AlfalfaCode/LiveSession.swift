@@ -121,7 +121,10 @@ final class LiveSession: ObservableObject, Identifiable {
         self.launcher = launcher
         liveBrowserExport = nil
         let (arguments, pacai) = engineArguments(task: task, images: images, wait: wait, queue: queue)
-        let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd, pacai: pacai)
+        var environment = ProcessInfo.processInfo.environment
+        environment["ALFALFA_VISTA_APPS"] = "1"
+        let child = AlfalfaProcess(launcher: launcher, arguments: arguments, directory: cwd,
+                                   environment: environment, pacai: pacai)
         child.onMessage = { [weak self] message in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(message) } }
         }
