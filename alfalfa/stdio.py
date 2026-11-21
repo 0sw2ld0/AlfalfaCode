@@ -7,6 +7,7 @@ import signal
 import sqlite3
 import sys
 import time
+import unicodedata
 from contextlib import redirect_stdout
 from pathlib import Path
 from uuid import uuid4
@@ -1245,6 +1246,7 @@ def marcar(ident, campo, valor):
         raise ValueError('Campo desconocido: usa titulo, fijada o archivada.')
     path = _carpeta_de_sesion(ident)
     if MARCAS[campo] is bool:
+        valor = unicodedata.normalize('NFC', valor)
         if valor not in ('si', 'sí', 'no', 'true', 'false', '1', '0'):
             raise ValueError('Usa sí o no.')
         valor = valor in ('si', 'sí', 'true', '1')

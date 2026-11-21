@@ -195,7 +195,7 @@ struct SidebarView: View {
     @ViewBuilder private func menu(for row: SidebarRow) -> some View {
         if row.sessionID != nil {
             Button { newTitle = row.title; renaming = row } label: { Label("Renombrar", systemImage: "pencil") }
-            Button { model.mark(row, "fijada", row.pinned ? "no" : "sí") } label: {
+            Button { model.mark(row, "fijada", !row.pinned) } label: {
                 Label(row.pinned ? "Dejar de fijar" : "Fijar", systemImage: row.pinned ? "pin.slash" : "pin")
             }
             Divider()
@@ -218,7 +218,7 @@ struct SidebarView: View {
                 }
             }
             Divider()
-            Button { model.mark(row, "archivada", row.archived ? "no" : "sí") } label: {
+            Button { model.mark(row, "archivada", !row.archived) } label: {
                 Label(row.archived ? "Desarchivar" : "Archivar", systemImage: "archivebox")
             }
             Button(role: .destructive) { trashing = row } label: { Label("Mover a la Papelera", systemImage: "trash") }

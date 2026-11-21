@@ -485,7 +485,7 @@ final class AppModel: ObservableObject {
         guard !ids.isEmpty else { return }
         if case let .past(id) = route, ids.contains(id) { route = .new }
         Task {
-            for id in ids { await manage(["--marcar", id, "archivada", "sí"]) }
+            for id in ids { await manage(["--marcar", id, "archivada", "true"]) }
         }
     }
 
@@ -628,6 +628,10 @@ final class AppModel: ObservableObject {
     func mark(_ row: SidebarRow, _ field: String, _ value: String) {
         guard let id = row.sessionID else { return }
         Task { await manage(["--marcar", id, field, value]) }
+    }
+
+    func mark(_ row: SidebarRow, _ field: String, _ value: Bool) {
+        mark(row, field, String(value))
     }
 
     func rename(_ row: SidebarRow, to title: String) {

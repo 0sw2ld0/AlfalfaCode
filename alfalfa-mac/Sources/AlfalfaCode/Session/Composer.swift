@@ -365,11 +365,11 @@ private extension Composer {
         case .renombrar:
             guard !value.isEmpty else { text = "/renombrar "; return }
             withRow { app.rename($0, to: value) }
-        case .fijar: withRow { app.mark($0, "fijada", $0.pinned ? "no" : "sí") }
+        case .fijar: withRow { app.mark($0, "fijada", !$0.pinned) }
         case .bifurcar: withRow { app.fork($0) }
         case .archivar:
             withRow { row in
-                app.mark(row, "archivada", "sí")
+                app.mark(row, "archivada", true)
                 app.route = .new
             }
         case .copiar:

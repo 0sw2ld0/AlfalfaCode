@@ -12,7 +12,10 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from alfalfa import stdio
+from alfalfa.terminal import main
 
 
 def sesion(hogar, ident='abc'):
@@ -40,6 +43,21 @@ def test_dos_marcas_a_la_vez_quedan_las_dos(tmp_path, monkeypatch):
     for hilo in hilos:
         hilo.join()
     assert json.loads((d / 'marcas.json').read_text()) == {'titulo': 'Nuevo', 'fijada': True}
+
+
+@pytest.mark.parametrize('campo', ['fijada', 'archivada'])
+@pytest.mark.parametrize('afirmativo,negativo', [('sí', 'no'), ('si\u0301', 'no'), ('true', 'false')])
+def test_la_cli_marca_y_desmarca_con_unicode_o_booleanos(tmp_path, monkeypatch, capsys, campo, afirmativo, negativo):
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path))
+    d = sesion(tmp_path)
+
+    assert main(['--marcar', 'abc', campo, afirmativo]) == 0
+    assert json.loads(capsys.readouterr().out)['marcas'] == {campo: True}
+    assert json.loads((d / 'marcas.json').read_text()) == {campo: True}
+
+    assert main(['--marcar', 'abc', campo, negativo]) == 0
+    assert json.loads(capsys.readouterr().out)['marcas'] == {}
+    assert json.loads((d / 'marcas.json').read_text()) == {}
 
 
 def test_se_puede_marcar_una_sesion_en_marcha(tmp_path, monkeypatch):
