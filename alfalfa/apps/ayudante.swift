@@ -479,19 +479,42 @@ final class VistaDeCursor: NSView {
             aro.lineWidth = 3
             aro.stroke()
         }
-        let flecha = NSBezierPath()
-        let puntos: [(CGFloat, CGFloat)] = [(0, 0), (0, -24), (6.5, -18.5), (11, -28), (15, -26.2), (10.6, -16.8), (19, -16.8)]
-        for (n, (x, y)) in puntos.enumerated() {
-            let p = NSPoint(x: punta.x + x, y: punta.y + y)
-            if n == 0 { flecha.move(to: p) } else { flecha.line(to: p) }
-        }
-        flecha.close()
+        // La punta del foliolo superior es el punto exacto de la acción.
+        func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: punta.x + x, y: punta.y + y) }
+        let hoja = NSBezierPath()
+        hoja.move(to: punta)
+        hoja.curve(to: p(16, -11), controlPoint1: p(10, -1), controlPoint2: p(15, -4))
+        hoja.curve(to: p(27, -8), controlPoint1: p(19, -7), controlPoint2: p(23, -7))
+        hoja.curve(to: p(18, -21), controlPoint1: p(27, -15), controlPoint2: p(23, -20))
+        hoja.line(to: p(23, -25))
+        hoja.curve(to: p(20, -28), controlPoint1: p(23, -27), controlPoint2: p(22, -29))
+        hoja.line(to: p(14, -22))
+        hoja.curve(to: p(2, -24), controlPoint1: p(11, -25), controlPoint2: p(6, -25))
+        hoja.curve(to: p(6, -13), controlPoint1: p(2, -19), controlPoint2: p(3, -15))
+        hoja.curve(to: punta, controlPoint1: p(2, -10), controlPoint2: p(0, -4))
+        hoja.close()
+
+        NSColor.black.withAlphaComponent(0.62).setStroke()
+        hoja.lineWidth = 3.5
+        hoja.lineJoinStyle = .round
+        hoja.stroke()
         verde.setFill()
-        flecha.fill()
+        hoja.fill()
         NSColor.white.setStroke()
-        flecha.lineWidth = 1.6
-        flecha.lineJoinStyle = .round
-        flecha.stroke()
+        hoja.lineWidth = 1.5
+        hoja.stroke()
+
+        let nervios = NSBezierPath()
+        nervios.move(to: p(19, -24))
+        nervios.curve(to: p(4, -5), controlPoint1: p(15, -18), controlPoint2: p(10, -13))
+        nervios.move(to: p(14, -18))
+        nervios.curve(to: p(23, -12), controlPoint1: p(17, -18), controlPoint2: p(21, -14))
+        nervios.move(to: p(12, -15))
+        nervios.curve(to: p(6, -20), controlPoint1: p(10, -17), controlPoint2: p(8, -19))
+        NSColor.white.withAlphaComponent(0.78).setStroke()
+        nervios.lineCapStyle = .round
+        nervios.lineWidth = 1.2
+        nervios.stroke()
     }
 }
 
@@ -501,7 +524,7 @@ func cursor() -> Never {
     let alto = NSScreen.screens.first?.frame.height ?? 0
     let tamano = NSSize(width: 64, height: 64)
     let vista = VistaDeCursor(frame: NSRect(origin: .zero, size: tamano))
-    // De arriba-izquierda (Quartz) a abajo-izquierda (AppKit), con la punta de la flecha en el punto.
+    // De arriba-izquierda (Quartz) a abajo-izquierda (AppKit), con la punta de la hoja en el punto.
     func origen(_ x: Double, _ y: Double) -> NSPoint {
         NSPoint(x: x - vista.punta.x, y: alto - y - vista.punta.y)
     }
