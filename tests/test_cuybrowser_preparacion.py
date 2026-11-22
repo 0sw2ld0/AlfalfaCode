@@ -103,3 +103,16 @@ def test_app_no_sondea_path_sin_elegirlo(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cuybrowser_preparacion.subprocess, 'run', inesperado)
     assert main(['--cuybrowser-estado', '--cuybrowser-solo-incluido', '--json']) == 1
     assert json.loads(capsys.readouterr().out)['estado'] == 'sin_cuybrowser'
+
+
+def test_path_prefiere_alfalfabrowser_y_reconoce_el_nombre_anterior(tmp_path, monkeypatch):
+    root = tmp_path / 'proyecto'
+    root.mkdir()
+    canonico = str(tmp_path / 'bin/alfalfabrowser')
+    anterior = str(tmp_path / 'bin/cuybrowser')
+    disponibles = {'alfalfabrowser': canonico, 'cuybrowser': anterior}
+    monkeypatch.setattr(cuybrowser_proceso.empaquetado, 'ayudante', lambda _: None)
+    monkeypatch.setattr(cuybrowser_proceso.shutil, 'which', disponibles.get)
+    assert cuybrowser_proceso.ejecutable_cuybrowser(root, origen='path') == (canonico, 'path')
+    del disponibles['alfalfabrowser']
+    assert cuybrowser_proceso.ejecutable_cuybrowser(root, origen='path') == (anterior, 'path')

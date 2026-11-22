@@ -102,14 +102,13 @@ WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
 alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
 ```
 
-La distribución de AlfalfaCode incluye AlfalfaBrowser 0.7.0 en `Helpers/cuybrowser`. El cursor de hoja
+La distribución de AlfalfaCode incluye AlfalfaBrowser 0.7.1 en `Helpers/cuybrowser`. El cursor de hoja
 marca los clics y movimientos del agente en la ventana de Chromium. Las capturas de página excluyen la hoja.
-El nombre del ejecutable, las preferencias guardadas y la opción de usar `cuybrowser` desde el PATH
-se mantienen para que sigan funcionando las configuraciones existentes. Los clones y las
-instalaciones anteriores pueden usar un `cuybrowser` compatible de `PATH`. Para elegirlo
-en una instalación que ya lo incluye, usa el interruptor en Ajustes → Navegador o la opción
-`--cuybrowser-desde-path` de la CLI. El motor comprueba `exactOrigins` y `localNetwork`
-antes de abrir Chromium.
+Los clones y las instalaciones anteriores pueden usar `alfalfabrowser` desde `PATH`.
+AlfalfaCode también reconoce el comando `cuybrowser` de las versiones publicadas
+con ese nombre. Para usar una instalación externa, elige «Usar AlfalfaBrowser del
+PATH» en Ajustes → Navegador o usa `--cuybrowser-desde-path` en la CLI.
+El motor comprueba `exactOrigins` y `localNetwork` antes de abrir Chromium.
 
 `alfalfa --cuybrowser-estado` comprueba qué navegador compatible está disponible. Si falta,
 la app ofrece descargar Chromium de Playwright y `alfalfa --descargar-chromium` pide confirmación

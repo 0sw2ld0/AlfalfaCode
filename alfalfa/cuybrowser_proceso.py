@@ -21,21 +21,25 @@ from .cuybrowser_http import HttpCuyBrowser
 def ejecutable_cuybrowser(root, *, origen=None):
     """La distribución instalada tiene prioridad. PATH sigue disponible por elección o en clones."""
     incluido = None if origen == 'path' else empaquetado.ayudante('cuybrowser')
-    ejecutable = incluido or (None if origen == 'incluido' else shutil.which('cuybrowser'))
-    if ejecutable is None and origen == 'path':
-        ejecutable = shutil.which(str(Path.home() / '.local/bin/cuybrowser'))
+    ejecutable = incluido
+    if ejecutable is None and origen != 'incluido':
+        local = Path.home() / '.local/bin'
+        ejecutable = (shutil.which('alfalfabrowser') or
+                      (origen == 'path' and shutil.which(str(local / 'alfalfabrowser'))) or
+                      shutil.which('cuybrowser') or
+                      (origen == 'path' and shutil.which(str(local / 'cuybrowser'))) or None)
     if ejecutable is None:
         return None, None
     ruta = Path(ejecutable).resolve()
     if incluido and (incluido.is_symlink() or incluido.parent.is_symlink()):
-        raise ValueError('El CuyBrowser incluido debe ser un archivo dentro de Helpers.')
+        raise ValueError('El AlfalfaBrowser incluido debe ser un archivo dentro de Helpers.')
     if not incluido and ruta.is_relative_to(root.resolve()):
         raise ValueError('No se ejecuta un cuybrowser procedente del proyecto; usa una instalación de confianza.')
     return str(ruta), 'incluido' if incluido else 'path'
 
 
 def entorno_cuybrowser(base, home=None, *, root=None):
-    # Bun y Node aceptan opciones de arranque antes de que CuyBrowser pueda aplicar su política.
+    # Bun y Node aceptan opciones de arranque antes de que AlfalfaBrowser pueda aplicar su política.
     env = {key: value for key, value in os.environ.items()
            if not key.startswith('BUN_') and key not in ('NODE_OPTIONS', 'NODE_PATH')}
     if root is not None:
@@ -68,7 +72,7 @@ def _private(path):
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
-        raise ValueError('El hogar propio de CuyBrowser debe ser un directorio privado sin enlaces simbólicos.')
+        raise ValueError('El hogar propio de AlfalfaBrowser debe ser un directorio privado sin enlaces simbólicos.')
     return path
 
 
@@ -83,7 +87,7 @@ def _ipc(home, kind='ping', expected=None):
             stream.flush()
             info = json.loads(stream.readline(4096))
             if info.get('type') != 'pong' or not isinstance(info.get('pid'), int):
-                raise ValueError('El socket propio de CuyBrowser no responde al protocolo esperado.')
+                raise ValueError('El socket propio de AlfalfaBrowser no responde al protocolo esperado.')
             if kind == 'shutdown' and info['pid'] == expected:
                 stream.write(b'{"id":2,"type":"shutdown"}\n')
                 stream.flush()
@@ -102,7 +106,7 @@ def _port():
 class ProcesoCuyBrowser:
     def __init__(self, profile='alfalfa', *, origen=None):
         if not isinstance(profile, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', profile):
-            raise ValueError('El perfil de CuyBrowser admite 1–64 letras ASCII, números, guiones y guiones bajos.')
+            raise ValueError('El perfil de AlfalfaBrowser admite 1–64 letras ASCII, números, guiones y guiones bajos.')
         self.profile = profile
         self.origen = origen
         self.home = None
@@ -121,7 +125,7 @@ class ProcesoCuyBrowser:
         if self.http is not None:
             if strict and self.http.capabilities.get('strictResources') is not True:
                 self.close()
-                raise ValueError('CuyBrowser no garantiza el modo estricto de subrecursos; usa WebKit.')
+                raise ValueError('AlfalfaBrowser no garantiza el modo estricto de subrecursos; usa WebKit.')
             return self.http
         self.root = root
         key = clave_proyecto(root)
@@ -146,12 +150,12 @@ class ProcesoCuyBrowser:
             executable, _ = ejecutable_cuybrowser(root, origen=self.origen)
             if not executable:
                 if self.origen == 'incluido':
-                    raise ValueError('CuyBrowser no está incluido. Puedes elegir tu instalación en Ajustes.')
-                raise ValueError('No se encuentra CuyBrowser incluido ni en PATH. Instala una versión compatible.')
+                    raise ValueError('AlfalfaBrowser no está incluido. Puedes elegir tu instalación en Ajustes.')
+                raise ValueError('No se encuentra AlfalfaBrowser incluido ni en PATH. Instala una versión compatible.')
             env = entorno_cuybrowser(runtime.manager.home, self.home, root=root)
             if not self.authorized:
                 await ask(runtime, [executable, 'serve', '--http'],
-                          'Navegador: iniciar CuyBrowser fuera del sandbox con un perfil propio del proyecto ('
+                          'Navegador: iniciar AlfalfaBrowser fuera del sandbox con un perfil propio del proyecto ('
                           + self.profile + '). Sus diálogos nativos confirmarán las acciones sensibles.')
                 self.authorized = True
             port = _port()
@@ -160,7 +164,7 @@ class ProcesoCuyBrowser:
                                             stderr=subprocess.DEVNULL, start_new_session=True)
             for _ in range(100):
                 if self.process.poll() is not None:
-                    raise ValueError('El servidor propio de CuyBrowser terminó al arrancar; no se reintentó.')
+                    raise ValueError('El servidor propio de AlfalfaBrowser terminó al arrancar; no se reintentó.')
                 info = await asyncio.to_thread(_ipc, self.home)
                 if info:
                     self.pid = info['pid']
@@ -174,21 +178,21 @@ class ProcesoCuyBrowser:
                     policy = await candidate.check_policy()
                     if (candidate.capabilities.get('exactOrigins') is not True
                             or candidate.capabilities.get('localNetwork') is not True):
-                        raise ValueError('Este CuyBrowser no garantiza orígenes exactos antes del contacto, incluso '
-                                         'al restaurar perfiles, y bloqueo de red local. Usa una versión compatible; '
-                                         'no se abrió Chromium.')
+                        raise ValueError('Este AlfalfaBrowser no garantiza orígenes exactos antes del contacto, '
+                                         'incluso al restaurar perfiles, y bloqueo de red local. '
+                                         'Usa una versión compatible; no se abrió Chromium.')
                     if strict and candidate.capabilities.get('strictResources') is not True:
-                        raise ValueError('CuyBrowser no garantiza el modo estricto de subrecursos; '
+                        raise ValueError('AlfalfaBrowser no garantiza el modo estricto de subrecursos; '
                                          'usa WebKit. No se abrió Chromium.')
                     self.origins(policy, [], [], [])  # Cerrado ANTES de lanzar/restaurar Chromium.
                     await candidate.call('start', {'mode': 'launch', 'profile': self.profile, 'headless': False})
                     self.http = candidate
                     return candidate
                 await asyncio.sleep(0.1)
-            raise ValueError('CuyBrowser no arrancó dentro de 10 segundos; no se reintentó.')
+            raise ValueError('AlfalfaBrowser no arrancó dentro de 10 segundos; no se reintentó.')
         except OSError as exc:
             self.close()
-            raise ValueError('No se pudo iniciar el servidor propio de CuyBrowser (' + type(exc).__name__
+            raise ValueError('No se pudo iniciar el servidor propio de AlfalfaBrowser (' + type(exc).__name__
                              + '). Comprueba permisos, longitud de ALFALFA_HOME y loopback.') from None
         except BaseException:
             self.close()
@@ -200,7 +204,7 @@ class ProcesoCuyBrowser:
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                 or info.st_uid != os.getuid() or info.st_mode & 0o077):
-            raise ValueError('La política propia de CuyBrowser debe ser un archivo normal privado.')
+            raise ValueError('La política propia de AlfalfaBrowser debe ser un archivo normal privado.')
         origins = {'allow': sorted(set(allow)), 'deny': sorted(set(deny))}
         if visit is not None:
             origins['visit'] = visit
@@ -213,7 +217,7 @@ class ProcesoCuyBrowser:
                 json.dump(content, out, ensure_ascii=False)
                 out.write('\n')
             if path.lstat() != info:
-                raise ValueError('La política de CuyBrowser cambió mientras se preparaba; no se sobrescribió.')
+                raise ValueError('La política de AlfalfaBrowser cambió mientras se preparaba; no se sobrescribió.')
             temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
@@ -224,10 +228,10 @@ class ProcesoCuyBrowser:
             info = os.fstat(fd)
             if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size not in (64, 65)
                     or info.st_uid != os.getuid() or info.st_mode & 0o077):
-                raise ValueError('El token propio de CuyBrowser debe ser privado y un archivo normal.')
+                raise ValueError('El token propio de AlfalfaBrowser debe ser privado y un archivo normal.')
             token = os.read(fd, 129).decode('ascii').strip()
             if not re.fullmatch('[a-fA-F0-9]{64}', token):
-                raise ValueError('Token de CuyBrowser inválido.')
+                raise ValueError('Token de AlfalfaBrowser inválido.')
             return token
         finally:
             os.close(fd)

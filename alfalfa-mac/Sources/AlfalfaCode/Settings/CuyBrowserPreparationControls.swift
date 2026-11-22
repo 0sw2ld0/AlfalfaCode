@@ -19,7 +19,7 @@ struct CuyBrowserPreparationControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allowsSourceChoice {
-                Toggle("Usar cuybrowser del PATH", isOn: $fromPath).disabled(downloading)
+                Toggle("Usar AlfalfaBrowser del PATH", isOn: $fromPath).disabled(downloading)
             }
             if loading || downloading {
                 HStack(spacing: 8) {
@@ -48,7 +48,7 @@ struct CuyBrowserPreparationControls: View {
     @ViewBuilder private func resultado(_ preparation: CuyBrowserPreparation) -> some View {
         switch preparation.status {
         case .available:
-            let source = preparation.source == "incluido" ? "AlfalfaBrowser incluido" : "cuybrowser del PATH"
+            let source = preparation.source == "incluido" ? "AlfalfaBrowser incluido" : "AlfalfaBrowser del PATH"
             Label("\(preparation.browser ?? "Chromium") disponible · \(source)", systemImage: "checkmark.circle")
                 .foregroundStyle(Theme.secondary)
         case .needsChromium:

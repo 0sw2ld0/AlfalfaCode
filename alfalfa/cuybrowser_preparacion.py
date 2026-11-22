@@ -22,27 +22,28 @@ def _consultar(home, origen):
         root = Path.cwd().resolve()
         binario, fuente = ejecutable_cuybrowser(root, origen=origen)
         if binario is None:
-            mensaje = 'CuyBrowser no está disponible en esta instalación.'
+            mensaje = 'AlfalfaBrowser no está disponible en esta instalación.'
             if origen == 'incluido':
-                mensaje = 'Esta app no trae CuyBrowser. Puedes elegir PATH en Ajustes.'
+                mensaje = 'Esta app no trae AlfalfaBrowser. Puedes elegir PATH en Ajustes.'
             return None, _resultado('sin_cuybrowser', mensaje=mensaje)
         perfil = home / 'cuybrowser' / clave_proyecto(root)
         env = entorno_cuybrowser(home, perfil, root=root)
         salida = subprocess.run([binario, 'browsers'], cwd='/', env=env,
                                 stdin=subprocess.DEVNULL, capture_output=True, text=True, errors='replace', timeout=10)
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
-        mensaje = str(error) if isinstance(error, ValueError) else 'No se pudo comprobar CuyBrowser.'
+        mensaje = str(error) if isinstance(error, ValueError) else 'No se pudo comprobar AlfalfaBrowser.'
         return None, _resultado('error', mensaje=mensaje)
     if salida.returncode != 0:
         if SIN_CHROMIUM in salida.stderr or 'Chromium no está instalado' in salida.stderr:
             return binario, _resultado('sin_chromium', origen=fuente)
-        return None, _resultado('error', origen=fuente, mensaje='CuyBrowser no pudo detectar un navegador compatible.')
+        return None, _resultado('error', origen=fuente,
+                                mensaje='AlfalfaBrowser no pudo detectar un navegador compatible.')
     for linea in salida.stdout.splitlines():
         if linea.startswith('* '):
             elegido = linea[2:].partition(': ')[0]
             nombre = Path(elegido).name if elegido.startswith('/') else elegido
             return binario, _resultado('disponible', origen=fuente, navegador=nombre[:120])
-    return None, _resultado('error', origen=fuente, mensaje='CuyBrowser no informó qué navegador eligió.')
+    return None, _resultado('error', origen=fuente, mensaje='AlfalfaBrowser no informó qué navegador eligió.')
 
 
 def _confirmar(pregunta):
@@ -99,7 +100,7 @@ def preparar_terminal(args, home):
         return
     estado = _descargar(home, args.origen_cuybrowser)
     if estado['estado'] == 'disponible':
-        pregunta = f"¿Activar CuyBrowser con {estado['navegador']} y un perfil propio en los próximos encargos?"
+        pregunta = f"¿Activar AlfalfaBrowser con {estado['navegador']} y un perfil propio en los próximos encargos?"
         _guardar(home, _confirmar(pregunta))
     elif estado['mensaje']:
         print(estado['mensaje'], file=sys.stderr)
@@ -109,7 +110,7 @@ def orden(args, home):
     if args.cuybrowser_cli:
         activa = args.cuybrowser_cli == 'activar'
         _guardar(home, activa)
-        print('CuyBrowser activado para la terminal.' if activa else 'CuyBrowser desactivado para la terminal.')
+        print('AlfalfaBrowser activado para la terminal.' if activa else 'AlfalfaBrowser desactivado para la terminal.')
         return 0
     if args.descargar_chromium:
         estado = _descargar(home, args.origen_cuybrowser, confirmada=args.confirmar_descarga_chromium)
@@ -118,7 +119,7 @@ def orden(args, home):
     if args.json:
         print(json.dumps(estado, ensure_ascii=False))
     elif estado['navegador']:
-        print(f"CuyBrowser puede usar {estado['navegador']} con un perfil propio.")
+        print(f"AlfalfaBrowser puede usar {estado['navegador']} con un perfil propio.")
     else:
         print(estado['mensaje'] or 'Falta Chromium. Usa alfalfa --descargar-chromium para instalarlo.')
     return int(estado['estado'] != 'disponible')
