@@ -46,7 +46,11 @@ def run():
     assert new["method"] == "session/new" and os.path.realpath(new["params"]["cwd"]) == os.getcwd()
     servers = new["params"]["mcpServers"]
     if "--process-per-session" in sys.argv:
-        assert servers == [{"type": "http", "name": "manual", "url": "https://docs.example.test/mcp", "headers": []}]
+        assert servers == [
+            {"type": "http", "name": "manual", "url": "https://docs.example.test/mcp", "headers": []},
+            {"name": "alfalfa-delegation", "command": "/test/alfalfa", "args": ["--delegacion-mcp", "openai/test"],
+             "env": [{"name": "ALFALFA_HOME", "value": "/test/settings"}]},
+        ]
     else:
         assert servers == []
     send(id=new["id"], error={"code": -32000, "message": "Authentication required"})

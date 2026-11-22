@@ -57,8 +57,8 @@ final class PermissionReasonTests: XCTestCase {
         // diagnosticos_swift, sourcekit-lsp (opcional, de AlfalfaCode y no del agente).
         XCTAssertEqual(PermissionReason.allCases.map(\.rawValue),
                        ["peligroso", "red", "salir_sandbox", "reintento", "modo", "edicion", "app", "navegador",
-                        "aprendizaje", "contenido_externo", "diagnosticos_swift"])
-        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 11)
+                        "aprendizaje", "contenido_externo", "diagnosticos_swift", "delegacion_antigravity"])
+        XCTAssertEqual(Set(PermissionReason.allCases.map(\.title)).count, 12)
         XCTAssertEqual(PermissionReason.allCases.filter(\.leavesSandbox), [.leaveSandbox, .retry])
         func scope(_ reasons: [PermissionReason]) -> String? {
             PermissionRequest(id: "x", argv: ["ls"], purpose: "", reason: reasons.first, reasons: reasons).scope
@@ -68,6 +68,7 @@ final class PermissionReasonTests: XCTestCase {
         XCTAssertTrue(scope([.leaveSandbox])!.contains("sin sandbox"))
         XCTAssertTrue(scope([.retry])!.contains("una vez"))
         XCTAssertTrue(scope([.browser])!.contains("sin tus cuentas"))
+        XCTAssertTrue(scope([.antigravityDelegation])!.contains("cuenta de Google"))
         XCTAssertNil(scope([]))
     }
 

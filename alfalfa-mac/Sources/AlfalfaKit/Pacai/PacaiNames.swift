@@ -123,21 +123,23 @@ enum PacaiNames {
         ],
         "reason": [
             "ajeno": "not_by_agent", "app": "app", "aprendizaje": "learning", "auto": "auto",
-            "contenido_externo": "external_content", "continuacion": "continuation", "desconocido": "unknown",
-            "detenida": "stopped", "diagnosticos_swift": "swift_diagnostics", "edicion": "edit",
-            "editado_despues": "edited_later", "entregado": "delivered", "generar_imagen": "image_generation",
-            "manual": "manual", "mcp": "mcp", "modo": "mode", "navegador": "browser", "peligroso": "dangerous",
-            "red": "network", "regla": "rule", "reintento": "sandbox_retry", "salir_sandbox": "outside_sandbox",
-            "sin_vision": "no_vision", "solo_lectura": "read_only", "umbral": "threshold"
+            "contenido_externo": "external_content", "continuacion": "continuation",
+            "delegacion_antigravity": "antigravity_delegation", "desconocido": "unknown", "detenida": "stopped",
+            "diagnosticos_swift": "swift_diagnostics", "edicion": "edit", "editado_despues": "edited_later",
+            "entregado": "delivered", "generar_imagen": "image_generation", "manual": "manual", "mcp": "mcp",
+            "modo": "mode", "navegador": "browser", "peligroso": "dangerous", "red": "network", "regla": "rule",
+            "reintento": "sandbox_retry", "salir_sandbox": "outside_sandbox", "sin_vision": "no_vision",
+            "solo_lectura": "read_only", "umbral": "threshold"
         ],
         "reasons": [
             "ajeno": "not_by_agent", "app": "app", "aprendizaje": "learning", "auto": "auto",
-            "contenido_externo": "external_content", "continuacion": "continuation", "desconocido": "unknown",
-            "detenida": "stopped", "diagnosticos_swift": "swift_diagnostics", "edicion": "edit",
-            "editado_despues": "edited_later", "entregado": "delivered", "generar_imagen": "image_generation",
-            "manual": "manual", "mcp": "mcp", "modo": "mode", "navegador": "browser", "peligroso": "dangerous",
-            "red": "network", "regla": "rule", "reintento": "sandbox_retry", "salir_sandbox": "outside_sandbox",
-            "sin_vision": "no_vision", "solo_lectura": "read_only", "umbral": "threshold"
+            "contenido_externo": "external_content", "continuacion": "continuation",
+            "delegacion_antigravity": "antigravity_delegation", "desconocido": "unknown", "detenida": "stopped",
+            "diagnosticos_swift": "swift_diagnostics", "edicion": "edit", "editado_despues": "edited_later",
+            "entregado": "delivered", "generar_imagen": "image_generation", "manual": "manual", "mcp": "mcp",
+            "modo": "mode", "navegador": "browser", "peligroso": "dangerous", "red": "network", "regla": "rule",
+            "reintento": "sandbox_retry", "salir_sandbox": "outside_sandbox", "sin_vision": "no_vision",
+            "solo_lectura": "read_only", "umbral": "threshold"
         ],
         "result": [
             "cancelada": "cancelled", "correcta": "succeeded", "fallida": "failed"

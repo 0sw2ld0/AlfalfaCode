@@ -406,7 +406,7 @@ class NativeRuntime:
                  approval_policy=None, excluded_tools=(), working_text='Trabajando…',
                  process_env=None, process_sandbox=None, tolerant_edit=False,
                  command_policy=None, mcp=None, complementos=None, compaction=None,
-                 compact_limit=None, project_docs=None, hooks=None):
+                 compact_limit=None, project_docs=None, hooks=None, delegate_antigravity=False):
         # Defaults stay lazy: terminal callers never load identity/personality modules.
         if instructions is None:
             # Quien integra el arnés registra las suyas en `ajustes`;
@@ -424,7 +424,10 @@ class NativeRuntime:
         self.manual = manual or manual_del_harness
         self.approval_label = approval_label
         self.approval_policy = approval_policy
+        self.delegate_antigravity = delegate_antigravity
         self.excluded_tools = frozenset(excluded_tools)
+        if not delegate_antigravity or task.get('review'):
+            self.excluded_tools |= {'delegate_antigravity'}
         self.working_text = working_text
         self.process_env = process_env or {}
         # Sólo AlfalfaCode lo activa (ver arnes/terminal.py); None conserva el
@@ -2161,8 +2164,10 @@ class NativeRuntime:
         # pasaba el día parado.
         # Tras leer contenido externo, una orden que safe_command da por inofensiva
         # (git status, pwd, --version…) tampoco necesita el sí extra: no cambia nada.
-        if args.get('motivo') != 'generar_imagen' and self.task.get('permission_mode') == 'auto' and (
-                args.get('motivo') != 'contenido_externo' or args.get('herramienta') in ('run_command', 'run_checks')):
+        if (args.get('motivo') not in ('generar_imagen', 'delegacion_antigravity')
+                and self.task.get('permission_mode') == 'auto'
+                and (args.get('motivo') != 'contenido_externo'
+                     or args.get('herramienta') in ('run_command', 'run_checks'))):
             from ...permisos.ordenes import python_en_linea_seguro, rutas_citadas, safe_command
             orden = shlex.join(str(a) for a in args.get('argv') or [])
             try:

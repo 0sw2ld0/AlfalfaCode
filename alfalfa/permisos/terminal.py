@@ -233,6 +233,7 @@ MOTIVO_TERMINAL = {
     'edicion': 'edición de archivos (modo Manual)',
     'aprendizaje': 'guardar lo aprendido (memoria o habilidad)',
     'contenido_externo': 'acción tras leer contenido externo',
+    'delegacion_antigravity': 'delegar un encargo a Antigravity',
 }
 
 
@@ -301,6 +302,8 @@ class TerminalApproval:
                         if args.get('mcp') else
                         '¿Enviar a OpenAI y generar la imagen de pago? [s/N] '
                         if args.get('motivo') == 'generar_imagen' else
+                        '¿Enviar el texto a Antigravity? [s/N] '
+                        if args.get('motivo') == 'delegacion_antigravity' else
                         '¿Guardarlo? [s/N] ' if args.get('motivo') == 'aprendizaje' else
                         'SIN SANDBOX: el proceso tendrá todos los permisos del usuario. ¿Ejecutar sin sandbox? [s/N] '
                         if unsandboxed else

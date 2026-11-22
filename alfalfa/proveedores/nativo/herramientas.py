@@ -388,6 +388,9 @@ TOOLS = [
             'size': {**STRING, 'enum': list(imagenes.PRECIOS)},
             'quality': {**STRING, 'enum': list(imagenes.CALIDADES)}}, ['prompt', 'path'],
            example={'prompt': 'A watercolor red fox in a snowy forest', 'path': 'fox.png', 'quality': 'medium'}),
+    schema('delegate_antigravity', 'Ask Antigravity for a second opinion on a self-contained coding task. '
+           'The user approves the exact text sent to Google. Send only the context needed for text analysis. '
+           'Do not repeat a rejected or failed delegation.', {'message': STRING}, ['message']),
     schema('update_plan', 'Keep the task list the user sees under your messages, like Codex update_plan. '
            'For work of several steps send the whole list in order with short imperative steps; exactly one '
            'step is in_progress while you work and none when everything is done. Send it again when a step '
@@ -1127,6 +1130,11 @@ class WorkspaceTools:
         # Se trabaja con la versión normalizada; lo que envió el modelo queda intacto.
         catalogo = list(self.runtime.tool_specs) + list(getattr(self.runtime, 'complementos_tools', ()))
         args = self.validate(name, args, catalogo)
+        if name == 'delegate_antigravity':
+            if not self.runtime.delegate_antigravity or self.runtime.task.get('review'):
+                raise ValueError('La delegación a Antigravity no está disponible en esta sesión.')
+            from ...delegacion import delegar
+            return await delegar(self.runtime, args['message'])
         if name == 'generate_image':
             # Su tarjeta obligatoria ya cubre el envío tras leer contenido externo.
             return await imagenes.generar(self, args)

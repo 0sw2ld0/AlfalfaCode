@@ -177,6 +177,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
     /// sourcekit-lsp, que corre fuera del sandbox: diagnósticos opcionales de AlfalfaCode, no una acción
     /// del agente. Negarlo sólo los apaga en la sesión.
     case swiftDiagnostics = "diagnosticos_swift"
+    case antigravityDelegation = "delegacion_antigravity"
 
     /// Nombre corto que muestra la tarjeta de permiso.
     public var title: String {
@@ -191,6 +192,7 @@ public enum PermissionReason: String, CaseIterable, Equatable, Sendable {
         case .browser: return "Navegador"
         case .learn: return "Guardar lo aprendido"
         case .externalContent: return "Contenido externo"
+        case .antigravityDelegation: return "Delegar a Antigravity"
         case .swiftDiagnostics: return "Diagnósticos de Swift (opcional)"
         }
     }
@@ -389,6 +391,9 @@ public struct PermissionRequest: Equatable, Sendable {
     }
 
     private var baseScope: String? {
+        if reasons.contains(.antigravityDelegation) {
+            return "Envía el texto mostrado a Antigravity con tu cuenta de Google, para un encargo en modo Plan."
+        }
         if reasons.contains(.swiftDiagnostics) {
             return "Es una función de diagnósticos de AlfalfaCode, no una acción del agente: lanzaría sourcekit-lsp "
                 + "fuera del sandbox para ver los errores de los .swift que edite. Negarla sólo desactiva los "

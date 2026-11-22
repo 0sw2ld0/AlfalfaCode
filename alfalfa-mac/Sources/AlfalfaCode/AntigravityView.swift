@@ -10,6 +10,7 @@ struct AntigravityView: View {
     @State private var executable = AntigravitySession.executable()
     @State private var servers: [AntigravityMCPServer] = []
     @State private var selectedServers: Set<String> = []
+    @State private var delegationModel: String?
     @State private var importError: String?
     @State private var confirmDisconnect = false
 
@@ -98,10 +99,27 @@ struct AntigravityView: View {
                     }
                     .toggleStyle(.checkbox)
                 }
+                if model.launcher != nil {
+                    Picker("Delegar a un modelo de AlfalfaCode", selection: $delegationModel) {
+                        Text("Desactivado").tag(nil as String?)
+                        ForEach(model.models.filter { !$0.name.lowercased().contains("embed") }) { item in
+                            Text(item.label).tag(Optional(item.name))
+                        }
+                    }
+                    if delegationModel != nil {
+                        Text("Antigravity puede enviar hasta tres consultas de texto al modelo elegido. "
+                             + "Se aplican la cuota o los cargos del proveedor.")
+                            .font(.callout).foregroundStyle(Theme.secondary)
+                    }
+                }
                 Button("Conectar") {
                     guard let executable, let folder = model.folder else { return }
-                    session.connect(executable: executable, directory: URL(fileURLWithPath: folder),
-                                    servers: servers.filter { selectedServers.contains($0.id) })
+                    var enabled = servers.filter { selectedServers.contains($0.id) }
+                    if let launcher = model.launcher, let delegationModel {
+                        enabled.removeAll { $0.id == "alfalfa-delegation" }
+                        enabled.append(.delegation(launcher: launcher, model: delegationModel))
+                    }
+                    session.connect(executable: executable, directory: URL(fileURLWithPath: folder), servers: enabled)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(executable == nil || model.folder == nil)

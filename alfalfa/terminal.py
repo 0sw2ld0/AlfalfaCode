@@ -798,6 +798,8 @@ class TerminalManager:
         return docs
 
     def runtime(self):
+        from .delegacion import ejecutable
+
         rt = NativeRuntime(self, self.task, instructions=INSTRUCTIONS, agent_tone=AGENT_TONE,
                              engine_text=engine_text,
                              manual=lambda model: MANUAL + SUBAGENTES_MANUAL + self.subagentes.descripcion_de_tipos()
@@ -825,7 +827,9 @@ class TerminalManager:
                              tolerant_edit=True, mcp=self.mcp, complementos=self.complementos,
                              project_docs=self.project_docs(), hooks=self.hooks,
                              # Compactación de Codex: 90 % de la ventana o --compactar-en, y a mano.
-                             compaction='codex', compact_limit=self.compact_limit)
+                             compaction='codex', compact_limit=self.compact_limit,
+                             delegate_antigravity=not (self.equipo or self.read_only)
+                             and ejecutable() is not None)
         if self.navegador is not None:
             from .navegador import TOOLS as HERRAMIENTAS_DEL_NAVEGADOR
             rt.tool_specs = list(rt.tool_specs) + getattr(self.navegador, 'tools', HERRAMIENTAS_DEL_NAVEGADOR)
@@ -1493,6 +1497,8 @@ def main(argv=None):
     listing.add_argument('--navegador-sitios', action='store_true',
                          help='Consultar los sitios de este proyecto; con --stdio, editar desde Ajustes con permiso')
     listing.add_argument('--sesiones', action='store_true')
+    listing.add_argument('--delegacion-mcp', metavar='MODELO',
+                         help='Servir por stdio consultas de texto al modelo elegido para Antigravity')
     listing.add_argument('--modelos', action='store_true')
     listing.add_argument('--complementos', action='store_true', help='Listar complementos autorizados sin ejecutarlos')
     listing.add_argument('--turnos', metavar='ID', help='Turnos de una sesión (con --json)')
@@ -1533,6 +1539,12 @@ def main(argv=None):
     from .busqueda_sesiones import orden as orden_de_busqueda
     orden_de_busqueda.argumentos(parser, listing)
     args = parser.parse_args(argv)
+    if args.delegacion_mcp is not None:
+        if not args.delegacion_mcp.strip() or len(args.delegacion_mcp) > 256 or args.encargo:
+            parser.error('--delegacion-mcp requiere un único identificador de modelo')
+        from .delegacion import servir
+        servir(args.delegacion_mcp)
+        return 0
     if args.confirmar_descarga_chromium and not args.descargar_chromium:
         parser.error('--confirmar-descarga-chromium sólo vale con --descargar-chromium')
     if args.cuybrowser_solo_incluido and args.cuybrowser_desde_path:

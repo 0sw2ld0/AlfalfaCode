@@ -45,3 +45,26 @@ no reabre esos hilos después de cerrar la sesión ni los añade al historial
 de sus sesiones nativas. Antigravity puede delegar en sus propios subagentes.
 La vista ACP actual no abre las conversaciones hijas ni delega encargos entre
 motores.
+
+## Delegar una consulta entre agentes
+
+- **AlfalfaCode → Antigravity.** Instala `agy` en `~/.local/bin`, `~/.antigravity/bin`,
+  `/opt/homebrew/bin` o `/usr/local/bin` e inicia sesión en Antigravity. En un chat nativo
+  de AlfalfaCode, pide «Delega a Antigravity una revisión de este fragmento». Revisa y aprueba
+  el texto en la tarjeta. El motor abre un encargo ACP nuevo en una carpeta temporal, exige
+  modo Plan, rechaza las solicitudes de permisos del agente y devuelve el texto al chat.
+- **Antigravity → AlfalfaCode.** En la pantalla de conexión de Antigravity elige un modelo
+  en **Delegar a un modelo de AlfalfaCode** y conecta. Pide «Consulta al modelo de AlfalfaCode
+  por MCP sobre este fragmento». El modelo queda fijado para esa conexión. Puede recibir hasta
+  tres consultas, una a la vez, con la cuota y los cargos normales de su proveedor.
+  Utiliza la configuración guardada de AlfalfaCode. Las credenciales de la app no viajan
+  al proceso de Antigravity.
+  Para conectar el mismo servidor desde otro cliente MCP usa la ruta absoluta de
+  `alfalfa` y los argumentos `--delegacion-mcp MODELO`.
+
+La delegación está desactivada en proyectos con política de equipo. Cada consulta dura
+hasta 90 segundos. Comparte sólo el texto que haga falta para la tarea.
+Las consultas no llevan automáticamente archivos, historial ni herramientas del chat de
+origen. El modelo de AlfalfaCode consultado por MCP responde sin herramientas. Los
+encargos a Antigravity no reciben el servidor MCP de vuelta. Al cerrar la conexión
+de Antigravity se cierra también el servidor MCP.

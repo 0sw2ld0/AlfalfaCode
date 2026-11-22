@@ -222,7 +222,8 @@ def secretos(runtime):
 # propio proyecto (incluido su AGENTS.md) no, como en Codex y Claude Code: con eso
 # cada `git status` esperaba al usuario, también en Auto y en Omitir permisos.
 # Su salida sigue llegando al modelo marcada como datos (`externa`).
-CONTAMINAN = frozenset({'read_web', 'web_search', 'app_state', 'buscar_sesiones', 'adjunto'})
+CONTAMINAN = frozenset({'read_web', 'web_search', 'app_state', 'buscar_sesiones', 'adjunto',
+                         'delegate_antigravity'})
 # Un subagente sólo trae contenido externo si él mismo lo leyó.
 SUBAGENTES = frozenset({'spawn_agent', 'wait_agent', 'send_input', 'list_agents'})
 

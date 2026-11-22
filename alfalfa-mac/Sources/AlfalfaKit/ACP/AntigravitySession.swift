@@ -4,15 +4,21 @@ import Combine
 public struct AntigravityMCPServer: Identifiable, Equatable {
     public let id: String
     private enum Endpoint: Equatable {
-        case stdio(String, [String])
+        case stdio(String, [String], [String: String])
         case https(URL)
     }
 
     private let endpoint: Endpoint
 
+    public static func delegation(launcher: URL, model: String,
+                                  home: String? = ProcessInfo.processInfo.environment["ALFALFA_HOME"]) -> Self {
+        let environment = home.map { ["ALFALFA_HOME": $0] } ?? [:]
+        return Self(id: "alfalfa-delegation", endpoint: .stdio(launcher.path, ["--delegacion-mcp", model], environment))
+    }
+
     public var summary: String {
         switch endpoint {
-        case let .stdio(command, arguments): return ([command] + arguments).joined(separator: "\n")
+        case let .stdio(command, arguments, _): return ([command] + arguments).joined(separator: "\n")
         case let .https(url): return url.absoluteString
         }
     }
@@ -40,7 +46,7 @@ public struct AntigravityMCPServer: Identifiable, Equatable {
                server["argumentos"] == nil || server["argumentos"] is [String] {
                 let arguments = server["argumentos"] as? [String] ?? []
                 guard ([command] + arguments).allSatisfy({ $0 == Redactor.clean($0) }) else { return nil }
-                return Self(id: name, endpoint: .stdio(command, arguments))
+                return Self(id: name, endpoint: .stdio(command, arguments, [:]))
             }
             guard keys.isSubset(of: ["url", "activo"]), let text = server["url"] as? String,
                   let parsed = URLComponents(string: text), parsed.scheme == "https",
@@ -55,8 +61,9 @@ public struct AntigravityMCPServer: Identifiable, Equatable {
 
     fileprivate var params: [String: Any] {
         switch endpoint {
-        case let .stdio(command, arguments):
-            return ["name": id, "command": command, "args": arguments, "env": [[String: String]]()]
+        case let .stdio(command, arguments, environment):
+            let entries = environment.sorted { $0.key < $1.key }.map { ["name": $0.key, "value": $0.value] }
+            return ["name": id, "command": command, "args": arguments, "env": entries]
         case let .https(url):
             return ["type": "http", "name": id, "url": url.absoluteString, "headers": [[String: String]]()]
         }

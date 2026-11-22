@@ -49,6 +49,7 @@ SIN_EQUIVALENTE = {
     'wrap_up': 'El cierre de turno de Claude Code es de la app, no una herramienta que vean los hooks.',
     'propose_session': 'Las tarjetas «Nueva sesión» de Claude Code son de la app, no una herramienta de los hooks.',
     'command_status': 'BashOutput y KillShell de Claude Code son dos herramientas; aquí es una.',
+    'delegate_antigravity': 'Delega un encargo a Antigravity por ACP con permiso explícito.',
     'spawn_agent': 'Agent (antes Task) de Claude Code recibe prompt y subagent_type; aquí message y agent_type.',
     'wait_agent': 'Claude Code avisa al terminar un agente en segundo plano; aquí se espera como en Codex.',
     'send_input': 'SendMessage de Claude Code; aquí con el nombre de Codex.',

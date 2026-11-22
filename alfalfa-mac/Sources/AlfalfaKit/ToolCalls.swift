@@ -125,7 +125,7 @@ public enum ToolKind: Equatable, Sendable {
         case "inspect_image": self = .image
         case "app_list", "app_state", "app_action": self = .app
         case _ where name.hasPrefix("browser_"): self = .browser
-        case "spawn_agent", "wait_agent", "send_input", "close_agent", "list_agents": self = .agent
+        case "delegate_antigravity", "spawn_agent", "wait_agent", "send_input", "close_agent", "list_agents": self = .agent
         case "update_plan": self = .plan
         case "buscar_herramientas": self = .tools
         default: self = .other
@@ -370,6 +370,7 @@ public enum ToolCalls {
         case "read_web": return "Leer una página web"
         case "update_plan": return "Actualizar el plan"
         case "command_status": return "Ver cómo va un proceso"
+        case "delegate_antigravity": return "Delegar a Antigravity"
         case "spawn_agent": return "Encargar a un subagente"
         case "wait_agent": return "Esperar a los subagentes"
         case "wrap_up": return "Cerrar el turno"

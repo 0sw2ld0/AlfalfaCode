@@ -354,7 +354,9 @@ def test_the_four_reasons_are_the_same_everywhere():
     # 'modo' lo añaden Manual y Aceptar ediciones (permisos/modos.py); 'edicion' y 'aprendizaje' (guardar
     # memoria o una habilidad, alfalfa/aprendizaje) no son de la política.
     assert MOTIVOS == ('peligroso', 'red', 'salir_sandbox', 'reintento', 'regla', 'modo')
-    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {'edicion', 'aprendizaje', 'contenido_externo'}
+    assert set(MOTIVO_TERMINAL) == set(MOTIVOS) | {
+        'edicion', 'aprendizaje', 'contenido_externo', 'delegacion_antigravity',
+    }
     assert set(MOTIVOS) == set(REQUESTS) | {'regla', 'modo'}
 
 

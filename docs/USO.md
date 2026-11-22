@@ -307,6 +307,9 @@ en worktrees utiliza el del repositorio compartido.
 En macOS puedes abrir Antigravity CLI en la barra lateral. Esta integración
 habla ACP con el proceso oficial de Google y conserva el flujo de PACAI para las
 sesiones nativas de AlfalfaCode. [Configuración, permisos y MCP](guia/antigravity.md).
+Una sesión nativa puede pedir una segunda opinión mediante `delegate_antigravity`, con
+aprobación `antigravity_delegation` en PACAI antes de enviar el texto. En la dirección
+inversa, Antigravity usa `delegate_alfalfa` por MCP con el modelo elegido al conectar.
 
 ## Control con PACAI: `alfalfa --pacai`
 

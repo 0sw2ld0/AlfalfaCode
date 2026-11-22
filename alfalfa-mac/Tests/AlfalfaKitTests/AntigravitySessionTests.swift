@@ -35,9 +35,10 @@ final class AntigravitySessionTests: XCTestCase {
         try FileManager.default.copyItem(at: fixture, to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let data = Data(#"{"servidores":{"manual":{"url":"https://docs.example.test/mcp"}}}"#.utf8)
-        session.connect(executable: executable, directory: directory, servers: try AntigravityMCPServer.portableServers(
-            in: data
-        ))
+        let servers = try AntigravityMCPServer.portableServers(in: data) + [
+            .delegation(launcher: URL(fileURLWithPath: "/test/alfalfa"), model: "openai/test", home: "/test/settings")
+        ]
+        session.connect(executable: executable, directory: directory, servers: servers)
         try await wait { session.state == .signInRequired }
         session.signIn()
         try await wait { session.state == .ready }
