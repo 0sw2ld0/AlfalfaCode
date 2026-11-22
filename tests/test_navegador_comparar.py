@@ -186,7 +186,7 @@ def test_webkit_no_valida_el_perfil_secundario_hasta_comparar(tmp_path, monkeypa
                               navegador=True, perfil_cuybrowser='perfil inválido')
     try:
         assert manager.navegador.comparador.chromium is None
-        with pytest.raises(ValueError, match='perfil de CuyBrowser'):
+        with pytest.raises(ValueError, match='perfil de AlfalfaBrowser'):
             asyncio.run(manager.navegador.llamar(Runtime(tmp_path), 'browser_compare', {'url': 'https://example.com/'}))
     finally:
         manager.close()
