@@ -1,1 +1,2 @@
-Control de apps incluye AlfalfaDesktop 0.1.1. El cursor virtual usa una hoja de 18 puntos con un halo más fino, y la vista previa lateral se actualiza después de cada acción.
+AlfalfaBrowser 0.8.0 viene incluido para Apple Silicon e Intel con el nuevo ejecutable alfalfabrowser.
+Chrome local permite probar páginas de localhost con aprobación por pestaña y puerto. El permiso se revoca cuando la pestaña cambia de origen.
