@@ -1,2 +1,2 @@
-AlfalfaBrowser 0.8.0 viene incluido para Apple Silicon e Intel con el nuevo ejecutable alfalfabrowser.
-Chrome local permite probar páginas de localhost con aprobación por pestaña y puerto. El permiso se revoca cuando la pestaña cambia de origen.
+Conecta tu plan de ChatGPT desde Ajustes › Proveedores y elige un modelo disponible para tu cuenta.
+AlfalfaCode sigue ejecutando las sesiones y las herramientas con sus propios permisos.
