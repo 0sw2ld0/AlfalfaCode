@@ -1,4 +1,4 @@
-Conecta tu plan de ChatGPT desde Ajustes › Proveedores y elige un modelo disponible para tu cuenta.
-Abre Antigravity CLI como agente externo en la app de macOS mediante ACP.
-Delega consultas de texto a Antigravity con tu aprobación y recibe el informe en el chat.
-Permite que Antigravity consulte por MCP un modelo de AlfalfaCode elegido al conectar.
+Genera imágenes con Codex usando tu plan de ChatGPT, sin clave API de OpenAI.
+Elige ChatGPT mediante Codex, API de OpenAI o Ninguno en Ajustes › Proveedores › Generación de imágenes.
+Si aún no elegiste proveedor, AlfalfaCode usa Codex cuando detecta una sesión de ChatGPT activa.
+Configura el modelo y el esfuerzo de Codex solo para generar imágenes, desde el mismo selector.
