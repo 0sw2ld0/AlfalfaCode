@@ -300,7 +300,7 @@ class TerminalApproval:
                         if args.get('motivo') == 'contenido_externo' else
                         'Llamada MCP: el servidor la ejecuta con sus propios permisos. ¿Enviarla? [s/N] '
                         if args.get('mcp') else
-                        '¿Enviar a OpenAI y generar la imagen de pago? [s/N] '
+                        '¿Generar la imagen con el servicio indicado? [s/N] '
                         if args.get('motivo') == 'generar_imagen' else
                         '¿Enviar el texto a Antigravity? [s/N] '
                         if args.get('motivo') == 'delegacion_antigravity' else

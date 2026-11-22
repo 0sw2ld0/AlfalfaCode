@@ -1,4 +1,4 @@
-"""Generación de imágenes de OpenAI: aprobación individual, sin reintentos."""
+"""Generación de imágenes con aprobación individual y sin reintentos."""
 from __future__ import annotations
 
 import asyncio
@@ -14,6 +14,7 @@ import httpx
 
 from ... import ajustes, contenido_externo
 from ...permisos import modos
+from . import imagenes_codex
 
 MODELO = 'gpt-image-1.5'
 URL = 'https://api.openai.com/v1/images/generations'
@@ -81,11 +82,18 @@ async def solicitar(clave, payload):
 def datos_png(respuesta):
     try:
         datos = base64.b64decode(respuesta['data'][0]['b64_json'], validate=True)
-        if not datos.startswith(b'\x89PNG\r\n\x1a\n\0\0\0\rIHDR'):
-            raise ValueError('No es PNG')
-        return datos, struct.unpack('>II', datos[16:24])
+        return datos, dimensiones_png(datos)
     except (KeyError, IndexError, TypeError, ValueError, struct.error) as exc:
         raise ValueError('OpenAI no devolvió un PNG válido; pudo cobrar la generación.') from exc
+
+
+def dimensiones_png(datos):
+    if len(datos) < 33 or not datos.startswith(b'\x89PNG\r\n\x1a\n\0\0\0\rIHDR'):
+        raise ValueError('El servicio no devolvió un PNG válido.')
+    width, height = struct.unpack('>II', datos[16:24])
+    if not width or not height:
+        raise ValueError('El PNG devuelto tiene dimensiones inválidas.')
+    return width, height
 
 
 def consumo(respuesta, salida):
@@ -115,17 +123,28 @@ async def generar(tools, args):
     archivo = destino(tools, args['path'])
     ruta = archivo.relative_to(tools.root).as_posix()
     size, quality = args.get('size', '1024x1024'), args.get('quality', 'medium')
-    costo = Decimal(PRECIOS[size][CALIDADES.index(quality)])
-    clave = ajustes.openai_clave()
-    if not clave:
-        raise ValueError('Configura la clave de OpenAI en Ajustes o mediante OPENAI_API_KEY; no la pegues en el chat.')
-    valores = {*contenido_externo.secretos(runtime), clave}
+    con_codex = args.get('provider') == 'codex'
+    valores = set(contenido_externo.secretos(runtime))
+    if con_codex:
+        codex = imagenes_codex.ejecutable()
+        if codex is None:
+            raise ValueError('Instala Codex CLI o la app de ChatGPT e inicia sesión en Codex con ChatGPT.')
+        modelo = 'codex'
+        proposito = 'Enviar este prompt a Codex y generar un PNG usando tu plan de ChatGPT.'
+    else:
+        modelo = MODELO
+        costo = Decimal(PRECIOS[size][CALIDADES.index(quality)])
+        clave = ajustes.openai_clave()
+        if not clave:
+            raise ValueError('Configura la clave de OpenAI en Ajustes o mediante OPENAI_API_KEY; no la pegues '
+                             'en el chat.')
+        valores.add(clave)
+        proposito = (f'Enviar este prompt a OpenAI y generar un PNG. Salida: USD {costo} estimados '
+                     '+ tokens de texto de entrada (USD 5 por millón). No es el cargo final.')
     if prompt != contenido_externo.limpiar(prompt, valores) or ruta != contenido_externo.limpiar(ruta, valores):
-        raise ValueError('El prompt o la ruta contienen datos sensibles. No se enviaron a OpenAI.')
-    permiso = {'argv': ['generate_image', ruta, MODELO, size, quality, prompt],
-               'purpose': f'Enviar este prompt a OpenAI y generar un PNG. Salida: USD {costo} estimados '
-                          '+ tokens de texto de entrada (USD 5 por millón). No es el cargo final.',
-               'motivo': MOTIVO, 'motivos': [MOTIVO]}
+        raise ValueError('El prompt o la ruta contienen datos sensibles. No se envió el encargo.')
+    permiso = {'argv': ['generate_image', ruta, modelo, size, quality, prompt],
+               'purpose': proposito, 'motivo': MOTIVO, 'motivos': [MOTIVO]}
     if contenido_externo.contaminada(runtime):
         permiso['justificacion'] = ('El agente leyó contenido externo. Aprueba sólo si el prompt corresponde '
                                     'a lo que pediste.')
@@ -136,18 +155,24 @@ async def generar(tools, args):
     if respuesta is False:
         raise ValueError('Generación rechazada. No se envió ninguna solicitud.')
     destino(tools, ruta)
-    respuesta = await solicitar(clave, {'model': MODELO, 'prompt': prompt, 'size': size, 'quality': quality,
-                                       'n': 1, 'output_format': 'png'})
-    datos, (width, height) = datos_png(respuesta)
+    if con_codex:
+        datos = await imagenes_codex.generar(codex, prompt, size, quality)
+        width, height = dimensiones_png(datos)
+        detalle = {'provider': 'codex', 'requested_size': size, 'requested_quality': quality}
+    else:
+        respuesta = await solicitar(clave, {'model': modelo, 'prompt': prompt, 'size': size, 'quality': quality,
+                                           'n': 1, 'output_format': 'png'})
+        datos, (width, height) = datos_png(respuesta)
+        uso, estimacion = consumo(respuesta, costo)
+        detalle = {'quality': quality, 'usage': uso, 'estimated_cost': estimacion}
     try:
         guardar_png(destino(tools, ruta), datos)
     except (OSError, ValueError) as exc:
-        raise ValueError('OpenAI generó la imagen, pero no se pudo guardar sin sobrescribir el destino. '
+        raise ValueError('El servicio generó la imagen, pero no se pudo guardar sin sobrescribir el destino. '
                          'La generación pudo tener costo; no se reintentó.') from exc
     from .herramientas import digest
     sha = digest(datos)
     runtime.state.setdefault('changes', []).append({'path': ruta, 'before': 'NEW', 'after': sha, 'via': MOTIVO})
     runtime.save()
-    uso, estimacion = consumo(respuesta, costo)
-    return {'path': ruta, 'model': MODELO, 'format': 'png', 'width': width, 'height': height, 'quality': quality,
-            'bytes': len(datos), 'sha256': sha, 'usage': uso, 'estimated_cost': estimacion}
+    return {'path': ruta, 'model': modelo, 'format': 'png', 'width': width, 'height': height,
+            'bytes': len(datos), 'sha256': sha, **detalle}

@@ -41,3 +41,22 @@ absoluta, `~/` o relativa a la carpeta de la sesión: una URL web se queda como 
 nunca se descarga nada. Un clic la abre en Vista rápida y el menú contextual la muestra
 en Finder o la copia. Copiar o exportar la respuesta sigue dando el Markdown original, y
 en la terminal se ve la ruta.
+
+## Generar un PNG con Codex
+
+Con Codex instalado e iniciado con tu cuenta de ChatGPT, pide en un chat de
+AlfalfaCode «Genera con Codex un icono con una hoja verde y guárdalo como
+`icono.png`». La herramienta `generate_image` usa `provider: "codex"` cuando
+pides usar Codex o la cuota de tu plan. Antes de iniciar el encargo, AlfalfaCode
+muestra el texto, el destino y el servicio para que apruebes esa imagen.
+
+El encargo se abre en una sesión temporal de Codex con la herramienta integrada
+de generación de imágenes. Usa la cuota de Codex del plan de ChatGPT, sin clave
+de API. AlfalfaCode recibe el PNG, indica sus dimensiones reales y lo guarda
+en una ruta nueva dentro del proyecto. El tamaño y la calidad que se piden a
+Codex son orientativos.
+
+Para usar la API de OpenAI, pide `provider: "openai"` o deja que la herramienta
+use su proveedor predeterminado. Esa opción usa la clave y la facturación de
+la API. AlfalfaCode pide aprobación para cada imagen y conserva el proveedor
+elegido si el encargo falla.

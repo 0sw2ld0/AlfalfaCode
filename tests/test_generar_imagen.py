@@ -128,3 +128,64 @@ async def test_sin_clave_no_pide_pago(tools, monkeypatch):
     with pytest.raises(ValueError, match='Configura la clave'):
         await tools.call('generate_image', ARGS)
     tools.runtime.approve.interior.assert_not_awaited()
+
+
+async def test_codex_usa_el_plan_y_devuelve_las_dimensiones_reales(tools, monkeypatch, tmp_path):
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    binary = tmp_path / 'codex'
+    monkeypatch.setattr(imagenes_codex, 'ejecutable', lambda: binary)
+    no_api = AsyncMock(side_effect=AssertionError('No se usa la API de imágenes'))
+    monkeypatch.setattr(imagenes, 'solicitar', no_api)
+
+    def no_key():
+        raise AssertionError('No se consulta la clave de la API')
+
+    monkeypatch.setattr(imagenes.ajustes, 'openai_clave', no_key)
+    generate = AsyncMock(return_value=PNG)
+    monkeypatch.setattr(imagenes_codex, 'generar', generate)
+    args = dict(ARGS, provider='codex')
+    approval = tools.runtime.approve.interior
+    approval.return_value = False
+    with pytest.raises(ValueError, match='rechazada'):
+        await tools.call('generate_image', args)
+    generate.assert_not_awaited()
+
+    approval.return_value = 'una_vez'
+    output = await tools.call('generate_image', args)
+    generate.assert_awaited_once_with(binary, ARGS['prompt'], '1024x1024', 'medium')
+    no_api.assert_not_awaited()
+    assert 'plan de ChatGPT' in approval.await_args.args[0]['purpose']
+    assert output['provider'] == 'codex' and 'estimated_cost' not in output
+    assert output['requested_size'] == '1024x1024'
+    assert (output['width'], output['height']) == (1, 1)
+    assert (tools.root / ARGS['path']).read_bytes() == PNG
+
+
+async def test_codex_rechaza_autenticacion_por_api():
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    session = imagenes_codex._Sesion(None)
+    session.pedir = AsyncMock(side_effect=[{}, {'account': {'type': 'apiKey'}}])
+    session.enviar = AsyncMock()
+    with pytest.raises(ValueError, match='Inicia sesión con ChatGPT'):
+        await session.generar(None, '/tmp', 'sprout', '1024x1024', 'low')
+    assert [call.args[0] for call in session.pedir.await_args_list] == ['initialize', 'account/read']
+
+
+def test_codex_solo_acepta_archivos_de_la_sesion(tmp_path):
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    folder = tmp_path / 'generated_images' / 'thread1'
+    folder.mkdir(parents=True)
+    image = folder / 'image.png'
+    image.write_bytes(PNG)
+    assert imagenes_codex._artefacto(tmp_path, 'thread1', str(image)) == PNG
+    with pytest.raises(ValueError, match='fuera de la carpeta'):
+        imagenes_codex._artefacto(tmp_path, 'other-thread', str(image))
+    outside = tmp_path / 'outside.png'
+    outside.write_bytes(PNG)
+    link = folder / 'link.png'
+    link.symlink_to(outside)
+    with pytest.raises(ValueError, match='No se pudo leer'):
+        imagenes_codex._artefacto(tmp_path, 'thread1', str(link))
