@@ -147,7 +147,7 @@ async def generar(tools, args):
     ruta = archivo.relative_to(tools.root).as_posix()
     size, quality = args.get('size', '1024x1024'), args.get('quality', 'medium')
     proveedor = runtime.image_provider
-    if proveedor == 'none':
+    if proveedor not in ('codex', 'openai'):
         raise ValueError('No tienes una herramienta para generar imágenes desde un prompt.')
     con_codex = proveedor == 'codex'
     valores = set(contenido_externo.secretos(runtime))

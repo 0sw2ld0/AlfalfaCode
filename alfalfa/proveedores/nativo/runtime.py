@@ -423,7 +423,7 @@ class NativeRuntime:
         self.engine_text = engine_text or self.default_engine_text
         self.manual = manual or manual_del_harness
         self.approval_label = approval_label
-        self.image_provider = 'none'
+        self.image_provider: str | None = None
         self.approval_policy = approval_policy
         self.delegate_antigravity = delegate_antigravity
         self.excluded_tools = frozenset(excluded_tools)
@@ -2770,7 +2770,7 @@ class NativeRuntime:
         system = self.instructions+'\n'+(self.task.get('agent_instructions') or '')
         system += self.engine_text(self.task.get('effort') or 'medium')
         system += NATIVE_HARNESS_CONTRACT
-        if not self.task.get('conversation_only'):
+        if self.image_provider is not None and not self.task.get('conversation_only'):
             if self.image_provider == 'none':
                 system += ('\nSi el usuario pide generar una imagen a partir de un prompt, responde solamente '
                            'con esta frase o su traducción al idioma del usuario: '
