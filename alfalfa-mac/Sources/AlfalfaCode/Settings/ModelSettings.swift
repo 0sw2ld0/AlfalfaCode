@@ -30,7 +30,7 @@ struct ModelSettings: View {
             }
             SettingsBlock(title: "Permisos", detail: model.defaultMode.summary) {
                 Picker("Permisos", selection: binding(\.defaultMode)) {
-                    ForEach(PermissionMode.allCases, id: \.self) { mode in
+                    ForEach(PermissionMode.allCases.filter { $0 != .turbo }, id: \.self) { mode in
                         Label(mode.title, systemImage: mode.symbol).tag(mode)
                     }
                 }

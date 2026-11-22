@@ -2,7 +2,7 @@ import Foundation
 
 /// Modos de permisos, como los de Claude Code (alfalfa/permisos/modos.py).
 public enum PermissionMode: String, CaseIterable, Sendable {
-    case auto, manual, ediciones, plan, omitir
+    case auto, manual, ediciones, plan, turbo, omitir
 
     public var title: String {
         switch self {
@@ -10,6 +10,7 @@ public enum PermissionMode: String, CaseIterable, Sendable {
         case .manual: return "Manual"
         case .ediciones: return "Aceptar ediciones"
         case .plan: return "Plan"
+        case .turbo: return "Turbo"
         case .omitir: return "Omitir permisos"
         }
     }
@@ -20,6 +21,7 @@ public enum PermissionMode: String, CaseIterable, Sendable {
         case .manual: return "Pregunta antes de cada cambio: órdenes y ediciones"
         case .ediciones: return "Edita sin preguntar; pregunta antes de cada orden"
         case .plan: return "Sólo lee y propone un plan antes de cambiar nada"
+        case .turbo: return "Permite borrados forzados del proyecto sin confirmar. Mantiene el sandbox y los demás permisos."
         case .omitir: return "Aprueba todo sin preguntar, también fuera del sandbox"
         }
     }
@@ -30,6 +32,7 @@ public enum PermissionMode: String, CaseIterable, Sendable {
         case .manual: return "hand.raised"
         case .ediciones: return "pencil.and.list.clipboard"
         case .plan: return "list.bullet.clipboard"
+        case .turbo: return "bolt.fill"
         case .omitir: return "exclamationmark.shield"
         }
     }

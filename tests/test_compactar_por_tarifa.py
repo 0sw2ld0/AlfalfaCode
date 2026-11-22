@@ -241,8 +241,10 @@ def test_una_salida_enorme_se_recorta_antes_de_pasar_el_umbral(tmp_path, monkeyp
     s.m.close()
 
 
-def test_seguir_en_una_sesion_nueva_con_el_resumen(tmp_path, monkeypatch):
+@pytest.mark.parametrize('modo, modo_nuevo', [('manual', 'manual'), ('turbo', 'auto')])
+def test_seguir_en_una_sesion_nueva_con_el_resumen(tmp_path, monkeypatch, modo, modo_nuevo):
     s = Sesion(tmp_path, monkeypatch, contexto='completo')
+    s.m.task['modo'] = modo
     modelo = Modelo([leer()], usos=[900, 900])
     assert s.correr(modelo) == 0
 
@@ -256,6 +258,7 @@ def test_seguir_en_una_sesion_nueva_con_el_resumen(tmp_path, monkeypatch):
     task = json.loads((carpeta / 'task.json').read_text())
     assert task['continuada_de'] == {'sesion': s.m.task['id']} and task['contexto_modo'] == 'completo'
     assert task['status'] == 'created' and task['turnos'] == []
+    assert task['modo'] == modo_nuevo
     estado = historial.leer(carpeta / 'native' / nueva / 'session.json')
     assert [m['role'] for m in estado['messages']] == ['system']
     assert estado['checkpoint']['through'] == 1 and estado['checkpoint']['text'] == 'Resumen: falta el paso 3.'

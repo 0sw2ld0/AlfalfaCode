@@ -8,7 +8,7 @@ public struct SessionInfo: Equatable, Sendable {
     public var cwd: String
     public var model: String
     public var effort: String
-    /// Modo de permisos (`auto`, `manual`, `ediciones`, `plan`, `omitir`); vacío en motores anteriores.
+    /// Modo de permisos (`auto`, `manual`, `ediciones`, `plan`, `turbo`, `omitir`); vacío en motores anteriores.
     public var mode: String = ""
     /// Ahorro o contexto completo (`contexto`); nil en motores anteriores.
     public var contextMode: ContextMode?

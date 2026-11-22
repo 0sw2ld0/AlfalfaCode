@@ -231,6 +231,7 @@ def test_un_valor_desconocido_en_una_orden_es_un_error_claro_y_no_llega_al_motor
 
 
 @pytest.mark.parametrize('orden, payload, v2', [
+    ('set_settings', {'mode': 'turbo'}, {'tipo': 'ajustes', 'modo': 'turbo'}),
     ('set_settings', {'mode': 'accept_edits'}, {'tipo': 'ajustes', 'modo': 'ediciones'}),
     ('set_settings', {'mode': 'bypass_permissions'}, {'tipo': 'ajustes', 'modo': 'omitir'}),
     ('set_context_mode', {'mode': 'full'}, {'tipo': 'contexto', 'modo': 'completo'}),

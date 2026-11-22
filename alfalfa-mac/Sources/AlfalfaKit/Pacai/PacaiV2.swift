@@ -20,7 +20,7 @@ enum PacaiV2 {
     }()
 
     /// Los valores de v2 que puede traer cada campo, por lo que describe.
-    static let modes = ["auto", "manual", "ediciones", "plan", "omitir"]
+    static let modes = ["auto", "manual", "ediciones", "plan", "turbo", "omitir"]
     static let contextModes = ["ahorro", "completo"]
     static let subagentStates = ["iniciando", "trabajando", "terminado", "fallido", "cerrado", "interrumpido"]
     static let queueStates = ["lista", "ejecutando", "pausando", "pausada", "completada", "cancelada"]

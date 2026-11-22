@@ -31,11 +31,12 @@ import asyncio
 import copy
 import shlex
 import unicodedata
+from pathlib import Path
 from uuid import uuid4
 
 from ..seatbelt import AISLADAS, SandboxUnavailable, nombre_del_sandbox
 from .denegacion import is_likely_sandbox_denied
-from .peligrosos import FORCED_RM, SUDO, dangerous_command_match
+from .peligrosos import FORCED_RM, SUDO, dangerous_command_match, executable_name_lookup_key
 
 PELIGROSO = 'peligroso'
 RED = 'red'
@@ -125,6 +126,22 @@ def with_network(sandbox):
     opened = copy.copy(sandbox)
     opened.network = True
     return opened
+
+
+def _borrado_local(argv, root, cwd):
+    """Sólo rm directo con operandos resueltos estrictamente dentro del proyecto."""
+    if executable_name_lookup_key(argv[0]) != 'rm':
+        return False
+    root = Path(root).resolve()
+    try:
+        # Las opciones de rm no toman argumentos de ruta. Comprobar también sus
+        # tokens como rutas evita confundir un operando que empieza por «-».
+        for arg in argv[1:]:
+            if root not in (Path(cwd) / arg).resolve().parents:
+                return False
+    except (OSError, RuntimeError):
+        return False
+    return True
 
 
 class OnRequestPolicy:
@@ -218,15 +235,19 @@ class OnRequestPolicy:
         danger_fuera = danger
         if danger and label in AISLADAS and not network:
             danger = dangerous_command_match(argv, dentro_del_sandbox=True)
+        from . import modos
+        modo = modos.modo_de(runtime.task)
+        if (modo == modos.TURBO and danger == FORCED_RM and label in AISLADAS and not network
+                and ruled != 'preguntar'):
+            from ..contenido_externo import contaminada
+            if not contaminada(runtime) and _borrado_local(argv, tools.root, tools.command_cwd(args)):
+                danger = None
         if danger:
             reasons.append(PELIGROSO)
         if ruled == 'preguntar':
             reasons.append(REGLA_USUARIO)
-        from . import modos
-        if not reasons and ruled != 'permitida' and modos.pide_ordenes(modos.modo_de(runtime.task)):
+        if not reasons and ruled != 'permitida' and modos.pide_ordenes(modo):
             # Manual y Aceptar ediciones: cada orden que no sólo lee espera al usuario.
-            from pathlib import Path
-
             from .terminal import solo_lectura
             carpeta = tools.command_cwd(args)
             raiz = Path(tools.root)

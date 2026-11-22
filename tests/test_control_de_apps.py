@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from alfalfa import apps
-from alfalfa.permisos import sesion
+from alfalfa.permisos import modos, sesion
 
 CONTADOR = {'pid': 4242, 'nombre': 'Contador Demo', 'bundle': 'com.alfalfacode.demo.contador',
             'ventanas': [{'ventana': 0, 'titulo': 'Factura de Ana', 'ancho': 420, 'alto': 252}]}
@@ -139,8 +139,12 @@ def test_aprobar_solo_esta_vez_vuelve_a_preguntar():
     assert len(rt.pedidos) == 2 and sesion.CAMPO not in rt.task
 
 
-def test_un_rechazo_no_deja_mirar_ni_tocar():
+@pytest.mark.parametrize('modo', ['auto', 'turbo'])
+def test_un_rechazo_no_deja_mirar_ni_tocar(modo):
     c, rt = control('no')
+    rt.task['modo'] = modo
+    rt.manager.task = rt.task
+    rt.approve = modos.AprobacionConModo(rt.approve, rt.manager)
     with pytest.raises(ValueError, match='no dejó controlar Contador Demo'):
         correr(c.estado({'app': 'Contador Demo'}))
     assert [o for o, _ in c.ayudante.llamadas] == ['lista']

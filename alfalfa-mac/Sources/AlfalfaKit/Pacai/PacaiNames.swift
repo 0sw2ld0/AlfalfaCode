@@ -88,7 +88,8 @@ enum PacaiNames {
         "context": [
             "ahorro": "saving", "apagado": "off", "arbol": "tree", "auto": "auto", "completo": "full",
             "ediciones": "accept_edits", "manual": "manual", "ollama": "ollama", "omitir": "bypass_permissions",
-            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text"
+            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text",
+            "turbo": "turbo"
         ],
         "decision": [
             "permitida": "allowed", "preguntar": "ask", "prohibida": "forbidden"
@@ -105,7 +106,8 @@ enum PacaiNames {
         "mode": [
             "ahorro": "saving", "apagado": "off", "arbol": "tree", "auto": "auto", "completo": "full",
             "ediciones": "accept_edits", "manual": "manual", "ollama": "ollama", "omitir": "bypass_permissions",
-            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text"
+            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text",
+            "turbo": "turbo"
         ],
         "origin": [
             "agente": "agent", "aprender": "learning", "cache": "cache", "externo": "external", "integrado": "builtin",
@@ -115,7 +117,8 @@ enum PacaiNames {
         "permissions": [
             "ahorro": "saving", "apagado": "off", "arbol": "tree", "auto": "auto", "completo": "full",
             "ediciones": "accept_edits", "manual": "manual", "ollama": "ollama", "omitir": "bypass_permissions",
-            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text"
+            "paralelo": "parallel", "plan": "plan", "searxng": "searxng", "serie": "serial", "texto": "text",
+            "turbo": "turbo"
         ],
         "phase": [
             "fin": "end", "inicio": "start"

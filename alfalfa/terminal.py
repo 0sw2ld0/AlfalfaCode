@@ -1419,7 +1419,7 @@ def main(argv=None):
     parser.add_argument('encargo', nargs='?')
     parser.add_argument('--modelo')
     parser.add_argument('--esfuerzo', choices=EFFORTS)
-    parser.add_argument('--modo', choices=modos.MODOS, help='Permisos: auto, manual, ediciones, plan u omitir')
+    parser.add_argument('--modo', choices=modos.MODOS, help='Permisos: auto, manual, ediciones, plan, turbo u omitir')
     parser.add_argument('--auto', action='store_true', help='Aprobar automáticamente sólo lecturas permitidas')
     parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de '
                                                                     'ejecución')

@@ -98,6 +98,20 @@ def test_modo_omitir_registra_la_rama_real_y_no_la_presenta_como_permiso_humano(
     assert registro(rt)['eventos'][0]['permisos'][0]['decision'] == 'omitido'
 
 
+def test_turbo_respeta_el_rechazo_de_un_formulario(tmp_path):
+    rt = preparar(tmp_path, ['no'], modo='turbo')
+    rt.manager.task = rt.task
+    rt.approve = modos.AprobacionConModo(rt.approve, rt.manager)
+    browser = Navegador(App(permisos={'pulsar': 'formulario'}))
+    with pytest.raises(ValueError, match='no lo aprobó'):
+        asyncio.run(actividad.ejecutar(rt, browser, 'browser_click', {'ref': 'e1'}))
+    pedido, = rt.pedidos
+    assert pedido['motivo'] == 'navegador'
+    evento, = registro(rt)['eventos']
+    assert evento['resultado'] == 'fallida'
+    assert [p['decision'] for p in evento['permisos']] == ['no_autorizado']
+
+
 def test_permiso_obligatorio_de_equipo_no_se_omite_ni_se_registra_como_omitido(tmp_path):
     rt = preparar(tmp_path, ['no'], modo='omitir')
     rt.manager.task = rt.task

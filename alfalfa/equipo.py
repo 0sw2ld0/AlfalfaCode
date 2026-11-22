@@ -18,7 +18,7 @@ ARCHIVO = 'equipo.toml'
 ORIGEN = CARPETA + '/' + ARCHIVO
 MODELO = re.compile(r'[\w.:/-]{1,200}')
 MAX_BYTES = 128 * 1024
-_RESTRICCION = (modos.PLAN, modos.MANUAL, modos.EDICIONES, modos.AUTO, modos.OMITIR)
+_RESTRICCION = (modos.PLAN, modos.MANUAL, modos.EDICIONES, modos.AUTO, modos.TURBO, modos.OMITIR)
 
 
 class ErrorDeEquipo(ValueError):

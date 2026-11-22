@@ -103,7 +103,7 @@ final class LiveSession: ObservableObject, Identifiable {
         start(launcher: launcher, task: nil, wait: true)
     }
 
-    /// Modo de permisos de la sesión (`auto`, `manual`, `ediciones`, `plan`, `omitir`).
+    /// Modo de permisos de la sesión (`auto`, `manual`, `ediciones`, `plan`, `turbo`, `omitir`).
     @Published private(set) var mode: String
 
     init(cwd: URL, title: String, resumeID: String?, model: String, effort: String, readOnly: Bool,

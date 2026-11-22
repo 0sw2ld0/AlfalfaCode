@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .encargos_worktrees import QUITADO
+from .permisos.modos import TURBO
 
 MAX_ENCARGOS = 20
 MAX_TEXTO = 20000
@@ -188,8 +189,9 @@ class ColaEncargos:
             cwd = fila.get('carpeta') or self.manager.task['cwd']
             transporte = self._transporte(ident) if self.manager.transport else None
             reanudada = fila.get('sesion')
+            permisos = self.datos['permisos']
             hijo = TerminalManager(fila['texto'], resume=reanudada, cwd=cwd, home=self.manager.home,
-                model=self.datos['modelo'], effort=self.datos['esfuerzo'], mode=self.datos['permisos'],
+                model=self.datos['modelo'], effort=self.datos['esfuerzo'], mode=None if permisos == TURBO else permisos,
                 transport=transporte, parent=self.manager.task['id'], read_only=self.manager.read_only,
                 compact_limit=self.manager.compact_limit, firma=self.manager.firma.activa(), auto=self.manager.auto,
                 keep_awake=self.manager.despierto.activo,

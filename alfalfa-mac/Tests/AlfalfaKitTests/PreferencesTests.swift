@@ -53,6 +53,16 @@ final class PreferencesTests: XCTestCase {
         XCTAssertNil(preferences.defaultMode)
     }
 
+    func testTurboIsAvailableInSessionButCannotBecomeTheDefault() {
+        let preferences = Preferences(defaults: defaults)
+        XCTAssertEqual(PermissionMode.named("turbo"), .turbo)
+
+        preferences.defaultMode = .turbo
+        XCTAssertNil(defaults.object(forKey: Preferences.Key.defaultMode))
+        defaults.set("turbo", forKey: Preferences.Key.defaultMode)
+        XCTAssertNil(preferences.defaultMode)
+    }
+
     func testTheDefaultFolderWinsWhileItExists() {
         let preferences = Preferences(defaults: defaults)
         let recents = ["/tmp/ultima", "/tmp/anterior"]

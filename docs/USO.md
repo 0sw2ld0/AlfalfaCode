@@ -409,7 +409,7 @@ tipos de subagente como `explorador`, ids) no se traducen. Los más usados:
 | Campo | Valores |
 |---|---|
 | `status` | subagentes: `working`, `completed`, `failed`, `closed`, `interrupted`; cola de encargos: `ready`, `running`, `pausing`, `paused`, `completed`, `cancelled` (cada encargo: `pending`, `running`, `cancelled`, `interrupted`…; su `cleanup`: `removed`, `kept`, `branch_kept`); revisión de código: `available`, `reviewing`, `completed`, `failed`, `no_budget`…; compactación: `in_progress`, `done`, `failed` |
-| `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
+| `mode`, `permissions` | permisos: `auto`, `manual`, `accept_edits`, `plan`, `turbo`, `bypass_permissions`; contexto: `saving`, `full`; cola: `serial`, `parallel` |
 | `reason`, `reasons` | permisos: `dangerous`, `network`, `outside_sandbox`, `sandbox_retry`, `rule`, `mode`, `edit`, `browser`, `external_content`, `learning`, `image_generation`, `mcp`, `app`, `swift_diagnostics`; otros: `no_vision`, `unknown`, `delivered`… |
 | `warning`, `exhausted` | `session`, `month` |
 | `prefix_scope` | lo que concede «No volver a preguntar» (`prefix`) en un `approval_request`: `outside_sandbox`, `network`, `sandbox` |
@@ -428,7 +428,7 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
 
 | Mensaje (campos) | Hace lo de v2 |
 |---|---|
-| `alfalfa.set_settings` (`model`, `effort`, `mode`: `auto`, `manual`, `accept_edits`, `plan` o `bypass_permissions`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
+| `alfalfa.set_settings` (`model`, `effort`, `mode`: `auto`, `manual`, `accept_edits`, `plan`, `turbo` o `bypass_permissions`) | `ajustes` (`modelo`, `esfuerzo`, `modo`) |
 | `alfalfa.compact` (`instructions`), `alfalfa.continue_in_new_session` | `compactar`, `continuar_en_nueva` |
 | `alfalfa.set_context_mode` (`mode`: `saving` o `full`) | `contexto` (`ahorro`, `completo`) |
 | `alfalfa.set_budget` (`session`, `month`, en dólares) | `presupuesto` (`sesion`, `mes`) |
@@ -865,7 +865,7 @@ decision = "prohibida"
   la revisión de código y las peticiones auxiliares, como el repaso de aprendizaje.
   Con una lista de modelos o un tope de equipo, las imágenes usan la visión del
   modelo de la sesión, si la admite.
-- **Permisos.** Puedes limitar los modos a `auto`, `manual`, `ediciones`, `plan` u
+- **Permisos.** Puedes limitar los modos a `auto`, `manual`, `ediciones`, `plan`, `turbo` u
   `omitir`. Si abres sin elegir un modo y el habitual queda fuera, se usa el
   primer modo permitido que sea más estricto. Si todos relajan los permisos,
   la sesión requiere una elección explícita. Las reglas de prefijo para `run_command` y `run_checks`
@@ -1060,6 +1060,11 @@ un permiso que nadie puede dar:
 - `--modo auto` (el de siempre): las órdenes normales corren en el sandbox sin preguntar,
   escriben sólo en la carpeta y no salen a la red. Lo peligroso, la red y salir del sandbox
   piden permiso; sin nadie, se niegan.
+- `--modo turbo` activa Turbo sólo para la sesión. Además de lo que permite Auto,
+  ejecuta un `rm -f` o `rm -rf` directo sin confirmación cuando las rutas quedan
+  dentro del proyecto y el sandbox corre sin red. Los permisos de red, salida del
+  sandbox, apps y navegador siguen su flujo habitual. También puedes elegir Turbo
+  en el selector de permisos de la app.
 - `--modo plan` sólo lee y propone un plan. `manual` y `ediciones` preguntan casi todo, así
   que sin nadie lo niegan casi todo.
 - `--modo omitir` lo aprueba todo, también fuera del sandbox: no lo uses sin nadie delante.

@@ -525,6 +525,7 @@ final class AppModel: ObservableObject {
         let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: task, resumeID: nil,
                                   model: model, effort: effort, readOnly: readOnly, mode: mode)
         open(session, launcher: launcher, task: task, images: draftImages)
+        if mode == PermissionMode.turbo.rawValue { mode = defaultMode.rawValue }
         draft = ""
         draftImages = []
     }
@@ -556,6 +557,7 @@ final class AppModel: ObservableObject {
 
     func startQueue(tasks: [String], mode: String, parallelism: Int) {
         guard let folder, let launcher else { return }
+        if self.mode == PermissionMode.turbo.rawValue { self.mode = defaultMode.rawValue }
         let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: "Cola de encargos", resumeID: nil,
                                   model: model, effort: effort, readOnly: readOnly, mode: self.mode)
         open(session, launcher: launcher, task: nil, queue: true)
@@ -829,14 +831,15 @@ enum CodeActionsShell {
 
 extension AppModel {
     /// «Nueva sesión» de una tarjeta de `propose_session`, como en Claude Code: empieza el encargo en
-    /// la misma carpeta, con el modelo, el esfuerzo y el modo de la sesión que la propuso. No cambia
-    /// de pantalla: la sesión nueva sale en la barra lateral y, si pide permiso, espera a que vayas.
+    /// la misma carpeta, con el modelo y el esfuerzo de la sesión que la propuso. Si usaba Turbo,
+    /// la nueva empieza con el modo por defecto. Sale en la barra lateral sin cambiar de pantalla.
     /// Va aquí porque `live` sólo se cambia desde este archivo.
     @discardableResult
     func startProposed(_ proposal: SessionProposal, from parent: LiveSession) -> Bool {
         guard let launcher else { return false }
         let session = LiveSession(cwd: parent.cwd, title: proposal.title, resumeID: nil, model: parent.model,
-                                  effort: parent.effort, readOnly: parent.readOnly, mode: parent.mode)
+                                  effort: parent.effort, readOnly: parent.readOnly,
+                                  mode: parent.mode == PermissionMode.turbo.rawValue ? defaultMode.rawValue : parent.mode)
         session.parentSessionID = parent.sessionID
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         watchFamily(session)

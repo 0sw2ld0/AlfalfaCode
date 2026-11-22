@@ -1,4 +1,4 @@
-"""Modos de permisos (Auto, Manual, Aceptar ediciones, Plan, Omitir permisos), con sandbox real."""
+"""Modos de permisos (Auto, Manual, Aceptar ediciones, Plan, Turbo, Omitir permisos), con sandbox real."""
 import asyncio
 import io
 import json
@@ -7,9 +7,12 @@ import sys
 
 import pytest
 
-from alfalfa.seatbelt import SANDBOX_EXEC
+from alfalfa.seatbelt import SANDBOX_EXEC, nombre_del_sandbox
 from alfalfa.stdio import Transport
 from alfalfa.terminal import ESCRITURA, TerminalManager
+from tests.sandbox_del_sistema import motivo_sin_sandbox
+
+con_sandbox = pytest.mark.skipif(motivo_sin_sandbox() is not None, reason=str(motivo_sin_sandbox()))
 
 real = pytest.mark.skipif(not (sys.platform == 'darwin' and os.access(SANDBOX_EXEC, os.X_OK)),
                           reason='requiere /usr/bin/sandbox-exec (macOS)')
@@ -69,6 +72,71 @@ def test_ordenes_que_escriben_segun_el_modo(sesion, modo, pregunta):
     assert bool(recorder.calls) is pregunta
     if pregunta:
         assert recorder.calls[0]['motivo'] == 'modo'
+
+
+@con_sandbox
+def test_turbo_borra_archivo_del_proyecto_sin_preguntar(sesion):
+    _, root, call = sesion
+    recorder = Recorder('no')
+    archivo = root / 'nota.txt'
+    orden = {'argv': ['/bin/rm', '-f', archivo.name], 'purpose': 'Limpiar un archivo de prueba'}
+    with pytest.raises(ValueError, match='rechazado'):
+        call('auto', recorder, 'run_command', **orden)
+    assert archivo.exists() and recorder.calls[0]['motivo'] == 'peligroso'
+
+    recorder.calls.clear()
+    result = call('turbo', recorder, 'run_command', **orden)
+    assert result['exit_code'] == 0 and result['sandbox'] == nombre_del_sandbox().lower()
+    assert not archivo.exists() and recorder.calls == []
+
+
+@con_sandbox
+@pytest.mark.parametrize('opciones, motivo', [
+    ({'needs_network': True}, 'red'),
+    ({'sandbox_permissions': 'require_escalated', 'justification': 'Prueba de salida del sandbox'}, 'salir_sandbox'),
+])
+def test_turbo_conserva_permisos_de_red_y_salida(sesion, opciones, motivo):
+    _, root, call = sesion
+    recorder = Recorder('no')
+    with pytest.raises(ValueError, match='rechazado'):
+        call('turbo', recorder, 'run_command', argv=['/bin/rm', '-f', 'nota.txt'],
+             purpose='Limpiar un archivo de prueba', **opciones)
+    assert (root / 'nota.txt').exists()
+    pedido, = recorder.calls
+    assert pedido['motivo'] == motivo
+
+
+@con_sandbox
+@pytest.mark.parametrize('ruta', ['ruta absoluta', 'enlace intermedio'])
+def test_turbo_conserva_confirmacion_de_borrado_fuera_del_proyecto(sesion, tmp_path, ruta):
+    _, root, call = sesion
+    fuera = tmp_path / 'fuera'
+    fuera.mkdir()
+    protegido = fuera / 'nota.txt'
+    protegido.write_text('conservar')
+    if ruta == 'enlace intermedio':
+        (root / 'enlace').symlink_to(fuera, target_is_directory=True)
+    recorder = Recorder('no')
+    with pytest.raises(ValueError, match='rechazado'):
+        call('turbo', recorder, 'run_command',
+             argv=['/bin/rm', '-f', str(protegido) if ruta == 'ruta absoluta' else 'enlace/nota.txt'],
+             purpose='Probar un borrado fuera del proyecto')
+    assert protegido.read_text() == 'conservar'
+    pedido, = recorder.calls
+    assert pedido['motivo'] == 'peligroso'
+
+
+@con_sandbox
+def test_turbo_conserva_reintento_de_escritura_fuera_del_sandbox(sesion, fuera_del_sandbox):
+    _, _, call = sesion
+    protegido = fuera_del_sandbox / 'nuevo.txt'
+    recorder = Recorder('no')
+    result = call('turbo', recorder, 'run_command', argv=['/usr/bin/touch', str(protegido)],
+                  purpose='Probar una escritura fuera del sandbox')
+    assert result['exit_code'] != 0 and result['sandbox'] == nombre_del_sandbox().lower()
+    assert not protegido.exists()
+    pedido, = recorder.calls
+    assert pedido['motivo'] == 'reintento' and pedido['sin_sandbox']
 
 
 @real

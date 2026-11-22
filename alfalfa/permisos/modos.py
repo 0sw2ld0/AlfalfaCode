@@ -6,6 +6,8 @@
   lee y de cada edición de archivos.
 - ediciones («Aceptar ediciones»): edita sin preguntar y pide permiso para cada
   orden que no sólo lee.
+- turbo: como auto, también ejecuta rm forzado directo dentro del proyecto sin
+  preguntar si corre aislado y sin red.
 - plan: sólo lee (sin herramientas de escritura ni órdenes) y propone un plan.
 - omitir («Omitir permisos»): aprueba todo sin preguntar, también fuera del
   sandbox. Las reglas `prohibida` del usuario siguen mandando.
@@ -17,9 +19,10 @@ from __future__ import annotations
 
 import re
 
-AUTO, MANUAL, EDICIONES, PLAN, OMITIR = 'auto', 'manual', 'ediciones', 'plan', 'omitir'
-MODOS = (AUTO, MANUAL, EDICIONES, PLAN, OMITIR)
-NOMBRES = {AUTO: 'Auto', MANUAL: 'Manual', EDICIONES: 'Aceptar ediciones', PLAN: 'Plan', OMITIR: 'Omitir permisos'}
+AUTO, MANUAL, EDICIONES, PLAN, TURBO, OMITIR = 'auto', 'manual', 'ediciones', 'plan', 'turbo', 'omitir'
+MODOS = (AUTO, MANUAL, EDICIONES, PLAN, TURBO, OMITIR)
+NOMBRES = {AUTO: 'Auto', MANUAL: 'Manual', EDICIONES: 'Aceptar ediciones', PLAN: 'Plan',
+           TURBO: 'Turbo', OMITIR: 'Omitir permisos'}
 # Motivos de permiso nuevos: una orden que el modo manda preguntar y una edición.
 MOTIVO_MODO = 'modo'
 MOTIVO_EDICION = 'edicion'

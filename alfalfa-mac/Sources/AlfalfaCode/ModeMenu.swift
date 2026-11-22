@@ -2,7 +2,7 @@ import AlfalfaKit
 import SwiftUI
 
 /// Selector de modo de permisos, como el de Claude Code: Auto, Manual, Aceptar
-/// ediciones y Plan, y aparte «Omitir permisos», que se confirma antes de activarse.
+/// ediciones, Plan y Turbo, y aparte «Omitir permisos», que se confirma antes de activarse.
 struct ModeMenu: View {
     let mode: String
     var help = "Modo de permisos"
@@ -17,7 +17,7 @@ struct ModeMenu: View {
         Button { open.toggle() } label: {
             HStack(spacing: 4) {
                 Image(systemName: current.symbol).font(.system(size: 11))
-                Text(current.title).font(.system(size: 12.5))
+                Text(current == .turbo ? "Turbo activo" : current.title).font(.system(size: 12.5))
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .foregroundStyle(current == .omitir ? Theme.danger : Theme.secondary)
@@ -39,7 +39,7 @@ struct ModeMenu: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Modo").font(.system(size: 12.5)).foregroundStyle(Theme.muted)
                 .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
-            ForEach(Array([PermissionMode.auto, .manual, .ediciones, .plan].enumerated()), id: \.element) { index, option in
+            ForEach(Array([PermissionMode.auto, .manual, .ediciones, .plan, .turbo].enumerated()), id: \.element) { index, option in
                 Button { pick(option) } label: { row(option, number: index + 1) }
                     .buttonStyle(.plain)
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [])

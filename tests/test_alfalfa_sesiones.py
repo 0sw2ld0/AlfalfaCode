@@ -144,8 +144,8 @@ def test_listados_de_sesiones_y_turnos(proyecto, capsys):
     assert main(['--turnos', '../fuera', '--json']) == 1
 
 
-def preparar(proyecto):
-    m = TerminalManager('Primero.')
+def preparar(proyecto, modo=None):
+    m = TerminalManager('Primero.', mode=modo)
     try:
         turno(m, 'Primero.', 'Respuesta uno.')
         turno(m, 'Segundo.', 'Respuesta dos.')
@@ -180,6 +180,13 @@ def test_bifurcar_desde_un_turno_y_seguir(proyecto):
         m.close()
     fila, = [s for s in sessions() if s['id'] == nuevo]
     assert fila['bifurcada_de'] == {'sesion': ident, 'turno': t1}
+
+
+def test_bifurcar_no_hereda_turbo(proyecto):
+    ident, _, base = preparar(proyecto, modo='turbo')
+    nuevo = bifurcar(base, ident)
+    assert json.loads((base / ident / 'task.json').read_text())['modo'] == 'turbo'
+    assert json.loads((base / nuevo / 'task.json').read_text())['modo'] == 'auto'
 
 
 def test_bifurcar_por_defecto_desde_el_ultimo_turno_y_por_la_orden(proyecto, capsys):

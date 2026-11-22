@@ -29,6 +29,8 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
+from ..permisos.modos import AUTO, TURBO
+
 ORIGINADOR = 'alfalfa'
 MAX_MENSAJE_TURNO = 200
 # Claves del estado nativo que guardan posiciones del historial.
@@ -213,6 +215,8 @@ def bifurcar(sesiones, ident, turno=None):
             for clave in ('turno_actual', 'approval', 'approval_token', 'summary', 'process_group',
                           'aprobadas_en_sesion'):
                 task.pop(clave, None)
+            if task.get('modo') == TURBO:
+                task['modo'] = AUTO
             # El gasto es de la otra sesión, como al «Seguir en una sesión nueva»: la bifurcada empieza
             # de cero para su tope (no nace al 84 % sin avisar) y su caché. El del mes sigue contando aparte.
             for clave in ('coste_usd', 'cache', 'presupuesto_avisos', 'presupuesto_sin_precio'):
@@ -280,6 +284,8 @@ def continuar(sesiones, ident):
                                       despues=0, resumen=punto['text']))
         _escribir(destino / (nuevo + '.jsonl'), json.dumps(fila, ensure_ascii=False) + '\n')
         nueva = {k: task[k] for k in HEREDADO if k in task}
+        if nueva.get('modo') == TURBO:
+            nueva['modo'] = AUTO
         nueva.update(id=nuevo, status='created', turnos=[], continuada_de=dict(sesion=ident), updated_at=ahora,
                      meta=metadatos(nuevo, nueva.get('cwd', ''), nueva.get('model'), nueva.get('effort')))
         _escribir(destino / 'task.json', json.dumps(nueva, ensure_ascii=False))

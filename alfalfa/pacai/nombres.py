@@ -116,7 +116,7 @@ ORDEN = {ingles: castellano for castellano, ingles in CAMPOS.items()
 
 # Valores enumerados de AlfalfaCode → inglés, por la clave (ya inglesa) que los lleva. Se aplica a un texto o a
 # cada texto de una lista. Un valor que no está aquí sale igual: o ya está en inglés (`YA_EN_INGLES`) o es un nombre.
-_MODOS = {'auto': 'auto', 'manual': 'manual', 'ediciones': 'accept_edits', 'plan': 'plan',
+_MODOS = {'auto': 'auto', 'manual': 'manual', 'ediciones': 'accept_edits', 'plan': 'plan', 'turbo': 'turbo',
           'omitir': 'bypass_permissions',                   # permisos/modos.py
           'ahorro': 'saving', 'completo': 'full',            # compactacion.MODOS_CONTEXTO
           'serie': 'serial', 'paralelo': 'parallel',         # encargos.validar
@@ -191,7 +191,7 @@ YA_EN_INGLES = frozenset({
 
 # Órdenes `alfalfa.*` del cliente con un valor enumerado: campo inglés → valor inglés → valor v2. Un valor que no
 # está aquí no llega al motor: es un error, como lo era un valor no válido en v2.
-_INVERSA_MODOS = {'auto': 'auto', 'manual': 'manual', 'accept_edits': 'ediciones', 'plan': 'plan',
+_INVERSA_MODOS = {'auto': 'auto', 'manual': 'manual', 'accept_edits': 'ediciones', 'plan': 'plan', 'turbo': 'turbo',
                   'bypass_permissions': 'omitir'}
 ORDEN_VALORES: dict[str, dict[str, dict[str, str]]] = {
     'set_settings': {'mode': _INVERSA_MODOS},

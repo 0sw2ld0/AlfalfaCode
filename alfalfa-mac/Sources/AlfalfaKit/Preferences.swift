@@ -55,8 +55,11 @@ public struct Preferences {
 
     /// Sólo un modo que exista: uno guardado por una versión con otros modos no cuenta.
     public var defaultMode: PermissionMode? {
-        get { text(Key.defaultMode).flatMap(PermissionMode.init(rawValue:)) }
-        nonmutating set { store(newValue?.rawValue, Key.defaultMode) }
+        get {
+            let mode = text(Key.defaultMode).flatMap(PermissionMode.init(rawValue:))
+            return mode == .turbo ? nil : mode
+        }
+        nonmutating set { store(newValue == .turbo ? nil : newValue?.rawValue, Key.defaultMode) }
     }
 
     /// Que el Mac no se duerma por inactividad mientras trabaja un agente. Encendido si nunca se tocó.
