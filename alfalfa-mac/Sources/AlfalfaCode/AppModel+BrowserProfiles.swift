@@ -10,6 +10,7 @@ extension AppModel {
     /// En una sesión se configura su carpeta, aunque «Nuevo encargo» tenga seleccionada otra.
     var browserProject: URL? {
         switch route {
+        case .antigravity: return nil
         case .new: return folder.map { URL(fileURLWithPath: $0) }
         case let .live(id): return session(id)?.cwd
         case let .past(id):

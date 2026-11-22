@@ -4,6 +4,7 @@ import Foundation
 
 enum Route: Equatable {
     case new
+    case antigravity
     case live(UUID)
     case past(String)
 }
@@ -155,7 +156,7 @@ final class AppModel: ObservableObject {
             guard let session = session(id) else { return }
             guard allowsImages(session.model) || !Attachments.isImage(url) else { session.imageNotice.show(); return }
             ImagePicker.add([url], to: &session.draftImages)
-        case .past: break
+        case .past, .antigravity: break
         }
     }
 

@@ -22,6 +22,7 @@ extension AppModel {
         case let .live(id): return session(id)?.cwd
         case let .past(id):
             return dormant[id]?.cwd ?? summaries.first { $0.id == id }?.cwd.map { URL(fileURLWithPath: $0) }
+        case .antigravity: return nil
         case .new: return folder.map { URL(fileURLWithPath: $0) }
         }
     }

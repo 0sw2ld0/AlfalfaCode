@@ -302,6 +302,12 @@ Al reanudar se conservan modelo y esfuerzo salvo que se indiquen otros.
 El lanzador conserva la carpeta actual y utiliza el `.venv` del repositorio;
 en worktrees utiliza el del repositorio compartido.
 
+## Usar Antigravity como agente externo
+
+En macOS puedes abrir Antigravity CLI en la barra lateral. Esta integración
+habla ACP con el proceso oficial de Google y conserva el flujo de PACAI para las
+sesiones nativas de AlfalfaCode. [Configuración, permisos y MCP](guia/antigravity.md).
+
 ## Control con PACAI: `alfalfa --pacai`
 
 `alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.3 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor

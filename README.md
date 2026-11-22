@@ -149,6 +149,8 @@ Cada función, con la guía que la detalla:
   Word y Excel ([Imágenes](docs/guia/imagenes.md) y [Archivos](docs/guia/archivos.md)).
 - **Habilidades y memoria**: lee `SKILL.md` sueltas y aprende de cada sesión, siempre
   con tu aprobación ([Habilidades y memoria](docs/guia/habilidades.md)).
+- **Antigravity**: abre su CLI como agente externo en la app de macOS con ACP
+  ([Antigravity en AlfalfaCode](docs/guia/antigravity.md)).
 - **Subagentes**: tareas acotadas en paralelo, con los permisos de la sesión
   ([Subagentes](docs/guia/subagentes.md)).
 - **Mensajes con el agente ocupado**: cola de mensajes, redirigir y enviar ahora

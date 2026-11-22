@@ -4,6 +4,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
+    @StateObject private var antigravity = AntigravitySession()
     /// Arrastrando el borde, entre 200 y 420 pt; se recuerda entre aperturas.
     @AppStorage(Preferences.Key.sidebarWidth) private var storedWidth = SidebarWidth.standard
     private var sidebarWidth: Binding<Double> {
@@ -20,6 +21,8 @@ struct RootView: View {
             switch model.route {
             case .new:
                 NewTaskView()
+            case .antigravity:
+                AntigravityView(session: antigravity)
             case let .live(id):
                 if let session = model.session(id) {
                     SessionView(session: session)
@@ -37,6 +40,9 @@ struct RootView: View {
         .modifier(UpdateAlert())
         .sheet(item: $model.keyRequest) { request in KeySheet(request: request) }
         .onAppear(perform: openSettingsIfRequested)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            antigravity.disconnect()
+        }
     }
 
     // MARK: - Métodos privados
@@ -100,6 +106,9 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 sidebarButton("plus", "Nuevo encargo", selected: model.route == .new) { model.route = .new }
+                sidebarButton("terminal", "Antigravity", selected: model.route == .antigravity) {
+                    model.route = .antigravity
+                }
                 sidebarButton("magnifyingglass", "Buscar", selected: searching) {
                     searching.toggle()
                     if !searching { model.search = ""; model.contentSearch = nil }

@@ -151,6 +151,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
     /// Sólo se usa desde `queue`.
     private let pacai: PacaiClient?
 
+    public var onRawLine: (@Sendable (Data) -> Void)?
     public var onMessage: (@Sendable (AlfalfaMessage) -> Void)?
     /// Código de salida y últimas líneas de stderr (sin la clave de Ollama).
     public var onExit: (@Sendable (Int32, String) -> Void)?
@@ -224,6 +225,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
             // vivos, y tras unas decenas de recargas fallaban Pipe() y Process.run().
             self.onExit = nil
             self.onMessage = nil
+            self.onRawLine = nil
         }
     }
 
@@ -232,7 +234,18 @@ public final class AlfalfaProcess: @unchecked Sendable {
         while let newline = buffer.firstIndex(of: 0x0A) {
             let line = buffer.subdata(in: buffer.startIndex..<newline)
             buffer.removeSubrange(buffer.startIndex...newline)
+            if onRawLine != nil && line.count > 4 * 1024 * 1024 {
+                closeInputNow()
+                terminate()
+                buffer.removeAll()
+                return
+            }
             emit(line)
+        }
+        if onRawLine != nil && buffer.count > 4 * 1024 * 1024 {
+            closeInputNow()
+            terminate()
+            buffer.removeAll()
         }
     }
 
@@ -241,6 +254,7 @@ public final class AlfalfaProcess: @unchecked Sendable {
     }
 
     private func emit(_ line: Data) {
+        if let onRawLine { onRawLine(line); return }
         let text = Redactor.clean(String(decoding: line, as: UTF8.self))
         if let pacai {
             deliver(pacai.receive(text))
