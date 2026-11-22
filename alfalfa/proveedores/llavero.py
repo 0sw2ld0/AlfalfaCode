@@ -57,13 +57,13 @@ def _cuenta(cuenta):
     return cuenta
 
 
-def leer(cuenta):
+def leer(cuenta, *, actual=False):
     """El secreto de `cuenta`, o None si no hay (o no hay Llavero)."""
     _cuenta(cuenta)
     if _almacen is not None:
         return _almacen.get(cuenta)
     guardado = _leidos.get(cuenta)
-    if guardado and time.monotonic() - guardado[0] < VIGENCIA:
+    if not actual and guardado and time.monotonic() - guardado[0] < VIGENCIA:
         return guardado[1]
     orden = _security()
     if not orden:

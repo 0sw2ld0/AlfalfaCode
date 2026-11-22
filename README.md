@@ -108,6 +108,7 @@ El modelo dice con quién se habla:
 | Modelo | Proveedor |
 |---|---|
 | `deepseek-v4.1-flash:cloud`, `ollama/…` | Ollama, local o Ollama Cloud |
+| `chatgpt/<modelo>` | Plan de ChatGPT en macOS, con tu cuenta y la cuota disponible |
 | `openai/gpt-6-luna`, `openai/<modelo>` | OpenAI, con tu clave de la API (Responses API) |
 | `anthropic/claude-sonnet-5-5`, `anthropic/<modelo>` | Anthropic (Claude), con tu clave de la API (Messages API) |
 | `openrouter/…`, `opencode/…`, `<proveedor>/…` | un proveedor compatible con OpenAI del catálogo, con tu clave |

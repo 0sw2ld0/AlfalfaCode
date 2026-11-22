@@ -184,6 +184,9 @@ def conectar(proveedor='openrouter', elegir=False, **opciones):
     la bienvenida, que enseña el aviso de datos) lo deja además por defecto con su modelo gratis
     recomendado; si no, no cambia ni el proveedor ni el modelo por defecto.
     Devuelve {proveedor, modelo} (sin la clave; `modelo` sólo si se eligió)."""
+    if proveedor == 'chatgpt':
+        from . import chatgpt
+        return chatgpt.conectar(**opciones)
     if proveedor not in CONECTABLES:
         raise ErrorAlConectar('Sólo se puede conectar así OpenRouter; para ' + str(proveedor)
                               + ' guarda su clave con `alfalfa --guardar-clave ' + str(proveedor) + '`.')

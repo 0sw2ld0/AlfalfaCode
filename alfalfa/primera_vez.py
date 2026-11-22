@@ -34,10 +34,12 @@ EN_LA_TERMINAL = 4
 def _algo_guardado():
     from . import ajustes
     from .proveedores import compatibles_guardados, configuracion
+    from .proveedores.chatgpt import ChatGPT
     from .proveedores.compatible import CONOCIDOS
     if 'por_defecto' in configuracion.leer():
         return True
-    lecturas = [ajustes.ollama_clave, ajustes.openai_clave, ajustes.anthropic_clave, ajustes.alfalfa_codigo]
+    lecturas = [ajustes.ollama_clave, ajustes.openai_clave, ajustes.anthropic_clave, ajustes.alfalfa_codigo,
+                ChatGPT().configurado]
     lecturas += [(lambda i=i: ajustes.clave_compatible(i)) for i in CONOCIDOS]
     for leer in lecturas:
         try:

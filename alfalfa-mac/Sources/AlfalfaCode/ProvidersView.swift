@@ -107,6 +107,35 @@ struct ProvidersView: View {
                     }
                 }
             }
+            if let plan = status("chatgpt") {
+                section("Plan de ChatGPT", status: plan,
+                        detail: "Usa la cuota disponible de tu plan para las peticiones al modelo.") {
+                    if let account = plan.notice, !account.isEmpty {
+                        Text(account).font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    }
+                    HStack {
+                        if model.connecting?.provider == "chatgpt" {
+                            ProgressView().controlSize(.small)
+                            Button("Cancelar") { model.cancelConnect() }
+                            if let url = model.connecting?.url {
+                                Link("Abrir en el navegador", destination: url)
+                            }
+                        } else {
+                            Button(plan.configured ? "Reconectar" : "Continuar con ChatGPT") {
+                                Task { await model.connect("chatgpt", onlyKey: true) }
+                            }
+                            .disabled(busy || model.connecting != nil)
+                            if plan.configured {
+                                Button("Desconectar") { Task { await run { await model.disconnectChatGPT() } } }
+                                    .disabled(busy || model.connecting != nil)
+                            }
+                        }
+                        if let url = URL(string: "https://chatgpt.com/settings/usage") {
+                            Link("Consultar uso", destination: url).font(.system(size: 12))
+                        }
+                    }
+                }
+            }
             section("Anthropic", status: status("anthropic"),
                     detail: "Claude con tu propia clave de la API; el uso se cobra en tu cuenta de Anthropic.") {
                 SecureField(status("anthropic")?.hasKey == true ? "Clave guardada · escribe otra para cambiarla"

@@ -68,6 +68,32 @@ El código queda atado a este Mac con una clave del Secure Enclave: copiado a ot
 ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
 enseña una barra con el % de la cuota del mes.
 
+## Plan de ChatGPT en macOS
+
+En **Ajustes ▸ Proveedores ▸ Plan de ChatGPT**, pulsa **Continuar con ChatGPT**
+y autoriza en tu navegador que AlfalfaCode use tu plan. Luego elige uno de los
+modelos disponibles para tu cuenta en el selector. Desde la terminal:
+
+```bash
+alfalfa --conectar chatgpt
+alfalfa --modelos
+alfalfa --modelo chatgpt/<modelo> "tu encargo"
+alfalfa --desconectar chatgpt
+```
+
+Las peticiones elegibles usan la cuota de tu plan. Puedes consultar su consumo
+en [Ajustes de ChatGPT](https://chatgpt.com/settings/usage). AlfalfaCode usa la
+Responses API para inferencia y ejecuta localmente sus propias herramientas con
+el sandbox y los permisos de la sesión. El historial, los subagentes y PACAI
+siguen a cargo de AlfalfaCode. Puedes generar imágenes con tu clave de API de
+OpenAI si la configuras aparte. Ese uso se factura por API.
+
+La cuenta activa se muestra en el panel del proveedor. Para cambiar de cuenta
+o de espacio de trabajo, desconecta primero el actual. AlfalfaCode guarda los
+tokens cifrados en su carpeta de datos y protege la clave de cifrado en el
+Llavero de macOS. El modo requiere el flujo de uso del plan abierto por OpenAI
+y está sujeto a [sus límites actuales](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
 ## Todos los modelos con tu clave (OpenAI y Anthropic)
 
 Con tu propia clave de OpenAI o de Anthropic pagas tú el uso, así que el selector

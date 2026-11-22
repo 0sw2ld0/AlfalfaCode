@@ -19,7 +19,7 @@ import threading
 
 import httpx
 
-PREFIJOS = ('ollama', 'openai', 'anthropic', 'alfalfa')
+PREFIJOS = ('ollama', 'openai', 'anthropic', 'alfalfa', 'chatgpt')
 TIEMPO_DE_LISTA = 10
 # Los esfuerzos de razonamiento de menos a más, con los nombres de OpenAI y Anthropic.
 ORDEN_ESFUERZOS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')
@@ -163,6 +163,9 @@ class Proveedor:
 
 
 def obtener(ident):
+    if ident == 'chatgpt':
+        from .chatgpt import ChatGPT
+        return ChatGPT()
     if ident == 'ollama':
         from .ollama import Ollama
         return Ollama()

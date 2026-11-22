@@ -57,6 +57,10 @@ See the [first-run guide](docs/guia/primera-vez.md), [provider setup](docs/guia/
 and [model pricing and budgets](docs/guia/catalogo.md). The detailed guides are
 in Spanish.
 
+On macOS, you can also connect your **ChatGPT plan** in **Settings → Providers**.
+Choose an available ChatGPT model for inference while AlfalfaCode runs the
+session and its tools locally. [Provider setup](docs/guia/proveedores.md#plan-de-chatgpt-en-macos).
+
 ## Try the approval flow
 
 1. Open a disposable project folder in the Mac app and choose manual mode.

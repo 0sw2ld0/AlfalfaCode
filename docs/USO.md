@@ -506,6 +506,10 @@ python3 conformance/verificar.py transcripcion.jsonl
 La suite de AlfalfaCode comprueba lo mismo con el esquema y las reglas de sesión del protocolo
 (`tests/test_pacai_*.py`, con los ejemplos de conformidad de `tests/fixtures/pacai`).
 
+El prefijo de modelo `chatgpt/` selecciona el proveedor Plan de ChatGPT.
+El cliente sigue usando los mismos mensajes de sesión, herramientas y permisos de PACAI.
+[Configurar el proveedor en macOS](guia/proveedores.md#plan-de-chatgpt-en-macos).
+
 ## Permisos on-request
 
 `run_command` y `run_checks` siguen la política on-request de Codex

@@ -303,6 +303,13 @@ final class AppModel: ObservableObject {
         if await providerCommand(["--borrar-clave", provider, "--json"]) { await reload() }
     }
 
+    func disconnectChatGPT() async {
+        let ok = await providerCommand(["--desconectar", "chatgpt", "--json"])
+        let notice = providersError
+        await reload()
+        if !ok { providersError = notice }
+    }
+
     func setURL(_ url: String, for provider: String) async -> Bool {
         let value = url.trimmingCharacters(in: .whitespacesAndNewlines)
         let ok = await providerCommand(["--fijar-url", provider, value.isEmpty ? "-" : value, "--json"])

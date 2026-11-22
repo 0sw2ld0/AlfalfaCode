@@ -8,6 +8,8 @@
     alfalfa --catalogo [--json]               estado del catálogo de models.dev y los gratis ahora
     alfalfa --primera-vez [--json]            si falta proveedor y los gratis ahora con los que empezar
     alfalfa --conectar openrouter [--json]    conecta OpenRouter en el navegador (OAuth), sin pegar la clave
+    alfalfa --conectar chatgpt               conecta el plan de ChatGPT para inferencia
+    alfalfa --desconectar chatgpt            desconecta el plan de ChatGPT
     alfalfa --proveedor-por-defecto openai
     alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
     alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este equipo
@@ -155,6 +157,15 @@ def orden(args, entrada=None):
                 configuracion.cambiar(proveedor, 'guardada', True)
             _salida({'tipo': 'proveedores', **estado()}, como_json,
                     'Clave de ' + proveedor + ' guardada en el Llavero.')
+        elif getattr(args, 'desconectar', None):
+            from .chatgpt import desconectar
+            confirmada = desconectar()
+            texto = 'Cuenta de ChatGPT desconectada de AlfalfaCode.'
+            if not confirmada:
+                aviso = 'No se confirmó la revocación remota. Puedes revocar el acceso en Ajustes de ChatGPT.'
+                _salida({'tipo': 'error', 'texto': texto + ' ' + aviso}, como_json, texto + ' ' + aviso)
+                return 1
+            _salida({'tipo': 'proveedores', **estado()}, como_json, texto)
         elif args.borrar_clave:
             proveedor = args.borrar_clave
             if proveedor not in CON_CLAVE + ('alfalfa',) and not es_compatible(proveedor):
@@ -212,12 +223,16 @@ def conectar_ahora(proveedor, como_json=False, **opciones):
             print(json.dumps({'version': 2, 'tipo': 'conectando', 'proveedor': proveedor, 'url': url},
                              ensure_ascii=False), flush=True)
         else:
-            print('Abriendo OpenRouter en el navegador para autorizar AlfalfaCode (la cuenta es gratis).\n'
+            nombre = 'ChatGPT' if proveedor == 'chatgpt' else 'OpenRouter'
+            print(f'Abriendo {nombre} en el navegador para autorizar AlfalfaCode.\n'
                   'Si no se abre, entra en:\n  ' + url + '\nEsperando…', file=sys.stderr, flush=True)
     return conectar(proveedor, al_abrir=al_abrir, **opciones)
 
 
 def _texto_conectado(hecho):
+    if hecho.get('proveedor') == 'chatgpt':
+        return ('Plan de ChatGPT conectado. Elige un modelo en el selector o usa '
+                '`alfalfa --modelos` y luego `--modelo chatgpt/<modelo>`.')
     texto = 'OpenRouter conectado; la clave quedó en el Llavero.'
     if hecho.get('modelo'):
         from .. import catalogo
@@ -299,8 +314,10 @@ def argumentos(grupo):
                        help='Catálogo de models.dev: fecha, origen y modelos gratis ahora')
     grupo.add_argument('--primera-vez', action='store_true',
                        help='¿Falta configurar un proveedor? Y los modelos gratis ahora con los que empezar')
-    grupo.add_argument('--conectar', metavar='PROVEEDOR', choices=('openrouter',),
-                       help='Conectar OpenRouter en el navegador (OAuth), sin pegar la clave, y usar sus gratis')
+    grupo.add_argument('--conectar', metavar='PROVEEDOR', choices=('openrouter', 'chatgpt'),
+                       help='Conectar OpenRouter o un plan de ChatGPT mediante OAuth')
+    grupo.add_argument('--desconectar', metavar='PROVEEDOR', choices=('chatgpt',),
+                       help='Desconectar el plan de ChatGPT')
     grupo.add_argument('--activar-codigo', action='store_true',
                        help='Atar a este equipo el código de cortesía que llega por la entrada estándar')
     grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
@@ -317,7 +334,8 @@ def argumentos(grupo):
 
 def pedida(args):
     return bool(args.proveedores or getattr(args, 'catalogo', False) or getattr(args, 'primera_vez', False)
-                or getattr(args, 'conectar', None) or args.guardar_clave or args.borrar_clave
+                or getattr(args, 'conectar', None) or getattr(args, 'desconectar', None)
+                or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota
                 or getattr(args, 'reportar', False) or getattr(args, 'buscador', None) is not None
                 or getattr(args, 'fijar_searxng', None) or getattr(args, 'instalar_buscador', False))
