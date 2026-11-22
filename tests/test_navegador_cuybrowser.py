@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from alfalfa.apps import ControlDeApps
 from alfalfa.cuybrowser_archivos import archivos_de_subida
 from alfalfa.cuybrowser_http import CONFIRMACIONES, HttpCuyBrowser
 from alfalfa.cuybrowser_proceso import ProcesoCuyBrowser
@@ -32,13 +33,16 @@ class Api:
         self.confirm = set()
         self.uploaded = []
         self.consumed = []
+        self.tools = TOOLS.copy()
+        self.url = 'https://example.com/'
+        self.tab = 't1'
 
     def __call__(self, request):
         assert str(request.url).startswith('http://127.0.0.1:18449/')
         assert request.headers['authorization'] == 'Bearer ' + 'a' * 64
         assert 'origin' not in request.headers
         if request.method == 'GET':
-            return httpx.Response(200, json={'ok': True, 'data': {'tools': [{'name': t} for t in TOOLS]}})
+            return httpx.Response(200, json={'ok': True, 'data': {'tools': [{'name': t} for t in self.tools]}})
         tool = request.url.path.rsplit('/', 1)[-1]
         params = json.loads(request.content)
         self.calls.append((tool, params))
@@ -48,10 +52,10 @@ class Api:
         if tool == 'policy_show':
             data = {'valid': True, 'policy': self.policy, 'capabilities': self.capabilities}
         elif tool == 'status':
-            data = {'running': True, 'consumed_visits': self.consumed, 'active_tab': 't1',
-                    'tabs': [{'id': 't1', 'url': 'https://example.com/'}]}
+            data = {'running': True, 'consumed_visits': self.consumed, 'active_tab': self.tab,
+                    'browser': 'Google Chrome', 'mode': 'launch', 'tabs': [{'id': self.tab, 'url': self.url}]}
         elif tool == 'snapshot':
-            data = {'url': 'https://example.com/', 'title': 'Página', 'text': '- button "Enviar" [e1]'}
+            data = {'url': self.url, 'title': 'Página', 'text': '- button "Enviar" [e1]'}
         elif tool == 'get_text':
             data = {'text': '<<<PAGE_CONTENT\nHola\nPAGE_CONTENT>>>'}
         elif tool == 'find':
@@ -404,3 +408,38 @@ def test_lectura_diff_cuy_sin_identidad_devuelve_completo_explicito(tmp_path, ap
     assert result['lectura']['modo'] == 'tree'
     assert result['lectura']['fallback'] == 'identidad_documento_no_disponible'
     assert not result['lectura']['base_actualizada'] and not requests
+
+
+def test_chrome_local_envia_la_pestana_y_el_puerto_y_conserva_lectura_al_redirigir(tmp_path, api):
+    browser, runtime, requests = setup(tmp_path)
+    runtime.manager.navegador = browser
+    app = ControlDeApps(runtime)
+    api.tools.add('local_tab_action')
+    api.confirm.add('local_tab_action')
+    api.url = 'http://127.0.0.1:18499/'
+    click = {'app': 'Chrome local', 'action': 'click', 'target': 'e1'}
+
+    async def exercise():
+        with pytest.raises(ValueError, match='Mira primero'):
+            await app.accion(click)
+        state = await app.estado({'app': 'Chrome local'})
+        assert (state['pestana'], state['origen']) == ('t1', 'http://127.0.0.1:18499')
+        assert (await app.accion(click))['como'] == 'AlfalfaBrowser'
+        assert ('local_tab_action', {'tab': 't1', 'origin': 'http://127.0.0.1:18499',
+                                     'action': 'click', 'ref': 'e1'}) in api.calls
+        assert ('confirm', {'confirmation_id': 'persona-elige'}) in api.calls
+        api.tab = 't2'
+        with pytest.raises(ValueError, match='cambió la pestaña'):
+            await app.accion(click)
+        api.tab = 't1'
+        api.url = 'http://127.0.0.1:18500/'
+        with pytest.raises(ValueError, match='cambió la pestaña o el origen'):
+            await app.accion(click)
+        api.url = 'https://example.com/'
+        assert (await app.estado({'app': 'Chrome local'}))['nivel'] == 'solo lectura'
+        with pytest.raises(ValueError, match='solo lectura'):
+            await app.accion(click)
+        assert len([tool for tool, _ in api.calls if tool == 'local_tab_action']) == 1
+
+    asyncio.run(exercise())
+    assert not requests  # El permiso lo decide el diálogo del navegador.

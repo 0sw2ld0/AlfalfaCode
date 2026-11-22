@@ -281,6 +281,12 @@ class ControlDeApps:
         datos = await self.ayudante.llamar('lista')
         return datos.get('apps') or [], datos.get('accesibilidad')
 
+    def _chrome_local(self):
+        from ..navegador_cuybrowser import NavegadorCuyBrowser
+
+        navegador = getattr(self.runtime.manager, 'navegador', None)
+        return navegador if isinstance(navegador, NavegadorCuyBrowser) else None
+
     async def lista(self):
         from ..permisos import sesion
         apps, accesibilidad = await self._apps()
@@ -299,6 +305,10 @@ class ControlDeApps:
             else:
                 fila['ventanas'] = [{k: v for k, v in v.items() if k != 'titulo'} for v in ventanas]
             filas.append(fila)
+        if self._chrome_local() is not None:
+            from ..navegador_cuybrowser import CHROME_LOCAL
+
+            filas.append({'nombre': CHROME_LOCAL, 'nota': 'Pestaña de AlfalfaBrowser; control local con permiso.'})
         resultado = {'apps': filas}
         if accesibilidad is False:
             resultado['aviso'] = ('Falta el permiso de Accesibilidad para la app que lanzó AlfalfaCode: el usuario '
@@ -423,6 +433,19 @@ class ControlDeApps:
         return resultado
 
     async def estado(self, args):
+        from ..navegador_cuybrowser import CHROME_LOCAL, CONSULTA_LOCAL
+
+        if args.get('app') == CHROME_LOCAL:
+            self._pestana_local = None
+            navegador = self._chrome_local()
+            if navegador is None:
+                raise ValueError('Activa el motor AlfalfaBrowser para usar Chrome local.')
+            if args.keys() - {'app'}:
+                raise ValueError('Chrome local se lee con app_state y solo el nombre de la app.')
+            estado = await navegador.llamar(self.runtime, CONSULTA_LOCAL, {})
+            if estado['origen']:
+                self._pestana_local = {'tab': estado['pestana'], 'origin': estado['origen']}
+            return estado
         app = await self._resolver(args.get('app'))
         await self._permiso(app, 'mirar su ventana')
         ventana = _numero(args, 'window')
@@ -465,6 +488,24 @@ class ControlDeApps:
     # --- acciones
 
     async def accion(self, args):
+        from ..navegador_cuybrowser import ACCION_LOCAL, CHROME_LOCAL
+
+        if args.get('app') == CHROME_LOCAL:
+            navegador = self._chrome_local()
+            pestana = getattr(self, '_pestana_local', None)
+            if navegador is None or pestana is None:
+                raise ValueError('Chrome local está en solo lectura. Mira primero una pestaña local con app_state.')
+            accion, ref = args.get('action'), args.get('target')
+            if (args.keys() - {'app', 'action', 'target', 'text'} or accion not in ('click', 'type') or
+                    not isinstance(ref, str) or not re.fullmatch(r'e\d{1,6}', ref)):
+                raise ValueError('Chrome local admite click o type sobre una ref eN del documento principal.')
+            params = dict(pestana, action=accion, ref=ref)
+            if accion == 'type':
+                texto = args.get('text')
+                if not isinstance(texto, str) or len(texto) > 10000:
+                    raise ValueError('type requiere text de hasta 10000 caracteres.')
+                params['text'] = texto
+            return await navegador.llamar(self.runtime, ACCION_LOCAL, params)
         pasos = args.get('steps')
         if pasos is not None:
             return await self._lote(args, pasos)

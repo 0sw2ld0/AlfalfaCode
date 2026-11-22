@@ -762,6 +762,25 @@ La primera vez que una captura autorizada necesita el permiso de grabación,
 AlfalfaCode muestra la solicitud de macOS al estar en primer plano. También
 puedes abrir los ajustes de grabación desde el panel si el permiso sigue pendiente.
 
+## Controlar una pestaña local de Chrome
+
+Con el motor Chromium de AlfalfaBrowser y una versión que anuncie
+`local_tab_action`, abre tu web local con `browser_navigate`. Usa
+`app_state` con `app: "Chrome local"` para leer la pestaña propia del
+navegador. Usa ese nombre en `app_action` con `action: "click"` o
+`action: "type"` y la referencia `eN` en `target`. `type` reemplaza el
+texto del campo y requiere `text`.
+
+Chrome solicita permiso en su diálogo nativo la primera vez que actúas en
+cada pestaña y origen local. La aprobación distingue protocolo, host y
+puerto. Al salir de ese origen, se revoca incluso si vuelves después. Una
+pestaña nueva o un puerto distinto necesitan su propia aprobación. Los
+sitios externos se pueden leer según la política de navegación. Las acciones
+se limitan al documento principal y el permiso no alcanza a los iframes,
+la barra de direcciones, los menús ni tu perfil personal de Chrome.
+Los formularios y campos sensibles mantienen sus controles habituales.
+El permiso de red local para abrir la página se sigue pidiendo aparte.
+
 ## Capturas antes y después
 
 Al probar una interfaz, abre su estado inicial antes de editar. Si durante el turno

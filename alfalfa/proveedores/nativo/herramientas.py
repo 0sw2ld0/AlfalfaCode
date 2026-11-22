@@ -441,7 +441,8 @@ NUMERO = {'type': ['integer', 'number', 'string']}
 APP_LIST_TOOL = schema(
     'app_list',
     'List the open Mac apps and their windows, to test an app you built (like Codex Computer Use). Use the name, '
-    'bundle id or pid with app_state and app_action. Browsers can only be looked at; terminals and editors can be '
+    'bundle id or pid with app_state and app_action. Native browser windows are read-only; Chrome local is a '
+    'separate entry for AlfalfaBrowser. Terminals and editors can be '
     'looked at and clicked, never typed into; password managers, Keychain Access, System Settings and other '
     'agents are blocked.', {})
 APP_STATE_TOOL = schema(
@@ -451,7 +452,8 @@ APP_STATE_TOOL = schema(
     'scale. question: the screenshot is looked at and the answer comes back. wait_for: wait until that text '
     'appears in the window (up to timeout_seconds, 30 at most) instead of looking again and again. zoom: '
     '{x, y, width, height} in window points returns that area at full screen resolution, to read small details. '
-    'The first use of each app asks the user.',
+    'The first use of each app asks the user. Use app=Chrome local without other arguments to read the '
+    'managed Chrome tab and obtain its eN refs.',
     {'app': STRING, 'window': NUMERO, 'question': STRING, 'max_elements': NUMERO, 'wait_for': STRING,
      'timeout_seconds': NUMERO, 'zoom': {'type': 'object'}}, ['app'],
     example={'app': 'Contador Demo', 'question': '¿Qué número muestra el contador?'})
@@ -469,7 +471,8 @@ APP_ACTION_TOOL = schema(
     'AlfalfaCode has its own mouse, like Codex Computer Use but without bringing the app to the front: clicks, '
     'drags, scrolls and keys go to that app window in the background, without moving the user\'s mouse, and a '
     'drawn cursor shows where. If an app ignores them (the tree does not change), retry once with real_mouse: '
-    'true, which needs the app in front and uses the real mouse.',
+    'true, which needs the app in front and uses the real mouse. For app=Chrome local, use click or type '
+    'with target set to an eN ref from app_state. The browser asks permission for the local tab and port.',
     {'app': STRING, 'action': {'type': 'string', 'enum': ['click', 'double_click', 'right_click', 'type', 'key',
                                                           'scroll', 'set_value', 'press', 'drag', 'focus', 'hover',
                                                           'menu']},
