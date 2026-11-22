@@ -50,6 +50,13 @@ detecta que has iniciado sesión con ChatGPT. Si no hay una sesión de ChatGPT
 disponible, se desactiva la herramienta. La elección también se puede hacer con
 `alfalfa --proveedor-imagen codex|openai|none`.
 
+Al elegir **ChatGPT mediante Codex**, puedes guardar un **Modelo de Codex** y un
+**Esfuerzo de razonamiento** para preparar el prompt y llamar al generador.
+Deja el modelo vacío o selecciona **Predeterminado de Codex** en esfuerzo para
+heredar ese valor. Estos ajustes se aplican al encargo efímero de imagen y son
+independientes del modelo del chat y de la calidad del PNG. Por CLI, por ejemplo,
+`alfalfa --ajustes-imagen-codex gpt-6.2-sol low`.
+
 Con Codex seleccionado, pide en un chat de AlfalfaCode «Genera un icono con una
 hoja verde y guárdalo como `icono.png`». AlfalfaCode muestra el texto, el destino y
 el servicio para que apruebes el encargo. Codex usa la cuota de tu plan de ChatGPT

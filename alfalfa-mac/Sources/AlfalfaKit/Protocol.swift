@@ -733,7 +733,7 @@ public enum AlfalfaMessage: Equatable, Sendable {
     case providers(defaultProvider: String, providers: [ProviderStatus])
     /// `--buscador --json` y `--fijar-searxng`: el buscador web de los agentes.
     case webSearch(WebSearchSettings)
-    case imageProvider(preference: String?, available: String)
+    case imageProvider(preference: String?, available: String, codexModel: String?, codexEffort: String?)
     case cuyBrowserPreparation(CuyBrowserPreparation)
     /// `cuota`: el % usado de la cuota mensual de cada proveedor que la tiene.
     case quota([Quota])
@@ -895,7 +895,9 @@ public enum AlfalfaMessage: Equatable, Sendable {
             })
         case "proveedor_imagen":
             guard let available = text(object["proveedor"]) else { return nil }
-            return .imageProvider(preference: text(object["preferencia"]), available: available)
+            return .imageProvider(preference: text(object["preferencia"]), available: available,
+                                  codexModel: text(object["modelo_codex_imagen"]),
+                                  codexEffort: text(object["esfuerzo_codex_imagen"]))
         case "buscador":
             return webSearch(object).map { .webSearch($0) }
         case "cuybrowser_preparacion":

@@ -7,6 +7,16 @@ func fixtureLines(_ name: String) throws -> [String] {
 }
 
 final class ProtocolTests: XCTestCase {
+    func testDecodesOptionalCodexImageSettings() {
+        let legacy = #"{"version":2,"tipo":"proveedor_imagen","proveedor":"codex"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: legacy),
+                       .imageProvider(preference: nil, available: "codex", codexModel: nil, codexEffort: nil))
+        let configured = #"{"version":2,"tipo":"proveedor_imagen","preferencia":"codex","proveedor":"codex","modelo_codex_imagen":"gpt-6.2-sol","esfuerzo_codex_imagen":"low"}"#
+        XCTAssertEqual(AlfalfaMessage.decode(line: configured),
+                       .imageProvider(preference: "codex", available: "codex", codexModel: "gpt-6.2-sol",
+                                      codexEffort: "low"))
+    }
+
     func testDecodesEveryOutputType() throws {
         let lines = try fixtureLines("salidas")
         let decoded = lines.map(AlfalfaMessage.decode(line:))

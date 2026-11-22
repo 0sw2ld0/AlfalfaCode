@@ -312,7 +312,11 @@ aprobación `antigravity_delegation` en PACAI antes de enviar el texto. En la di
 inversa, Antigravity usa `delegate_alfalfa` por MCP con el modelo elegido al conectar.
 
 La herramienta `generate_image` usa el proveedor elegido en Ajustes o mediante
-`alfalfa --proveedor-imagen codex|openai|none`. El cliente recibe la ruta y las dimensiones reales
+`alfalfa --proveedor-imagen codex|openai|none`. Con `--ajustes-imagen-codex MODELO ESFUERZO`
+se eligen los ajustes del encargo de imagen. Usa `-` para heredar el valor de Codex.
+La consulta JSON devuelve `modelo_codex_imagen` y `esfuerzo_codex_imagen` cuando se configuran.
+En el mapa de PACAI corresponden a `image_codex_model` y `image_codex_effort`.
+El cliente recibe la ruta y las dimensiones reales
 del resultado. [Generar un PNG con Codex](guia/imagenes.md#generar-un-png-con-codex).
 
 ## Control con PACAI: `alfalfa --pacai`

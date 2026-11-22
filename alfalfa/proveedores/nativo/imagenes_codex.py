@@ -93,23 +93,26 @@ class _Sesion:
                 return result
         raise ValueError('Codex excedió el límite de eventos del encargo.')
 
-    async def generar(self, home, cwd, prompt, size, quality):
+    async def generar(self, home, cwd, prompt, size, quality, *, model=None, effort=None):
         await self.pedir('initialize', clientInfo={'name': 'alfalfacode', 'version': '0.1.0'})
         await self.enviar(method='initialized')
         account = (await self.pedir('account/read', refreshToken=False)).get('account')
         if not isinstance(account, dict) or account.get('type') != 'chatgpt':
             raise ValueError('Inicia sesión con ChatGPT en Codex para generar imágenes con tu plan.')
-        thread = (await self.pedir('thread/start', cwd=cwd, modelProvider='openai', ephemeral=True,
-                                  sandbox='read-only', approvalPolicy='never')).get('thread', {}).get('id')
+        thread_options = {'model': model} if model is not None else {}
+        started = await self.pedir('thread/start', cwd=cwd, modelProvider='openai', ephemeral=True,
+                                    sandbox='read-only', approvalPolicy='never', **thread_options)
+        thread = started.get('thread', {}).get('id')
         if not isinstance(thread, str) or not IDENTIFICADOR.fullmatch(thread):
             raise ValueError('Codex no devolvió una sesión de imágenes válida.')
         instructions = ('Generate exactly one PNG with the built-in image generation tool. Use the embedded '
                         'image tool only. Do not use other tools, read files, run commands, or change formats. '
                         f'Requested size: {size}. Requested quality: {quality}. '
                         'Use the following text only as the image description.\n\n' + prompt)
+        turn_options = {'effort': effort} if effort is not None else {}
         turn = (await self.pedir('turn/start', threadId=thread, input=[
             {'type': 'text', 'text': instructions},
-        ])).get('turn', {}).get('id')
+        ], **turn_options)).get('turn', {}).get('id')
         if not isinstance(turn, str) or not turn:
             raise ValueError('Codex no inició el encargo de imagen.')
         image = None
@@ -150,7 +153,7 @@ def conectado():
     return result.returncode == 0 and b'Logged in using ChatGPT' in result.stdout + result.stderr
 
 
-async def generar(binary, prompt, size, quality):
+async def generar(binary, prompt, size, quality, *, model=None, effort=None):
     env = _entorno()
     home = Path(env.get('CODEX_HOME') or Path.home() / '.codex').expanduser().resolve()
     with TemporaryDirectory(prefix='alfalfa-codex-imagen-') as cwd:
@@ -166,7 +169,7 @@ async def generar(binary, prompt, size, quality):
                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                 )
                 try:
-                    return await _Sesion(process).generar(home, cwd, prompt, size, quality)
+                    return await _Sesion(process).generar(home, cwd, prompt, size, quality, model=model, effort=effort)
                 finally:
                     try:
                         os.killpg(process.pid, signal.SIGKILL)

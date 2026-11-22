@@ -39,6 +39,7 @@ TIPOS = {
 # Campo v2 → campo de la extensión. Los que ya están en inglés (`argv`, `cwd`, `diff`, `id`…) no hacen falta.
 CAMPOS = {
     'preferencia': 'preference',
+    'modelo_codex_imagen': 'image_codex_model', 'esfuerzo_codex_imagen': 'image_codex_effort',
     'accion': 'action', 'actividad': 'activity', 'activo': 'active', 'actualizada': 'updated',
     'actualizado': 'updated', 'agente': 'agent', 'agotado': 'exhausted', 'ajustes': 'settings', 'alcance': 'scope',
     'almacen': 'store', 'almacenes': 'stores', 'ambito': 'area', 'ancla': 'anchor', 'antes': 'before',

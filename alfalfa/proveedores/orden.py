@@ -66,11 +66,15 @@ def orden(args, entrada=None):
     entrada = entrada or sys.stdin
     como_json = bool(getattr(args, 'json', False))
     try:
-        if getattr(args, 'proveedor_imagen', None) is not None:
+        preferencia_imagen = getattr(args, 'proveedor_imagen', None)
+        ajustes_imagen_codex = getattr(args, 'ajustes_imagen_codex', None)
+        if preferencia_imagen is not None or ajustes_imagen_codex is not None:
             from .nativo import imagenes
-            datos = imagenes.configurar(args.proveedor_imagen or None)
+            datos = imagenes.configurar(preferencia_imagen or None, codex=ajustes_imagen_codex)
             _salida({'tipo': 'proveedor_imagen', **datos}, como_json,
-                    'Proveedor de imágenes disponible: ' + datos['proveedor'])
+                    'Proveedor de imágenes disponible: ' + datos['proveedor']
+                    + '\nModelo de Codex para imágenes: ' + datos.get(imagenes.MODELO_CODEX, 'predeterminado')
+                    + '\nEsfuerzo de Codex para imágenes: ' + datos.get(imagenes.ESFUERZO_CODEX, 'predeterminado'))
             return 0
         if getattr(args, 'activar_codigo', False):
             from .alfalfa import Alfalfa
@@ -308,6 +312,8 @@ def _diagnostico():
 def argumentos(grupo):
     grupo.add_argument('--proveedor-imagen', nargs='?', const='', choices=('', 'codex', 'openai', 'none'),
                        help='Consultar o elegir el proveedor de generación de imágenes')
+    grupo.add_argument('--ajustes-imagen-codex', nargs=2, metavar=('MODELO', 'ESFUERZO'),
+                       help='Modelo y esfuerzo de Codex sólo para generar imágenes («-» usa la configuración de Codex)')
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
     grupo.add_argument('--guardar-clave', metavar='PROVEEDOR',
                        help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai, '
@@ -342,6 +348,7 @@ def argumentos(grupo):
 
 def pedida(args):
     return bool(getattr(args, 'proveedor_imagen', None) is not None or args.proveedores
+                or getattr(args, 'ajustes_imagen_codex', None) is not None
                 or getattr(args, 'catalogo', False) or getattr(args, 'primera_vez', False)
                 or getattr(args, 'conectar', None) or getattr(args, 'desconectar', None)
                 or args.guardar_clave or args.borrar_clave

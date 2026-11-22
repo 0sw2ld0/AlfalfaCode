@@ -135,6 +135,7 @@ async def test_codex_usa_el_plan_y_devuelve_las_dimensiones_reales(tools, monkey
 
     binary = tmp_path / 'codex'
     monkeypatch.setattr(imagenes_codex, 'ejecutable', lambda: binary)
+    imagenes.configurar(codex=('gpt-6.2-sol', 'low'))
     no_api = AsyncMock(side_effect=AssertionError('No se usa la API de imágenes'))
     monkeypatch.setattr(imagenes, 'solicitar', no_api)
 
@@ -154,9 +155,10 @@ async def test_codex_usa_el_plan_y_devuelve_las_dimensiones_reales(tools, monkey
 
     approval.return_value = 'una_vez'
     output = await tools.call('generate_image', args)
-    generate.assert_awaited_once_with(binary, ARGS['prompt'], '1024x1024', 'medium')
+    generate.assert_awaited_once_with(binary, ARGS['prompt'], '1024x1024', 'medium', model='gpt-6.2-sol', effort='low')
     no_api.assert_not_awaited()
     assert 'plan de ChatGPT' in approval.await_args.args[0]['purpose']
+    assert 'Modelo de Codex: gpt-6.2-sol. Esfuerzo: low.' in approval.await_args.args[0]['purpose']
     assert output['provider'] == 'codex' and 'estimated_cost' not in output
     assert output['requested_size'] == '1024x1024'
     assert (output['width'], output['height']) == (1, 1)
@@ -172,6 +174,37 @@ async def test_codex_rechaza_autenticacion_por_api():
     with pytest.raises(ValueError, match='Inicia sesión con ChatGPT'):
         await session.generar(None, '/tmp', 'sprout', '1024x1024', 'low')
     assert [call.args[0] for call in session.pedir.await_args_list] == ['initialize', 'account/read']
+
+
+async def test_codex_solo_envia_los_ajustes_del_encargo_de_imagen(tmp_path):
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    folder = tmp_path / 'generated_images' / 'thread1'
+    folder.mkdir(parents=True)
+    image = folder / 'image.png'
+    image.write_bytes(PNG)
+    for options in ({'model': 'gpt-6.2-sol', 'effort': 'low'}, {}, {'effort': 'high'}, {'model': 'gpt-6-luna'}):
+        session = imagenes_codex._Sesion(None)
+        session.pedir = AsyncMock(side_effect=[
+            {}, {'account': {'type': 'chatgpt'}}, {'thread': {'id': 'thread1'}}, {'turn': {'id': 'turn1'}},
+        ])
+        session.enviar = AsyncMock()
+        session.recibir = AsyncMock(side_effect=[
+            {'method': 'item/completed', 'params': {'threadId': 'thread1', 'turnId': 'turn1',
+                                                   'item': {'type': 'imageGeneration', 'savedPath': str(image)}}},
+            {'method': 'turn/completed', 'params': {'threadId': 'thread1',
+                                                   'turn': {'id': 'turn1', 'status': 'completed'}}},
+        ])
+        assert await session.generar(tmp_path, '/tmp', 'sprout', '1024x1024', 'low', **options) == PNG
+        calls = session.pedir.await_args_list
+        assert [call.args[0] for call in calls] == ['initialize', 'account/read', 'thread/start', 'turn/start']
+        thread, turn = calls[2].kwargs, calls[3].kwargs
+        assert thread['ephemeral'] is True
+        assert ('model' in thread) == ('model' in options)
+        assert ('effort' in turn) == ('effort' in options)
+        assert thread.get('model') == options.get('model')
+        assert turn.get('effort') == options.get('effort')
+        assert 'effort' not in thread and 'model' not in turn
 
 
 def test_codex_solo_acepta_archivos_de_la_sesion(tmp_path):
@@ -210,6 +243,22 @@ def test_preferencia_de_imagen_preserva_otros_ajustes_y_no_recurre_a_la_api(monk
     assert imagenes.configurar('codex')['proveedor'] == 'codex'
     monkeypatch.setattr(imagenes_codex, 'conectado', lambda: False)
     assert imagenes.configurar() == {'preferencia': 'codex', 'proveedor': 'none'}
+
+
+def test_los_ajustes_de_imagen_se_guardan_y_se_borran_sin_cambiar_otros():
+    from alfalfa.proveedores import configuracion
+
+    existente = {'por_defecto': 'ollama', 'proveedor_imagen': 'none', 'ollama': {'url': 'http://localhost:11434'}}
+    configuracion.escribir(existente)
+    imagenes.configurar(codex=('gpt-6.2-sol', 'low'))
+    configurado = dict(existente, modelo_codex_imagen='gpt-6.2-sol', esfuerzo_codex_imagen='low')
+    assert configuracion.leer() == configurado
+    assert imagenes.configurar()['esfuerzo_codex_imagen'] == 'low'
+    with pytest.raises(ValueError, match='Esfuerzo de Codex desconocido'):
+        imagenes.configurar(codex=('gpt-6-luna', 'invalido'))
+    assert configuracion.leer() == configurado
+    imagenes.configurar(codex=('-', '-'))
+    assert configuracion.leer() == existente
 
 
 async def test_sin_proveedor_no_pide_permiso_ni_escribe(tools):

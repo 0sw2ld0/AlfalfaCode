@@ -64,6 +64,11 @@ struct ModelMenuItems: View {
 /// (OpenRouter, OpenCode Zen…) con la del usuario, el servicio Alfalfa y el proveedor por defecto.
 /// Las claves van al Llavero a través de `alfalfa`; la app no las guarda ni las vuelve a enseñar.
 struct ProvidersView: View {
+    private struct ImageCodexSettings: Equatable {
+        var model = ""
+        var effort = ""
+    }
+
     @EnvironmentObject private var model: AppModel
     @State private var ollamaURL = ""
     @State private var ollamaKey = ""
@@ -76,6 +81,8 @@ struct ProvidersView: View {
     @State private var notice: String?
     @State private var imageProvider: String?
     @State private var availableImageProvider = "none"
+    @State private var imageCodex = ImageCodexSettings()
+    @State private var savedImageCodex = ImageCodexSettings()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -214,6 +221,9 @@ struct ProvidersView: View {
                 Text("Ninguno").tag("none")
             }
             .disabled(busy || imageProvider == nil)
+            if imageProvider == "codex" {
+                imageCodexSettings
+            }
             if imageProvider == "codex", availableImageProvider == "none" {
                 Text("Inicia sesión con ChatGPT en Codex para generar imágenes.")
                     .font(.caption).foregroundStyle(Theme.secondary)
@@ -224,18 +234,53 @@ struct ProvidersView: View {
         }
     }
 
+    private var imageCodexSettings: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("Modelo de Codex", text: $imageCodex.model, prompt: Text("Predeterminado de Codex"))
+            Picker("Esfuerzo de razonamiento", selection: $imageCodex.effort) {
+                Text("Predeterminado de Codex").tag("")
+                Text("Ninguno").tag("none")
+                Text("Mínimo").tag("minimal")
+                ForEach(Presentation.efforts, id: \.value) { effort in
+                    Text(effort.label).tag(effort.value)
+                }
+                Text("Ultra").tag("ultra")
+            }
+            Text("Se aplican solo a los encargos de imagen. Usa un modelo y un esfuerzo admitidos por Codex.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            Button("Guardar ajustes de imágenes") {
+                let name = imageCodex.model.trimmingCharacters(in: .whitespacesAndNewlines)
+                let effort = imageCodex.effort
+                Task {
+                    busy = true
+                    notice = nil
+                    await queryImageProvider(["--ajustes-imagen-codex", name.isEmpty ? "-" : name,
+                                              effort.isEmpty ? "-" : effort])
+                    busy = false
+                }
+            }
+            .disabled(imageCodex == savedImageCodex)
+        }
+        .disabled(busy)
+    }
+
     private func loadImageProvider(_ preference: String? = nil) async {
+        await queryImageProvider(["--proveedor-imagen"] + (preference.map { [$0] } ?? []))
+    }
+
+    private func queryImageProvider(_ arguments: [String]) async {
         guard let launcher = model.launcher else { return }
-        let arguments = ["--proveedor-imagen"] + (preference.map { [$0] } ?? []) + ["--json"]
         do {
             let messages = try await AlfalfaProcess.query(
-                launcher: launcher, arguments: arguments,
+                launcher: launcher, arguments: arguments + ["--json"],
                 directory: FileManager.default.homeDirectoryForCurrentUser
             )
             for message in messages {
-                if case let .imageProvider(preference, available) = message {
+                if case let .imageProvider(preference, available, codexModel, codexEffort) = message {
                     imageProvider = preference ?? available
                     availableImageProvider = available
+                    imageCodex = ImageCodexSettings(model: codexModel ?? "", effort: codexEffort ?? "")
+                    savedImageCodex = imageCodex
                     return
                 }
                 if case let .error(text) = message {

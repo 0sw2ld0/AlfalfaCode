@@ -5,6 +5,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import struct
 import tempfile
 from decimal import Decimal
@@ -14,7 +15,7 @@ import httpx
 
 from ... import ajustes, contenido_externo
 from ...permisos import modos
-from .. import configuracion
+from .. import ORDEN_ESFUERZOS, configuracion
 from . import imagenes_codex
 
 MODELO = 'gpt-image-1.5'
@@ -33,14 +34,38 @@ PRECIOS = {
 
 PROVEEDORES = ('codex', 'openai', 'none')
 PREFERENCIA = 'proveedor_imagen'
+MODELO_CODEX = 'modelo_codex_imagen'
+ESFUERZO_CODEX = 'esfuerzo_codex_imagen'
+ESFUERZOS_CODEX = (*ORDEN_ESFUERZOS, 'ultra')
+ID_MODELO = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,119}')
 
 
-def configurar(preferencia=None):
-    datos = configuracion.leer(para_cambiar=preferencia is not None)
+def ajustes_codex(datos):
+    modelo, esfuerzo = datos.get(MODELO_CODEX), datos.get(ESFUERZO_CODEX)
+    return {
+        MODELO_CODEX: modelo if isinstance(modelo, str) and ID_MODELO.fullmatch(modelo) else None,
+        ESFUERZO_CODEX: esfuerzo if esfuerzo in ESFUERZOS_CODEX else None,
+    }
+
+
+def configurar(preferencia=None, *, codex=None):
+    datos = configuracion.leer(para_cambiar=preferencia is not None or codex is not None)
     if preferencia is not None:
         if preferencia not in PROVEEDORES:
             raise ValueError('Proveedor de imágenes desconocido.')
         datos[PREFERENCIA] = preferencia
+    if codex is not None:
+        modelo, esfuerzo = (None if valor == '-' else valor for valor in codex)
+        if modelo is not None and not ID_MODELO.fullmatch(modelo):
+            raise ValueError('Indica un identificador de modelo de Codex válido o «-» para heredar.')
+        if esfuerzo is not None and esfuerzo not in ESFUERZOS_CODEX:
+            raise ValueError('Esfuerzo de Codex desconocido.')
+        for campo, valor in ((MODELO_CODEX, modelo), (ESFUERZO_CODEX, esfuerzo)):
+            if valor is None:
+                datos.pop(campo, None)
+            else:
+                datos[campo] = valor
+    if preferencia is not None or codex is not None:
         configuracion.escribir(datos)
     elegido = datos.get(PREFERENCIA)
     if elegido not in PROVEEDORES:
@@ -50,7 +75,8 @@ def configurar(preferencia=None):
         proveedor = 'codex'
     elif elegido == 'openai' and ajustes.openai_clave():
         proveedor = 'openai'
-    return {'preferencia': elegido, 'proveedor': proveedor}
+    return {'preferencia': elegido, 'proveedor': proveedor,
+            **{campo: valor for campo, valor in ajustes_codex(datos).items() if valor is not None}}
 
 
 def restringida(runtime):
@@ -156,7 +182,12 @@ async def generar(tools, args):
         if codex is None:
             raise ValueError('Instala Codex CLI o la app de ChatGPT e inicia sesión en Codex con ChatGPT.')
         modelo = 'codex'
+        opciones_codex = ajustes_codex(configuracion.leer())
+        modelo_codex, esfuerzo_codex = opciones_codex[MODELO_CODEX], opciones_codex[ESFUERZO_CODEX]
         proposito = 'Enviar este prompt a Codex y generar un PNG usando tu plan de ChatGPT.'
+        if modelo_codex is not None or esfuerzo_codex is not None:
+            proposito += (f' Modelo de Codex: {modelo_codex or "predeterminado"}.'
+                          f' Esfuerzo: {esfuerzo_codex or "predeterminado"}.')
     else:
         modelo = MODELO
         costo = Decimal(PRECIOS[size][CALIDADES.index(quality)])
@@ -182,7 +213,7 @@ async def generar(tools, args):
         raise ValueError('Generación rechazada. No se envió ninguna solicitud.')
     destino(tools, ruta)
     if con_codex:
-        datos = await imagenes_codex.generar(codex, prompt, size, quality)
+        datos = await imagenes_codex.generar(codex, prompt, size, quality, model=modelo_codex, effort=esfuerzo_codex)
         width, height = dimensiones_png(datos)
         detalle = {'provider': 'codex', 'requested_size': size, 'requested_quality': quality}
     else:
