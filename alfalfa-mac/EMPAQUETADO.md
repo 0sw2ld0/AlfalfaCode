@@ -24,7 +24,7 @@ AlfalfaCode.app/Contents/
   Helpers/alfalfa-firma-<huella>    firmante.swift ya compilado (Secure Enclave, proveedor Alfalfa)
   Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (inventario y compatibilidad)
   Helpers/alfalfa-desktop         AlfalfaDesktop 0.1.1 (control de ventanas y cursor)
-  Helpers/cuybrowser              CuyBrowser autónomo 0.6.0, macOS arm64 (o x64 en la de Intel)
+  Helpers/cuybrowser              AlfalfaBrowser autónomo 0.7.0, macOS arm64 (o x64 en la de Intel)
   Resources/AppIcon.icns
   Resources/motor/alfalfa           lanzador: python3 -I -B -m alfalfa.terminal
   Resources/motor/bin/rg            ripgrep 15.2.0 oficial (fijado por huella), al final del PATH

@@ -14,7 +14,7 @@ struct BrowserEngineSettings: View {
             Text("Motor del navegador").font(.title2.bold())
             Picker("Navegador", selection: $engine) {
                 Text("WebKit · integrado").tag("webkit")
-                Text("CuyBrowser · Chromium").tag("cuybrowser")
+                Text("AlfalfaBrowser · Chromium").tag("cuybrowser")
                 Text("Desactivado").tag("off")
             }
             .pickerStyle(.segmented)
@@ -24,7 +24,7 @@ struct BrowserEngineSettings: View {
                      + "Cada proyecto conserva su propio perfil.")
                     .font(.caption).foregroundStyle(Theme.secondary)
                 if profile.range(of: "^[A-Za-z0-9_-]{1,64}$", options: .regularExpression) == nil {
-                    Text("Corrige el nombre del perfil antes de iniciar CuyBrowser.").foregroundStyle(Theme.danger)
+                    Text("Corrige el nombre del perfil antes de iniciar AlfalfaBrowser.").foregroundStyle(Theme.danger)
                 }
                 CuyBrowserPreparationControls(
                     launcher: model.launcher, directory: model.folder.map { URL(fileURLWithPath: $0) }

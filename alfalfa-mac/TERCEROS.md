@@ -43,9 +43,9 @@ La app empaquetada lleva además programas de terceros sin cambios, cada uno con
   cryptography…), cada una con su licencia en su `*.dist-info`.
 - **ripgrep** 15.2.0, binario oficial de [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep)
   (MIT o Unlicense, en `motor/licencias/ripgrep/`).
-- **CuyBrowser** 0.6.0, binario oficial para Apple Silicon (o para Intel, en la app de Intel). Las licencias de
-  CuyBrowser, Playwright, Bun y sus componentes van en `motor/licencias/cuybrowser/`.
-  [Fuentes de CuyBrowser](https://github.com/0sw2ld0/cuybrowser/tree/v0.6.0)
+- **AlfalfaBrowser** 0.7.0, binario oficial para Apple Silicon (o para Intel, en la app de Intel). Las licencias de
+  AlfalfaBrowser, Playwright, Bun y sus componentes van en `motor/licencias/cuybrowser/`.
+  [Fuentes de AlfalfaBrowser](https://github.com/0sw2ld0/AlfalfaBrowser/tree/v0.7.0)
   [Fuentes de Bun](https://github.com/oven-sh/bun/tree/bun-v1.4.4)
 - **AlfalfaDesktop** 0.1.1, binario oficial de la arquitectura de la app (MIT).
   Su licencia y sus avisos van en `motor/licencias/alfalfadesktop/`.

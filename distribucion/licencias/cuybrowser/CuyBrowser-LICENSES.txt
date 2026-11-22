@@ -1,13 +1,14 @@
-CuyBrowser 0.6.0 y dependencias de producción según package-lock.json.
-Fuentes y receta del ejecutable en https://github.com/0sw2ld0/cuybrowser/tree/v0.6.0
+AlfalfaBrowser 0.7.0 y dependencias de producción según package-lock.json.
+Fuentes y receta del ejecutable en https://github.com/0sw2ld0/AlfalfaBrowser/tree/v0.7.0
 Bun 1.4.4 tiene sus avisos en Bun-LICENSE.md.
 
 ========================================================================
-cuybrowser@0.6.0 · LICENSE
+cuybrowser@0.7.0 · LICENSE
 
 MIT License
 
 Copyright (c) 2026 CuyCoders
+Cursor geometry and colors from AlfalfaDesktop, Copyright (c) 2026 Oswaldo Leon
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -19,7 +19,7 @@ struct CuyBrowserPreparationControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allowsSourceChoice {
-                Toggle("Usar mi CuyBrowser de PATH", isOn: $fromPath).disabled(downloading)
+                Toggle("Usar cuybrowser del PATH", isOn: $fromPath).disabled(downloading)
             }
             if loading || downloading {
                 HStack(spacing: 8) {
@@ -48,7 +48,7 @@ struct CuyBrowserPreparationControls: View {
     @ViewBuilder private func resultado(_ preparation: CuyBrowserPreparation) -> some View {
         switch preparation.status {
         case .available:
-            let source = preparation.source == "incluido" ? "CuyBrowser incluido" : "CuyBrowser de PATH"
+            let source = preparation.source == "incluido" ? "AlfalfaBrowser incluido" : "cuybrowser del PATH"
             Label("\(preparation.browser ?? "Chromium") disponible · \(source)", systemImage: "checkmark.circle")
                 .foregroundStyle(Theme.secondary)
         case .needsChromium:
@@ -56,7 +56,7 @@ struct CuyBrowserPreparationControls: View {
                 .foregroundStyle(Theme.secondary)
             Button("Descargar Chromium (unos 190 MB)…") { confirming = true }.controlSize(.small)
         case .missing, .error:
-            Text(preparation.message ?? "No se pudo preparar CuyBrowser.").foregroundStyle(Theme.danger)
+            Text(preparation.message ?? "No se pudo preparar el navegador Chromium.").foregroundStyle(Theme.danger)
         }
     }
 
@@ -87,7 +87,7 @@ struct CuyBrowserPreparationControls: View {
                 preparation = value
                 return
             }
-            error = "AlfalfaCode no devolvió el estado de CuyBrowser."
+            error = "AlfalfaCode no devolvió el estado del navegador."
         } catch {
             if !Task.isCancelled { self.error = error.localizedDescription }
         }

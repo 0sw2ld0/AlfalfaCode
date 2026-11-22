@@ -21,7 +21,7 @@ struct BrowserFirstRunCard: View {
                 }
             }
             Toggle("Navegador de la app · WebKit", isOn: motor("webkit")).disabled(!webAccess)
-            Toggle("Navegador Chromium · CuyBrowser", isOn: motor("cuybrowser")).disabled(!webAccess)
+            Toggle("Navegador Chromium · AlfalfaBrowser", isOn: motor("cuybrowser")).disabled(!webAccess)
             if webAccess {
                 CuyBrowserPreparationControls(
                     launcher: model.launcher, directory: model.folder.map { URL(fileURLWithPath: $0) }

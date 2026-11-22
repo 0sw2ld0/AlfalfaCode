@@ -24,7 +24,7 @@ tras confirmar, sin borrar los de otros proyectos. Mientras el agente trabaja,
 espera un permiso o está en relevo, estos cambios quedan bloqueados.
 
 Herramientas del motor WebKit (la app arranca el motor con `--stdio --navegador`). En terminal
-se pueden activar explícitamente con el segundo motor CuyBrowser, descrito abajo. Con el buscador web en
+se pueden activar explícitamente con el segundo motor AlfalfaBrowser, descrito abajo. Con el buscador web en
 «apagado» tampoco se ofrecen:
 
 - `browser_navigate`: abrir una URL http o https, o `back`, `forward`, `reload`.
@@ -93,16 +93,19 @@ El motor decide los permisos y la app sólo ejecuta (`alfalfa/navegador.py` y
 `"permiso":{"tipo":"formulario",…}` si la acción necesita aprobación: el motor pregunta
 y repite la petición con `permitido`.
 
-## Chromium con CuyBrowser
+## Chromium con AlfalfaBrowser
 
-En Ajustes → Navegador se puede elegir **CuyBrowser · Chromium** para las sesiones nuevas.
+En Ajustes → Navegador se puede elegir **AlfalfaBrowser · Chromium** para las sesiones nuevas.
 WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
 
 ```sh
 alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
 ```
 
-La distribución de AlfalfaCode incluye CuyBrowser 0.6.0 en `Helpers`. Los clones y las
+La distribución de AlfalfaCode incluye AlfalfaBrowser 0.7.0 en `Helpers/cuybrowser`. El cursor de hoja
+marca los clics y movimientos del agente en la ventana de Chromium. Las capturas de página excluyen la hoja.
+El nombre del ejecutable, las preferencias guardadas y la opción de usar `cuybrowser` desde el PATH
+se mantienen para que sigan funcionando las configuraciones existentes. Los clones y las
 instalaciones anteriores pueden usar un `cuybrowser` compatible de `PATH`. Para elegirlo
 en una instalación que ya lo incluye, usa el interruptor en Ajustes → Navegador o la opción
 `--cuybrowser-desde-path` de la CLI. El motor comprueba `exactOrigins` y `localNetwork`
@@ -115,7 +118,7 @@ En el primer uso interactivo de `--motor-navegador cuybrowser` puedes guardar la
 para la terminal. Se cambia con `alfalfa --cuybrowser-cli activar` o `desactivar`.
 
 El motor pide permiso una vez por sesión para iniciar el servidor fuera del sandbox. Usa HTTP
-autenticado en un puerto propio de `127.0.0.1`, sin proxies ni redirecciones. El hogar de CuyBrowser
+autenticado en un puerto propio de `127.0.0.1`, sin proxies ni redirecciones. El hogar de AlfalfaBrowser
 vive en `ALFALFA_HOME/cuybrowser/<hash de la raíz canónica del proyecto>` y conserva los logins
 de ese proyecto. Un bloqueo exclusivo impide que dos sesiones compartan el mismo navegador.
 No adopta un daemon preexistente ni detiene procesos de otros clientes. Al cerrar, detiene sólo
@@ -123,23 +126,23 @@ su servidor y su daemon; los perfiles propios permanecen. Nunca copia cookies pe
 
 La política de ese hogar debe conservar `approval: native-dialog`, todas las confirmaciones
 sensibles, bloqueo de campos sensibles y `attach.enabled: false`. El cliente comprueba `policy_show`
-antes de actuar y pide las confirmaciones a CuyBrowser mediante `confirm`: la persona decide en
+antes de actuar y pide las confirmaciones a AlfalfaBrowser mediante `confirm`: la persona decide en
 el diálogo del sistema. No se duplica la tarjeta sensible de AlfalfaCode. **Omitir permisos sólo
-omite las preguntas del motor; los diálogos independientes de CuyBrowser siguen activos.**
+omite las preguntas del motor; los diálogos independientes de AlfalfaBrowser siguen activos.**
 Manual conserva su permiso por sitio y Plan/sólo lectura deshabilitan las herramientas de escritura.
 Para contraseñas, 2FA y captchas se usa el relevo; el agente nunca los resuelve ni disfraza su identidad.
 
 Las dieciséis herramientas mantienen sus nombres. El contenido web, los mensajes, las URLs y los
 títulos siguen marcados como datos, no instrucciones. Estas diferencias se comunican al agente:
 
-| Herramienta | Comportamiento de CuyBrowser |
+| Herramienta | Comportamiento de AlfalfaBrowser |
 | --- | --- |
 | Navegar, leer, consola, red, viewport, pulsar, escribir, desplazar, captura, esperar y hover | Traducción HTTP nativa. Los diagnósticos de red no incluyen duraciones, cuerpos ni cabeceras. `type` admite campos editables, no selecciona opciones de un `<select>` nativo. |
 | `browser_eval` | Requiere `modifies: true` y que una persona haya habilitado `evaluate` en la política privada. Siempre pasa por su diálogo nativo. No existe un mundo JavaScript de sólo lectura y el motor no habilita la función automáticamente. |
 | `browser_handoff` | Espera la decisión de la persona en el diálogo del sistema, hasta 120 segundos. `until` devuelve un error de capacidad. Cancelar el turno detiene exclusivamente este navegador para interrumpir el relevo. |
 | `browser_key` | Usa el foco actual; `ref` y `target` para cambiarlo devuelven un error de capacidad. |
-| `browser_upload` | Hasta diez archivos del proyecto y 20 MiB. Rechaza enlaces simbólicos, duros, rutas privadas y salidas del proyecto. Prepara copias privadas de sólo lectura fuera del hogar de CuyBrowser; su diálogo aprueba esos mismos bytes aunque el proyecto cambie mientras espera. Las copias se eliminan al terminar o cancelar. |
-| `browser_download` | Descargar una URL a un archivo del proyecto requiere WebKit; CuyBrowser devuelve un error explícito. No se suplanta con JavaScript ni `fetch`. |
+| `browser_upload` | Hasta diez archivos del proyecto y 20 MiB. Rechaza enlaces simbólicos, duros, rutas privadas y salidas del proyecto. Prepara copias privadas de sólo lectura fuera del hogar de AlfalfaBrowser; su diálogo aprueba esos mismos bytes aunque el proyecto cambie mientras espera. Las copias se eliminan al terminar o cancelar. |
+| `browser_download` | Descargar una URL a un archivo del proyecto requiere WebKit; AlfalfaBrowser devuelve un error explícito. No se suplanta con JavaScript ni `fetch`. |
 
 El modo estricto de subrecursos requiere `strictResources: true`. Si el servidor sólo garantiza
 documentos por origen exacto, se rechaza ese modo y se indica usar WebKit. Una lista de hostnames

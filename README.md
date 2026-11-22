@@ -155,7 +155,7 @@ Cada función, con la guía que la detalla:
 - **Control de apps del Mac**: prueba como un usuario la app que construyó
   ([Probar apps del Mac](docs/guia/apps-mac.md)).
 - **Navegador propio**: WebKit dentro de la app, con las herramientas `browser_*`;
-  opcional Chromium con CuyBrowser ([Navegador propio](docs/guia/navegador.md)).
+  opcional Chromium con AlfalfaBrowser ([Navegador propio](docs/guia/navegador.md)).
 - **Venir de otra herramienta**: lee `AGENTS.md`, `CLAUDE.md`, la configuración de
   OpenCode y de Codex, servidores MCP, agentes y órdenes «/»
   ([Venir de OpenCode, Codex o Claude Code](docs/guia/migrar.md)).
