@@ -222,11 +222,14 @@ struct ProvidersView: View {
             }
             .disabled(busy || imageProvider == nil)
             if imageProvider == "codex" {
+                if availableImageProvider == "none" {
+                    Label("Codex no puede generar imágenes. Comprueba que esté instalado y conectado a ChatGPT.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 imageCodexSettings
-            }
-            if imageProvider == "codex", availableImageProvider == "none" {
-                Text("Inicia sesión con ChatGPT en Codex para generar imágenes.")
-                    .font(.caption).foregroundStyle(Theme.secondary)
             } else if imageProvider == "openai", availableImageProvider == "none" {
                 Text("Guarda una clave en la sección de OpenAI para generar imágenes.")
                     .font(.caption).foregroundStyle(Theme.secondary)
