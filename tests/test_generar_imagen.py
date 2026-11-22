@@ -21,7 +21,7 @@ def tools(tmp_path, monkeypatch):
     monkeypatch.setattr(imagenes.ajustes, 'openai_clave', lambda: 'clave-ficticia')
     monkeypatch.setattr(imagenes.contenido_externo, 'secretos', lambda runtime: ())
     rt = SimpleNamespace(task={'cwd': str(tmp_path), 'modo': 'omitir'}, manager=SimpleNamespace(),
-                         state={}, save=lambda: None, excluded_tools=(), tool_specs=TOOLS)
+                         state={}, save=lambda: None, excluded_tools=(), tool_specs=TOOLS, image_provider='openai')
     rt.manager.task = rt.task
     rt.approve = AprobacionConModo(AsyncMock(return_value='una_vez'), rt.manager)
     return WorkspaceTools(rt)
@@ -144,7 +144,8 @@ async def test_codex_usa_el_plan_y_devuelve_las_dimensiones_reales(tools, monkey
     monkeypatch.setattr(imagenes.ajustes, 'openai_clave', no_key)
     generate = AsyncMock(return_value=PNG)
     monkeypatch.setattr(imagenes_codex, 'generar', generate)
-    args = dict(ARGS, provider='codex')
+    tools.runtime.image_provider = 'codex'
+    args = ARGS
     approval = tools.runtime.approve.interior
     approval.return_value = False
     with pytest.raises(ValueError, match='rechazada'):
@@ -189,3 +190,31 @@ def test_codex_solo_acepta_archivos_de_la_sesion(tmp_path):
     link.symlink_to(outside)
     with pytest.raises(ValueError, match='No se pudo leer'):
         imagenes_codex._artefacto(tmp_path, 'thread1', str(link))
+
+
+def test_preferencia_de_imagen_preserva_otros_ajustes_y_no_recurre_a_la_api(monkeypatch):
+    from alfalfa.proveedores import configuracion
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    configuracion.escribir({'por_defecto': 'ollama'})
+    monkeypatch.setattr(imagenes.ajustes, 'openai_clave', lambda: 'clave-ficticia')
+    assert imagenes.configurar() == {'preferencia': None, 'proveedor': 'none'}
+    monkeypatch.setattr(imagenes_codex, 'conectado', lambda: True)
+    assert imagenes.configurar() == {'preferencia': None, 'proveedor': 'codex'}
+    assert imagenes.configurar('none')['proveedor'] == 'none'
+    assert imagenes.configurar()['proveedor'] == 'none'
+    assert imagenes.configurar('openai')['proveedor'] == 'openai'
+    assert configuracion.por_defecto() == 'ollama'
+    monkeypatch.setattr(imagenes.ajustes, 'openai_clave', lambda: None)
+    assert imagenes.configurar() == {'preferencia': 'openai', 'proveedor': 'none'}
+    assert imagenes.configurar('codex')['proveedor'] == 'codex'
+    monkeypatch.setattr(imagenes_codex, 'conectado', lambda: False)
+    assert imagenes.configurar() == {'preferencia': 'codex', 'proveedor': 'none'}
+
+
+async def test_sin_proveedor_no_pide_permiso_ni_escribe(tools):
+    tools.runtime.image_provider = 'none'
+    with pytest.raises(ValueError, match='herramienta para generar imágenes'):
+        await tools.call('generate_image', ARGS)
+    tools.runtime.approve.interior.assert_not_awaited()
+    assert not (tools.root / ARGS['path']).exists()

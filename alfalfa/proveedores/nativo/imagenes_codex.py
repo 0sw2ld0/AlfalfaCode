@@ -7,6 +7,7 @@ import os
 import re
 import signal
 import stat
+import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -130,10 +131,27 @@ class _Sesion:
         raise ValueError('Codex no devolvió un PNG con tu plan de ChatGPT. No se reintentó.')
 
 
-async def generar(binary, prompt, size, quality):
+def _entorno():
     keys = ('HOME', 'CODEX_HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR')
     env = {key: os.environ[key] for key in keys if key in os.environ}
     env['PATH'] = '/usr/bin:/bin:/usr/sbin:/sbin'
+    return env
+
+
+def conectado():
+    binary = ejecutable()
+    if binary is None:
+        return False
+    try:
+        result = subprocess.run([binary, 'login', 'status'], env=_entorno(), cwd='/',
+                                capture_output=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and b'Logged in using ChatGPT' in result.stdout + result.stderr
+
+
+async def generar(binary, prompt, size, quality):
+    env = _entorno()
     home = Path(env.get('CODEX_HOME') or Path.home() / '.codex').expanduser().resolve()
     with TemporaryDirectory(prefix='alfalfa-codex-imagen-') as cwd:
         try:

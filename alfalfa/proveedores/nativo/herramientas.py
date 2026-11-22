@@ -381,14 +381,12 @@ TOOLS = [
                             'read image bytes as text.',
            {'path': STRING, 'question': STRING}, ['path', 'question'],
            example=TOOL_ARGUMENT_EXAMPLES['inspect_image']),
-    schema('generate_image', 'Generate one PNG only when the user asks for an image. The OpenAI API is the default. '
-           'Use provider=codex when the user asks for Codex or their ChatGPT plan. Both paths ask for approval. '
-           'Returns the PNG path and dimensions. Show the saved image using Markdown. Do not retry failures or '
-           'switch the billing provider without the user asking.',
+    schema('generate_image', 'Generate one PNG only when the user asks for an image. The tool uses the image '
+           'provider configured in settings and asks for approval. Returns the PNG path and dimensions. '
+           'Show the saved image using Markdown. Do not retry failures or attempt another provider.',
            {'prompt': STRING, 'path': {**STRING, 'description': 'New relative PNG path in an existing directory.'},
             'size': {**STRING, 'enum': list(imagenes.PRECIOS)},
-            'quality': {**STRING, 'enum': list(imagenes.CALIDADES)},
-            'provider': {**STRING, 'enum': ['openai', 'codex']}}, ['prompt', 'path'],
+            'quality': {**STRING, 'enum': list(imagenes.CALIDADES)}}, ['prompt', 'path'],
            example={'prompt': 'A watercolor red fox in a snowy forest', 'path': 'fox.png', 'quality': 'medium'}),
     schema('delegate_antigravity', 'Ask Antigravity for a second opinion on a self-contained coding task. '
            'The user approves the exact text sent to Google. Send only the context needed for text analysis. '

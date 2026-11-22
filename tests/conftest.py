@@ -65,6 +65,14 @@ def _sin_llavero_ni_proveedores_del_usuario(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _sin_inicio_de_sesion_real_de_codex(tmp_path_factory, monkeypatch):
+    from alfalfa.proveedores.nativo import imagenes_codex
+
+    monkeypatch.setenv('CODEX_HOME', str(tmp_path_factory.mktemp('codex')))
+    monkeypatch.setattr(imagenes_codex, 'conectado', lambda: False)
+
+
+@pytest.fixture(autouse=True)
 def _catalogo_sin_red(monkeypatch):
     """El catálogo de models.dev nunca se baja en la suite: sin copia guardada vale la del paquete.
     Las pruebas del catálogo ponen su propio `_descargar` con un catálogo falso."""

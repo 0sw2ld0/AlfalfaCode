@@ -423,6 +423,7 @@ class NativeRuntime:
         self.engine_text = engine_text or self.default_engine_text
         self.manual = manual or manual_del_harness
         self.approval_label = approval_label
+        self.image_provider = 'none'
         self.approval_policy = approval_policy
         self.delegate_antigravity = delegate_antigravity
         self.excluded_tools = frozenset(excluded_tools)
@@ -2769,6 +2770,18 @@ class NativeRuntime:
         system = self.instructions+'\n'+(self.task.get('agent_instructions') or '')
         system += self.engine_text(self.task.get('effort') or 'medium')
         system += NATIVE_HARNESS_CONTRACT
+        if not self.task.get('conversation_only'):
+            if self.image_provider == 'none':
+                system += ('\nSi el usuario pide generar una imagen a partir de un prompt, responde solamente '
+                           'con esta frase o su traducción al idioma del usuario: '
+                           '«No tengo una herramienta para generar imágenes a partir de un prompt». '
+                           'No agregues alternativas, preguntas ni una explicación adicional. '
+                           'No intentes generarla por otra vía.')
+            else:
+                image_service = 'ChatGPT mediante Codex' if self.image_provider == 'codex' else 'API de OpenAI'
+                system += ('\nLa herramienta generate_image está configurada para ' + image_service
+                           + '. Si el usuario pide usar otro servicio, indícale que puede cambiarlo en Ajustes '
+                             'sin iniciar la generación.')
         uncertain_operations = [row for row in self.state.get('handoff_uncertain_operations', [])
                                 if isinstance(row, dict) and row.get('status') == 'uncertain']
         if uncertain_operations:
@@ -2864,6 +2877,11 @@ class NativeRuntime:
 
 
     async def run(self, prompt):
+        from . import imagenes
+        if self.task.get('conversation_only') or imagenes.restringida(self):
+            self.image_provider = 'none'
+        else:
+            self.image_provider = (await asyncio.to_thread(imagenes.configurar))['proveedor']
         self.attempt_start_index = len(self.state.get('messages', []))
         closing = self.state.get('review_closing', {})
         if self.task.get('review') and closing.get('status') == 'completed':
@@ -3016,11 +3034,10 @@ class NativeRuntime:
                 except ValueError:
                     await self.compact(client,model,session_deadline=session_deadline)
                     context = self.context()
-                from .imagenes import restringida as imagen_restringida
                 allowed_tools = ([] if self.task.get('conversation_only') else
                                  [t for t in self.tool_specs if t['function']['name'] not in self.excluded_tools
                                   and (t['function']['name'] != 'inspect_image' or self._puede_ver())
-                                  and (t['function']['name'] != 'generate_image' or not imagen_restringida(self))
+                                  and (t['function']['name'] != 'generate_image' or self.image_provider != 'none')
                                   and (not self.task.get('review') or
                                   t['function']['name'] not in ('write_file','edit_file','run_command','run_checks',
                                                                 'apply_patch'))])

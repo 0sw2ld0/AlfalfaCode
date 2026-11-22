@@ -14,6 +14,7 @@ import httpx
 
 from ... import ajustes, contenido_externo
 from ...permisos import modos
+from .. import configuracion
 from . import imagenes_codex
 
 MODELO = 'gpt-image-1.5'
@@ -28,6 +29,28 @@ PRECIOS = {
     '1024x1536': ('0.013', '0.050', '0.200'),
     '1536x1024': ('0.013', '0.050', '0.200'),
 }
+
+
+PROVEEDORES = ('codex', 'openai', 'none')
+PREFERENCIA = 'proveedor_imagen'
+
+
+def configurar(preferencia=None):
+    datos = configuracion.leer(para_cambiar=preferencia is not None)
+    if preferencia is not None:
+        if preferencia not in PROVEEDORES:
+            raise ValueError('Proveedor de imágenes desconocido.')
+        datos[PREFERENCIA] = preferencia
+        configuracion.escribir(datos)
+    elegido = datos.get(PREFERENCIA)
+    if elegido not in PROVEEDORES:
+        elegido = None
+    proveedor = 'none'
+    if elegido in (None, 'codex') and imagenes_codex.conectado():
+        proveedor = 'codex'
+    elif elegido == 'openai' and ajustes.openai_clave():
+        proveedor = 'openai'
+    return {'preferencia': elegido, 'proveedor': proveedor}
 
 
 def restringida(runtime):
@@ -123,7 +146,10 @@ async def generar(tools, args):
     archivo = destino(tools, args['path'])
     ruta = archivo.relative_to(tools.root).as_posix()
     size, quality = args.get('size', '1024x1024'), args.get('quality', 'medium')
-    con_codex = args.get('provider') == 'codex'
+    proveedor = runtime.image_provider
+    if proveedor == 'none':
+        raise ValueError('No tienes una herramienta para generar imágenes desde un prompt.')
+    con_codex = proveedor == 'codex'
     valores = set(contenido_externo.secretos(runtime))
     if con_codex:
         codex = imagenes_codex.ejecutable()

@@ -24,6 +24,7 @@ __all__ = ['CAMPOS', 'TIPOS', 'VALORES', 'YA_EN_INGLES', 'ORDEN_VALORES', 'en_in
 
 # Tipo de evento v2 → tipo de la extensión (`alfalfa.<nombre>`).
 TIPOS = {
+    'proveedor_imagen': 'image_provider',
     'sesion': 'session', 'presupuesto': 'budget', 'procesos': 'processes', 'despierto': 'awake', 'cuota': 'quota',
     'preparando': 'preparing', 'revision_codigo': 'code_review', 'encargos': 'jobs',
     'aprendizaje_propuesto': 'learning_proposed', 'aprendizaje_resuelto': 'learning_resolved',
@@ -37,6 +38,7 @@ TIPOS = {
 
 # Campo v2 → campo de la extensión. Los que ya están en inglés (`argv`, `cwd`, `diff`, `id`…) no hacen falta.
 CAMPOS = {
+    'preferencia': 'preference',
     'accion': 'action', 'actividad': 'activity', 'activo': 'active', 'actualizada': 'updated',
     'actualizado': 'updated', 'agente': 'agent', 'agotado': 'exhausted', 'ajustes': 'settings', 'alcance': 'scope',
     'almacen': 'store', 'almacenes': 'stores', 'ambito': 'area', 'ancla': 'anchor', 'antes': 'before',

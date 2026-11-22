@@ -311,8 +311,8 @@ Una sesión nativa puede pedir una segunda opinión mediante `delegate_antigravi
 aprobación `antigravity_delegation` en PACAI antes de enviar el texto. En la dirección
 inversa, Antigravity usa `delegate_alfalfa` por MCP con el modelo elegido al conectar.
 
-La herramienta `generate_image` admite `provider: "codex"` para encargar un PNG a
-Codex con una sesión de ChatGPT. El cliente recibe la ruta y las dimensiones reales
+La herramienta `generate_image` usa el proveedor elegido en Ajustes o mediante
+`alfalfa --proveedor-imagen codex|openai|none`. El cliente recibe la ruta y las dimensiones reales
 del resultado. [Generar un PNG con Codex](guia/imagenes.md#generar-un-png-con-codex).
 
 ## Control con PACAI: `alfalfa --pacai`

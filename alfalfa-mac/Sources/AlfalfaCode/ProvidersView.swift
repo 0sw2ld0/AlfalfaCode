@@ -74,11 +74,14 @@ struct ProvidersView: View {
     @State private var compatibleKeys: [String: String] = [:]
     @State private var busy = false
     @State private var notice: String?
+    @State private var imageProvider: String?
+    @State private var availableImageProvider = "none"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsTitle(text: "Proveedores")
             defaultPicker
+            imageProviderPicker
             section("Ollama", status: status("ollama"),
                     detail: "Local, u Ollama Cloud con tu clave. Sin URL se usa la de este Mac.") {
                 TextField("http://127.0.0.1:11434", text: $ollamaURL).textFieldStyle(.roundedBorder)
@@ -190,8 +193,58 @@ struct ProvidersView: View {
         .frame(width: 480, alignment: .leading)
         .task {
             await model.reloadProviders()
+            await loadImageProvider()
             ollamaURL = status("ollama")?.url ?? ""
             await model.loadAlfalfaQuota()
+        }
+    }
+
+    private var imageProviderPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Generación de imágenes", selection: Binding(get: { imageProvider ?? "none" }, set: { value in
+                Task {
+                    busy = true
+                    notice = nil
+                    await loadImageProvider(value)
+                    busy = false
+                }
+            })) {
+                Text("ChatGPT mediante Codex").tag("codex")
+                Text("API de OpenAI").tag("openai")
+                Text("Ninguno").tag("none")
+            }
+            .disabled(busy || imageProvider == nil)
+            if imageProvider == "codex", availableImageProvider == "none" {
+                Text("Inicia sesión con ChatGPT en Codex para generar imágenes.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            } else if imageProvider == "openai", availableImageProvider == "none" {
+                Text("Guarda una clave en la sección de OpenAI para generar imágenes.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+        }
+    }
+
+    private func loadImageProvider(_ preference: String? = nil) async {
+        guard let launcher = model.launcher else { return }
+        let arguments = ["--proveedor-imagen"] + (preference.map { [$0] } ?? []) + ["--json"]
+        do {
+            let messages = try await AlfalfaProcess.query(
+                launcher: launcher, arguments: arguments,
+                directory: FileManager.default.homeDirectoryForCurrentUser
+            )
+            for message in messages {
+                if case let .imageProvider(preference, available) = message {
+                    imageProvider = preference ?? available
+                    availableImageProvider = available
+                    return
+                }
+                if case let .error(text) = message {
+                    notice = text
+                    return
+                }
+            }
+        } catch {
+            notice = error.localizedDescription
         }
     }
 
@@ -269,6 +322,7 @@ struct ProvidersView: View {
         busy = true
         notice = nil
         await action()
+        await loadImageProvider()
         busy = false
     }
 

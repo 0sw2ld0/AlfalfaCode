@@ -66,6 +66,12 @@ def orden(args, entrada=None):
     entrada = entrada or sys.stdin
     como_json = bool(getattr(args, 'json', False))
     try:
+        if getattr(args, 'proveedor_imagen', None) is not None:
+            from .nativo import imagenes
+            datos = imagenes.configurar(args.proveedor_imagen or None)
+            _salida({'tipo': 'proveedor_imagen', **datos}, como_json,
+                    'Proveedor de imágenes disponible: ' + datos['proveedor'])
+            return 0
         if getattr(args, 'activar_codigo', False):
             from .alfalfa import Alfalfa
             if entrada.isatty():
@@ -300,6 +306,8 @@ def _diagnostico():
 
 
 def argumentos(grupo):
+    grupo.add_argument('--proveedor-imagen', nargs='?', const='', choices=('', 'codex', 'openai', 'none'),
+                       help='Consultar o elegir el proveedor de generación de imágenes')
     grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
     grupo.add_argument('--guardar-clave', metavar='PROVEEDOR',
                        help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai, '
@@ -333,7 +341,8 @@ def argumentos(grupo):
 
 
 def pedida(args):
-    return bool(args.proveedores or getattr(args, 'catalogo', False) or getattr(args, 'primera_vez', False)
+    return bool(getattr(args, 'proveedor_imagen', None) is not None or args.proveedores
+                or getattr(args, 'catalogo', False) or getattr(args, 'primera_vez', False)
                 or getattr(args, 'conectar', None) or getattr(args, 'desconectar', None)
                 or args.guardar_clave or args.borrar_clave
                 or args.proveedor_por_defecto or args.fijar_url or args.activar_codigo or args.cuota

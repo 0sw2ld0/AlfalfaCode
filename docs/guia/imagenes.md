@@ -44,19 +44,18 @@ en la terminal se ve la ruta.
 
 ## Generar un PNG con Codex
 
-Con Codex instalado e iniciado con tu cuenta de ChatGPT, pide en un chat de
-AlfalfaCode «Genera con Codex un icono con una hoja verde y guárdalo como
-`icono.png`». La herramienta `generate_image` usa `provider: "codex"` cuando
-pides usar Codex o la cuota de tu plan. Antes de iniciar el encargo, AlfalfaCode
-muestra el texto, el destino y el servicio para que apruebes esa imagen.
+En **Ajustes → Proveedores → Generación de imágenes**, elige **ChatGPT mediante
+Codex**, **API de OpenAI** o **Ninguno**. Antes de elegir, AlfalfaCode usa Codex si
+detecta que has iniciado sesión con ChatGPT. Si no hay una sesión de ChatGPT
+disponible, se desactiva la herramienta. La elección también se puede hacer con
+`alfalfa --proveedor-imagen codex|openai|none`.
 
-El encargo se abre en una sesión temporal de Codex con la herramienta integrada
-de generación de imágenes. Usa la cuota de Codex del plan de ChatGPT, sin clave
-de API. AlfalfaCode recibe el PNG, indica sus dimensiones reales y lo guarda
-en una ruta nueva dentro del proyecto. El tamaño y la calidad que se piden a
-Codex son orientativos.
+Con Codex seleccionado, pide en un chat de AlfalfaCode «Genera un icono con una
+hoja verde y guárdalo como `icono.png`». AlfalfaCode muestra el texto, el destino y
+el servicio para que apruebes el encargo. Codex usa la cuota de tu plan de ChatGPT
+y devuelve el PNG para que AlfalfaCode lo guarde en la carpeta del proyecto.
+AlfalfaCode informa las dimensiones reales que devuelve Codex.
 
-Para usar la API de OpenAI, pide `provider: "openai"` o deja que la herramienta
-use su proveedor predeterminado. Esa opción usa la clave y la facturación de
-la API. AlfalfaCode pide aprobación para cada imagen y conserva el proveedor
-elegido si el encargo falla.
+La API de OpenAI usa la clave que configures en Ajustes. Si el proveedor elegido
+no está disponible, AlfalfaCode indica que no dispone de una herramienta para
+generar imágenes a partir de un prompt.

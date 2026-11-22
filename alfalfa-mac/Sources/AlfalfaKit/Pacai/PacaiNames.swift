@@ -49,23 +49,23 @@ enum PacaiNames {
         "omitidos": "skipped", "orden": "command", "ordenes": "commands", "origen": "origin", "papelera": "trash",
         "para_sesion": "for_session", "paralelos": "parallel", "paso": "step", "pasos": "steps", "patron": "pattern",
         "pendiente": "pending", "pendientes": "pending", "permisos": "permissions", "permitidos": "allowed",
-        "podadas": "pruned", "politica": "policy", "posicion": "position", "precio": "price", "prefijo": "prefix",
-        "prefijo_alcance": "prefix_scope", "primer_turno": "first_turn", "prioridad": "priority",
-        "procedencia": "provenance", "procesos": "processes", "proposito": "purpose", "proveedor": "provider",
-        "proyecto": "project", "quitado": "removed", "raiz": "root", "rama": "branch", "rama_base": "base_branch",
-        "razona": "reasoning", "rechazado": "rejected", "recortado": "truncated", "red": "network",
-        "referencia": "reference", "regla": "rule", "reintento_de": "retry_of", "renueva": "renews",
-        "reserva_maxima": "max_reserve", "restaurables": "restorable", "restaurados": "restored", "resultado": "result",
-        "resultados": "results", "resumen": "summary", "revision": "review", "rol": "role", "ruta": "path",
-        "salida": "output", "salida_max": "max_output", "servicio": "service", "servidor": "server",
-        "servidores": "servers", "servidores_mcp": "mcp_servers", "sesion": "session", "sesiones": "sessions",
-        "siempre": "always", "sin_sandbox": "unsandboxed", "sistema": "system", "sitio": "site", "sitios": "sites",
-        "subagentes": "subagents", "tarifa": "pricing", "texto": "text", "tiempo": "duration", "tipo": "type",
-        "titulo": "title", "tokens_contados": "counted_tokens", "tokens_sesion": "session_tokens",
-        "tokens_turno": "turn_tokens", "tope": "cap", "transporte": "transport", "turno": "turn", "turnos": "turns",
-        "ultima": "latest", "ultimas": "tail", "umbral": "threshold", "usado_pct": "used_pct", "usados": "used",
-        "ventana": "window", "version_disponible": "available_version", "visita": "visit", "visita_id": "visit_id",
-        "visita_sitio": "visit_site", "vista": "view", "vivo": "alive"
+        "podadas": "pruned", "politica": "policy", "posicion": "position", "precio": "price",
+        "preferencia": "preference", "prefijo": "prefix", "prefijo_alcance": "prefix_scope",
+        "primer_turno": "first_turn", "prioridad": "priority", "procedencia": "provenance", "procesos": "processes",
+        "proposito": "purpose", "proveedor": "provider", "proyecto": "project", "quitado": "removed", "raiz": "root",
+        "rama": "branch", "rama_base": "base_branch", "razona": "reasoning", "rechazado": "rejected",
+        "recortado": "truncated", "red": "network", "referencia": "reference", "regla": "rule",
+        "reintento_de": "retry_of", "renueva": "renews", "reserva_maxima": "max_reserve", "restaurables": "restorable",
+        "restaurados": "restored", "resultado": "result", "resultados": "results", "resumen": "summary",
+        "revision": "review", "rol": "role", "ruta": "path", "salida": "output", "salida_max": "max_output",
+        "servicio": "service", "servidor": "server", "servidores": "servers", "servidores_mcp": "mcp_servers",
+        "sesion": "session", "sesiones": "sessions", "siempre": "always", "sin_sandbox": "unsandboxed",
+        "sistema": "system", "sitio": "site", "sitios": "sites", "subagentes": "subagents", "tarifa": "pricing",
+        "texto": "text", "tiempo": "duration", "tipo": "type", "titulo": "title", "tokens_contados": "counted_tokens",
+        "tokens_sesion": "session_tokens", "tokens_turno": "turn_tokens", "tope": "cap", "transporte": "transport",
+        "turno": "turn", "turnos": "turns", "ultima": "latest", "ultimas": "tail", "umbral": "threshold",
+        "usado_pct": "used_pct", "usados": "used", "ventana": "window", "version_disponible": "available_version",
+        "visita": "visit", "visita_id": "visit_id", "visita_sitio": "visit_site", "vista": "view", "vivo": "alive"
     ]
 
     /// Por campo inglés, valor de v2 → valor en inglés (`VALORES`).
@@ -189,9 +189,10 @@ enum PacaiNames {
         "deshecho": "undone", "despierto": "awake", "encargos": "jobs", "habilidad": "skill", "historial": "history",
         "importadas": "imported", "indice_sesiones": "session_index", "memoria": "memory", "modelos": "models",
         "navegador_sitios": "browser_sites", "pendiente": "pending_learning", "preparando": "preparing",
-        "presupuesto": "budget", "procesos": "processes", "quitado_de_cola": "dequeued", "reglas": "rules",
-        "revision_codigo": "code_review", "sesion": "session", "sesion_cambiada": "session_changed",
-        "sesiones": "sessions", "sesiones_alrededor": "sessions_around", "turnos": "turns", "volver": "reverted"
+        "presupuesto": "budget", "procesos": "processes", "proveedor_imagen": "image_provider",
+        "quitado_de_cola": "dequeued", "reglas": "rules", "revision_codigo": "code_review", "sesion": "session",
+        "sesion_cambiada": "session_changed", "sesiones": "sessions", "sesiones_alrededor": "sessions_around",
+        "turnos": "turns", "volver": "reverted"
     ]
 
     /// La herramienta `browser`: campo de v2 → campo inglés (`NAVEGADOR_CAMPOS`).
