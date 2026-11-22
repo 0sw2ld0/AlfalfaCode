@@ -78,8 +78,10 @@ blocked. Manual mode asks before file edits and commands that change state. The
 - Bring project instructions, skills, hooks, and MCP servers into the workflow. See [migration](docs/guia/migrar.md) and [skills and memory](docs/guia/habilidades.md).
 - Use the Mac app's browser and app testing tools. See the [browser guide](docs/guia/navegador.md) and [Mac app testing](docs/guia/apps-mac.md).
 
-The macOS app can also open [Antigravity CLI](docs/guia/antigravity.md)
-as an external agent over ACP using your Antigravity account.
+The macOS app can open Antigravity CLI as an external agent over ACP. You can
+approve a text task sent from an AlfalfaCode chat to Antigravity. Antigravity can
+also query the AlfalfaCode model you select when connecting, using MCP.
+[Set up Antigravity and delegation](docs/guia/antigravity.md).
 
 ## Integrate with PACAI
 

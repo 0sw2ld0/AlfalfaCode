@@ -43,8 +43,7 @@ La vista mantiene una conversación de Antigravity abierta mientras navegas por
 la app. El historial de la sesión ACP se conserva en Antigravity. La app todavía
 no reabre esos hilos después de cerrar la sesión ni los añade al historial
 de sus sesiones nativas. Antigravity puede delegar en sus propios subagentes.
-La vista ACP actual no abre las conversaciones hijas ni delega encargos entre
-motores.
+La delegación entre motores devuelve su resultado al chat de origen.
 
 ## Delegar una consulta entre agentes
 

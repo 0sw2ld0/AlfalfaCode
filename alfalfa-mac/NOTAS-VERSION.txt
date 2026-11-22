@@ -1,2 +1,4 @@
 Conecta tu plan de ChatGPT desde Ajustes › Proveedores y elige un modelo disponible para tu cuenta.
-AlfalfaCode sigue ejecutando las sesiones y las herramientas con sus propios permisos.
+Abre Antigravity CLI como agente externo en la app de macOS mediante ACP.
+Delega consultas de texto a Antigravity con tu aprobación y recibe el informe en el chat.
+Permite que Antigravity consulte por MCP un modelo de AlfalfaCode elegido al conectar.
