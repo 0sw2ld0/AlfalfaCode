@@ -24,7 +24,7 @@ AlfalfaCode.app/Contents/
   Helpers/alfalfa-firma-<huella>    firmante.swift ya compilado (Secure Enclave, proveedor Alfalfa)
   Helpers/alfalfa-apps-<huella>     ayudante.swift ya compilado (inventario y compatibilidad)
   Helpers/alfalfa-desktop         AlfalfaDesktop 0.1.1 (control de ventanas y cursor)
-  Helpers/cuybrowser              AlfalfaBrowser autónomo 0.7.1, macOS arm64 (o x64 en la de Intel)
+  Helpers/alfalfabrowser          AlfalfaBrowser autónomo 0.8.0, macOS arm64 (o x64 en la de Intel)
   Resources/AppIcon.icns
   Resources/motor/alfalfa           lanzador: python3 -I -B -m alfalfa.terminal
   Resources/motor/bin/rg            ripgrep 15.2.0 oficial (fijado por huella), al final del PATH
@@ -44,9 +44,9 @@ AlfalfaCode.app/Contents/
   proyecto en `sys.path` (un `json.py` del proyecto no se importaría).
 - Las versiones de las dependencias están fijadas en `motor-requisitos.txt` (se versiona).
   `REGENERAR_REQUISITOS=1 ./build-app.sh` las actualiza.
-- `distribucion/cuybrowser.sh` fija la versión de CuyBrowser y la huella SHA-256 del
+- `distribucion/cuybrowser.sh` fija la versión de AlfalfaBrowser y la huella SHA-256 del
   binario original. El ensamblado comprueba la huella antes de firmar y vuelve a probar
-  el ayudante firmado. Los avisos de CuyBrowser, sus dependencias y Bun van en
+  el ayudante firmado. Los avisos de AlfalfaBrowser, sus dependencias y Bun van en
   `motor/licencias/cuybrowser`.
 - `distribucion/alfalfadesktop.sh` fija la versión y las huellas de AlfalfaDesktop para Apple Silicon
   e Intel. Se conserva la firma oficial de Developer ID. La versión va en `AlfalfaDesktopVersion`
@@ -68,7 +68,7 @@ hacen dos apps:
   (el guion enseña el `gh release upload`). La app sale en `dist/x86_64/`.
 
 Con `ARQ=x86_64`, `build-app.sh` usa el Python `cpython-…-macos-x86_64-none`, el
-`cuybrowser-macos-x64`, el ripgrep `x86_64-apple-darwin` (los dos fijados por huella),
+`alfalfabrowser-macos-x64`, el ripgrep `x86_64-apple-darwin` (los dos fijados por huella),
 `swift build --arch x86_64` y los ayudantes con `-target x86_64-apple-macos14`, y fija el motor
 con `motor-requisitos-x86_64.txt`: las mismas versiones que `motor-requisitos.txt` salvo
 `cryptography`, que desde la 49 sólo publica ruedas de Mac para arm64. En Intel se queda en la
@@ -104,15 +104,15 @@ Se firma de dentro hacia fuera: las bibliotecas (`.so`, `.dylib`), después los 
 y sello de tiempo, que es lo que pide la notarización. El Python no necesita desactivar la
 validación de bibliotecas: todas sus extensiones van firmadas por el mismo equipo.
 
-Sólo el ayudante CuyBrowser recibe las dos excepciones de JavaScriptCore en
+Sólo el ayudante AlfalfaBrowser recibe las dos excepciones de JavaScriptCore en
 `CuyBrowser.entitlements`. Su identificador de firma es
 `com.cuycoders.alfalfacode.cuybrowser`. La app declara la versión instalada en
-`AlfalfaCuyBrowserVersion` de su Info.plist firmado. Tras firmar y notarizar con
+`AlfalfaBrowserVersion` de su Info.plist firmado. Tras firmar y notarizar con
 Developer ID, se comprueban la app y su ayudante.
 
 ```bash
 codesign --verify --deep --strict dist/AlfalfaCode.app
-codesign --verify --strict dist/AlfalfaCode.app/Contents/Helpers/cuybrowser
+codesign --verify --strict dist/AlfalfaCode.app/Contents/Helpers/alfalfabrowser
 spctl --assess --type execute --verbose=2 dist/AlfalfaCode.app
 ```
 
@@ -211,8 +211,8 @@ un `.app`, con la misma forma, y dejan al lado un archivo `instalacion` (`curl` 
 y la versión). `empaquetado.py` lo reconoce: usa los ayudantes ya compilados, y
 `actualizacion.py` sabe quién actualiza esa copia.
 
-CuyBrowser queda en `~/.local/share/alfalfa/Helpers/cuybrowser` o
-`$(brew --prefix)/opt/alfalfa/libexec/Helpers/cuybrowser`. Si el DMG declara CuyBrowser,
+AlfalfaBrowser queda en `~/.local/share/alfalfa/Helpers/alfalfabrowser` o
+`$(brew --prefix)/opt/alfalfa/libexec/Helpers/alfalfabrowser`. Si el DMG declara AlfalfaBrowser,
 el instalador y el bottle comprueban su firma y versión antes de copiarlo. Los DMG
 anteriores siguen funcionando. Chromium se obtiene aparte si hace falta y la persona
 lo autoriza.
@@ -239,7 +239,7 @@ Los archivos viven aquí, en `distribucion/homebrew` (`Casks/alfalfacode.rb`,
   - El `install` de la fórmula (`--build-from-source`) deja lo mismo, pero ese camino sí
     tiene problemas. Homebrew reescribe el identificador de los `.so` de Rust (`@rpath`)
     y los firma ad hoc, y el Python con runtime del equipo no los cargaría, así que
-    `install` firma el motor ad hoc. CuyBrowser conserva su firma original porque sólo
+    `install` firma el motor ad hoc. AlfalfaBrowser conserva su firma original porque sólo
     enlaza bibliotecas de macOS. Además Homebrew exige las CLT al día.
 
 `distribucion/actualizar-tap.sh <versión> [clon del tap]` pone el cask y la fórmula en

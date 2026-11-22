@@ -10,12 +10,16 @@ from alfalfa.terminal import main
 def test_resuelve_ayudante_de_la_distribucion_y_path_explicito(tmp_path, monkeypatch):
     root = tmp_path / 'proyecto'
     root.mkdir()
-    helper = tmp_path / 'AlfalfaCode.app/Contents/Helpers/cuybrowser'
+    helper = tmp_path / 'AlfalfaCode.app/Contents/Helpers/alfalfabrowser'
     external = tmp_path / 'bin/cuybrowser'
-    monkeypatch.setattr(cuybrowser_proceso.empaquetado, 'ayudante', lambda _: helper)
+    legacy = helper.with_name('cuybrowser')
+    helpers = {'alfalfabrowser': helper, 'cuybrowser': legacy}
+    monkeypatch.setattr(cuybrowser_proceso.empaquetado, 'ayudante', helpers.get)
     monkeypatch.setattr(cuybrowser_proceso.shutil, 'which', lambda _: str(external))
     assert cuybrowser_proceso.ejecutable_cuybrowser(root) == (str(helper.resolve()), 'incluido')
     assert cuybrowser_proceso.ejecutable_cuybrowser(root, origen='path') == (str(external.resolve()), 'path')
+    del helpers['alfalfabrowser']
+    assert cuybrowser_proceso.ejecutable_cuybrowser(root, origen='incluido') == (str(legacy.resolve()), 'incluido')
 
 
 def test_entorno_separa_perfiles_y_comparte_binario_chromium(tmp_path, monkeypatch):

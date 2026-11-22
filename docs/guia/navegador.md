@@ -102,7 +102,7 @@ WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
 alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
 ```
 
-La distribución de AlfalfaCode incluye AlfalfaBrowser 0.7.1 en `Helpers/cuybrowser`. El cursor de hoja
+La distribución de AlfalfaCode incluye AlfalfaBrowser 0.8.0 en `Helpers/alfalfabrowser`. El cursor de hoja
 marca los clics y movimientos del agente en la ventana de Chromium. Las capturas de página excluyen la hoja.
 Los clones y las instalaciones anteriores pueden usar `alfalfabrowser` desde `PATH`.
 AlfalfaCode también reconoce el comando `cuybrowser` de las versiones publicadas

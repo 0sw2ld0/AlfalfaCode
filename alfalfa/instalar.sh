@@ -11,7 +11,7 @@
 #      (codesign --verify --deep --strict), del equipo FZ8TW9AWLE, notarizada (spctl),
 #      con el identificador com.cuycoders.alfalfacode, la misma versión y el procesador de este Mac.
 #   4. Copia de la app el motor (un Python propio con alfalfa y sus dependencias) y sus
-#      ayudantes, incluidos CuyBrowser y AlfalfaDesktop cuando están en el DMG, a ~/.local/share/alfalfa y
+#      ayudantes, incluidos AlfalfaBrowser y AlfalfaDesktop cuando están en el DMG, a ~/.local/share/alfalfa y
 #      deja ~/.local/bin/alfalfa. Si algo falla,
 #      la copia que hubiera no se toca.
 #   5. Si ~/.local/bin no está en el PATH, lo añade a ~/.zshrc (o ~/.bash_profile) entre
@@ -141,6 +141,7 @@ main() {
   else
     paso "Firma correcta (Developer ID del equipo $EQUIPO, notarizada)."
   fi
+  comprobar_ayudante AlfalfaBrowserVersion alfalfabrowser AlfalfaBrowser ''
   comprobar_ayudante AlfalfaCuyBrowserVersion cuybrowser CuyBrowser ''
   comprobar_ayudante AlfalfaDesktopVersion alfalfa-desktop AlfalfaDesktop 'AlfalfaDesktop '
 

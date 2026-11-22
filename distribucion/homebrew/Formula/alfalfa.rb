@@ -40,6 +40,7 @@ class Alfalfa < Formula
     # Homebrew entra en la única carpeta del DMG (la app) si el acceso a Aplicaciones no cuenta.
     contenidos = [buildpath/"Contents", buildpath/"AlfalfaCode.app/Contents"].find(&:directory?)
     odie "El DMG no trae AlfalfaCode.app" if contenidos.nil?
+    comprobar_ayudante(contenidos, "AlfalfaBrowserVersion", "alfalfabrowser", "AlfalfaBrowser")
     comprobar_ayudante(contenidos, "AlfalfaCuyBrowserVersion", "cuybrowser", "CuyBrowser")
     comprobar_ayudante(contenidos, "AlfalfaDesktopVersion", "alfalfa-desktop", "AlfalfaDesktop", "AlfalfaDesktop ")
 
@@ -52,9 +53,9 @@ class Alfalfa < Formula
     # con @rpath) y las vuelve a firmar ad hoc. El Python lleva hardened runtime con la firma
     # del equipo, que no cargaría una biblioteca firmada ad hoc: todo el motor va ad hoc, sin
     # runtime. La huella SHA-256 del DMG comprueba la integridad. Los ayudantes autónomos
-    # conservan sus firmas originales, incluidas las excepciones de JavaScriptCore de CuyBrowser.
+    # conservan sus firmas originales, incluidas las excepciones de JavaScriptCore de AlfalfaBrowser.
     magicos = [0xcafebabe, 0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe]
-    firmados = %w[cuybrowser alfalfa-desktop].map { |nombre| (libexec/"Helpers"/nombre).to_s }
+    firmados = %w[alfalfabrowser cuybrowser alfalfa-desktop].map { |nombre| (libexec/"Helpers"/nombre).to_s }
     macho = Dir[libexec/"**/*"].select do |f|
       !firmados.include?(f) && File.file?(f) && !File.symlink?(f) && File.size(f) >= 4 &&
         magicos.include?(File.binread(f, 4).unpack1("N"))
@@ -109,7 +110,7 @@ class Alfalfa < Formula
     assert_match version.to_s, shell_output("#{bin}/alfalfa --version")
     assert_match "brew", shell_output("#{libexec}/Resources/motor/python/bin/python3 -I -B -c " \
                                       "'import alfalfa.empaquetado as e; print(e.instalacion())'")
-    %w[cuybrowser alfalfa-desktop].each do |nombre|
+    %w[alfalfabrowser cuybrowser alfalfa-desktop].each do |nombre|
       ayudante = libexec/"Helpers"/nombre
       system "/usr/bin/codesign", "--verify", "--strict", ayudante.to_s if ayudante.exist?
     end

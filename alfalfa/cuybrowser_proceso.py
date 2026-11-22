@@ -20,7 +20,9 @@ from .cuybrowser_http import HttpCuyBrowser
 
 def ejecutable_cuybrowser(root, *, origen=None):
     """La distribución instalada tiene prioridad. PATH sigue disponible por elección o en clones."""
-    incluido = None if origen == 'path' else empaquetado.ayudante('cuybrowser')
+    incluido = None
+    if origen != 'path':
+        incluido = empaquetado.ayudante('alfalfabrowser') or empaquetado.ayudante('cuybrowser')
     ejecutable = incluido
     if ejecutable is None and origen != 'incluido':
         local = Path.home() / '.local/bin'
@@ -34,7 +36,7 @@ def ejecutable_cuybrowser(root, *, origen=None):
     if incluido and (incluido.is_symlink() or incluido.parent.is_symlink()):
         raise ValueError('El AlfalfaBrowser incluido debe ser un archivo dentro de Helpers.')
     if not incluido and ruta.is_relative_to(root.resolve()):
-        raise ValueError('No se ejecuta un cuybrowser procedente del proyecto; usa una instalación de confianza.')
+        raise ValueError('No se ejecuta un AlfalfaBrowser procedente del proyecto; usa una instalación de confianza.')
     return str(ruta), 'incluido' if incluido else 'path'
 
 

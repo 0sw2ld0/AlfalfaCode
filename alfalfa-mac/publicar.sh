@@ -87,8 +87,8 @@ if [ -z "$LOCAL" ]; then
 fi
 
 # --- 2. DMG con acceso directo a Aplicaciones -----------------------------------------------------
-test "$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$APP/Contents/Info.plist")" = "$CUYBROWSER_VERSION" \
-  || { echo "✗ la app no declara el CuyBrowser fijado ($CUYBROWSER_VERSION)" >&2; exit 1; }
+test "$(plutil -extract AlfalfaBrowserVersion raw -o - "$APP/Contents/Info.plist")" = "$CUYBROWSER_VERSION" \
+  || { echo "✗ la app no declara el AlfalfaBrowser fijado ($CUYBROWSER_VERSION)" >&2; exit 1; }
 cuybrowser_comprobar_app "$APP" "$TMP"
 test "$(plutil -extract AlfalfaDesktopVersion raw -o - "$APP/Contents/Info.plist")" = "$ALFALFADESKTOP_VERSION" \
   || { echo "✗ la app no declara el AlfalfaDesktop fijado ($ALFALFADESKTOP_VERSION)" >&2; exit 1; }

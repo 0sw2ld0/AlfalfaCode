@@ -1,9 +1,9 @@
-AlfalfaBrowser 0.7.0 y dependencias de producción según package-lock.json.
-Fuentes y receta del ejecutable en https://github.com/0sw2ld0/AlfalfaBrowser/tree/v0.7.0
+AlfalfaBrowser 0.8.0 y dependencias de producción según package-lock.json.
+Fuentes y receta del ejecutable en https://github.com/0sw2ld0/AlfalfaBrowser/tree/v0.8.0
 Bun 1.4.4 tiene sus avisos en Bun-LICENSE.md.
 
 ========================================================================
-cuybrowser@0.7.0 · LICENSE
+alfalfabrowser@0.8.0 · LICENSE
 
 MIT License
 

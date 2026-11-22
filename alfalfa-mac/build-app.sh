@@ -88,10 +88,10 @@ BIN="$(swift build --disable-keychain --disable-netrc -c "$CONFIGURACION" --arch
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN" "$APP/Contents/MacOS/AlfalfaCode"
-CUYBROWSER="$APP/Contents/Helpers/cuybrowser"
+CUYBROWSER="$APP/Contents/Helpers/alfalfabrowser"
 install -m 755 "$CUYBROWSER_ORIGEN" "$CUYBROWSER"
 cuybrowser_huella_correcta "$CUYBROWSER" \
-  || { echo "✗ CuyBrowser copiado no coincide con su huella SHA-256 fijada" >&2; exit 1; }
+  || { echo "✗ AlfalfaBrowser copiado no coincide con su huella SHA-256 fijada" >&2; exit 1; }
 ALFALFADESKTOP="$APP/Contents/Helpers/alfalfa-desktop"
 install -m 755 "$ALFALFADESKTOP_ORIGEN" "$ALFALFADESKTOP"
 alfalfadesktop_huella_correcta "$ALFALFADESKTOP" \
@@ -111,7 +111,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleLocalizations</key>      <array><string>es</string></array>
   <key>CFBundleVersion</key>            <string>$COMPILACION</string>
   <key>CFBundleShortVersionString</key> <string>$VERSION</string>
-  <key>AlfalfaCuyBrowserVersion</key>    <string>$CUYBROWSER_VERSION</string>
+  <key>AlfalfaBrowserVersion</key>    <string>$CUYBROWSER_VERSION</string>
   <key>AlfalfaDesktopVersion</key>       <string>$ALFALFADESKTOP_VERSION</string>
   <key>CFBundleExecutable</key>         <string>AlfalfaCode</string>
   <key>CFBundlePackageType</key>        <string>APPL</string>
@@ -270,7 +270,7 @@ env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$MOTOR/alfalfa" --version
 env -i HOME="$PRUEBA_HOME" PATH=/usr/bin:/bin "$PY" -I -B -c \
   'import alfalfa.terminal, alfalfa.empaquetado as e, cuysearch, mcp, jsonschema, httpx; assert e.en_la_app(), "no se ve dentro de la app"'
 cuybrowser_comprobar_app "$APP" "$PRUEBA_HOME"
-echo "CuyBrowser $CUYBROWSER_VERSION: firma y arranque comprobados."
+echo "AlfalfaBrowser $CUYBROWSER_VERSION: firma y arranque comprobados."
 alfalfadesktop_comprobar_app "$APP" "$PRUEBA_HOME"
 echo "AlfalfaDesktop $ALFALFADESKTOP_VERSION: firma y arranque comprobados."
 "$MOTOR/bin/rg" --version | head -1

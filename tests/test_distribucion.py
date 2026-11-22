@@ -22,7 +22,7 @@ BOTELLA = RAIZ / 'distribucion' / 'botella.sh'
 CUYBROWSER = RAIZ / 'distribucion' / 'cuybrowser.sh'
 TAP = RAIZ / 'distribucion' / 'actualizar-tap.sh'
 VERSION = '9.9.9'
-VERSION_CUY = '0.6.0'
+VERSION_CUY = '0.8.0'
 BASE = f'https://github.com/0sw2ld0/AlfalfaCode/releases/download/v{VERSION}'
 
 CURL = '''#!/bin/sh
@@ -99,7 +99,7 @@ def _compilar(destino, texto, arq=None):
                    check=True, input=fuente, text=True, capture_output=True)
 
 
-def _crear_release(base, version_cuy=None, version_ejecutable=None, arq=None):
+def _crear_release(base, version_cuy=None, version_ejecutable=None, arq=None, *, anterior=False):
     """DMG firmado ad hoc con un motor mínimo y, si corresponde, un ayudante Mach-O. `arq`
     («x86_64» o «arm64») fija el procesador del ejecutable de la app y de CuyBrowser."""
     app = base / 'dmg' / 'AlfalfaCode.app' / 'Contents'
@@ -107,9 +107,11 @@ def _crear_release(base, version_cuy=None, version_ejecutable=None, arq=None):
     _ejecutable(app / 'Resources' / 'motor' / 'alfalfa', f'#!/bin/sh\necho "AlfalfaCode {VERSION}"\n')
     _ejecutable(app / 'Resources' / 'motor' / 'python' / 'bin' / 'python3', '#!/bin/sh\nexit 0\n')
     _ejecutable(app / 'Helpers' / 'alfalfa-firma-abc', '#!/bin/sh\nexit 0\n')
+    nombre = 'cuybrowser' if anterior else 'alfalfabrowser'
+    clave = 'AlfalfaCuyBrowserVersion' if anterior else 'AlfalfaBrowserVersion'
     if version_ejecutable:
-        _compilar(app / 'Helpers' / 'cuybrowser', version_ejecutable, arq)
-    clave_cuy = f'<key>AlfalfaCuyBrowserVersion</key><string>{version_cuy}</string>' if version_cuy else ''
+        _compilar(app / 'Helpers' / nombre, version_ejecutable, arq)
+    clave_cuy = f'<key>{clave}</key><string>{version_cuy}</string>' if version_cuy else ''
     (app / 'Info.plist').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -165,11 +167,11 @@ def test_instala_desde_la_release_de_github_y_reinstala(entorno):
     r = _instalar(env)
     assert r.returncode == 0, r.stderr
     assert 'notarizada' in r.stdout
-    assert f'CuyBrowser {VERSION_CUY} incluido' in r.stdout
+    assert f'AlfalfaBrowser {VERSION_CUY} incluido' in r.stdout
     raiz = home / '.local' / 'share' / 'alfalfa'
     assert (raiz / 'instalacion').read_text() == f'curl\n{VERSION}\n'
     assert (raiz / 'Helpers' / 'alfalfa-firma-abc').exists()
-    cuy = raiz / 'Helpers' / 'cuybrowser'
+    cuy = raiz / 'Helpers' / 'alfalfabrowser'
     subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(cuy)], check=True)
     salida = subprocess.run([str(home / '.local' / 'bin' / 'alfalfa'), '--version'], capture_output=True, text=True)
     assert salida.stdout.strip() == f'AlfalfaCode {VERSION}'
@@ -258,12 +260,12 @@ def test_rechaza_un_dmg_con_cuybrowser_incompleto(entorno, tmp_path, version_eje
     dmg, huella = _crear_release(tmp_path / 'incompleta', VERSION_CUY, version_ejecutable)
     escribir(sha256=huella)
     r = _instalar(env, FALSO_DMG=str(dmg))
-    assert r.returncode != 0 and f'CuyBrowser {VERSION_CUY}' in r.stderr
+    assert r.returncode != 0 and f'AlfalfaBrowser {VERSION_CUY}' in r.stderr
     assert not (home / '.local').exists()
     salida = tmp_path / 'bottle'
     r = subprocess.run([str(BOTELLA), str(dmg), VERSION, str(salida)], capture_output=True, text=True,
                        env={**env, 'BOTELLA_SIN_EQUIPO': '1'}, timeout=120)
-    assert r.returncode != 0 and f'CuyBrowser {VERSION_CUY}' in r.stderr
+    assert r.returncode != 0 and f'AlfalfaBrowser {VERSION_CUY}' in r.stderr
     assert not salida.exists()
 
 
@@ -276,6 +278,17 @@ def test_dmg_anterior_sigue_instalando_sin_cuybrowser(entorno, tmp_path):
     ayudantes = home / '.local' / 'share' / 'alfalfa' / 'Helpers'
     assert (ayudantes / 'alfalfa-firma-abc').is_file()
     assert not (ayudantes / 'cuybrowser').exists()
+    assert not (ayudantes / 'alfalfabrowser').exists()
+
+
+def test_dmg_anterior_con_cuybrowser_sigue_instalando(entorno, tmp_path):
+    env, home, escribir = entorno
+    dmg, huella = _crear_release(tmp_path / 'anterior', '0.7.1', '0.7.1', anterior=True)
+    escribir(sha256=huella, url=f'file://{dmg}')
+    r = _instalar(env, ALFALFA_FEED=f'file://{env["FALSO_JSON"]}', ALFALFA_SIN_PATH='1')
+    assert r.returncode == 0, r.stderr
+    assert 'CuyBrowser 0.7.1 incluido' in r.stdout
+    assert (home / '.local' / 'share' / 'alfalfa' / 'Helpers' / 'cuybrowser').is_file()
 
 
 def test_no_usa_un_binario_cuybrowser_con_otra_huella(tmp_path):
@@ -365,7 +378,7 @@ def test_botella_tiene_la_forma_de_la_formula(release, tmp_path):
         assert f'alfalfa/{VERSION}/bin/alfalfa' in nombres
         assert f'alfalfa/{VERSION}/libexec/Resources/motor/alfalfa' in nombres
         assert f'alfalfa/{VERSION}/libexec/Helpers/alfalfa-firma-abc' in nombres
-        assert f'alfalfa/{VERSION}/libexec/Helpers/cuybrowser' in nombres
+        assert f'alfalfa/{VERSION}/libexec/Helpers/alfalfabrowser' in nombres
         assert tar.extractfile(f'alfalfa/{VERSION}/libexec/instalacion').read() == f'brew\n{VERSION}\n'.encode()
         assert not any('/._' in n for n in nombres)
     # Sin BOTELLA_SIN_EQUIPO exige el equipo (esta app va firmada ad hoc).

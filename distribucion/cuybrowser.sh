@@ -1,13 +1,13 @@
 # Versión del ayudante de AlfalfaCode.app. ARQ elige el procesador: arm64 (Apple Silicon, por
 # defecto) o x86_64 (Intel). Las huellas son las de SHA256SUMS de la release de AlfalfaBrowser.
-CUYBROWSER_VERSION="0.7.1"
+CUYBROWSER_VERSION="0.8.0"
 case "${ARQ:-arm64}" in
   arm64)
-    CUYBROWSER_SHA256="339c7cf80423bba903ea4376fb7d5b153716628af4cd5fce6e3b5054b2cd5afd"
-    CUYBROWSER_ASSET="cuybrowser-macos-arm64" ;;
+    CUYBROWSER_SHA256="501d6e0d9483ab78e22338c827f5b2a33d421f1e68eda72ce43b1fd54610faa7"
+    CUYBROWSER_ASSET="alfalfabrowser-macos-arm64" ;;
   x86_64)
-    CUYBROWSER_SHA256="f720942eed7d205d0cfa7cc4c4af0f1d6668ac6a653c9509c1f858828c7c0b5c"
-    CUYBROWSER_ASSET="cuybrowser-macos-x64" ;;
+    CUYBROWSER_SHA256="46381ae67ecde9233a71f16df6ece173cf05ca01567881c1e525a7fab8cb79bc"
+    CUYBROWSER_ASSET="alfalfabrowser-macos-x64" ;;
   *) echo "✗ ARQ debe ser arm64 o x86_64, no ${ARQ}" >&2; return 1 2>/dev/null || exit 1 ;;
 esac
 
@@ -37,21 +37,24 @@ cuybrowser_firmar() {
 
 cuybrowser_comprobar_app() {
   local app="$1" casa="$2" plist tipo version ejecutable salida
+  local clave=AlfalfaBrowserVersion binario=alfalfabrowser nombre=AlfalfaBrowser
   plist="$app/Contents/Info.plist"
-  # Los DMG anteriores a CuyBrowser no declaran la clave.
-  tipo="$(plutil -type AlfalfaCuyBrowserVersion "$plist" 2>/dev/null)" || return 0
+  if ! tipo="$(plutil -type "$clave" "$plist" 2>/dev/null)"; then
+    clave=AlfalfaCuyBrowserVersion binario=cuybrowser nombre=CuyBrowser
+    tipo="$(plutil -type "$clave" "$plist" 2>/dev/null)" || return 0
+  fi
   [ "$tipo" = string ] \
-    || { echo "✗ AlfalfaCuyBrowserVersion no es un texto" >&2; return 1; }
-  version="$(plutil -extract AlfalfaCuyBrowserVersion raw -o - "$plist")"
+    || { echo "✗ $clave no es un texto" >&2; return 1; }
+  version="$(plutil -extract "$clave" raw -o - "$plist")"
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || { echo "✗ AlfalfaCuyBrowserVersion no es una versión válida" >&2; return 1; }
-  ejecutable="$(cd "$(dirname "$app")" && pwd)/$(basename "$app")/Contents/Helpers/cuybrowser"
+    || { echo "✗ $clave no es una versión válida" >&2; return 1; }
+  ejecutable="$(cd "$(dirname "$app")" && pwd)/$(basename "$app")/Contents/Helpers/$binario"
   if [ ! -f "$ejecutable" ] || [ ! -x "$ejecutable" ] || [ -L "$ejecutable" ]; then
-    echo "✗ La app declara CuyBrowser $version y no trae su ejecutable" >&2; return 1
+    echo "✗ La app declara $nombre $version y no trae su ejecutable" >&2; return 1
   fi
   codesign --verify --strict "$ejecutable" || return 1
   if ! salida="$(cd "$casa" && env -i HOME="$PWD" PATH=/usr/bin:/bin "$ejecutable" --version)" \
     || [ "$salida" != "$version" ]; then
-    echo "✗ El ejecutable no declara CuyBrowser $version de la app" >&2; return 1
+    echo "✗ El ejecutable no declara $nombre $version de la app" >&2; return 1
   fi
 }
