@@ -61,3 +61,46 @@ python3.11 -m venv .venv
 
 Después `alfalfa` queda en `.venv/bin/`. También se puede lanzar con
 `scripts/alfalfa`, que admite un enlace simbólico desde cualquier carpeta del `PATH`.
+
+## La app de Mac desde el código
+
+Hacen falta macOS 14 o posterior y Xcode (o sus herramientas de línea de órdenes) con Swift 5.9
+o posterior. La app no lleva el motor dentro cuando se compila así: usa el `scripts/alfalfa`
+del repositorio, que a su vez necesita el `.venv` del apartado anterior. Así que primero el
+motor y después la app:
+
+```bash
+git clone https://github.com/0sw2ld0/AlfalfaCode.git
+cd AlfalfaCode
+python3.11 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+cd alfalfa-mac
+swift run AlfalfaCode
+```
+
+La primera vez, `swift run` baja la dependencia CuyTerm y compila la app; tarda un poco.
+
+La app busca el motor subiendo desde la carpeta actual y desde su ejecutable hasta encontrar
+`scripts/alfalfa`. Si la lanzas desde fuera del clon, indícale dónde está con `ALFALFA_REPO`:
+
+```bash
+ALFALFA_REPO=~/ruta/a/AlfalfaCode swift run --package-path ~/ruta/a/AlfalfaCode/alfalfa-mac AlfalfaCode
+```
+
+Si falta el `.venv`, la app avisa con «falta el .venv del repositorio».
+
+### Una AlfalfaCode.app para este Mac
+
+Para tener la app en Aplicaciones, con su propio Python y el motor dentro y sin depender del
+clon, empaquétala con `build-app.sh`. Necesita además [uv](https://docs.astral.sh/uv/)
+(`brew install uv`) y conexión, porque baja el Python, ripgrep y CuyBrowser:
+
+```bash
+cd alfalfa-mac
+IDENTIDAD=- ./build-app.sh
+```
+
+La app sale en `alfalfa-mac/dist/AlfalfaCode.app` con firma ad hoc, que sólo vale en este Mac.
+Cópiala a `/Applications`. Sin `IDENTIDAD=-` usa tu certificado Developer ID si hay uno. El DMG
+firmado y notarizado (`publicar.sh`) y la versión para Intel están en
+[alfalfa-mac/EMPAQUETADO.md](../../alfalfa-mac/EMPAQUETADO.md).

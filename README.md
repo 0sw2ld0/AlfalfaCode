@@ -58,6 +58,17 @@ Ninguna de las dos borra `~/.alfalfa`, donde viven tus sesiones y ajustes. El pa
 paso, las variables de `instalar.sh` y la instalación desde el código están en la
 [guía de instalación](docs/guia/instalar.md).
 
+Desde un clon, la app de Mac usa el motor del repositorio: primero el `.venv`, después la app
+(hace falta Xcode o sus herramientas de línea de órdenes):
+
+```bash
+python3.11 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+cd alfalfa-mac && swift run AlfalfaCode
+```
+
+Para empaquetar una `AlfalfaCode.app` para tu Mac con `build-app.sh`, mira
+[la app de Mac desde el código](docs/guia/instalar.md#la-app-de-mac-desde-el-código).
+
 En Linux (Ubuntu 24.04, también en WSL2) el motor se instala con pipx y aísla sus órdenes
 con bubblewrap; los pasos, el perfil de AppArmor y las claves están en
 [Linux](docs/USO.md#linux).
