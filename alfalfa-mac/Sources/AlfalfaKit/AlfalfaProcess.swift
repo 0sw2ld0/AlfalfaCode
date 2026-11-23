@@ -68,13 +68,17 @@ public enum Launcher {
                                       commitSignature: Bool = true, queue: Bool = false,
                                       browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa",
-                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil) -> [String] {
+                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil,
+                                      prototype: Bool = false) -> [String] {
         var arguments = ["--stdio"]
         if queue { arguments.append("--cola-encargos") }
+        if prototype, resume == nil { arguments.append("--prototipo") }
         if let brainstorm, resume == nil { arguments += brainstorm.launchArguments }
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
-        arguments += browserArguments(enabled: browser, engine: browserEngine, profile: cuyBrowserProfile,
-                                      fromPath: cuyBrowserFromPath)
+        if !prototype {
+            arguments += browserArguments(enabled: browser, engine: browserEngine, profile: cuyBrowserProfile,
+                                          fromPath: cuyBrowserFromPath)
+        }
         // Ajustes ▸ General ▸ Mantener el Mac despierto, Ver los errores al editar y Firmar los commits, apagados.
         arguments += [(keepAwake, "--sin-mantener-despierto"), (diagnostics, "--sin-diagnosticos"),
                       (commitSignature, "--sin-firma")]
@@ -112,14 +116,15 @@ public enum Launcher {
                                       swiftDiagnostics: Bool = false, commitSignature: Bool = true,
                                       queue: Bool = false, browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa",
-                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil) -> [String] {
+                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil,
+                                      prototype: Bool = false) -> [String] {
         var arguments = stdioArguments(task: nil, resume: resume, model: model, effort: effort, readOnly: readOnly,
                                        mode: mode, parent: parent, title: title, keepAwake: keepAwake,
                                        browser: browser, budget: budget, monthlyBudget: monthlyBudget,
                                        diagnostics: diagnostics, swiftDiagnostics: swiftDiagnostics,
                                        commitSignature: commitSignature, queue: queue, browserEngine: browserEngine,
                                        cuyBrowserProfile: cuyBrowserProfile, cuyBrowserFromPath: cuyBrowserFromPath,
-                                       brainstorm: brainstorm)
+                                       brainstorm: brainstorm, prototype: prototype)
         arguments[0] = "--pacai"
         return arguments
     }

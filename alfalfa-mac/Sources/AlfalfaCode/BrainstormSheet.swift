@@ -19,6 +19,18 @@ struct BrainstormSheet: View {
     @State private var limit = BrainstormConfiguration.defaultTurns
     @State private var moderator: BrainstormParticipant
     @State private var participants: [ParticipantRow]
+    @AppStorage("BrainstormGroups") private var groupData = Data()
+    @State private var selectedGroup: UUID?
+    @State private var namingGroup = false
+    @State private var groupName = ""
+
+    private var groups: [BrainstormGroup] {
+        (try? JSONDecoder().decode([BrainstormGroup].self, from: groupData)) ?? []
+    }
+
+    private var configuration: BrainstormConfiguration {
+        BrainstormConfiguration(limit: limit, participants: participants.map(\.selection))
+    }
 
     let start: (String, BrainstormParticipant, BrainstormConfiguration, URL?) -> Bool
 
@@ -62,10 +74,21 @@ struct BrainstormSheet: View {
         .background(Theme.background)
         .foregroundStyle(Theme.text)
         .onAppear { topicFocused = true }
+        .onChange(of: configuration) { checkSelectedGroup() }
+        .onChange(of: moderator) { checkSelectedGroup() }
+        .alert("Guardar grupo", isPresented: $namingGroup) {
+            TextField("Nombre del grupo", text: $groupName)
+            Button("Cancelar", role: .cancel) {}
+            Button("Guardar grupo") { saveGroup() }
+                .disabled(cleanGroupName.isEmpty || cleanGroupName.count > 80)
+        } message: {
+            Text("Guarda el moderador, los participantes, sus modelos, el esfuerzo y el límite de intervenciones. Si el nombre ya existe, se actualiza ese grupo.")
+        }
     }
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 18) {
+            groupPicker
             question
             roster
             turnLimit
@@ -80,6 +103,51 @@ struct BrainstormSheet: View {
                 }
             }
         }
+    }
+
+    private var groupPicker: some View {
+        HStack(spacing: 10) {
+            Text("Grupo").font(.subheadline.weight(.semibold))
+            Menu {
+                Button("Sin grupo") { selectedGroup = nil }
+                ForEach(groups) { group in
+                    Button(group.name) {
+                        selectedGroup = group.id
+                        moderator = group.moderator
+                        participants = group.configuration.participants.map { ParticipantRow(selection: $0) }
+                        limit = group.configuration.limit
+                    }
+                }
+            } label: {
+                Text(groups.first { $0.id == selectedGroup }?.name ?? "Sin grupo")
+                    .lineLimit(1)
+            }
+            .accessibilityLabel("Grupo de Lluvia de ideas")
+            Button("Guardar como grupo…") {
+                groupName = groups.first { $0.id == selectedGroup }?.name ?? ""
+                namingGroup = true
+            }
+        }
+    }
+
+    private var cleanGroupName: String { groupName.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func saveGroup() {
+        let name = cleanGroupName
+        guard !name.isEmpty, name.count <= 80 else { return }
+        var updated = groups
+        let existing = updated.firstIndex { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        let id = existing.map { updated[$0].id } ?? UUID()
+        let group = BrainstormGroup(id: id, name: name, moderator: moderator, configuration: configuration)
+        if let existing { updated[existing] = group } else { updated.append(group) }
+        guard let data = try? JSONEncoder().encode(updated) else { return }
+        groupData = data
+        selectedGroup = id
+    }
+
+    private func checkSelectedGroup() {
+        guard let group = groups.first(where: { $0.id == selectedGroup }) else { return }
+        if group.moderator != moderator || group.configuration != configuration { selectedGroup = nil }
     }
 
     private var question: some View {
@@ -144,7 +212,7 @@ struct BrainstormSheet: View {
                 participant("Moderador", selection: $moderator)
                 ForEach($participants) { $row in
                     if let index = participants.firstIndex(where: { $0.id == row.id }) {
-                        participant(participantName(index), selection: $row.selection,
+                        participant(BrainstormConfiguration.participantName(index), selection: $row.selection,
                                     remove: participants.count > BrainstormConfiguration.participantRange.lowerBound
                                         ? { participants.removeAll { $0.id == row.id } } : nil)
                     }
@@ -191,7 +259,6 @@ struct BrainstormSheet: View {
             Spacer(minLength: 14)
             Button("Cancelar", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
             Button {
-                let configuration = BrainstormConfiguration(limit: limit, participants: participants.map(\.selection))
                 if start(cleanTopic, moderator, configuration, reference) { dismiss() }
             } label: {
                 Text("Empezar").fontWeight(.semibold).foregroundStyle(canStart ? Theme.dark : Theme.muted)
@@ -217,14 +284,6 @@ struct BrainstormSheet: View {
         }
         reference = url
         referenceError = nil
-    }
-
-    private func participantName(_ index: Int) -> String {
-        switch index {
-        case 0: return "Propuesta"
-        case 1: return "Contraste"
-        default: return "Participante \(index + 1)"
-        }
     }
 
     private func participant(_ name: String, selection: Binding<BrainstormParticipant>,
@@ -264,4 +323,11 @@ struct BrainstormSheet: View {
             .frame(width: 20, height: 20)
         }
     }
+}
+
+private struct BrainstormGroup: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let moderator: BrainstormParticipant
+    let configuration: BrainstormConfiguration
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct BrainstormParticipant: Codable, Equatable {
+public struct BrainstormParticipant: Codable, Equatable, Sendable {
     public var model: String
     public var effort: String
 
@@ -10,7 +10,7 @@ public struct BrainstormParticipant: Codable, Equatable {
     }
 }
 
-public struct BrainstormConfiguration {
+public struct BrainstormConfiguration: Codable, Equatable, Sendable {
     public static let participantRange = 2...6
     public static let maximumTurns = 12
     public static let defaultTurns = 6
@@ -21,6 +21,14 @@ public struct BrainstormConfiguration {
     public init(limit: Int, participants: [BrainstormParticipant]) {
         self.limit = limit
         self.participants = participants
+    }
+
+    public static func participantName(_ index: Int) -> String {
+        switch index {
+        case 0: return "Propuesta"
+        case 1: return "Contraste"
+        default: return "Participante \(index + 1)"
+        }
     }
 
     var launchArguments: [String] {

@@ -10,6 +10,7 @@ struct SessionView: View {
     @EnvironmentObject private var app: AppModel
     var notice: String?
     @State private var planningQueue = false
+    @State private var prototyping = false
     @State private var showingBrowserActivity = false
 
     var body: some View {
@@ -36,6 +37,15 @@ struct SessionView: View {
                               onSessionCap: session.sessionID == nil ? nil : { session.setSessionCap($0) },
                               appControlPreviewStore: appControlPreviewStore)
                 }
+            }
+        }
+        .sheet(isPresented: $prototyping) {
+            if let configuration = session.brainstorm {
+                BrainstormPrototypeSheet(
+                    participants: configuration.participants,
+                    directory: session.cwd,
+                    start: { app.startBrainstormPrototype(from: session, participant: $0, reference: $1) }
+                )
             }
         }
     }
@@ -113,6 +123,7 @@ struct SessionView: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 let items = session.timeline.visibleConversation
+                let synthesisID = session.brainstormDiscussion?.itemID
                 // Sólo el último grupo de acciones es el que está trabajando ahora, y sólo si es de
                 // este turno: el de antes del último mensaje ya no corre. Si el agente escribió
                 // después, el grupo terminó y lo que sigue es pensar (la fila de abajo).
@@ -130,6 +141,11 @@ struct SessionView: View {
                                  isFirstPending: firstPending.map { isPermission(item, $0) } ?? false,
                                  closesRun: closesRun(items, index), liveWork: index == liveWork)
                             .id(item.id)
+                        if item.id == synthesisID {
+                            Button { prototyping = true } label: {
+                                Label("Prototipar…", systemImage: "photo")
+                            }
+                        }
                     }
                     if let plan = session.timeline.visiblePlan {
                         PlanCard(plan: plan, fromBefore: session.timeline.planIsFromBeforeLastMessage).id("plan")

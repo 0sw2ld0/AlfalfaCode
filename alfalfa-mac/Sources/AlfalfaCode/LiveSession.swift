@@ -15,6 +15,7 @@ final class LiveSession: ObservableObject, Identifiable {
     private var settingsChanged = false
     let readOnly: Bool
     let brainstorm: BrainstormConfiguration?
+    private let prototype: Bool
 
     @Published private(set) var timeline = Timeline()
     @Published private(set) var snapshot: GitSnapshot?
@@ -38,6 +39,28 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published var searchAnchor: String?
     /// «Este modelo no ve imágenes» al pegar o soltar una con un modelo sin visión.
     let imageNotice = ImageNotice()
+
+    var brainstormDiscussion: (idea: String, synthesis: String, itemID: Int)? {
+        guard brainstorm != nil, !timeline.status.isRunning, !runningElsewhere, !resumableWithoutMessage,
+              timeline.status == .idle || timeline.status == .completed else { return nil }
+        var idea: String?
+        var synthesis: (String, Int)?
+        for item in timeline.items {
+            if case let .user(_, text, false) = item {
+                if idea != nil { break }
+                idea = Self.prototypeContext(text)
+            } else if case let .agent(id, text) = item, idea != nil {
+                synthesis = (Self.prototypeContext(text), id)
+            }
+        }
+        guard let idea, let (text, id) = synthesis, !idea.isEmpty, !text.isEmpty else { return nil }
+        return (idea, text, id)
+    }
+
+    private static func prototypeContext(_ text: String) -> String {
+        // Evita que una etiqueta escrita en la síntesis se convierta en otro adjunto del encargo.
+        ImageTags.split(text).text.replacingOccurrences(of: "<", with: "‹")
+    }
 
     var onChange: (() -> Void)?
     /// El navegador propio de la sesión (herramientas browser_* del agente), con su almacén de datos aislado.
@@ -108,7 +131,8 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var mode: String
 
     init(cwd: URL, title: String, resumeID: String?, model: String, effort: String, readOnly: Bool,
-         mode: String = PermissionMode.auto.rawValue, brainstorm: BrainstormConfiguration? = nil) {
+         mode: String = PermissionMode.auto.rawValue, brainstorm: BrainstormConfiguration? = nil,
+         prototype: Bool = false) {
         self.cwd = cwd
         self.title = title
         self.resumeID = resumeID
@@ -116,6 +140,7 @@ final class LiveSession: ObservableObject, Identifiable {
         self.effort = effort
         self.readOnly = readOnly
         self.brainstorm = brainstorm
+        self.prototype = prototype
         self.mode = mode
     }
 
@@ -566,7 +591,7 @@ extension LiveSession {
                 monthlyBudget: preferences.monthlyBudget, diagnostics: preferences.diagnostics,
                 swiftDiagnostics: preferences.swiftDiagnostics, commitSignature: preferences.commitSignature,
                 queue: queue, browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
-                cuyBrowserFromPath: browserPreferences.fromPath, brainstorm: brainstorm), nil)
+                cuyBrowserFromPath: browserPreferences.fromPath, brainstorm: brainstorm, prototype: prototype), nil)
         }
         let arguments = Launcher.pacaiArguments(
             resume: resumeID, model: model, effort: effort, readOnly: readOnly, mode: mode, parent: parentSessionID,
@@ -575,7 +600,7 @@ extension LiveSession {
             diagnostics: preferences.diagnostics, swiftDiagnostics: preferences.swiftDiagnostics,
             commitSignature: preferences.commitSignature, queue: queue, browserEngine: browserBackend,
             cuyBrowserProfile: browserPreferences.profile, cuyBrowserFromPath: browserPreferences.fromPath,
-            brainstorm: brainstorm)
+            brainstorm: brainstorm, prototype: prototype)
         // Como `--reanudar ID` sin encargo ni `--esperar` en v2: la sesión sigue sin mensaje.
         let opening = PacaiClient.Opening(task: task, attachments: images.map(\.path),
                                           continueWithoutMessage: resumeID != nil && task == nil && !wait && !queue)

@@ -39,7 +39,8 @@ SIN_EQUIVALENTE = {
     'update_plan': 'TodoWrite recibe todos con content y activeForm; update_plan, plan con step y status (los mismos '
                    'estados).',
     'inspect_image': 'Read de Claude también abre imágenes, pero aquí analiza otro modelo.',
-    'generate_image': 'Genera un PNG por la API de OpenAI o por Codex con una aprobación por imagen.',
+    'generate_image': 'Genera un PNG por la API de OpenAI o por Codex con una aprobación por imagen. '
+                      'También la usa el agente encargado de prototipos en la sala de lluvia de ideas.',
     'web_search': 'WebSearch de Claude recibe query y allowed_domains; aquí query y domains.',
     'read_web': 'WebFetch de Claude recibe url y prompt y resume la página; read_web devuelve su texto.',
     'buscar_herramientas': 'Buscar o cargar un esquema MCP no ejecuta ninguna herramienta MCP.',

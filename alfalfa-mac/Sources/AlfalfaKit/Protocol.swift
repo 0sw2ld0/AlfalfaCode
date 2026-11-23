@@ -1200,6 +1200,21 @@ public enum AlfalfaMessage: Equatable, Sendable {
                               date: number(row["fecha"]) ?? 0, tokens: row["tokens"] as? Int ?? 0,
                               title: text(row["titulo"]), pinned: bool(row["fijada"]) ?? false,
                               archived: bool(row["archivada"]) ?? false, mode: text(row["modo"]),
-                              parent: text(row["padre"]), cost: amount(row["coste"]))
+                              parent: text(row["padre"]), cost: amount(row["coste"]),
+                              brainstorm: brainstormSummary(row))
+    }
+
+    private static func brainstormSummary(_ row: [String: Any]) -> BrainstormConfiguration? {
+        guard let limit = row["lluvia_limite"] as? Int,
+              let selections = row["lluvia_participantes"] as? [[String: String]],
+              BrainstormConfiguration.participantRange.contains(selections.count),
+              (selections.count...BrainstormConfiguration.maximumTurns).contains(limit)
+        else { return nil }
+        let participants = selections.compactMap { selection -> BrainstormParticipant? in
+            guard let model = selection["model"], !model.isEmpty, let effort = selection["effort"] else { return nil }
+            return BrainstormParticipant(model: model, effort: effort)
+        }
+        guard participants.count == selections.count else { return nil }
+        return BrainstormConfiguration(limit: limit, participants: participants)
     }
 }

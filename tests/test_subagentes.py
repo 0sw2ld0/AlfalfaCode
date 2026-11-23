@@ -5,7 +5,9 @@ TerminalManager y Transport reales; sólo se sustituye la inferencia
 subagente, según la tarea del runtime que pregunta."""
 import asyncio
 import json
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from alfalfa import subagentes
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
@@ -441,3 +443,42 @@ def test_lluvia_comparte_solo_la_referencia_elegida_con_cada_participante(tmp_pa
         assert 'Propuesta elegida para la sesión' in mensajes
         assert 'Contenido privado sin adjuntar' not in mensajes
         assert str(otro) not in mensajes
+
+
+
+@pytest.mark.parametrize('approved', [True, False])
+def test_prototype_only_offers_images_and_requires_approval(tmp_path, monkeypatch, approved):
+    from alfalfa.proveedores.nativo import imagenes
+    from tests.test_generar_imagen import PNG
+
+    s = Sesion(tmp_path, monkeypatch, None, respuesta=approved, prototipo=True)
+    monkeypatch.setattr(imagenes, 'configurar', lambda: {'proveedor': 'codex'})
+    monkeypatch.setattr(imagenes.imagenes_codex, 'ejecutable', lambda: '/test/codex')
+    generate = AsyncMock(return_value=PNG)
+    monkeypatch.setattr(imagenes.imagenes_codex, 'generar', generate)
+
+    def draft_prompt(payload):
+        assert nombres_de_herramientas(payload) == {'generate_image'}
+        assert 'Escribe tú el prompt visual' in payload['messages'][0]['content']
+        assert 'Validador de pedidos' in payload['messages'][-1]['content']
+        return llamada('write_file', {'path': 'unrelated.txt', 'content': 'No debe escribirse.'})
+
+    visual_prompt = 'Pantalla del validador con una tabla de pedidos y una acción de aprobar.'
+    script = Guion(
+        principal=[draft_prompt,
+                   llamada('generate_image', {'prompt': visual_prompt, 'path': 'mockup.png'}),
+                   {'role': 'assistant', 'content': 'Terminé el encargo.'}],
+        por_agente={},
+    )
+    correr(s, script, 'Idea original: Validador de pedidos. Síntesis: mostrar una tabla para aprobar.')
+    assert not (s.root / 'unrelated.txt').exists()
+    assert 'sólo puede generar imágenes' in resultados(script.payloads['principal'][1])[0]['error']
+    [permission] = s.eventos('permiso')
+    assert permission['motivo'] == 'generar_imagen'
+    assert permission['argv'][-1] == visual_prompt
+    if approved:
+        assert (s.root / 'mockup.png').read_bytes() == PNG
+        generate.assert_awaited_once()
+    else:
+        assert not (s.root / 'mockup.png').exists()
+        generate.assert_not_awaited()

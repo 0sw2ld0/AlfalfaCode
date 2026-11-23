@@ -81,7 +81,9 @@ def configurar(preferencia=None, *, codex=None):
 
 def restringida(runtime):
     return (runtime.task.get('review') or runtime.task.get('subagente_de')
-            or modos.solo_lee(modos.modo_de(runtime.task)) or getattr(runtime.manager, 'read_only', False)
+            or modos.solo_lee(modos.modo_de(runtime.task))
+            or (getattr(runtime.manager, 'read_only', False)
+                and not getattr(runtime.manager, 'prototype_images', False))
             # El costo de imágenes aún no está integrado en el presupuesto de equipo.
             or bool(getattr(runtime.manager, 'equipo', None)))
 

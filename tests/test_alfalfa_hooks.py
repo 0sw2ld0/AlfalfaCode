@@ -80,7 +80,7 @@ class Sesion:
     """TerminalManager real con Transport real, hooks del usuario y un cliente que responde permisos."""
 
     def __init__(self, tmp_path, monkeypatch, hooks, *, respuesta=True, servidores=None, resume=None,
-                 objetivo='Prueba de hooks.'):
+                 objetivo='Prueba de hooks.', prototipo=False):
         self.root = tmp_path / 'project'
         self.root.mkdir(exist_ok=True)
         monkeypatch.chdir(self.root)
@@ -93,7 +93,8 @@ class Sesion:
         self.salida = io.StringIO()
         self.transport = Transport(self.salida)
         self.respuesta = respuesta
-        self.m = TerminalManager(objetivo, home=self.home, transport=self.transport, resume=resume)
+        self.m = TerminalManager(objetivo, home=self.home, transport=self.transport, resume=resume,
+                                 prototipo=prototipo)
 
     async def _responder(self):
         vistos = set()

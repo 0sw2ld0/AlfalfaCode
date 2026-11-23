@@ -1123,6 +1123,8 @@ class WorkspaceTools:
             from ...lluvia import herramienta
             if name != herramienta(self.runtime.task):
                 raise ValueError('Esta herramienta no está disponible en la lluvia de ideas.')
+        if self.runtime.task.get('prototipo') and name != 'generate_image':
+            raise ValueError('Esta sesión sólo puede generar imágenes para el prototipo.')
         if name in self.runtime.excluded_tools:
             raise ValueError('Herramienta no configurada o deshabilitada: ' + name)
         mcp = getattr(self.runtime, 'mcp', None)

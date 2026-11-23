@@ -543,6 +543,20 @@ final class AppModel: ObservableObject {
         return true
     }
 
+    func startBrainstormPrototype(from room: LiveSession, participant: BrainstormParticipant, reference: URL?) -> Bool {
+        guard let launcher, let parent = room.sessionID, let discussion = room.brainstormDiscussion,
+              info(for: participant.model)?.missingKey == nil,
+              reference == nil || allowsImages(participant.model) else { return false }
+        let task = "Idea original:\n" + discussion.idea + "\n\nSíntesis de la sala:\n" + discussion.synthesis
+        let title = "Mockups · " + String(discussion.idea.prefix(64))
+        let session = LiveSession(cwd: room.cwd, title: title, resumeID: nil, model: participant.model,
+                                  effort: participant.effort, readOnly: false, mode: PermissionMode.manual.rawValue,
+                                  prototype: true)
+        session.parentSessionID = parent
+        open(session, launcher: launcher, task: task, images: reference.map { [$0] } ?? [])
+        return true
+    }
+
     /// El ejemplo abre su propia sesión de solo lectura y conserva el borrador del compositor.
     @discardableResult
     func startFirstRunTask(_ task: String, in folder: URL, model name: String) -> Bool {
@@ -564,7 +578,7 @@ final class AppModel: ObservableObject {
         let session = LiveSession(cwd: URL(fileURLWithPath: cwd), title: summary.task ?? "Sesión \(summary.id)",
                                   resumeID: summary.id, model: summary.model ?? model,
                                   effort: summary.effort ?? effort, readOnly: readOnly,
-                                  mode: summary.mode ?? PermissionMode.auto.rawValue)
+                                  mode: summary.mode ?? PermissionMode.auto.rawValue, brainstorm: summary.brainstorm)
         open(session, launcher: launcher, task: nil)
     }
 
@@ -602,7 +616,7 @@ final class AppModel: ObservableObject {
         let session = LiveSession(cwd: URL(fileURLWithPath: cwd), title: summary.displayTitle ?? "Sesión \(summary.id)",
                                   resumeID: summary.id, model: summary.model ?? model,
                                   effort: summary.effort ?? effort, readOnly: readOnly,
-                                  mode: summary.mode ?? PermissionMode.auto.rawValue)
+                                  mode: summary.mode ?? PermissionMode.auto.rawValue, brainstorm: summary.brainstorm)
         session.onChange = { [weak self] in self?.objectWillChange.send() }
         watchFamily(session)
         session.onWake = { [weak self, weak session] in

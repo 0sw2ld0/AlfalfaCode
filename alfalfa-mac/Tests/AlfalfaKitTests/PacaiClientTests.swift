@@ -186,6 +186,40 @@ final class PacaiClientTests: XCTestCase {
         XCTAssertFalse(resumed.contains("--lluvia-participantes"))
     }
 
+    func testPrototypeStartsAsAChildWithTheSelectedAgentAndNoBrowser() {
+        let start = Launcher.pacaiArguments(resume: nil, model: "chatgpt/sol", effort: "low",
+                                            readOnly: false, mode: "manual", parent: "room",
+                                            browser: true, prototype: true)
+        XCTAssertTrue(start.contains("--prototipo"))
+        XCTAssertFalse(start.contains("--navegador"))
+        for (flag, value) in [("--modelo", "chatgpt/sol"), ("--esfuerzo", "low"),
+                              ("--modo", "manual"), ("--padre", "room")] {
+            guard let offset = start.firstIndex(of: flag) else { return XCTFail("Falta " + flag) }
+            XCTAssertEqual(start.dropFirst(offset + 1).first, value)
+        }
+        let resume = Launcher.pacaiArguments(resume: "child", model: nil, effort: nil, readOnly: false,
+                                             prototype: true)
+        XCTAssertFalse(resume.contains("--prototipo"))
+    }
+
+    func testSessionListRestoresTheOriginalBrainstormParticipants() throws {
+        let line = """
+        {"version":2,"tipo":"sesiones","sesiones":[
+          {"id":"room","estado":"completed","lluvia_limite":6,"lluvia_participantes":[
+            {"model":"anthropic/opus","effort":"high"},{"model":"chatgpt/sol","effort":"low"}]},
+          {"id":"ordinary","estado":"completed"}
+        ]}
+        """
+        guard case let .sessions(rows) = AlfalfaMessage.decode(line: line) else {
+            return XCTFail("No se pudo leer el listado")
+        }
+        XCTAssertEqual(rows[0].brainstorm, BrainstormConfiguration(limit: 6, participants: [
+            BrainstormParticipant(model: "anthropic/opus", effort: "high"),
+            BrainstormParticipant(model: "chatgpt/sol", effort: "low")
+        ]))
+        XCTAssertNil(rows[1].brainstorm)
+    }
+
     // MARK: - Métodos privados
 
     private func parsed(_ line: String) throws -> [String: Any] {

@@ -270,7 +270,7 @@ class TerminalManager:
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
                  diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa',
                  origen_cuybrowser=None, lluvia_limite=None, lluvia_participantes=None,
-                 reglas_equipo=_CARGAR_EQUIPO):
+                 reglas_equipo=_CARGAR_EQUIPO, prototipo=False):
         if lluvia_limite is not None:
             from .lluvia import validar
             validar(lluvia_limite, lluvia_participantes)
@@ -360,6 +360,8 @@ class TerminalManager:
                     self.task['lluvia_limite'] = lluvia_limite
                     if lluvia_participantes is not None:
                         self.task['lluvia_participantes'] = lluvia_participantes
+                if prototipo:
+                    self.task['prototipo'] = True
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
                 self.task['meta'] = registro.metadatos(ident, self.task['cwd'], self.task['model'],
                                                        self.task['effort'])
@@ -376,7 +378,10 @@ class TerminalManager:
                     raise ValueError('Modo desconocido: ' + str(mode))
                 self.task['modo'] = mode
             self.task.setdefault('modo', modos.AUTO)
-            if self.task.get('lluvia_limite'):
+            # Un prototipo omite conectores y hooks como una sesión de solo lectura.
+            # La única excepción es el PNG aprobado, y no aplica con --solo-lectura.
+            self.prototype_images = bool(self.task.get('prototipo')) and not read_only
+            if self.task.get('lluvia_limite') or self.task.get('prototipo'):
                 self.read_only = read_only = True
             if self.equipo:
                 self.equipo.comprobar_modelo(self.task['model'])
@@ -911,7 +916,7 @@ class TerminalManager:
         ¿algo que recordar o un procedimiento que guardar? (alfalfa/aprendizaje/revision.py). Va aparte
         del turno: Detener no lo toca, y si se cancela (se cierra la sesión) el turno sigue como estaba."""
         rt = getattr(self.aprendizaje, 'rt', None)
-        if rt is None:
+        if rt is None or self.task.get('prototipo'):
             return None
         try:
             return await self.aprendizaje.revisar(rt)
@@ -1137,7 +1142,7 @@ class TerminalManager:
         try:
             self.pruebas_interfaz.empezar(rt, turno['id'])
             # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
-            expandido = (None if self.task.get('lluvia_limite') else
+            expandido = (None if self.task.get('lluvia_limite') or self.task.get('prototipo') else
                          self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt))
             pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
             if pendiente is not None:
@@ -1383,7 +1388,8 @@ async def execute(args):
                               perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
                               origen_cuybrowser=getattr(args, 'origen_cuybrowser', None),
                               lluvia_limite=getattr(args, 'lluvia_de_ideas', None),
-                              lluvia_participantes=getattr(args, 'lluvia_participantes', None))
+                              lluvia_participantes=getattr(args, 'lluvia_participantes', None),
+                              prototipo=getattr(args, 'prototipo', False))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -1444,6 +1450,8 @@ def main(argv=None):
                         help='Límite de intervenciones para una sesión nueva de lluvia de ideas')
     parser.add_argument('--lluvia-participantes', type=json.loads, metavar='JSON',
                         help='Lista de objetos model y effort para la lluvia de ideas')
+    parser.add_argument('--prototipo', action='store_true',
+                        help='Abrir un encargo de mockups con acceso sólo a la herramienta de imágenes')
     parser.add_argument('--reanudar', metavar='ID')
     parser.add_argument('--esperar', action='store_true',
                         help='Con --stdio y --reanudar: abrir la sesión sin turno y esperar un mensaje o «compactar»')
@@ -1639,6 +1647,9 @@ def main(argv=None):
         parser.error('--lluvia-participantes requiere --lluvia-de-ideas')
     if args.lluvia_de_ideas is not None and (args.reanudar or args.bifurcar or args.cola_encargos is not None):
         parser.error('--lluvia-de-ideas abre una sesión nueva y no usa la cola de encargos')
+    if args.prototipo and (args.reanudar or args.bifurcar or args.lluvia_de_ideas is not None
+                           or args.cola_encargos is not None or args.solo_lectura):
+        parser.error('--prototipo abre un encargo nuevo con aprobación individual de imágenes')
     if args.reanudar and args.bifurcar:
         parser.error('--reanudar y --bifurcar no van juntos')
     from .presupuesto import importe

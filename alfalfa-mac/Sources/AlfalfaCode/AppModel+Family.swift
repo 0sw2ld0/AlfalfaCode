@@ -43,6 +43,9 @@ extension AppModel {
         guard !["cortado", "interrupted"].contains(outcome.state),
               let parentID = child.parentSessionID
                 ?? child.sessionID.flatMap({ id in summaries.first { $0.id == id }?.parent }) else { return }
+        // Los mockups ya aparecen bajo la sala en la barra lateral. Su resultado no abre otro turno allí.
+        if (live.first { $0.sessionID == parentID } ?? dormant[parentID])?.brainstorm != nil
+            || summaries.first(where: { $0.id == parentID })?.brainstorm != nil { return }
         let note = SessionFamily.note(title: child.title, state: outcome.state, recap: outcome.wrapUp?.recap,
                                       answer: child.lastAnswer)
         if let parent = live.first(where: { $0.sessionID == parentID }) ?? dormant[parentID] {

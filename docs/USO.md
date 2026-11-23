@@ -319,6 +319,23 @@ En el mapa de PACAI corresponden a `image_codex_model` y `image_codex_effort`.
 El cliente recibe la ruta y las dimensiones reales
 del resultado. [Generar un PNG con Codex](guia/imagenes.md#generar-un-png-con-codex).
 
+## Lluvia de ideas y prototipos
+
+En macOS, abre **Lluvia de ideas** desde el menú de modo. **Guardar como grupo…**
+guarda el moderador, los participantes, sus modelos y esfuerzos y el máximo de
+intervenciones con un nombre que puedes volver a elegir en otras salas.
+
+Al terminar la discusión, usa **Prototipar…** debajo de la síntesis. Elige uno de
+los participantes y, si su modelo admite visión, adjunta una imagen de referencia.
+El participante elabora el prompt en una sesión hija dedicada. Usa el generador
+configurado en el arnés, que elige ChatGPT mediante Codex de forma predeterminada
+si hay una sesión de ChatGPT disponible. Cada PNG en el proyecto requiere
+aprobación antes de enviar el prompt al generador.
+
+El listado JSON de sesiones incluye `lluvia_limite` y `lluvia_participantes` para
+las salas. Sus nombres en PACAI son `brainstorm_limit` y `brainstorm_participants`.
+El lanzador usa `--prototipo` con PACAI o stdio para abrir el encargo dedicado.
+
 ## Control con PACAI: `alfalfa --pacai`
 
 `alfalfa --pacai` habla [PACAI](#qué-es-pacai) 0.3 por stdio (JSONL) en lugar de `--stdio` v2. Es el mismo motor

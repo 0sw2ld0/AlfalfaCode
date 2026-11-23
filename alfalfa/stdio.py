@@ -747,7 +747,8 @@ async def run(args, transport):
                                   diagnosticos=diagnostics(args), firma=signature(args),
                                   diagnosticos_swift=swift_diagnostics(args),
                                   lluvia_limite=getattr(args, 'lluvia_de_ideas', None),
-                                  lluvia_participantes=getattr(args, 'lluvia_participantes', None))
+                                  lluvia_participantes=getattr(args, 'lluvia_participantes', None),
+                                  prototipo=getattr(args, 'prototipo', False))
         transport.conectar(manager)
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()
@@ -1172,6 +1173,10 @@ def sessions():
                     row['bifurcada_de'] = task['bifurcada_de']
                 if task.get('padre'):
                     row['padre'] = task['padre']
+                if limit := task.get('lluvia_limite'):
+                    participante = {'model': task['model'], 'effort': task['effort']}
+                    row['lluvia_limite'] = limit
+                    row['lluvia_participantes'] = task.get('lluvia_participantes') or [participante, participante]
                 if task['id'] != directory.name or not isinstance(row['fecha'], (int, float)):
                     raise ValueError()
                 row.update(_marcas(directory))
