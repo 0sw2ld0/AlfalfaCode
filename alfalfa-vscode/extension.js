@@ -115,9 +115,10 @@ class ProveedorChat {
     resolveWebviewView(vista) {
         this.vistas.add(vista);
         const media = vscode.Uri.joinPath(this.contexto.extensionUri, 'media');
-        // El HTML antes que las opciones: si no, la webview se pinta un momento vacía y sin CSP.
-        vista.webview.html = this._html(vista.webview, media);
+        // Primero las opciones y después el HTML, el orden que esperan VS Code y sus derivados (Cursor): con el
+        // orden contrario, un editor que no vuelve a pintar al cambiar las opciones deja el panel sin scripts.
         vista.webview.options = { enableScripts: true, localResourceRoots: [media] };
+        vista.webview.html = this._html(vista.webview, media);
         vista.webview.onDidReceiveMessage(m => this._deLaVista(m, vista).catch(error => this._aviso('error', error.message)));
         vista.onDidDispose(() => this.vistas.delete(vista));
     }

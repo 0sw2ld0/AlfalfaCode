@@ -2,7 +2,7 @@
   "name": "alfalfa-vscode",
   "displayName": "AlfalfaCode",
   "description": "Chat de AlfalfaCode en la barra lateral de VS Code y Cursor, por PACAI.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "cuycoders",
   "license": "MIT",
   "engines": {

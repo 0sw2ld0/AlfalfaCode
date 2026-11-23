@@ -58,7 +58,7 @@ Para empaquetarla e instalar el `.vsix`:
 ```sh
 cd alfalfa-vscode
 npm run package
-code --install-extension alfalfa-vscode-0.1.1.vsix
+code --install-extension alfalfa-vscode-0.1.2.vsix
 ```
 
 Las pruebas del cliente PACAI usan un agente falso y no gastan modelo:

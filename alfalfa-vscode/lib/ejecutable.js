@@ -2,7 +2,7 @@
 // Dónde está `alfalfa`. Un editor abierto desde el Dock no hereda el PATH del shell, y quien sólo instaló la app de
 // Mac no tiene la orden en ningún PATH: la app lleva su motor dentro. Por eso, si el ajuste no lo dice, se prueba en
 // este orden: el PATH del editor, el del shell del usuario, las carpetas habituales y el motor de la app.
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const { accessSync, constants } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -27,11 +27,38 @@ function salidaDe(orden, argumentos, plazo = 5000) {
     });
 }
 
+/**
+ * Una orden en el shell del usuario, en su propia sesión y sin terminal (`detached`, stdin cerrado), como hace
+ * VS Code al leer el entorno del shell. Un zsh interactivo activa el control de trabajos e intenta quedarse con la
+ * terminal: si el editor se abrió desde una, eso puede detener el proceso de las extensiones (el panel en negro).
+ * Con plazo: al vencer, se mata todo su grupo de procesos.
+ */
+function enElShell(shell, argumentos, plazo = 5000) {
+    return new Promise(resolver => {
+        let salida = '';
+        let hijo;
+        try {
+            hijo = spawn(shell, argumentos, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+        } catch {
+            resolver('');
+            return;
+        }
+        const reloj = setTimeout(() => {
+            try { process.kill(-hijo.pid, 'SIGKILL'); } catch { /* ya terminó */ }
+            resolver('');
+        }, plazo);
+        hijo.stdout.setEncoding('utf8');
+        hijo.stdout.on('data', trozo => { salida += trozo; });
+        hijo.on('error', () => { clearTimeout(reloj); resolver(''); });
+        hijo.on('close', codigo => { clearTimeout(reloj); resolver(codigo === 0 ? salida : ''); });
+    });
+}
+
 /** `command -v alfalfa` en el shell del usuario, también interactivo: el PATH de ~/.zshrc sólo se lee así. */
 async function delShell() {
     const shell = process.env.SHELL || '/bin/zsh';
     for (const opciones of ['-lc', '-ilc']) {
-        const salida = await salidaDe(shell, [opciones, 'command -v alfalfa']);
+        const salida = await enElShell(shell, [opciones, 'command -v alfalfa']);
         // Un shell interactivo puede escribir más cosas (avisos, un alias): sólo vale una ruta absoluta.
         const ruta = salida.split('\n').map(l => l.trim()).filter(l => l.startsWith('/')).pop();
         if (ruta && ejecutable(ruta)) return ruta;
@@ -82,4 +109,4 @@ function entorno() {
     return { ...process.env, PATH: [...actuales, ...extra].join(path.delimiter) };
 }
 
-module.exports = { buscarAlfalfa, entorno, LUGARES, deLaApp };
+module.exports = { buscarAlfalfa, entorno, LUGARES, deLaApp, delShell, enElShell };
