@@ -59,6 +59,14 @@ repositorio. Si algo de aquí choca con lo que te pidieron, pregunta antes de ha
 
 ## Publicar una versión (sólo con permiso del dueño)
 
+Los instaladores generados para probar un commit son artefactos locales. La app instalada busca
+la versión de la última release pública y sólo ofrece una actualización si su número es mayor.
+Si una release ya está publicada y hay cambios nuevos para distribuir, sube el número de versión,
+recompila ambos DMG y publica una release nueva. Conserva la etiqueta y los archivos de la release
+anterior. Comprueba que la release nueva sea la última y que sus dos manifiestos y el tap de Homebrew
+apunten a ella. Un IDE que usa la CLI recibe la versión nueva al actualizar la instalación de
+`alfalfa` que invoca.
+
 Publicar firma con el Llavero del dueño y lo ve todo el mundo: **nunca** lo hagas por tu cuenta.
 
 1. Commit «AlfalfaCode X.Y.Z» en `main` con `__version__` (`alfalfa/__init__.py`) y
