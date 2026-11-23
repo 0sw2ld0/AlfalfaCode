@@ -6,3 +6,4 @@ dist/
 alfalfa-mac/.build/
 .pytest_cache/
 alfalfa-mac/.swiftpm/
+alfalfa-vscode/*.vsix
