@@ -90,3 +90,38 @@ def test_el_turno_falla_y_la_sesion_sigue(cliente):
     registro = next((cliente.hogar / 'sesiones').glob('*/errores.log'))
     texto = registro.read_text()
     assert 'RuntimeError: fallo-interno-de-prueba' in texto and 'Traceback' in texto
+
+
+FUERA_DEL_TURNO = '''
+import sys
+from unittest.mock import patch
+from alfalfa.terminal import main, TerminalManager
+from alfalfa.proveedores.nativo.runtime import NativeRuntime
+async def inference(self, client, endpoint, payload, **kwargs):
+    if endpoint == '/api/show':
+        return {'capabilities': ['tools'], 'model_info': {'x.context_length': 131072}}
+    return dict(message=dict(role='assistant', content='Respuesta.'), done=True, done_reason='stop',
+                prompt_eval_count=900, eval_count=10)
+async def sin_vision(self, prompt):
+    self.save()
+    raise ConnectionError('fallo-fuera-del-turno')
+with patch.object(NativeRuntime, 'request', inference), patch.object(TerminalManager, 'sin_vision', sin_vision):
+    sys.exit(main(['--stdio', 'Hola']))
+'''
+
+
+def test_un_fallo_fuera_del_turno_dice_cual_fue_y_deja_su_traza(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], 'MOTOR', FUERA_DEL_TURNO)
+    cliente = Cliente(tmp_path)
+    try:
+        fin = cliente.hasta(lambda f: f['tipo'] == 'fin')
+        assert fin and fin['codigo_salida'] == 1, cliente.filas[-5:]
+        errores = [f['texto'] for f in cliente.filas if f['tipo'] == 'error']
+        assert any('No se pudo iniciar o ejecutar la sesión (ConnectionError: fallo-fuera-del-turno)' in t
+                   and 'errores.log' in t for t in errores), errores
+        texto = next((cliente.hogar / 'sesiones').glob('*/errores.log')).read_text()
+        assert 'Traceback' in texto and 'ConnectionError: fallo-fuera-del-turno' in texto
+        cliente.proc.wait(10)
+        assert 'fallo-fuera-del-turno' in cliente.proc.stderr.read()
+    finally:
+        cliente.cerrar()

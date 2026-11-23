@@ -1025,11 +1025,14 @@ async def run(args, transport):
         # La sesión no llegó a abrirse: qué falta configurar, no un «no se pudo iniciar».
         code = 1
         transport.emit('error', texto=str(exc))
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — lo que no recoge un turno cierra la sesión, pero con su traza
         code = 1
-        transport.emit('error', texto='No se pudo iniciar o ejecutar la sesión.')
+        detalle = type(exc).__name__ + (': ' + str(exc)[:300] if str(exc) else '')
+        apuntada = _apuntar_traza(manager, transport, exc)
+        transport.emit('error', texto='No se pudo iniciar o ejecutar la sesión (' + detalle + ').'
+                       + (' El detalle está en errores.log de la sesión.' if apuntada else ''))
         if manager:
-            manager.task.update(status='failed', summary='Fallo de ejecución')
+            manager.task.update(status='failed', summary='Fallo de ejecución (' + detalle + ')')
     finally:
         cierre.limpiando()
         await _cancelar_revision(transport)
@@ -1066,6 +1069,26 @@ async def run(args, transport):
     return code
 
 
+def _apuntar_traza(manager, transport, exc):
+    """La traza de un fallo inesperado, sin secretos, en `errores.log` de la sesión y en stderr (la app guarda
+    sus últimas líneas). ¿Quedó en `errores.log`? Sin sesión abierta, sólo va a stderr."""
+    import traceback
+    traza = transport.clean(''.join(traceback.format_exception(exc)))
+    try:
+        sys.stderr.write(traza)
+        sys.stderr.flush()
+    except (OSError, ValueError):
+        pass
+    if manager is None:
+        return False
+    try:
+        with open(manager.directory / 'errores.log', 'a', encoding='utf-8') as registro:
+            registro.write(time.strftime('%Y-%m-%dT%H:%M:%S') + ' ' + traza + '\n')
+    except OSError:
+        return False
+    return True
+
+
 def _turno_que_revento(manager, transport, exc):
     """Un error inesperado del arnés dentro de un turno: el turno falla y la sesión sigue.
 
@@ -1073,14 +1096,8 @@ def _turno_que_revento(manager, transport, exc):
     ejecutar la sesión» y la excepción no quedaba en ningún sitio. Ahora se apunta con su traza en
     `errores.log` de la sesión y la app lo ve como el fallo de ese turno.
     """
-    import traceback
     resumen = 'Fallo inesperado en el turno (' + type(exc).__name__ + '): ' + (str(exc)[:300] or 'sin detalle')
-    try:
-        with open(manager.directory / 'errores.log', 'a', encoding='utf-8') as registro:
-            registro.write(time.strftime('%Y-%m-%dT%H:%M:%S') + ' ' + transport.clean(
-                ''.join(traceback.format_exception(exc))) + '\n')
-    except OSError:
-        pass
+    _apuntar_traza(manager, transport, exc)
     manager.task.update(status='failed', summary=resumen + '. El detalle está en errores.log de la sesión.')
     transport.emit('error', texto=resumen)
     try:
