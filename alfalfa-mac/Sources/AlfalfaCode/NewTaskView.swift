@@ -43,14 +43,6 @@ struct NewTaskView: View {
                                 model.startQueue(tasks: tasks, mode: mode, parallelism: parallelism)
                             }
                         }
-                    Button { brainstorming = true } label: {
-                        Label("Lluvia de ideas", systemImage: "bubble.left.and.bubble.right")
-                    }
-                    .disabled(model.folder == nil || model.launcher == nil || model.model.isEmpty
-                              || model.firstRun != nil)
-                    .sheet(isPresented: $brainstorming) {
-                        BrainstormSheet(model: model.model, effort: model.effort, start: model.startBrainstorm)
-                    }
                     resumeList
                 }
                 Spacer(minLength: 0)
@@ -65,6 +57,9 @@ struct NewTaskView: View {
                       providerID: ModelProvider.id(of: model.model, in: model.models),
                       providerName: model.currentProviderName)
                 .frame(width: 300)
+        }
+        .sheet(isPresented: $brainstorming) {
+            BrainstormSheet(model: model.model, effort: model.effort, start: model.startBrainstorm)
         }
         .onChange(of: shouldShowBrowserFirstRun, initial: true) { _, show in
             if show { showingBrowserFirstRun = true }
@@ -209,7 +204,10 @@ struct NewTaskView: View {
                 }
                 modelMenu
                 effortMenu
-                ModeMenu(mode: model.mode) { model.mode = $0 }
+                ModeMenu(mode: model.mode, help: "Permisos o Lluvia de ideas",
+                         brainstorm: { brainstorming = true },
+                         canBrainstorm: model.folder != nil && model.launcher != nil
+                            && !model.model.isEmpty && model.firstRun == nil) { model.mode = $0 }
                 Toggle(isOn: $model.readOnly) { Text("Solo lectura") }
                     .toggleStyle(ReadOnlyToggleStyle())
                 Spacer()

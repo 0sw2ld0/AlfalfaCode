@@ -6,6 +6,8 @@ import SwiftUI
 struct ModeMenu: View {
     let mode: String
     var help = "Modo de permisos"
+    var brainstorm: (() -> Void)?
+    var canBrainstorm = true
     let choose: (String) -> Void
 
     @State private var open = false
@@ -37,7 +39,7 @@ struct ModeMenu: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Modo").font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+            Text("Permisos").font(.system(size: 12.5)).foregroundStyle(Theme.muted)
                 .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
             ForEach(Array([PermissionMode.auto, .manual, .ediciones, .plan, .turbo].enumerated()), id: \.element) { index, option in
                 Button { pick(option) } label: { row(option, number: index + 1) }
@@ -56,6 +58,21 @@ struct ModeMenu: View {
                 .padding(.horizontal, 12).frame(height: 36).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            if let brainstorm {
+                Divider().overlay(Theme.border).padding(.vertical, 4)
+                Button {
+                    open = false
+                    brainstorm()
+                } label: {
+                    Label("Lluvia de ideas…", systemImage: "bubble.left.and.bubble.right")
+                        .font(.system(size: 14))
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canBrainstorm)
+            }
         }
         .padding(6)
         .frame(width: 330)

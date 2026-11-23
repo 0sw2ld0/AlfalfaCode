@@ -100,8 +100,8 @@ mensaje, y lo que viene de fuera lleva «de fuera».
 
 ## Lluvia de ideas en macOS
 
-En «Nuevo encargo», elige una carpeta y un modelo, abre «Lluvia de ideas»
-y escribe una pregunta. Elige un modelo y esfuerzo para el moderador y
+En «Nuevo encargo», elige una carpeta y un modelo. Abre el menú de modo
+junto al esfuerzo, selecciona «Lluvia de ideas…» y escribe una pregunta. Elige un modelo y esfuerzo para el moderador y
 para cada participante. Puedes combinar proveedores y añadir hasta seis
 participantes. Reciben la pregunta y los aportes que el moderador comparte.
 Cada proveedor aplica su cuota o sus cargos.
