@@ -2,7 +2,7 @@
   "name": "alfalfa-vscode",
   "displayName": "AlfalfaCode",
   "description": "Chat de AlfalfaCode en la barra lateral de VS Code y Cursor, por PACAI.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "cuycoders",
   "license": "MIT",
   "engines": {
@@ -85,6 +85,11 @@
         "title": "Abrir el chat",
         "category": "AlfalfaCode",
         "icon": "media/icono.svg"
+      },
+      {
+        "command": "alfalfa.elegirEjecutable",
+        "title": "Elegir el ejecutable de AlfalfaCode",
+        "category": "AlfalfaCode"
       }
     ],
     "menus": {
@@ -116,7 +121,7 @@
         "alfalfa.ejecutable": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Ruta de la orden `alfalfa`. Vacío: se busca en el PATH, en el shell de inicio y en `/opt/homebrew/bin`, `/usr/local/bin` y `~/.local/bin`."
+          "markdownDescription": "Ruta de la orden `alfalfa`. Vacío: se busca en el PATH, en el de tu shell, en `/opt/homebrew/bin`, `/usr/local/bin` y `~/.local/bin` y, si sólo tienes la app, se usa el motor que lleva dentro (`AlfalfaCode.app/Contents/Resources/motor/alfalfa`)."
         },
         "alfalfa.modo": {
           "type": "string",

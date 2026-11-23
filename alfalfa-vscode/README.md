@@ -27,10 +27,10 @@ cursor --install-extension AlfalfaCode.vsix    # Cursor
 
 ## Requisitos
 
-- La orden `alfalfa` (AlfalfaCode 0.99.28 o posterior, `brew install 0sw2ld0/tap/alfalfa`), con un modelo configurado que admita herramientas.
+- La app de Mac de AlfalfaCode o la orden `alfalfa` (0.99.28 o posterior), con un modelo configurado que admita herramientas.
 - VS Code 1.85 o posterior, o una versión de Cursor basada en él.
 
-Si el editor se abrió desde el Dock y no encuentra `alfalfa`, la extensión lo busca en el shell de inicio y en `/opt/homebrew/bin`, `/usr/local/bin` y `~/.local/bin`. También puedes poner la ruta en el ajuste **AlfalfaCode: Ejecutable**.
+Basta con la app de Mac: si no tienes la orden `alfalfa`, la extensión usa el motor que la app lleva dentro (`AlfalfaCode.app/Contents/Resources/motor/alfalfa`). Antes busca la orden en el PATH del editor, en el de tu shell y en `/opt/homebrew/bin`, `/usr/local/bin` y `~/.local/bin`. Si no aparece, el aviso trae **Elegir ejecutable…** (vale elegir la app entera), o usa la orden **AlfalfaCode: Elegir el ejecutable de AlfalfaCode**.
 
 ## Ajustes
 
@@ -58,7 +58,7 @@ Para empaquetarla e instalar el `.vsix`:
 ```sh
 cd alfalfa-vscode
 npm run package
-code --install-extension alfalfa-vscode-0.1.0.vsix
+code --install-extension alfalfa-vscode-0.1.1.vsix
 ```
 
 Las pruebas del cliente PACAI usan un agente falso y no gastan modelo:

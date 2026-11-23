@@ -3,7 +3,7 @@ const vscode = require('vscode');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { ClientePacai } = require('./lib/pacai');
-const { buscarAlfalfa, entorno } = require('./lib/ejecutable');
+const { buscarAlfalfa, entorno, LUGARES } = require('./lib/ejecutable');
 
 // El mismo chat a los dos lados, como Claude Code: en la barra de actividad de la izquierda y, donde el editor la
 // admite para extensiones (VS Code 1.106+, no Cursor), en la barra lateral secundaria de la derecha.
@@ -256,6 +256,41 @@ class ProveedorChat {
         this.salida.dispose();
     }
 
+    /** No aparece `alfalfa`: lo dice, dónde se buscó, y ofrece elegirlo a mano o ver cómo instalarlo. */
+    async sinAlfalfa() {
+        const texto = 'No encuentro AlfalfaCode. Busqué en ' + LUGARES.join(', ') + '.';
+        this._aviso('error', texto + ' Instala la app o la orden `alfalfa`, o elige el ejecutable.');
+        const eleccion = await vscode.window.showErrorMessage(texto, 'Elegir ejecutable…', 'Cómo instalar');
+        if (eleccion === 'Elegir ejecutable…') await this.elegirEjecutable();
+        if (eleccion === 'Cómo instalar') vscode.env.openExternal(vscode.Uri.parse('https://alfalfacode.cuycoders.dev'));
+    }
+
+    /** Elegir `alfalfa` o la app AlfalfaCode (se usa el motor que lleva dentro) y guardarlo en el ajuste. */
+    async elegirEjecutable() {
+        const elegidos = await vscode.window.showOpenDialog({
+            canSelectFiles: true, canSelectFolders: false, canSelectMany: false,
+            defaultUri: vscode.Uri.file('/Applications'), openLabel: 'Usar este',
+            title: 'Elige la app AlfalfaCode o la orden alfalfa',
+        });
+        if (!elegidos?.length) return;
+        let ruta = elegidos[0].fsPath;
+        if (ruta.endsWith('.app')) ruta = path.join(ruta, 'Contents/Resources/motor/alfalfa');
+        if (!(await buscarAlfalfa(ruta))) {
+            vscode.window.showErrorMessage('Ahí no hay un `alfalfa` que se pueda ejecutar: ' + ruta);
+            return;
+        }
+        await vscode.workspace.getConfiguration('alfalfa').update('ejecutable', ruta, vscode.ConfigurationTarget.Global);
+        this._aviso('info', 'Usaré ' + ruta + '.');
+    }
+
+    /** Vuelve a pedir modelos y modos (cambió el ejecutable) y se los manda a las vistas abiertas. */
+    refrescarListas() {
+        this.modelos = null;
+        this.modos = null;
+        this._modelos().then(lista => this._post({ tipo: 'modelos', ...lista }, false));
+        this._modos().then(modos => { if (modos) this._post({ tipo: 'modos', modos }, false); });
+    }
+
     // -- proceso ----------------------------------------------------------------
     async _arrancar({ reanudar } = {}) {
         const carpeta = vscode.workspace.workspaceFolders?.[0];
@@ -266,8 +301,7 @@ class ProveedorChat {
         const ajustes = vscode.workspace.getConfiguration('alfalfa');
         const ruta = await buscarAlfalfa(ajustes.get('ejecutable'));
         if (!ruta) {
-            this._aviso('error', 'No encuentro la orden `alfalfa`. Instálala o indica su ruta en el ajuste '
-                + '«AlfalfaCode: Ejecutable».');
+            this.sinAlfalfa();
             return false;
         }
         const cliente = new ClientePacai({
@@ -472,6 +506,7 @@ function activate(contexto) {
         vscode.commands.registerCommand('alfalfa.nuevaSesion', () => proveedor.nuevaSesion()),
         vscode.commands.registerCommand('alfalfa.detener', () => proveedor.detener()),
         vscode.commands.registerCommand('alfalfa.reanudar', () => proveedor.reanudar()),
+        vscode.commands.registerCommand('alfalfa.elegirEjecutable', () => proveedor.elegirEjecutable()),
         vscode.commands.registerCommand('alfalfa.registro', () => proveedor.salida.show(true)),
         vscode.commands.registerCommand('alfalfa.preguntarSeleccion', async () => {
             const editor = vscode.window.activeTextEditor;
@@ -488,7 +523,7 @@ function activate(contexto) {
             if (e.textEditor === vscode.window.activeTextEditor) proveedor._post(archivoActivo(), false);
         }),
         vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('alfalfa.ejecutable')) { proveedor.modelos = null; proveedor.modos = null; }
+            if (e.affectsConfiguration('alfalfa.ejecutable')) proveedor.refrescarListas();
             if (['modo', 'modelo', 'esfuerzo'].some(k => e.affectsConfiguration('alfalfa.' + k))) {
                 proveedor._post(proveedor._config(), false);
             }
