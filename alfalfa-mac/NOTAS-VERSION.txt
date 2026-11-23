@@ -1,3 +1,2 @@
-Activa Turbo por sesión para reducir confirmaciones en el proyecto. Se mantienen el sandbox y los permisos de red, archivos externos, apps y navegador.
-Abre Lluvia de ideas desde el menú de modo. Elige los modelos y el esfuerzo de cada agente, limita sus intervenciones y guarda la configuración como grupo.
-Tras la síntesis, usa Prototipar para encargar mockups a un agente de la sala con el generador de imágenes configurado y una referencia visual opcional.
+Abre Claude Code desde la barra lateral de AlfalfaCode y elige la carpeta, el modelo y el esfuerzo de la sesión.
+Inicia sesión o renueva tu acceso con el comando oficial de Claude Code. La sesión se abre en Terminal con los MCP y la integración de Chrome desactivados.
