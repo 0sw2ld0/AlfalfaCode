@@ -97,6 +97,7 @@ struct SidebarView: View {
     @EnvironmentObject private var model: AppModel
     @State private var collapsed: Set<String> = []
     @State private var searching = false
+    @State private var showingClaudeCode = false
     @State private var renaming: SidebarRow?
     @State private var newTitle = ""
     @State private var trashing: SidebarRow?
@@ -108,6 +109,9 @@ struct SidebarView: View {
                 sidebarButton("plus", "Nuevo encargo", selected: model.route == .new) { model.route = .new }
                 sidebarButton("terminal", "Antigravity", selected: model.route == .antigravity) {
                     model.route = .antigravity
+                }
+                sidebarButton("terminal", "Claude Code", selected: showingClaudeCode) {
+                    showingClaudeCode = true
                 }
                 sidebarButton("magnifyingglass", "Buscar", selected: searching) {
                     searching.toggle()
@@ -166,6 +170,9 @@ struct SidebarView: View {
         .background(Theme.sidebar)
         .task(id: model.search) { await model.searchContent(searching ? model.search : "") }
         .task(id: model.importFolder?.path) { await model.refreshPendingImports() }
+        .sheet(isPresented: $showingClaudeCode) {
+            ClaudeCodeSheet(folder: model.importFolder ?? model.folder.map { URL(fileURLWithPath: $0) })
+        }
         .sheet(item: $model.importReview) { request in
             ImportReviewSheet(folder: request.folder).environmentObject(model)
         }

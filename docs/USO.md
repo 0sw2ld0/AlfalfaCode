@@ -302,6 +302,23 @@ Al reanudar se conservan modelo y esfuerzo salvo que se indiquen otros.
 El lanzador conserva la carpeta actual y utiliza el `.venv` del repositorio;
 en worktrees utiliza el del repositorio compartido.
 
+## Abrir Claude Code en Terminal
+
+En macOS, elige «Claude Code» en la barra lateral, selecciona una carpeta y,
+si quieres, fija el modelo y el esfuerzo para esa sesión. Después de pulsar
+«Abrir Terminal», escribe el encargo en la CLI oficial. La disponibilidad de
+cada nivel de esfuerzo depende del modelo y de la versión de Claude Code.
+
+Si la CLI te pide renovar la sesión, el botón «Iniciar sesión o renovar…»
+abre `claude auth login` en Terminal y muestra el estado al terminar.
+Claude Code gestiona la cuenta, los permisos y el consumo. La sesión de
+trabajo omite la configuración MCP de usuario y del proyecto y desactiva
+los conectores de Claude.ai y Chrome. Siguen aplicándose las políticas
+administradas de tu organización.
+
+[Instalar la CLI oficial](https://code.claude.com/docs/en/setup) ·
+[Gestionar el inicio de sesión](https://code.claude.com/docs/en/authentication).
+
 ## Usar Antigravity como agente externo
 
 En macOS puedes abrir Antigravity CLI en la barra lateral. Esta integración
