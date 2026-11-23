@@ -88,7 +88,7 @@ struct ProvidersView: View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsTitle(text: "Proveedores")
             defaultPicker
-            imageProviderPicker
+            imageProviderPicker.id(ProviderSettingsAnchor.images)
             section("Ollama", status: status("ollama"),
                     detail: "Local, u Ollama Cloud con tu clave. Sin URL se usa la de este Mac.") {
                 TextField("http://127.0.0.1:11434", text: $ollamaURL).textFieldStyle(.roundedBorder)

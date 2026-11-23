@@ -1,6 +1,10 @@
 import AlfalfaKit
 import SwiftUI
 
+enum ProviderSettingsAnchor: Hashable {
+    case images
+}
+
 /// Las partes de la ventana de Ajustes, en el orden de la lista lateral.
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general, proveedores, modelo, navegador, memoria, importar, actualizaciones
@@ -55,10 +59,17 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             sidebar
             Divider().overlay(Theme.border)
-            ScrollView {
-                detail
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(28)
+            ScrollViewReader { scroll in
+                ScrollView {
+                    detail
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(28)
+                        .task(id: model.imageSettingsRequest) {
+                            guard selected == .proveedores, model.imageSettingsRequest != nil else { return }
+                            scroll.scrollTo(ProviderSettingsAnchor.images, anchor: .top)
+                            model.imageSettingsRequest = nil
+                        }
+                }
             }
             .background(Theme.background)
         }

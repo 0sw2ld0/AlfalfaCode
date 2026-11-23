@@ -1,5 +1,9 @@
 # La primera vez, sin claves
 
+En macOS, **Primeros pasos** te ayuda a configurar un proveedor, probar un
+encargo de solo lectura en la carpeta que elijas y configurar la generación
+de imágenes. Puedes omitir la guía y volver a abrirla desde **Ayuda → Primeros pasos**.
+
 Puede que todavía no haya ningún proveedor: ni claves, ni un proveedor elegido,
 ni Ollama en el Mac. Entonces `alfalfa` y la app no dan un error de conexión.
 Enseñan los modelos de **Gratis ahora** (ver [Catálogo, coste y presupuesto](catalogo.md)), con su aviso de datos.

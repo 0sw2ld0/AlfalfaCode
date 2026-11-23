@@ -1,3 +1,4 @@
+import AlfalfaKit
 import AppKit
 import SwiftUI
 
@@ -60,6 +61,9 @@ extension AppDelegate: NSApplicationDelegate {
 struct AlfalfaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage(Preferences.Key.firstRunGuideSeen) private var firstRunGuideSeen = false
+    @AppStorage(Preferences.Key.browserFirstRunSeen) private var browserFirstRunSeen = false
     /// Sólo actúa en la app empaquetada (AppUpdater.isPackaged); con `swift run` no hace nada.
     @ObservedObject private var updater = AppUpdater.shared
 
@@ -92,6 +96,7 @@ struct AlfalfaApp: App {
                 .task {
                     delegate.model = model
                     await model.reload()
+                    offerFirstRunGuide()
                 }
                 .task { await updater.checkIfDue() }
                 .environmentObject(updater)
@@ -108,6 +113,9 @@ struct AlfalfaApp: App {
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(model.importFolder == nil)
             }
+            CommandGroup(after: .help) {
+                Button("Primeros pasos") { showFirstRunGuide() }
+            }
         }
         .defaultSize(width: 1280, height: 800)
 
@@ -115,5 +123,26 @@ struct AlfalfaApp: App {
         Settings {
             SettingsView().environmentObject(model)
         }
+
+        Window("Primeros pasos", id: FirstRunGuide.windowID) {
+            FirstRunGuide().environmentObject(model)
+                .preferredColorScheme(.dark)
+        }
+        .defaultPosition(.center)
+        .windowResizability(.contentSize)
+    }
+
+    private func offerFirstRunGuide() {
+        defer { model.firstRunGuideChecked = true }
+        guard !firstRunGuideSeen, model.loadedSessionList, model.summaries.isEmpty, model.live.isEmpty,
+              SettingsSection.requestedAtLaunch() == nil else { return }
+        // La bienvenida de navegación no debe competir con la guía del primer arranque.
+        browserFirstRunSeen = true
+        showFirstRunGuide()
+    }
+
+    private func showFirstRunGuide() {
+        firstRunGuideSeen = true
+        openWindow(id: FirstRunGuide.windowID)
     }
 }

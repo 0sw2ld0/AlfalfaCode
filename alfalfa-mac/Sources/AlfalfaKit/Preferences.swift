@@ -24,6 +24,8 @@ public struct Preferences {
         public static let swiftDiagnostics = "ajustes.diagnosticosSwift"
         public static let commitSignature = "ajustes.firmaCommits"
         public static let section = "ajustes.seccion"
+        public static let firstRunGuideSeen = "primerosPasos.vistos"
+        public static let browserFirstRunSeen = "ajustes.navegador.primerInicioVisto"
     }
 
     // MARK: - Constantes

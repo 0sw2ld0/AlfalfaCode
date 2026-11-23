@@ -15,7 +15,7 @@ struct NewTaskView: View {
     @State private var importingOllama = false
     @State private var planningQueue = false
     @State private var showingBrowserFirstRun = false
-    @AppStorage("ajustes.navegador.primerInicioVisto") private var browserFirstRunSeen = false
+    @AppStorage(Preferences.Key.browserFirstRunSeen) private var browserFirstRunSeen = false
     /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
     @State private var askingAboutImages = false
     @Environment(\.openSettings) private var openSettings
@@ -66,7 +66,7 @@ struct NewTaskView: View {
     }
 
     private var shouldShowBrowserFirstRun: Bool {
-        !browserFirstRunSeen && model.firstRun == nil && model.launcher != nil
+        model.firstRunGuideChecked && !browserFirstRunSeen && model.firstRun == nil && model.launcher != nil
             && model.providers.contains(where: \.configured) && model.connecting == nil
     }
 

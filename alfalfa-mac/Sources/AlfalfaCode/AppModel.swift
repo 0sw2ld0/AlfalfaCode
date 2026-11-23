@@ -54,6 +54,7 @@ final class AppModel: ObservableObject {
     var pendingDrafts: [String: String] = [:]
     @Published private(set) var historyError: [String: String] = [:]
     @Published private(set) var summaries: [SessionSummary] = []
+    private(set) var loadedSessionList = false
     @Published private(set) var models: [ModelInfo] = []
     /// Un modelo elegido cuyo proveedor no tiene clave: la hoja explica cuál falta y la guarda.
     @Published var keyRequest: KeyRequest?
@@ -63,6 +64,8 @@ final class AppModel: ObservableObject {
     @Published var importReview: ImportReviewRequest?
     /// Sin ningún proveedor configurado: los gratis con los que empezar (`--primera-vez`).
     @Published var firstRun: FirstRun?
+    @Published var firstRunGuideChecked = false
+    @Published var imageSettingsRequest: UUID?
     /// Esperando a que el usuario autorice en el navegador (`--conectar`).
     @Published var connecting: Connecting?
     var connectHandle: ConnectHandle?
@@ -166,7 +169,10 @@ final class AppModel: ObservableObject {
         guard let launcher else { return }
         do {
             let messages = try await AlfalfaProcess.query(launcher: launcher, arguments: ["--sesiones", "--json"], directory: home)
-            for case let .sessions(rows) in messages { summaries = rows }
+            for case let .sessions(rows) in messages {
+                summaries = rows
+                loadedSessionList = true
+            }
             loadError = nil
             // Para revisar la interfaz sin clics: ALFALFA_ABRIR_SESION=ID abre esa sesión al arrancar.
             if let wanted = ProcessInfo.processInfo.environment["ALFALFA_ABRIR_SESION"], !openedAtLaunch,
@@ -467,13 +473,17 @@ final class AppModel: ObservableObject {
     // MARK: - Carpeta
 
     func chooseFolder() {
+        if let url = pickFolder() { select(folder: url.path) }
+    }
+
+    func pickFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Elegir"
         panel.message = "Carpeta de trabajo para el encargo"
-        if panel.runModal() == .OK, let url = panel.url { select(folder: url.path) }
+        return panel.runModal() == .OK ? panel.url : nil
     }
 
     func select(folder path: String) {
@@ -517,6 +527,18 @@ final class AppModel: ObservableObject {
         open(session, launcher: launcher, task: task, images: draftImages)
         draft = ""
         draftImages = []
+    }
+
+    /// El ejemplo abre su propia sesión de solo lectura y conserva el borrador del compositor.
+    @discardableResult
+    func startFirstRunTask(_ task: String, in folder: URL, model name: String) -> Bool {
+        guard let launcher, (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            return false
+        }
+        let session = LiveSession(cwd: folder, title: task, resumeID: nil, model: name, effort: effort,
+                                  readOnly: true, mode: PermissionMode.plan.rawValue)
+        open(session, launcher: launcher, task: task)
+        return true
     }
 
     func resume(_ summary: SessionSummary) {
