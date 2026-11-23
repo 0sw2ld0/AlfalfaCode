@@ -106,7 +106,8 @@
     }
 
     function vacio(hayAnterior) {
-        if (conversacion.children.length) return;
+        if (conversacion.children.length && !$('vacio')) return;
+        $('vacio')?.remove();
         const caja = el('div', 'vacio');
         caja.id = 'vacio';
         caja.appendChild($('hoja-grande').content.cloneNode(true));
@@ -114,7 +115,7 @@
         marca.appendChild(el('span', null, 'Code'));
         caja.appendChild(marca);
         caja.appendChild(el('p', null, 'Pide un cambio, una revisión o una explicación. Trabaja en la carpeta abierta y te pide permiso según el modo.'));
-        if (hayAnterior) caja.appendChild(boton('Reanudar la última sesión', 'enlace', () => vscode.postMessage({ tipo: 'reanudar' })));
+        if (hayAnterior) caja.appendChild(boton('Reanudar una sesión…', 'enlace', () => vscode.postMessage({ tipo: 'reanudar' })));
         conversacion.appendChild(caja);
     }
 
@@ -187,14 +188,7 @@
                 if (p.role === 'user') break;
                 let nodo;
                 if (p.role === 'system') {
-                    if (!avisosSistema) {
-                        avisosSistema = el('details', 'sistema');
-                        avisosSistema.appendChild(el('summary', null, 'Avisos'));
-                        añadir(avisosSistema);
-                    }
-                    nodo = el('div', 'linea-sistema');
-                    avisosSistema.appendChild(nodo);
-                    avisosSistema.querySelector('summary').textContent = `Avisos (${avisosSistema.children.length - 1})`;
+                    nodo = lineaSistema();
                 } else {
                     if (horaPendiente && p.role === 'assistant' && !ejecuciones.has(p.run_id)) {
                         horaPendiente = false;
@@ -225,14 +219,8 @@
             case 'tool_end': {
                 const fila = herramientas.get(p.tool_call_id);
                 if (!fila) break;
-                fila.dataset.estado = p.status;
-                fila.querySelector('.estado').textContent = { success: '✓', error: '✗', cancelled: '⊘' }[p.status] || '•';
                 if (p.summary) fila.querySelector('.resumen').textContent = p.summary;
-                const salida = textoDe(p.output);
-                if (salida) {
-                    const pre = el('pre', 'salida', salida.length > 4000 ? salida.slice(0, 4000) + '\n…' : salida);
-                    fila.querySelector('details').appendChild(pre);
-                }
+                cerrarHerramienta(fila, p.status, textoDe(p.output));
                 break;
             }
             case 'approval_request':
@@ -489,22 +477,98 @@
         bajar();
     }
 
-    function herramienta(m) {
-        const p = m.payload;
+    /** Una línea dentro del grupo «Avisos» de los mensajes de sistema seguidos. */
+    function lineaSistema(t) {
+        if (!avisosSistema) {
+            avisosSistema = el('details', 'sistema');
+            avisosSistema.appendChild(el('summary', null, 'Avisos'));
+            añadir(avisosSistema);
+        }
+        const nodo = el('div', 'linea-sistema', t);
+        avisosSistema.appendChild(nodo);
+        avisosSistema.querySelector('summary').textContent = `Avisos (${avisosSistema.children.length - 1})`;
+        return nodo;
+    }
+
+    function filaHerramienta(titulo, etiqueta, argumentos) {
         const fila = añadir(el('div', 'herramienta'));
         fila.dataset.estado = 'running';
         const resumen = el('details');
         const cabecera = el('summary');
         cabecera.appendChild(el('span', 'estado', '◌'));
-        const etiqueta = etiquetaDe(p.run_id);
         if (etiqueta) cabecera.appendChild(etiqueta);
-        cabecera.appendChild(el('span', 'titulo', p.title || p.name));
+        cabecera.appendChild(el('span', 'titulo', titulo));
         cabecera.appendChild(el('span', 'resumen'));
         resumen.appendChild(cabecera);
-        const args = JSON.stringify(p.arguments ?? {}, null, 2);
-        resumen.appendChild(el('pre', 'argumentos', `${p.name} ${args.length > 3000 ? args.slice(0, 3000) + '\n…' : args}`));
+        resumen.appendChild(el('pre', 'argumentos', argumentos.length > 3000 ? argumentos.slice(0, 3000) + '\n…' : argumentos));
         fila.appendChild(resumen);
-        herramientas.set(m.id, fila);
+        return fila;
+    }
+
+    function cerrarHerramienta(fila, estado, salida) {
+        fila.dataset.estado = estado;
+        fila.querySelector('.estado').textContent = { success: '✓', error: '✗', cancelled: '⊘' }[estado] || '•';
+        if (salida) {
+            const pre = el('pre', 'salida', salida.length > 4000 ? salida.slice(0, 4000) + '\n…' : salida);
+            fila.querySelector('details').appendChild(pre);
+        }
+    }
+
+    function herramienta(m) {
+        const p = m.payload;
+        const args = JSON.stringify(p.arguments ?? {}, null, 2);
+        herramientas.set(m.id, filaHerramienta(p.title || p.name, etiquetaDe(p.run_id), `${p.name} ${args}`));
+    }
+
+    function mensajeAsistente(t) {
+        const nodo = añadir(el('div', 'mensaje asistente'));
+        const cuerpo = el('div', 'cuerpo');
+        cuerpo.innerHTML = markdown(t);
+        nodo.appendChild(cuerpo);
+    }
+
+    /**
+     * La conversación guardada de una sesión que se reanuda (`alfalfa --historial`), con el formato de la app:
+     * mensajes, cada herramienta con su resultado y los avisos agrupados. Una herramienta cierra la última
+     * abierta con su mismo nombre.
+     */
+    function pintarHistorial({ eventos, recortado }) {
+        if (recortado) aviso('info', 'Sólo se muestra lo más reciente de esta sesión.');
+        const abiertas = [];
+        // El encargo de la sesión sale sin turno cuando hay avisos sueltos; en una sesión del panel es el primer
+        // mensaje, que también sale con su turno: no se pinta dos veces.
+        const conTurno = new Set((eventos || []).filter(e => e.rol === 'user' && e.turno).map(e => e.texto));
+        for (const e of eventos || []) {
+            const hora = e.hora ? e.hora * 1000 : null;
+            const t = typeof e.texto === 'string' ? e.texto : '';
+            if (e.rol === 'user') {
+                if (!e.turno && (t === 'Sesión PACAI' || conTurno.has(t))) continue;
+                // La referencia al archivo del editor que añade el panel vuelve a ser su chip.
+                const ref = /^\[Archivo abierto en el editor: (.+?)(?:, líneas ([\d-]+))?\]\n\n/.exec(t);
+                usuario({ texto: ref ? t.slice(ref[0].length) : t, hora,
+                    archivo: ref ? { ruta: ref[1], lineas: ref[2] } : undefined });
+            } else if (e.rol === 'agent' || e.rol === 'assistant') {
+                if (!t.trim()) continue;
+                if (horaPendiente) { horaPendiente = false; marcaDeTiempo(hora); }
+                mensajeAsistente(t);
+            } else if (e.rol === 'tool' && e.herramienta) {
+                const h = e.herramienta;
+                if (h.fase === 'inicio') {
+                    abiertas.push({ nombre: h.nombre, fila: filaHerramienta(h.descripcion || h.nombre, null, t) });
+                } else if (h.fase === 'fin') {
+                    const i = abiertas.map(a => a.nombre).lastIndexOf(h.nombre);
+                    if (i < 0) continue;
+                    const [{ fila }] = abiertas.splice(i, 1);
+                    const fallo = h.error || h.clasificacion?.disposition === 'failure';
+                    cerrarHerramienta(fila, fallo ? 'error' : 'success', t);
+                }
+            } else if (e.rol === 'system' && t.trim()) {
+                lineaSistema(t);
+            }
+        }
+        // Las que se quedaron sin resultado (el turno se cortó): sin marca de éxito ni de fallo.
+        for (const { fila } of abiertas) cerrarHerramienta(fila, 'cancelled');
+        conversacion.scrollTop = conversacion.scrollHeight;
     }
 
     function aprobacion(m) {
@@ -638,6 +702,7 @@
                 vacio(data.hayAnterior);
                 break;
             case 'pacai': pacai(data.m); break;
+            case 'historial': pintarHistorial(data); break;
             case 'usuario': usuario(data); break;
             case 'aviso': aviso(data.nivel, data.texto); break;
             case 'archivoActivo':

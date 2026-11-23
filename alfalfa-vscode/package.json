@@ -2,7 +2,7 @@
   "name": "alfalfa-vscode",
   "displayName": "AlfalfaCode",
   "description": "Chat de AlfalfaCode en la barra lateral de VS Code y Cursor, por PACAI.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "cuycoders",
   "license": "MIT",
   "engines": {
@@ -67,7 +67,7 @@
       },
       {
         "command": "alfalfa.reanudar",
-        "title": "Reanudar la última sesión",
+        "title": "Reanudar una sesión…",
         "category": "AlfalfaCode"
       },
       {

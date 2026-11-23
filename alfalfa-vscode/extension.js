@@ -4,6 +4,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { ClientePacai } = require('./lib/pacai');
 const { buscarAlfalfa, entorno, LUGARES } = require('./lib/ejecutable');
+const { listarSesiones, leerHistorial } = require('./lib/sesiones');
 
 // El mismo chat a los dos lados, como Claude Code: en la barra de actividad de la izquierda y, donde el editor la
 // admite para extensiones (VS Code 1.106+, no Cursor), en la barra lateral secundaria de la derecha.
@@ -21,6 +22,8 @@ function vista() {
     return admiteBarraSecundaria() ? VISTA_DERECHA : VISTA_IZQUIERDA;
 }
 const CLAVE_ULTIMA = 'alfalfa.ultimaSesion';
+// Estados de `--sesiones` cuando otro proceso tiene la sesión abierta con un turno en marcha.
+const TRABAJANDO = new Set(['running', 'waiting', 'starting']);
 const CLAVE_MODOS = 'alfalfa.modos';
 // Los esfuerzos que acepta `alfalfa` (terminal.EFFORTS); un modelo puede anunciar otros (`none`, `minimal`).
 const ESFUERZOS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -36,6 +39,18 @@ async function guardarAjuste(clave, valor) {
 }
 
 /** `alfalfa --modos --json`: los modos del motor con su id de PACAI. null si este `alfalfa` no lo admite (anterior). */
+/** «hace 5 min», «ayer»… de una fecha en segundos. */
+function haceCuanto(segundos) {
+    if (!segundos) return '';
+    const s = Math.max(0, Date.now() / 1000 - segundos);
+    if (s < 60) return 'hace un momento';
+    if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+    if (s < 2 * 86400) return 'ayer';
+    if (s < 30 * 86400) return `hace ${Math.round(s / 86400)} días`;
+    return new Date(segundos * 1000).toLocaleDateString();
+}
+
 function listarModos(ruta) {
     return new Promise(resolver => {
         execFile(ruta, ['--modos', '--json'], { env: entorno(), timeout: 15000 }, (error, salida) => {
@@ -109,6 +124,7 @@ class ProveedorChat {
         this.cliente = null;
         this.historial = [];        // lo enviado a la webview, para repintarla si se recrea
         this.sesionAlfalfa = null;  // id de la sesión de AlfalfaCode (`alfalfa.session`)
+        this.haySesiones = false;   // ¿hay sesiones guardadas de esta carpeta (de aquí o de la app de Mac)?
         this.salida = vscode.window.createOutputChannel('AlfalfaCode', { log: true });
     }
 
@@ -136,6 +152,7 @@ class ProveedorChat {
                 this._modelos().then(lista => vista.webview.postMessage({ tipo: 'modelos', ...lista }));
                 // Los modos, antes de abrir sesión: así uno nuevo del motor (Turbo…) sale ya en el menú.
                 this._modos().then(modos => { if (modos) vista.webview.postMessage({ tipo: 'modos', modos }); });
+                this._comprobarSesiones();
                 break;
             }
             case 'enviar':
@@ -160,7 +177,7 @@ class ProveedorChat {
                 this.nuevaSesion();
                 break;
             case 'reanudar':
-                await this.reanudar();
+                await this.reanudar(m.id);
                 break;
             case 'modo': {
                 // Un modo que se confirma (Omitir permisos) pregunta antes, como la app de Mac.
@@ -232,15 +249,79 @@ class ProveedorChat {
         this._post(this._config(), false);
     }
 
-    async reanudar() {
-        const id = this.contexto.workspaceState.get(CLAVE_ULTIMA);
-        if (!id) {
-            this._aviso('info', 'No hay ninguna sesión anterior en esta carpeta.');
+    /**
+     * Reanuda una sesión guardada de esta carpeta: la de `id` o la que se elija en la lista. La lista es la del
+     * motor, así que trae también las sesiones abiertas desde la app de Mac. El panel pinta su conversación.
+     */
+    async reanudar(id) {
+        const carpeta = vscode.workspace.workspaceFolders?.[0];
+        const ruta = await buscarAlfalfa(vscode.workspace.getConfiguration('alfalfa').get('ejecutable'));
+        if (!ruta) return this.sinAlfalfa();
+        if (!carpeta || carpeta.uri.scheme !== 'file') {
+            this._aviso('error', 'Abre una carpeta local: AlfalfaCode trabaja dentro de ella.');
             return;
         }
+        if (!id) {
+            const elegida = await this._elegirSesion(ruta, carpeta.uri.fsPath);
+            if (!elegida) return;
+            id = elegida.id;
+        }
+        if (id === this.sesionAlfalfa && this.cliente && !this.cliente.cerrado) return;
+        const historial = await leerHistorial(ruta, id, entorno());
         this.nuevaSesion();
+        if (historial) this._post({ tipo: 'historial', ...historial });
+        else this._aviso('info', 'No pude leer la conversación guardada; la sesión sigue igualmente.');
         if (await this._arrancar({ reanudar: id })) {
-            this._aviso('info', `Sesión ${id} reanudada. Escribe para seguir.`);
+            this._aviso('info', 'Sesión reanudada. Escribe para seguir.');
+        }
+    }
+
+    async _elegirSesion(ruta, carpeta) {
+        const sesiones = await listarSesiones(ruta, carpeta, entorno());
+        if (sesiones === null) {
+            vscode.window.showErrorMessage('AlfalfaCode no pudo listar las sesiones guardadas.');
+            return null;
+        }
+        if (!sesiones.length) {
+            vscode.window.showInformationMessage('No hay sesiones guardadas en esta carpeta.');
+            return null;
+        }
+        const ultima = this.contexto.workspaceState.get(CLAVE_ULTIMA);
+        const elementos = sesiones.map(s => {
+            const titulo = String(s.titulo || s.encargo || s.id).split('\n')[0].trim();
+            const turnos = s.turnos === 1 ? '1 turno' : `${s.turnos || 0} turnos`;
+            const detalle = [haceCuanto(s.fecha), turnos];
+            if (TRABAJANDO.has(s.estado)) detalle.push('trabajando en otro sitio');
+            if (s.id === this.sesionAlfalfa) detalle.push('abierta aquí');
+            else if (s.id === ultima) detalle.push('la última de esta ventana');
+            return {
+                label: titulo.length > 90 ? titulo.slice(0, 89) + '…' : titulo,
+                description: s.modelo || '', detail: detalle.join(' · '), sesion: s,
+            };
+        });
+        const elegido = await vscode.window.showQuickPick(elementos, {
+            title: 'Reanudar una sesión de AlfalfaCode', placeHolder: 'Las de esta carpeta, también las de la app de Mac',
+            matchOnDescription: true, matchOnDetail: true,
+        });
+        if (elegido && TRABAJANDO.has(elegido.sesion.estado) && elegido.sesion.id !== this.sesionAlfalfa) {
+            // Como la app: dos procesos sobre la misma sesión se pisarían. Se puede reanudar cuando termine.
+            vscode.window.showWarningMessage('Esa sesión está trabajando ahora en otro sitio (la app de Mac u otra '
+                + 'ventana). Reanúdala cuando termine.');
+            return null;
+        }
+        return elegido?.sesion || null;
+    }
+
+    /** ¿Hay sesiones guardadas en esta carpeta? Para enseñar el botón de reanudar aunque no sean de esta ventana. */
+    async _comprobarSesiones() {
+        const carpeta = vscode.workspace.workspaceFolders?.[0];
+        if (!carpeta || carpeta.uri.scheme !== 'file') return;
+        const ruta = await buscarAlfalfa(vscode.workspace.getConfiguration('alfalfa').get('ejecutable'));
+        const sesiones = ruta ? await listarSesiones(ruta, carpeta.uri.fsPath, entorno()) : null;
+        const hay = Boolean(sesiones?.length);
+        if (hay !== this.haySesiones) {
+            this.haySesiones = hay;
+            this._post(this._config(), false);
         }
     }
 
@@ -401,7 +482,7 @@ class ProveedorChat {
             tipo: 'config', modo: ajustes.get('modo') || 'auto',
             modos: this.contexto.globalState.get(CLAVE_MODOS) || null,
             modelo: ajustes.get('modelo') || '', esfuerzo: ajustes.get('esfuerzo') || '',
-            hayAnterior: Boolean(this.contexto.workspaceState.get(CLAVE_ULTIMA)),
+            hayAnterior: this.haySesiones || Boolean(this.contexto.workspaceState.get(CLAVE_ULTIMA)),
             vivo: Boolean(this.cliente && !this.cliente.cerrado), ocupado: Boolean(this.cliente?.ocupado),
         };
     }
@@ -441,7 +522,7 @@ class ProveedorChat {
   ${hoja('hoja-estado')}
   <span id="titulo" title="Sesión">Nueva sesión</span>
   <span id="uso"></span>
-  <button id="historial" class="icono" title="Reanudar la última sesión" aria-label="Reanudar la última sesión">${ICONOS.reloj}</button>
+  <button id="historial" class="icono" title="Reanudar una sesión" aria-label="Reanudar una sesión">${ICONOS.reloj}</button>
   <button id="nueva" class="icono" title="Nueva sesión" aria-label="Nueva sesión">${ICONOS.nueva}</button>
 </header>
 <main id="conversacion" aria-live="polite"></main>

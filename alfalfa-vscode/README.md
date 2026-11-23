@@ -13,7 +13,7 @@ La extensión no trae ningún motor. Lanza la orden `alfalfa --pacai` en la carp
 - **Plan del turno** fijo encima del cuadro de texto, y **cambios del turno** con los archivos tocados (se abren con un clic) y el parche completo.
 - **Encauzar.** Lo que escribes mientras AlfalfaCode trabaja entra en el turno en curso sin cortarlo. **Detener** (o Esc) lo interrumpe.
 - **Preguntar sobre la selección** (menú contextual o ⌘⌥A): pega la ruta, las líneas y el código seleccionado en el cuadro.
-- **Reanudar la última sesión** de esa carpeta (`alfalfa --reanudar`).
+- **Reanudar una sesión** de esa carpeta, también las abiertas desde la app de Mac: el reloj de la cabecera lista las sesiones guardadas (`alfalfa --sesiones`) y, al elegir una, el panel pinta su conversación (`alfalfa --historial`) y sigue en ella (`alfalfa --reanudar`). Las sesiones de la extensión salen igualmente en la app. Una sesión que está trabajando en otro sitio no se reanuda hasta que termine.
 - Uso de contexto y gasto de la sesión en la cabecera.
 
 ## Instalar
@@ -58,7 +58,7 @@ Para empaquetarla e instalar el `.vsix`:
 ```sh
 cd alfalfa-vscode
 npm run package
-code --install-extension alfalfa-vscode-0.1.3.vsix
+code --install-extension alfalfa-vscode-0.1.4.vsix
 ```
 
 Las pruebas del cliente PACAI usan un agente falso y no gastan modelo:
@@ -72,6 +72,6 @@ npm test
 
 - Una sesión por ventana, en la primera carpeta del espacio de trabajo.
 - No adjunta imágenes ni archivos (el cliente ya sabe enviarlos como bloques `file`; falta el botón).
-- No muestra el historial de una sesión reanudada: sigue la conversación, pero el panel empieza vacío.
+- No hay sincronía en vivo con la app de Mac: cada lado ve lo que hizo el otro al reanudar la sesión, no mientras trabaja.
 - Se reparte como `.vsix`; aún no está en el Marketplace de VS Code ni en Open VSX.
 - El navegador propio de AlfalfaCode (`--navegador`) no está disponible en el editor.
