@@ -134,10 +134,15 @@ code, pre { font-family: var(--vscode-editor-font-family); font-size: var(--vsco
 
 .aviso { font-size: .9em; padding: 5px 10px; border-radius: 6px; white-space: pre-wrap; }
 .aviso.info { color: var(--suave); text-align: center; }
+/* El texto va con el color normal del tema: el rojo sólo tiñe el fondo y marca el borde. Los colores de validación
+   de los campos (`inputValidation-error*`) no sirven aquí: en algunos temas de Cursor el fondo y el texto de error
+   son el mismo salmón y el aviso queda como una barra roja sin letras. */
 .aviso.error {
-    color: var(--vscode-errorForeground);
-    background: var(--vscode-inputValidation-errorBackground, transparent);
-    border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+    color: var(--vscode-foreground);
+    background: transparent;
+    background: color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--vscode-errorForeground) 45%, transparent);
+    border-left: 3px solid var(--vscode-errorForeground);
 }
 
 /* -- plan ---------------------------------------------------------------------- */
