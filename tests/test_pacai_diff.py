@@ -63,6 +63,18 @@ def test_el_diff_de_git_cuenta_solo_lo_que_cambio_la_ejecucion_y_no_toca_nada_de
     assert not partida.temporal.exists()
 
 
+def test_lo_nuevo_en_tmp_alfalfa_no_entra_aunque_el_repo_no_lo_ignore(repo):
+    partida = PuntoDePartida.tomar(repo)
+    (repo / '.tmp-alfalfa' / 'gradle-home' / 'daemon').mkdir(parents=True)
+    (repo / '.tmp-alfalfa' / 'gradle-home' / 'daemon' / 'daemon-1.out.log').write_text('registro\n')
+    (repo / 'sub' / '.tmp-alfalfa').mkdir(parents=True)
+    (repo / 'sub' / '.tmp-alfalfa' / 'captura.txt').write_text('antes\n')
+    (repo / '.tmp-alfalfa.md').write_text('no es la carpeta\n')
+    diff = partida.diff()
+    partida.olvidar()
+    assert diff['files'] == [{'path': '.tmp-alfalfa.md', 'added': 1, 'removed': 0}]
+
+
 def _al_principio_de_un_segundo():
     while time.time() % 1 > 0.3:
         time.sleep(0.01)

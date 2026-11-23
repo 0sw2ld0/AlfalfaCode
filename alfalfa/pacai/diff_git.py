@@ -7,8 +7,10 @@ partida; al terminar se hace lo mismo con otra copia y se comparan los dos árbo
 índice del usuario sólo sirve para que git no vuelva a leer los archivos que no cambiaron.
 
 - Sólo la carpeta de la sesión (que puede ser una subcarpeta del repo), con las rutas relativas a ella.
-- Respeta `.gitignore`: lo ignorado no entra. Un archivo nuevo de más de `MAX_NUEVO` bytes tampoco (los binarios
-  enormes no se meten en la base de objetos), y de un binario sólo se cuenta que cambió.
+- Respeta `.gitignore`: lo ignorado no entra. Tampoco lo nuevo en `.tmp-alfalfa/`, la carpeta de temporales de los
+  agentes (registros de gradle, capturas, copias del «antes»), aunque el repo no la ignore. Un archivo nuevo de más
+  de `MAX_NUEVO` bytes tampoco (los binarios enormes no se meten en la base de objetos), y de un binario sólo se
+  cuenta que cambió.
 - Lo único que se escribe en el repo son objetos sueltos en `.git/objects` (los de `git add`), que nadie referencia
   y `git gc` acaba borrando.
 - Fuera de un repo git, o si git falla o tarda, no hay diff.
@@ -27,6 +29,7 @@ MAX_NUEVO = 1024 * 1024        # bytes de un archivo nuevo (sin seguimiento) par
 MAX_PARCHE = 200_000           # caracteres del parche; con más, `diff_updated` lleva sólo la lista de archivos
 MAX_ARCHIVOS = 2000
 TIEMPO = 20                    # segundos para cada orden de git
+TEMPORALES = b'.tmp-alfalfa'   # carpeta de temporales de los agentes: lo nuevo que hay dentro no es un cambio
 
 
 class ErrorGit(Exception):
@@ -123,6 +126,8 @@ def _arbol(carpeta: Path, indice: Path) -> str:
                               indice=indice).split(b'\0') if r]
     pequenos = []
     for ruta in nuevos:
+        if TEMPORALES in ruta.split(b'/')[:-1]:
+            continue
         try:
             datos = os.lstat(carpeta / os.fsdecode(ruta))
         except OSError:
