@@ -1,1 +1,2 @@
-Si Codex no está disponible para generar imágenes, Ajustes muestra un aviso debajo del selector y explica qué comprobar.
+La guía de primeros pasos te ayuda a configurar un proveedor, probar un encargo de solo lectura y configurar la generación de imágenes.
+Puedes omitir la guía y volver a abrirla desde Ayuda › Primeros pasos.
