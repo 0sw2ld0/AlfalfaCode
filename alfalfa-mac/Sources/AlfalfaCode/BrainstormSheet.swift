@@ -38,65 +38,37 @@ struct BrainstormSheet: View {
         }
     }
 
+    private var canStart: Bool {
+        !cleanTopic.isEmpty && cleanTopic.count <= 4_000 && !missingProviders
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Lluvia de ideas").font(.headline)
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Lluvia de ideas")
+                .font(.system(size: 22, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
 
-            TextField("Describe la idea o la pregunta", text: $topic, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(3...5)
-                .focused($topicFocused)
-            if cleanTopic.count > 4_000 {
-                Text("La idea puede tener hasta 4.000 caracteres.")
-                    .font(.callout).foregroundStyle(Theme.warning)
+            ViewThatFits(in: .vertical) {
+                form.fixedSize(horizontal: false, vertical: true)
+                ScrollView { form }
             }
 
-            HStack {
-                Button { chooseReference() } label: { Label("Adjuntar archivo…", systemImage: "paperclip") }
-                if let reference {
-                    Text(reference.lastPathComponent)
-                        .foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
-                    Button("Quitar adjunto", systemImage: "xmark.circle") {
-                        self.reference = nil
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                }
-            }
-            if let referenceError {
-                Text(referenceError).font(.callout).foregroundStyle(Theme.warning)
-            }
+            Divider().overlay(Theme.border)
+            footer
+        }
+        .padding(24)
+        .frame(width: 650)
+        .frame(maxHeight: 620)
+        .background(Theme.background)
+        .foregroundStyle(Theme.text)
+        .onAppear { topicFocused = true }
+    }
 
-            VStack(spacing: 6) {
-                participant("Moderador", selection: $moderator)
-                ForEach($participants) { $row in
-                    if let index = participants.firstIndex(where: { $0.id == row.id }) {
-                        HStack(spacing: 6) {
-                            participant(participantName(index), selection: $row.selection)
-                            if participants.count > BrainstormConfiguration.participantRange.lowerBound {
-                                Button(role: .destructive) {
-                                    participants.removeAll { $0.id == row.id }
-                                } label: { Image(systemName: "minus.circle") }
-                                .buttonStyle(.borderless)
-                                .accessibilityLabel("Quitar " + participantName(index))
-                            }
-                        }
-                    }
-                }
-            }
-            Button {
-                participants.append(ParticipantRow(selection: moderator))
-                limit = max(limit, participants.count)
-            } label: {
-                Label("Añadir participante", systemImage: "plus")
-            }
-            .disabled(participants.count >= BrainstormConfiguration.participantRange.upperBound)
-
-            Stepper("Máximo de intervenciones: \(limit)", value: $limit,
-                    in: participants.count...BrainstormConfiguration.maximumTurns)
-            Text("La sala comparte la pregunta, el adjunto y los aportes previos con los modelos elegidos. Se aplican sus cuotas o cargos. El moderador puede cerrar antes si hay acuerdo.")
-                .font(.callout).foregroundStyle(Theme.secondary)
-
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            question
+            roster
+            turnLimit
             if missingProviders {
                 HStack {
                     Text("Configura los proveedores de los modelos elegidos para empezar.")
@@ -107,21 +79,127 @@ struct BrainstormSheet: View {
                     }
                 }
             }
+        }
+    }
 
-            HStack {
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Empezar") {
-                    let configuration = BrainstormConfiguration(limit: limit, participants: participants.map(\.selection))
-                    if start(cleanTopic, moderator, configuration, reference) { dismiss() }
+    private var question: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Pregunta").font(.subheadline.weight(.semibold))
+                .accessibilityHidden(true)
+            TextField("Describe la idea o la pregunta", text: $topic, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(3...5)
+                .padding(10)
+                .background(Theme.field, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(topicFocused ? Theme.alfalfa : Theme.cardBorder)
+                        .allowsHitTesting(false)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(cleanTopic.isEmpty || cleanTopic.count > 4_000 || missingProviders)
+                .focused($topicFocused)
+                .accessibilityLabel("Pregunta")
+            if cleanTopic.count > 4_000 {
+                Text("La idea puede tener hasta 4.000 caracteres.")
+                    .font(.callout).foregroundStyle(Theme.warning)
+            }
+
+            HStack(spacing: 10) {
+                Button { chooseReference() } label: { Label("Adjuntar archivo…", systemImage: "paperclip") }
+                if let reference {
+                    HStack(spacing: 6) {
+                        Label(reference.lastPathComponent, systemImage: "doc.text")
+                            .lineLimit(1).truncationMode(.middle)
+                        Button("Quitar adjunto", systemImage: "xmark") {
+                            self.reference = nil
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                    }
+                    .font(.callout)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.selection, in: RoundedRectangle(cornerRadius: 6))
+                    .help(reference.lastPathComponent)
+                }
+            }
+            if let referenceError {
+                Text(referenceError).font(.callout).foregroundStyle(Theme.warning)
             }
         }
-        .padding(24)
-        .frame(width: 610)
-        .onAppear { topicFocused = true }
+    }
+
+    private var roster: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow {
+                    Text("Rol").frame(width: 124, alignment: .leading)
+                    Text("Modelo").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Esfuerzo").frame(width: 112, alignment: .leading)
+                    Spacer().frame(width: 20)
+                }
+                .font(.callout.weight(.medium))
+                .foregroundStyle(Theme.secondary)
+                .accessibilityHidden(true)
+
+                Divider().overlay(Theme.border).gridCellUnsizedAxes(.horizontal)
+                participant("Moderador", selection: $moderator)
+                ForEach($participants) { $row in
+                    if let index = participants.firstIndex(where: { $0.id == row.id }) {
+                        participant(participantName(index), selection: $row.selection,
+                                    remove: participants.count > BrainstormConfiguration.participantRange.lowerBound
+                                        ? { participants.removeAll { $0.id == row.id } } : nil)
+                    }
+                }
+            }
+
+            Button {
+                participants.append(ParticipantRow(selection: moderator))
+                limit = max(limit, participants.count)
+            } label: {
+                Label("Añadir participante", systemImage: "plus")
+            }
+            .disabled(participants.count >= BrainstormConfiguration.participantRange.upperBound)
+        }
+    }
+
+    private var turnLimit: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 12) {
+                Text("Máximo de intervenciones").font(.subheadline.weight(.medium))
+                HStack(spacing: 0) {
+                    Button("Reducir máximo", systemImage: "minus") { limit -= 1 }
+                        .disabled(limit <= participants.count)
+                    Text(limit.formatted()).monospacedDigit().frame(minWidth: 28)
+                        .accessibilityLabel("\(limit) intervenciones")
+                    Button("Aumentar máximo", systemImage: "plus") { limit += 1 }
+                        .disabled(limit >= BrainstormConfiguration.maximumTurns)
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 4).frame(height: 26)
+                .background(Theme.selection, in: RoundedRectangle(cornerRadius: 6))
+            }
+            Text("La sala puede cerrar antes si hay acuerdo.")
+                .font(.callout).foregroundStyle(Theme.secondary)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Text("La pregunta, el adjunto y los aportes se comparten con los modelos elegidos. Se aplican sus cuotas o cargos.")
+                .font(.callout).foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 14)
+            Button("Cancelar", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+            Button {
+                let configuration = BrainstormConfiguration(limit: limit, participants: participants.map(\.selection))
+                if start(cleanTopic, moderator, configuration, reference) { dismiss() }
+            } label: {
+                Text("Empezar").fontWeight(.semibold).foregroundStyle(canStart ? Theme.dark : Theme.muted)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.alfalfaLight)
+            .disabled(!canStart)
+        }
     }
 
     private func chooseReference() {
@@ -149,9 +227,10 @@ struct BrainstormSheet: View {
         }
     }
 
-    private func participant(_ name: String, selection: Binding<BrainstormParticipant>) -> some View {
-        HStack(spacing: 8) {
-            Text(name).frame(width: 104, alignment: .leading)
+    private func participant(_ name: String, selection: Binding<BrainstormParticipant>,
+                             remove: (() -> Void)? = nil) -> some View {
+        GridRow {
+            Text(name).frame(width: 124, alignment: .leading)
             Menu {
                 ModelMenuItems(app: app, groups: app.modelGroups, selected: selection.wrappedValue.model) { name in
                     selection.wrappedValue.model = name
@@ -160,7 +239,9 @@ struct BrainstormSheet: View {
                 let model = selection.wrappedValue.model
                 let provider = app.providerName(ModelProvider.id(of: model, in: app.models))
                 Text(app.label(for: model) + " · " + provider).lineLimit(1).truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .help(app.label(for: selection.wrappedValue.model))
             .accessibilityLabel("Modelo de " + name)
 
             Picker("Esfuerzo de " + name, selection: selection.effort) {
@@ -169,7 +250,18 @@ struct BrainstormSheet: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 110)
+            .frame(width: 112)
+
+            Group {
+                if let remove {
+                    Button("Quitar " + name, systemImage: "minus.circle", action: remove)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                } else {
+                    Color.clear.accessibilityHidden(true)
+                }
+            }
+            .frame(width: 20, height: 20)
         }
     }
 }

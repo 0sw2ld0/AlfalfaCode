@@ -39,6 +39,28 @@ struct ModeMenu: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 2) {
+            if let brainstorm {
+                Button {
+                    open = false
+                    brainstorm()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .foregroundStyle(canBrainstorm ? Theme.alfalfaLight : Theme.muted)
+                        Text("Lluvia de ideas…").font(.system(size: 14, weight: .medium))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 12).frame(minHeight: 40)
+                    .foregroundStyle(canBrainstorm ? Theme.text : Theme.muted)
+                    .background(Theme.alfalfa.opacity(canBrainstorm ? 0.15 : 0), in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canBrainstorm)
+                Divider().overlay(Theme.border).padding(.top, 6)
+            }
             Text("Permisos").font(.system(size: 12.5)).foregroundStyle(Theme.muted)
                 .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
             ForEach(Array([PermissionMode.auto, .manual, .ediciones, .plan, .turbo].enumerated()), id: \.element) { index, option in
@@ -58,24 +80,9 @@ struct ModeMenu: View {
                 .padding(.horizontal, 12).frame(height: 36).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if let brainstorm {
-                Divider().overlay(Theme.border).padding(.vertical, 4)
-                Button {
-                    open = false
-                    brainstorm()
-                } label: {
-                    Label("Lluvia de ideas…", systemImage: "bubble.left.and.bubble.right")
-                        .font(.system(size: 14))
-                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!canBrainstorm)
-            }
         }
         .padding(6)
-        .frame(width: 330)
+        .frame(width: brainstorm == nil ? 330 : 270)
         .background(Theme.card)
     }
 
@@ -83,18 +90,23 @@ struct ModeMenu: View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(option.title).font(.system(size: 14)).foregroundStyle(Theme.text)
-                Text(option.summary).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if brainstorm == nil {
+                    Text(option.summary).font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 8)
             if option == current {
                 Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.link)
             }
-            Text("\(number)").font(.system(size: 12.5)).foregroundStyle(Theme.muted).monospacedDigit()
+            if brainstorm == nil {
+                Text("\(number)").font(.system(size: 12.5)).foregroundStyle(Theme.muted).monospacedDigit()
+            }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .background(option == current ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contentShape(Rectangle())
+        .help(option.summary)
     }
 
     private func pick(_ option: PermissionMode) {
