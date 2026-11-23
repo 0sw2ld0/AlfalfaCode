@@ -165,6 +165,27 @@ final class PacaiClientTests: XCTestCase {
         }
     }
 
+    func testBrainstormRosterReachesTheEngineForNewSessionsOnly() throws {
+        let participants = [
+            BrainstormParticipant(model: "anthropic/opus", effort: "high"),
+            BrainstormParticipant(model: "chatgpt/sol", effort: "low")
+        ]
+        let configuration = BrainstormConfiguration(limit: 6, participants: participants)
+        let pacai = Launcher.pacaiArguments(resume: nil, model: "m", effort: nil, readOnly: true,
+                                            brainstorm: configuration)
+        XCTAssertEqual(Array(pacai.prefix(4)), ["--pacai", "--lluvia-de-ideas", "6", "--lluvia-participantes"])
+        let roster = try JSONDecoder().decode([BrainstormParticipant].self, from: Data(pacai[4].utf8))
+        XCTAssertEqual(roster, participants)
+
+        let stdio = Launcher.stdioArguments(task: "Idea", resume: nil, model: "m", effort: nil, readOnly: true,
+                                            brainstorm: configuration)
+        XCTAssertEqual(Array(stdio.prefix(4)), ["--stdio", "--lluvia-de-ideas", "6", "--lluvia-participantes"])
+        let resumed = Launcher.pacaiArguments(resume: "abc", model: nil, effort: nil, readOnly: true,
+                                              brainstorm: configuration)
+        XCTAssertFalse(resumed.contains("--lluvia-de-ideas"))
+        XCTAssertFalse(resumed.contains("--lluvia-participantes"))
+    }
+
     // MARK: - Métodos privados
 
     private func parsed(_ line: String) throws -> [String: Any] {

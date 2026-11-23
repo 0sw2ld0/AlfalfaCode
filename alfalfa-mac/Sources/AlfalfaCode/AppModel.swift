@@ -530,6 +530,19 @@ final class AppModel: ObservableObject {
         draftImages = []
     }
 
+    func startBrainstorm(_ topic: String, moderator: BrainstormParticipant,
+                         configuration: BrainstormConfiguration) -> Bool {
+        guard let folder, let launcher, !moderator.model.isEmpty, !topic.isEmpty, topic.count <= 4_000,
+              BrainstormConfiguration.participantRange.contains(configuration.participants.count),
+              (configuration.participants.count...BrainstormConfiguration.maximumTurns).contains(configuration.limit)
+        else { return false }
+        let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: "Lluvia de ideas · " + String(topic.prefix(80)),
+                                  resumeID: nil, model: moderator.model, effort: moderator.effort, readOnly: true,
+                                  mode: PermissionMode.plan.rawValue, brainstorm: configuration)
+        open(session, launcher: launcher, task: topic)
+        return true
+    }
+
     /// El ejemplo abre su propia sesión de solo lectura y conserva el borrador del compositor.
     @discardableResult
     func startFirstRunTask(_ task: String, in folder: URL, model name: String) -> Bool {

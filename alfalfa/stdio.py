@@ -745,7 +745,9 @@ async def run(args, transport):
                                   budget=getattr(args, 'presupuesto', None),
                                   monthly_budget=getattr(args, 'presupuesto_mes', None),
                                   diagnosticos=diagnostics(args), firma=signature(args),
-                                  diagnosticos_swift=swift_diagnostics(args))
+                                  diagnosticos_swift=swift_diagnostics(args),
+                                  lluvia_limite=getattr(args, 'lluvia_de_ideas', None),
+                                  lluvia_participantes=getattr(args, 'lluvia_participantes', None))
         transport.conectar(manager)
         if getattr(args, 'titulo', None) and not args.reanudar:
             manager.save()

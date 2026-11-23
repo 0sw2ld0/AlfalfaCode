@@ -269,8 +269,11 @@ class TerminalManager:
                  read_only=False, compact_limit=None, mode=None, wait=False, parent=None, keep_awake=None,
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
                  diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa',
-                 origen_cuybrowser=None,
+                 origen_cuybrowser=None, lluvia_limite=None, lluvia_participantes=None,
                  reglas_equipo=_CARGAR_EQUIPO):
+        if lluvia_limite is not None:
+            from .lluvia import validar
+            validar(lluvia_limite, lluvia_participantes)
         cwd = Path(cwd or Path.cwd()).resolve()
         self.equipo = equipo.cargar(cwd) if reglas_equipo is _CARGAR_EQUIPO else reglas_equipo
         self.rutas_equipo = (self.equipo.ruta, equipo.raiz_proyecto(cwd) / equipo.ORIGEN) if self.equipo else ()
@@ -336,6 +339,8 @@ class TerminalManager:
         try:
             if resume:
                 self.task = json.loads((self.directory / 'task.json').read_text())
+                if self.task.get('lluvia_usados'):
+                    self.task['lluvia_cerrada'] = True
                 if self.task['id'] != ident:
                     raise ValueError('La sesión no coincide con su directorio.')
                 self._recuperar_cierre_brusco()
@@ -351,6 +356,10 @@ class TerminalManager:
                 self.task = dict(id=ident, cwd=str(cwd), objective=objective,
                                  status='created', provider=proveedores.separar(model)[0], runner='native',
                                  model=model, effort=effort or 'medium')
+                if lluvia_limite is not None:
+                    self.task['lluvia_limite'] = lluvia_limite
+                    if lluvia_participantes is not None:
+                        self.task['lluvia_participantes'] = lluvia_participantes
                 # SessionMeta de Codex: quién, dónde y sobre qué commit empezó.
                 self.task['meta'] = registro.metadatos(ident, self.task['cwd'], self.task['model'],
                                                        self.task['effort'])
@@ -367,8 +376,12 @@ class TerminalManager:
                     raise ValueError('Modo desconocido: ' + str(mode))
                 self.task['modo'] = mode
             self.task.setdefault('modo', modos.AUTO)
+            if self.task.get('lluvia_limite'):
+                self.read_only = read_only = True
             if self.equipo:
                 self.equipo.comprobar_modelo(self.task['model'])
+                for participante in self.task.get('lluvia_participantes', []):
+                    self.equipo.comprobar_modelo(participante['model'])
                 self.task['modo'] = self.equipo.modo_inicial(modos.modo_de(self.task), mode is not None)
                 from .auditoria_equipo import Auditoria
                 self.auditoria_equipo = Auditoria(self)
@@ -1124,7 +1137,8 @@ class TerminalManager:
         try:
             self.pruebas_interfaz.empezar(rt, turno['id'])
             # «/comando» autorizado de OpenCode o Claude Code: el modelo recibe su plantilla, marcada.
-            expandido = self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt)
+            expandido = (None if self.task.get('lluvia_limite') else
+                         self.aprendizaje.expandir(prompt) or self.importadas.expandir(prompt))
             pendiente = None if expandido else self.importadas.sin_autorizar(prompt)
             if pendiente is not None:
                 self.event(self.task, 'system', 'La orden /' + pendiente.nombre + ' del proyecto ('
@@ -1367,7 +1381,9 @@ async def execute(args):
                               diagnosticos_swift=swift_diagnostics(args),
                               motor_navegador=getattr(args, 'motor_navegador', None),
                               perfil_cuybrowser=getattr(args, 'perfil_cuybrowser', 'alfalfa'),
-                              origen_cuybrowser=getattr(args, 'origen_cuybrowser', None))
+                              origen_cuybrowser=getattr(args, 'origen_cuybrowser', None),
+                              lluvia_limite=getattr(args, 'lluvia_de_ideas', None),
+                              lluvia_participantes=getattr(args, 'lluvia_participantes', None))
     loop = asyncio.get_running_loop()
     if getattr(args, 'contexto', None):
         manager.elegir_contexto(args.contexto)
@@ -1423,6 +1439,11 @@ def main(argv=None):
     parser.add_argument('--auto', action='store_true', help='Aprobar automáticamente sólo lecturas permitidas')
     parser.add_argument('--solo-lectura', action='store_true', help='No ofrecer herramientas de escritura ni de '
                                                                     'ejecución')
+    from .lluvia import MAXIMO, MINIMO
+    parser.add_argument('--lluvia-de-ideas', type=int, choices=range(MINIMO, MAXIMO + 1), metavar='TURNOS',
+                        help='Límite de intervenciones para una sesión nueva de lluvia de ideas')
+    parser.add_argument('--lluvia-participantes', type=json.loads, metavar='JSON',
+                        help='Lista de objetos model y effort para la lluvia de ideas')
     parser.add_argument('--reanudar', metavar='ID')
     parser.add_argument('--esperar', action='store_true',
                         help='Con --stdio y --reanudar: abrir la sesión sin turno y esperar un mensaje o «compactar»')
@@ -1614,6 +1635,10 @@ def main(argv=None):
     if args.comprobar_orden is not None:
         from .stdio import check_command
         return check_command(args.comprobar_orden)
+    if args.lluvia_participantes is not None and args.lluvia_de_ideas is None:
+        parser.error('--lluvia-participantes requiere --lluvia-de-ideas')
+    if args.lluvia_de_ideas is not None and (args.reanudar or args.bifurcar or args.cola_encargos is not None):
+        parser.error('--lluvia-de-ideas abre una sesión nueva y no usa la cola de encargos')
     if args.reanudar and args.bifurcar:
         parser.error('--reanudar y --bifurcar no van juntos')
     from .presupuesto import importe

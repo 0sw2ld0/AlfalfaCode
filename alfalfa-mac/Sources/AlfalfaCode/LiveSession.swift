@@ -14,6 +14,7 @@ final class LiveSession: ObservableObject, Identifiable {
     /// El usuario cambió modelo o esfuerzo antes de arrancar el proceso: se pasan al reanudar.
     private var settingsChanged = false
     let readOnly: Bool
+    let brainstorm: BrainstormConfiguration?
 
     @Published private(set) var timeline = Timeline()
     @Published private(set) var snapshot: GitSnapshot?
@@ -107,13 +108,14 @@ final class LiveSession: ObservableObject, Identifiable {
     @Published private(set) var mode: String
 
     init(cwd: URL, title: String, resumeID: String?, model: String, effort: String, readOnly: Bool,
-         mode: String = PermissionMode.auto.rawValue) {
+         mode: String = PermissionMode.auto.rawValue, brainstorm: BrainstormConfiguration? = nil) {
         self.cwd = cwd
         self.title = title
         self.resumeID = resumeID
         self.model = model
         self.effort = effort
         self.readOnly = readOnly
+        self.brainstorm = brainstorm
         self.mode = mode
     }
 
@@ -555,7 +557,7 @@ extension LiveSession {
         let preferences = Preferences()
         let model = resumeID == nil || settingsChanged ? model : nil
         let effort = resumeID == nil || settingsChanged ? effort : nil
-        let title = parentSessionID == nil ? nil : title
+        let title = parentSessionID == nil && brainstorm == nil ? nil : title
         guard EngineProtocol.current() == .pacai else {
             return (Launcher.stdioArguments(
                 task: task, resume: resumeID, model: model, effort: effort, readOnly: readOnly,
@@ -564,7 +566,7 @@ extension LiveSession {
                 monthlyBudget: preferences.monthlyBudget, diagnostics: preferences.diagnostics,
                 swiftDiagnostics: preferences.swiftDiagnostics, commitSignature: preferences.commitSignature,
                 queue: queue, browserEngine: browserBackend, cuyBrowserProfile: browserPreferences.profile,
-                cuyBrowserFromPath: browserPreferences.fromPath), nil)
+                cuyBrowserFromPath: browserPreferences.fromPath, brainstorm: brainstorm), nil)
         }
         let arguments = Launcher.pacaiArguments(
             resume: resumeID, model: model, effort: effort, readOnly: readOnly, mode: mode, parent: parentSessionID,
@@ -572,7 +574,8 @@ extension LiveSession {
             budget: preferences.sessionBudget(for: sessionID), monthlyBudget: preferences.monthlyBudget,
             diagnostics: preferences.diagnostics, swiftDiagnostics: preferences.swiftDiagnostics,
             commitSignature: preferences.commitSignature, queue: queue, browserEngine: browserBackend,
-            cuyBrowserProfile: browserPreferences.profile, cuyBrowserFromPath: browserPreferences.fromPath)
+            cuyBrowserProfile: browserPreferences.profile, cuyBrowserFromPath: browserPreferences.fromPath,
+            brainstorm: brainstorm)
         // Como `--reanudar ID` sin encargo ni `--esperar` en v2: la sesión sigue sin mensaje.
         let opening = PacaiClient.Opening(task: task, attachments: images.map(\.path),
                                           continueWithoutMessage: resumeID != nil && task == nil && !wait && !queue)

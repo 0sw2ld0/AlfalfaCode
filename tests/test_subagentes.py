@@ -316,3 +316,100 @@ def test_cabecera_y_equivalencias():
     assert datos == {'name': 'x', 'tools': '[Read, Bash, Edit]'} and cuerpo == 'Hola'
     assert subagentes._herramientas(datos['tools']) == ['read_file', 'run_command', 'edit_file']
     assert subagentes._cabecera('sin cabecera') == ({}, 'sin cabecera')
+
+
+def test_lluvia_alterna_participantes_y_cierra_al_agotar_el_limite(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 4
+    s.m.read_only = True
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón dos ideas.', 'background': True}),
+            llamada('spawn_agent', {'message': 'Evalúa la propuesta A.'}),
+            llamada('send_input', {'agent': 'a1', 'message': 'Revisa tu propuesta con el contraste.'}),
+            llamada('send_input', {'agent': 'a1', 'message': 'Formula el acuerdo final.'}),
+            llamada('send_input', {'agent': 'a2', 'message': 'Intenta una quinta intervención.'}),
+            {'role': 'assistant', 'content': 'Acuerdo: prototipo de la opción A.'},
+        ],
+        por_agente={
+            'a1': [{'role': 'assistant', 'content': 'Propongo A o B.'},
+                   {'role': 'assistant', 'content': 'A con la variante sugerida.'}],
+            'a2': [{'role': 'assistant', 'content': 'Prefiero A con un ajuste.'},
+                   {'role': 'assistant', 'content': 'De acuerdo con A.'}],
+        },
+    )
+
+    assert correr(s, guion, '¿Cómo probamos el diseño?') == 0
+
+    assert s.m.task['lluvia_usados'] == 4 and s.m.task['lluvia_cerrada'] is True
+    assert [(a.nombre, a.turnos) for a in s.m.subagentes.agentes.values()] == [('Propuesta', 2), ('Contraste', 2)]
+    assert 'última intervención' in guion.payloads['a2'][1]['messages'][-1]['content']
+    assert not nombres_de_herramientas(guion.payloads['principal'][4])
+    error = resultados(guion.payloads['principal'][5])[-1]
+    assert 'no está disponible' in error['error']
+    assert 'Acuerdo: prototipo de la opción A.' in s.textos()
+    assert '**Contraste**\n\nDe acuerdo con A.' in s.textos()
+    assert all(not nombres_de_herramientas(p) for p in guion.payloads['a1'] + guion.payloads['a2'])
+
+
+def test_lluvia_puede_cerrar_pronto_si_ya_hay_acuerdo(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 6
+    s.m.read_only = True
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón una idea.'}),
+            llamada('spawn_agent', {'message': 'Contrasta la idea.'}),
+            {'role': 'assistant', 'content': 'Ya hay acuerdo.'},
+        ],
+        por_agente={
+            'a1': [{'role': 'assistant', 'content': 'Probemos A.'}],
+            'a2': [{'role': 'assistant', 'content': 'De acuerdo con A.'}],
+        },
+    )
+
+    assert correr(s, guion) == 0
+    assert s.m.task['lluvia_usados'] == 2 and s.m.task['lluvia_cerrada'] is True
+    assert 'Ya hay acuerdo.' in s.textos()
+
+
+def test_lluvia_acota_al_moderador_si_insiste_en_usar_herramientas_ajenas(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 2
+    guion = Guion([llamada('read_file', {'path': f'{i}.txt'}) for i in range(12)], {})
+
+    assert correr(s, guion) != 0
+    assert len(guion.payloads['principal']) == 6
+    assert not nombres_de_herramientas(guion.payloads['principal'][-1])
+    assert not s.m.subagentes.lista()
+
+
+def test_lluvia_respeta_modelos_esfuerzos_y_un_tercer_participante(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 4
+    s.m.task['lluvia_participantes'] = [
+        {'model': 'modelo-uno', 'effort': 'low'},
+        {'model': 'modelo-dos', 'effort': 'high'},
+        {'model': 'modelo-tres', 'effort': 'medium'},
+    ]
+    (s.root / 'AGENTS.md').write_text('# Contenido del proyecto que no debe llegar a la sala')
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón la primera idea.', 'model': 'sustituto'}),
+            llamada('spawn_agent', {'message': 'Contrasta la idea.'}),
+            llamada('spawn_agent', {'message': 'Evalúa la viabilidad.'}),
+            llamada('send_input', {'agent': 'a3', 'message': 'Cierra la propuesta.'}),
+            {'role': 'assistant', 'content': 'Decisión registrada.'},
+        ],
+        por_agente={},
+    )
+
+    assert correr(s, guion) == 0
+
+    assert [(a.nombre, a.task['model'], a.task['effort'], a.turnos)
+            for a in s.m.subagentes.agentes.values()] == [
+        ('Propuesta', 'modelo-uno', 'low', 2),
+        ('Contraste', 'modelo-dos', 'high', 1),
+        ('Participante 3', 'modelo-tres', 'medium', 1),
+    ]
+    assert 'que no debe llegar a la sala' not in str(guion.payloads)

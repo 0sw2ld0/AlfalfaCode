@@ -1119,6 +1119,10 @@ class WorkspaceTools:
             raise ValueError('El revisor sólo recibe el diff congelado: no puede invocar herramientas.')
         if self.runtime.task.get('conversation_only'):
             self.runtime.reject_conversation_tool(name)
+        if self.runtime.task.get('lluvia_limite'):
+            from ...lluvia import herramienta
+            if name != herramienta(self.runtime.task):
+                raise ValueError('Esta herramienta no está disponible en la lluvia de ideas.')
         if name in self.runtime.excluded_tools:
             raise ValueError('Herramienta no configurada o deshabilitada: ' + name)
         mcp = getattr(self.runtime, 'mcp', None)
@@ -1246,6 +1250,9 @@ class WorkspaceTools:
             subagentes = getattr(self.runtime.manager, 'subagentes', None)
             if subagentes is None:
                 raise ValueError('Un subagente no puede lanzar ni manejar otros agentes.')
+            if self.runtime.task.get('lluvia_limite'):
+                from ...lluvia import reservar
+                args = reservar(self.runtime.manager, name, args)
             if name == 'spawn_agent':
                 return await subagentes.lanzar(self.runtime, args)
             if name == 'wait_agent':

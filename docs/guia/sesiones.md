@@ -97,3 +97,18 @@ mensaje, y lo que viene de fuera lleva «de fuera».
   desechable: borrarlo no pierde nada, porque las sesiones no se tocan; si se rompe,
   se rehace solo (ocupado por otra sesión, no se toca). Crearlo y borrarlo van con un
   cerrojo de archivo que se espera como mucho 5 s.
+
+## Lluvia de ideas en macOS
+
+En «Nuevo encargo», elige una carpeta y un modelo, abre «Lluvia de ideas»
+y escribe una pregunta. Elige un modelo y esfuerzo para el moderador y
+para cada participante. Puedes combinar proveedores y añadir hasta seis
+participantes. Reciben la pregunta y los aportes que el moderador comparte.
+Cada proveedor aplica su cuota o sus cargos.
+
+El máximo es de 12 intervenciones en total (6 de forma predeterminada), con
+al menos una por participante disponible. El moderador puede sintetizar antes
+si hay acuerdo. Al alcanzar el máximo, el motor deshabilita las intervenciones
+y queda la síntesis. Los aportes aparecen con su autor en la conversación.
+La sesión es de solo lectura y aplica los presupuestos habituales. Al reabrir una sesión
+que ya empezó el debate, puedes consultar los aportes y pedir otra síntesis.

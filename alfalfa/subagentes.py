@@ -411,6 +411,8 @@ class Subagentes:
                     modo=principal.get('modo'), subagente_de=principal['id'],
                     # Ahorro o contexto completo, como la sesión que lo lanza.
                     **({'contexto_modo': principal['contexto_modo']} if principal.get('contexto_modo') else {}))
+        if principal.get('lluvia_limite'):
+            task['lluvia_limite'] = principal['lluvia_limite']
         if task['effort'] not in ('low', 'medium', 'high', 'xhigh', 'max'):
             task['effort'] = principal.get('effort') or 'medium'
         # Lo aprobado «para la sesión» vale también para sus subagentes, y al revés.
@@ -536,8 +538,12 @@ class Subagentes:
             except Exception:  # noqa: BLE001
                 pass
             final = sub.informe.strip().splitlines()[0][:200] if sub.informe.strip() else sub.error[:200]
-            self.gestor.event(self.gestor.task, 'system', 'Subagente ' + sub.id + ' «' + sub.nombre + '» '
-                              + sub.estado + (': ' + final if final else '.'))
+            if sub.task.get('lluvia_limite') and sub.estado == 'terminado' and sub.informe.strip():
+                self.gestor.event(self.gestor.task, 'agent', '**' + sub.nombre + '**\n\n'
+                                  + sub.informe[:MAX_INFORME])
+            else:
+                self.gestor.event(self.gestor.task, 'system', 'Subagente ' + sub.id + ' «' + sub.nombre + '» '
+                                  + sub.estado + (': ' + final if final else '.'))
             self.avisar()
             self.gestor.save()
 

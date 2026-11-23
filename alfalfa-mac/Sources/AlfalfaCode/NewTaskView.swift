@@ -14,6 +14,7 @@ struct NewTaskView: View {
     @FocusState private var focused: Bool
     @State private var importingOllama = false
     @State private var planningQueue = false
+    @State private var brainstorming = false
     @State private var showingBrowserFirstRun = false
     @AppStorage(Preferences.Key.browserFirstRunSeen) private var browserFirstRunSeen = false
     /// Al empezar con imágenes que el modelo no ve: cambiar de modelo o quitarlas.
@@ -42,6 +43,14 @@ struct NewTaskView: View {
                                 model.startQueue(tasks: tasks, mode: mode, parallelism: parallelism)
                             }
                         }
+                    Button { brainstorming = true } label: {
+                        Label("Lluvia de ideas", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .disabled(model.folder == nil || model.launcher == nil || model.model.isEmpty
+                              || model.firstRun != nil)
+                    .sheet(isPresented: $brainstorming) {
+                        BrainstormSheet(model: model.model, effort: model.effort, start: model.startBrainstorm)
+                    }
                     resumeList
                 }
                 Spacer(minLength: 0)

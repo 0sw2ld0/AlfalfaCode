@@ -68,9 +68,10 @@ public enum Launcher {
                                       commitSignature: Bool = true, queue: Bool = false,
                                       browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa",
-                                      cuyBrowserFromPath: Bool? = nil) -> [String] {
+                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil) -> [String] {
         var arguments = ["--stdio"]
         if queue { arguments.append("--cola-encargos") }
+        if let brainstorm, resume == nil { arguments += brainstorm.launchArguments }
         // La app ofrece su navegador propio: el motor da al agente las herramientas browser_*.
         arguments += browserArguments(enabled: browser, engine: browserEngine, profile: cuyBrowserProfile,
                                       fromPath: cuyBrowserFromPath)
@@ -111,13 +112,14 @@ public enum Launcher {
                                       swiftDiagnostics: Bool = false, commitSignature: Bool = true,
                                       queue: Bool = false, browserEngine: String? = nil,
                                       cuyBrowserProfile: String = "alfalfa",
-                                      cuyBrowserFromPath: Bool? = nil) -> [String] {
+                                      cuyBrowserFromPath: Bool? = nil, brainstorm: BrainstormConfiguration? = nil) -> [String] {
         var arguments = stdioArguments(task: nil, resume: resume, model: model, effort: effort, readOnly: readOnly,
                                        mode: mode, parent: parent, title: title, keepAwake: keepAwake,
                                        browser: browser, budget: budget, monthlyBudget: monthlyBudget,
                                        diagnostics: diagnostics, swiftDiagnostics: swiftDiagnostics,
                                        commitSignature: commitSignature, queue: queue, browserEngine: browserEngine,
-                                       cuyBrowserProfile: cuyBrowserProfile, cuyBrowserFromPath: cuyBrowserFromPath)
+                                       cuyBrowserProfile: cuyBrowserProfile, cuyBrowserFromPath: cuyBrowserFromPath,
+                                       brainstorm: brainstorm)
         arguments[0] = "--pacai"
         return arguments
     }

@@ -2767,6 +2767,12 @@ class NativeRuntime:
                    'Esfuerzo solicitado: '+str(effort))
 
     def system_instructions(self, model):
+        if self.task.get('lluvia_limite'):
+            from ...lluvia import MODERAR, PARTICIPAR, REGLAS
+            rol = (PARTICIPAR if self.task.get('subagente_de') else
+                   MODERAR + ' Máximo de intervenciones: ' + str(self.task['lluvia_limite']) + '.')
+            self.system_parts = {}
+            return rol + REGLAS
         system = self.instructions+'\n'+(self.task.get('agent_instructions') or '')
         system += self.engine_text(self.task.get('effort') or 'medium')
         system += NATIVE_HARNESS_CONTRACT
@@ -2939,7 +2945,9 @@ class NativeRuntime:
                                       session_deadline=session_deadline)
             self.task['dispatch_model_aliases'] = resolved_model_aliases(info)
             check_task(self.manager, self.task)
-            if 'tools' not in info.get('capabilities', []) and not self.task.get('conversation_only'):
+            solo_texto = (self.task.get('conversation_only')
+                          or (self.task.get('lluvia_limite') and self.task.get('subagente_de')))
+            if 'tools' not in info.get('capabilities', []) and not solo_texto:
                 raise ValueError('Este modelo no declara soporte de herramientas. Elige otro modelo para programación.')
             self.task['runtime_capabilities'] = info.get('capabilities', [])
             # ¿Ve imágenes el modelo de este turno? True, False o None (no se sabe).
@@ -2987,6 +2995,9 @@ class NativeRuntime:
             # ahora que compacta al 60 % puede trabajar sesiones largas. El
             # detector de bucles sigue parando a quien se repite sin avanzar.
             max_steps = {'low':80, 'medium':150, 'high':250, 'xhigh':350, 'max':500}.get(self.task.get('effort'), 150)
+            lluvia_limite = self.task.get('lluvia_limite')
+            if lluvia_limite:
+                max_steps = 3 if self.task.get('subagente_de') else lluvia_limite + 4
             compactado = -99
             review = self.task.get('review') and not self.task.get('conversation_only')
             first_step = self.state.get('review_steps', 0) if review else 0
@@ -3052,6 +3063,14 @@ class NativeRuntime:
                     # explícita; el contenido sigue abriéndose bajo demanda.
                     allowed_tools += [t for t in self.complementos_tools
                                       if t['function']['name'] not in self.excluded_tools]
+                if lluvia_limite:
+                    from ...lluvia import herramienta
+                    permitida = herramienta(self.task)
+                    allowed_tools = [tool for tool in allowed_tools if tool['function']['name'] == permitida]
+                    if permitida is None and not self.task.get('subagente_de'):
+                        context = context + [{'role': 'user', 'content': (
+                            'Cierra con una síntesis de los aportes recibidos. Ya no hay intervenciones disponibles.'
+                        )}]
                 if self.compaction == 'codex' and not final_review:
                     from ...compactacion import tokens_aprox
                     self._tokens_de_herramientas = tokens_aprox(json.dumps(allowed_tools, ensure_ascii=False))
@@ -3266,6 +3285,9 @@ class NativeRuntime:
                     if parada.detener:
                         self.manager.event(self.task, 'system', 'Hooks · ' + parada.motivo_detener[:500])
                 if not calls:
+                    if lluvia_limite and not self.task.get('subagente_de'):
+                        self.task['lluvia_cerrada'] = True
+                        self.manager.save()
                     verification = self.evidence.handoff()
                     self.task['summary'] = clean['content'][:500]
                     if self.state.get('unresolved_nudged'):
