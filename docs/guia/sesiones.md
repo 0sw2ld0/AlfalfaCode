@@ -104,7 +104,9 @@ En «Nuevo encargo», elige una carpeta y un modelo. Abre el menú de modo
 junto al esfuerzo, selecciona «Lluvia de ideas…» y escribe una pregunta. Elige un modelo y esfuerzo para el moderador y
 para cada participante. Puedes combinar proveedores y añadir hasta seis
 participantes. Reciben la pregunta y los aportes que el moderador comparte.
-Cada proveedor aplica su cuota o sus cargos.
+Cada proveedor aplica su cuota o sus cargos. Con «Adjuntar archivo…» puedes
+seleccionar un Markdown o un archivo de texto de hasta 16 KiB. El moderador
+y cada participante reciben el archivo al intervenir por primera vez.
 
 El máximo es de 12 intervenciones en total (6 de forma predeterminada), con
 al menos una por participante disponible. El moderador puede sintetizar antes

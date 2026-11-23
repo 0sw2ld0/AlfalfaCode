@@ -1291,7 +1291,8 @@ class NativeRuntime:
         from ... import imagenes
         message = {'role': 'user', 'content': text}
         copias, fallos = [], []
-        for ruta in imagenes.rutas_etiquetadas(text):
+        rutas_imagenes = () if self.task.get('lluvia_limite') else imagenes.rutas_etiquetadas(text)
+        for ruta in rutas_imagenes:
             try:
                 copias.append(str(imagenes.preparar(ruta, self.directory / 'imagenes')))
             except (OSError, ValueError) as exc:
@@ -1301,6 +1302,8 @@ class NativeRuntime:
         # Las de este mensaje, para saber cuáles llegan ahora y cuáles son del historial.
         self._imagenes_del_turno = list(copias)
         fichas = self._preparar_archivos(text, fallos)
+        if self.task.get('lluvia_limite') and not self.task.get('subagente_de'):
+            self.task.setdefault('lluvia_referencia', fichas)
         if fichas:
             message['archivos'] = fichas
         if fallos:
@@ -1315,9 +1318,22 @@ class NativeRuntime:
         para contenido_externo (cada acción posterior pide su aprobación) y se avisa si es enorme."""
         from ... import adjuntos
         fichas = []
-        for ruta in adjuntos.rutas_etiquetadas(text)[:adjuntos.MAX_ARCHIVOS]:
+        rutas = adjuntos.rutas_etiquetadas(text)
+        tope = None
+        if self.task.get('lluvia_limite'):
+            if self.task.get('subagente_de'):
+                if any(message.get('archivos') for message in self.state['messages']):
+                    return fichas
+                return self.task.get('lluvia_referencia', [])
+            from ...lluvia import validar_referencia
             try:
-                fichas.append(adjuntos.preparar(ruta, self.directory / 'archivos'))
+                tope = validar_referencia(rutas)
+            except ValueError as exc:
+                fallos.append(str(exc))
+                return fichas
+        for ruta in rutas[:adjuntos.MAX_ARCHIVOS]:
+            try:
+                fichas.append(adjuntos.preparar(ruta, self.directory / 'archivos', tope=tope))
             except (OSError, ValueError) as exc:
                 fallos.append(str(exc))
         if fichas:

@@ -162,16 +162,19 @@ def sin_etiquetas(texto):
     return ETIQUETA.sub('', limpio).replace(CIERRE, '').strip()
 
 
-def preparar(ruta, destino):
+def preparar(ruta, destino, *, tope=None):
     """Copia el archivo a `destino` y extrae su texto una vez. Devuelve lo que guarda el mensaje:
     {nombre, origen, ruta, tipo, bytes, paginas, texto (ruta del .txt) o error, tokens, recortado}."""
-    fd, _, path, tipo = _abrir(ruta)
+    fd, estado, path, tipo = _abrir(ruta)
+    limite = LIMITES[tipo] if tope is None else min(tope, LIMITES[tipo])
+    with os.fdopen(fd, 'rb') as entrada:
+        if estado.st_size > limite:
+            raise ArchivoInvalido(f'{path.name} supera el tamaño permitido para este encargo.')
+        datos = entrada.read(limite + 1)
+    if len(datos) > limite:
+        raise ArchivoInvalido(f'{path.name} creció mientras se adjuntaba.')
     destino = Path(destino)
     destino.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with os.fdopen(fd, 'rb') as entrada:
-        datos = entrada.read(LIMITES[tipo] + 1)
-    if len(datos) > LIMITES[tipo]:
-        raise ArchivoInvalido(f'{path.name} creció mientras se adjuntaba.')
     resumen = hashlib.sha256(datos).hexdigest()[:16]
     extension = path.suffix.lower() if path.suffix else '.txt'
     copia = destino / (resumen + extension)

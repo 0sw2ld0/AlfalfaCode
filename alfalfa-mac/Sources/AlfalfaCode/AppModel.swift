@@ -531,7 +531,7 @@ final class AppModel: ObservableObject {
     }
 
     func startBrainstorm(_ topic: String, moderator: BrainstormParticipant,
-                         configuration: BrainstormConfiguration) -> Bool {
+                         configuration: BrainstormConfiguration, reference: URL?) -> Bool {
         guard let folder, let launcher, !moderator.model.isEmpty, !topic.isEmpty, topic.count <= 4_000,
               BrainstormConfiguration.participantRange.contains(configuration.participants.count),
               (configuration.participants.count...BrainstormConfiguration.maximumTurns).contains(configuration.limit)
@@ -539,7 +539,7 @@ final class AppModel: ObservableObject {
         let session = LiveSession(cwd: URL(fileURLWithPath: folder), title: "Lluvia de ideas · " + String(topic.prefix(80)),
                                   resumeID: nil, model: moderator.model, effort: moderator.effort, readOnly: true,
                                   mode: PermissionMode.plan.rawValue, brainstorm: configuration)
-        open(session, launcher: launcher, task: topic)
+        open(session, launcher: launcher, task: topic, images: reference.map { [$0] } ?? [])
         return true
     }
 

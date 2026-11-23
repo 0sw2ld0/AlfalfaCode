@@ -413,3 +413,31 @@ def test_lluvia_respeta_modelos_esfuerzos_y_un_tercer_participante(tmp_path, mon
         ('Participante 3', 'modelo-tres', 'medium', 1),
     ]
     assert 'que no debe llegar a la sala' not in str(guion.payloads)
+
+
+def test_lluvia_comparte_solo_la_referencia_elegida_con_cada_participante(tmp_path, monkeypatch):
+    from alfalfa.adjuntos import con_etiquetas
+
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 2
+    s.m.read_only = True
+    referencia = s.root / 'idea.md'
+    referencia.write_text('# Propuesta elegida para la sesión\n')
+    otro = s.root / 'privado.txt'
+    otro.write_text('Contenido privado sin adjuntar.')
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': con_etiquetas('Considera la idea.', [str(otro)])}),
+            llamada('spawn_agent', {'message': 'Contrasta la propuesta.'}),
+            {'role': 'assistant', 'content': 'Síntesis.'},
+        ],
+        por_agente={},
+    )
+
+    assert correr(s, guion, con_etiquetas('Evalúa esta idea.', [str(referencia)])) == 0
+
+    for actor in ('principal', 'a1', 'a2'):
+        mensajes = str(guion.payloads[actor][0]['messages'])
+        assert 'Propuesta elegida para la sesión' in mensajes
+        assert 'Contenido privado sin adjuntar' not in mensajes
+        assert str(otro) not in mensajes

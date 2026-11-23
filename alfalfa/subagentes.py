@@ -413,6 +413,7 @@ class Subagentes:
                     **({'contexto_modo': principal['contexto_modo']} if principal.get('contexto_modo') else {}))
         if principal.get('lluvia_limite'):
             task['lluvia_limite'] = principal['lluvia_limite']
+            task['lluvia_referencia'] = principal.get('lluvia_referencia', [])
         if task['effort'] not in ('low', 'medium', 'high', 'xhigh', 'max'):
             task['effort'] = principal.get('effort') or 'medium'
         # Lo aprobado «para la sesión» vale también para sus subagentes, y al revés.

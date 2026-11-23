@@ -1,5 +1,7 @@
 import AlfalfaKit
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BrainstormSheet: View {
     private struct ParticipantRow: Identifiable {
@@ -12,14 +14,16 @@ struct BrainstormSheet: View {
     @EnvironmentObject private var app: AppModel
     @FocusState private var topicFocused: Bool
     @State private var topic = ""
+    @State private var reference: URL?
+    @State private var referenceError: String?
     @State private var limit = BrainstormConfiguration.defaultTurns
     @State private var moderator: BrainstormParticipant
     @State private var participants: [ParticipantRow]
 
-    let start: (String, BrainstormParticipant, BrainstormConfiguration) -> Bool
+    let start: (String, BrainstormParticipant, BrainstormConfiguration, URL?) -> Bool
 
     init(model: String, effort: String,
-         start: @escaping (String, BrainstormParticipant, BrainstormConfiguration) -> Bool) {
+         start: @escaping (String, BrainstormParticipant, BrainstormConfiguration, URL?) -> Bool) {
         let initial = BrainstormParticipant(model: model, effort: effort)
         _moderator = State(initialValue: initial)
         _participants = State(initialValue: [ParticipantRow(selection: initial), ParticipantRow(selection: initial)])
@@ -45,6 +49,22 @@ struct BrainstormSheet: View {
             if cleanTopic.count > 4_000 {
                 Text("La idea puede tener hasta 4.000 caracteres.")
                     .font(.callout).foregroundStyle(Theme.warning)
+            }
+
+            HStack {
+                Button { chooseReference() } label: { Label("Adjuntar archivo…", systemImage: "paperclip") }
+                if let reference {
+                    Text(reference.lastPathComponent)
+                        .foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
+                    Button("Quitar adjunto", systemImage: "xmark.circle") {
+                        self.reference = nil
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                }
+            }
+            if let referenceError {
+                Text(referenceError).font(.callout).foregroundStyle(Theme.warning)
             }
 
             VStack(spacing: 6) {
@@ -74,7 +94,7 @@ struct BrainstormSheet: View {
 
             Stepper("Máximo de intervenciones: \(limit)", value: $limit,
                     in: participants.count...BrainstormConfiguration.maximumTurns)
-            Text("La sala comparte la pregunta y los aportes previos con los modelos elegidos. Se aplican sus cuotas o cargos. El moderador puede cerrar antes si hay acuerdo.")
+            Text("La sala comparte la pregunta, el adjunto y los aportes previos con los modelos elegidos. Se aplican sus cuotas o cargos. El moderador puede cerrar antes si hay acuerdo.")
                 .font(.callout).foregroundStyle(Theme.secondary)
 
             if missingProviders {
@@ -93,7 +113,7 @@ struct BrainstormSheet: View {
                 Button("Cancelar", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Empezar") {
                     let configuration = BrainstormConfiguration(limit: limit, participants: participants.map(\.selection))
-                    if start(cleanTopic, moderator, configuration) { dismiss() }
+                    if start(cleanTopic, moderator, configuration, reference) { dismiss() }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(cleanTopic.isEmpty || cleanTopic.count > 4_000 || missingProviders)
@@ -102,6 +122,23 @@ struct BrainstormSheet: View {
         .padding(24)
         .frame(width: 610)
         .onAppear { topicFocused = true }
+    }
+
+    private func chooseReference() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText] + ["md", "markdown"].compactMap { UTType(filenameExtension: $0) }
+        panel.message = "Elige un archivo Markdown o de texto de hasta 16 KiB."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let attributes = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard ["md", "markdown", "txt"].contains(url.pathExtension.lowercased()),
+              attributes?.isRegularFile == true, attributes?.isSymbolicLink == false,
+              let size = attributes?.fileSize, size <= 16 * 1024 else {
+            reference = nil
+            referenceError = "Elige un archivo Markdown o de texto de hasta 16 KiB."
+            return
+        }
+        reference = url
+        referenceError = nil
     }
 
     private func participantName(_ index: Int) -> String {
