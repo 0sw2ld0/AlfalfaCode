@@ -1,0 +1,162 @@
+{
+  "name": "alfalfa-vscode",
+  "displayName": "AlfalfaCode",
+  "description": "Chat de AlfalfaCode en la barra lateral de VS Code y Cursor, por PACAI.",
+  "version": "0.1.4",
+  "publisher": "cuycoders",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "alfalfa",
+          "title": "AlfalfaCode",
+          "icon": "media/icono.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "alfalfaDerecha",
+          "title": "AlfalfaCode",
+          "icon": "media/icono.svg",
+          "when": "!alfalfa.sinBarraSecundaria"
+        }
+      ]
+    },
+    "views": {
+      "alfalfa": [
+        {
+          "type": "webview",
+          "id": "alfalfa.chat",
+          "name": "AlfalfaCode"
+        }
+      ],
+      "alfalfaDerecha": [
+        {
+          "type": "webview",
+          "id": "alfalfa.chatDerecha",
+          "name": "AlfalfaCode",
+          "when": "!alfalfa.sinBarraSecundaria"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "alfalfa.nuevaSesion",
+        "title": "Nueva sesión",
+        "category": "AlfalfaCode",
+        "icon": "$(add)"
+      },
+      {
+        "command": "alfalfa.detener",
+        "title": "Detener el turno",
+        "category": "AlfalfaCode",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "alfalfa.reanudar",
+        "title": "Reanudar una sesión…",
+        "category": "AlfalfaCode"
+      },
+      {
+        "command": "alfalfa.preguntarSeleccion",
+        "title": "Preguntar sobre la selección",
+        "category": "AlfalfaCode"
+      },
+      {
+        "command": "alfalfa.registro",
+        "title": "Ver el registro",
+        "category": "AlfalfaCode"
+      },
+      {
+        "command": "alfalfa.abrir",
+        "title": "Abrir el chat",
+        "category": "AlfalfaCode",
+        "icon": "media/icono.svg"
+      },
+      {
+        "command": "alfalfa.elegirEjecutable",
+        "title": "Elegir el ejecutable de AlfalfaCode",
+        "category": "AlfalfaCode"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "alfalfa.preguntarSeleccion",
+          "when": "editorHasSelection",
+          "group": "navigation@90"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "alfalfa.abrir",
+          "group": "navigation@100"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "alfalfa.preguntarSeleccion",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "AlfalfaCode",
+      "properties": {
+        "alfalfa.ejecutable": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Ruta de la orden `alfalfa`. Vacío: se busca en el PATH, en el de tu shell, en `/opt/homebrew/bin`, `/usr/local/bin` y `~/.local/bin` y, si sólo tienes la app, se usa el motor que lleva dentro (`AlfalfaCode.app/Contents/Resources/motor/alfalfa`)."
+        },
+        "alfalfa.modo": {
+          "type": "string",
+          "default": "auto",
+          "markdownDescription": "Modo de permisos al abrir la sesión: el `id` de uno de los modos que anuncia AlfalfaCode (`auto`, `manual`, `accept_edits`, `plan`, `bypass_permissions`, o los que añada el motor). Lo más cómodo es elegirlo en el panel. Se aplica desde el turno siguiente."
+        },
+        "alfalfa.modelo": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Modelo (`alfalfa --modelos` los lista). Vacío: el que tengas configurado en AlfalfaCode."
+        },
+        "alfalfa.esfuerzo": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "description": "Esfuerzo de razonamiento. Vacío: el configurado."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "npx --yes @vscode/vsce@3.2.1 package --no-dependencies"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0sw2ld0/AlfalfaCode.git",
+    "directory": "alfalfa-vscode"
+  },
+  "homepage": "https://alfalfacode.cuycoders.dev"
+}
