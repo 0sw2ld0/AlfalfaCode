@@ -277,6 +277,10 @@ final class AppModel: ObservableObject {
     /// van aparte, en «Gratis ahora» (`freeGroups`), salvo el elegido.
     var modelGroups: [(provider: String, names: [String])] {
         let names = modelChoices.filter { name in !(info(for: name)?.free ?? false) || name == model }
+        return groupModels(names)
+    }
+
+    func groupModels(_ names: [String]) -> [(provider: String, names: [String])] {
         var order: [String] = []
         var groups: [String: [String]] = [:]
         for name in names {

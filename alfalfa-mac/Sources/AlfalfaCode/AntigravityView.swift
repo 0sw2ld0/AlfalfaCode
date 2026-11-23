@@ -102,8 +102,12 @@ struct AntigravityView: View {
                 if model.launcher != nil {
                     Picker("Delegar a un modelo de AlfalfaCode", selection: $delegationModel) {
                         Text("Desactivado").tag(nil as String?)
-                        ForEach(model.models.filter { !$0.name.lowercased().contains("embed") }) { item in
-                            Text(item.label).tag(Optional(item.name))
+                        ForEach(delegationGroups, id: \.provider) { group in
+                            Section(model.providerName(group.provider)) {
+                                ForEach(group.names, id: \.self) { name in
+                                    Text(model.label(for: name)).tag(Optional(name))
+                                }
+                            }
                         }
                     }
                     if delegationModel != nil {
@@ -127,6 +131,10 @@ struct AntigravityView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
         }
+    }
+
+    private var delegationGroups: [(provider: String, names: [String])] {
+        model.groupModels(model.models.map(\.name).filter { !$0.lowercased().contains("embed") })
     }
 
     private var conversation: some View {
