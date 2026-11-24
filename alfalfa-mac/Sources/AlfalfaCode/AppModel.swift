@@ -534,6 +534,7 @@ final class AppModel: ObservableObject {
                          configuration: BrainstormConfiguration, reference: URL?) -> Bool {
         guard let folder, let launcher, !moderator.model.isEmpty, !topic.isEmpty, topic.count <= 4_000,
               !moderator.isClaudeCode,
+              !configuration.participants.contains(where: \.isClaudeCode),
               BrainstormConfiguration.participantRange.contains(configuration.participants.count),
               (configuration.participants.count...BrainstormConfiguration.maximumTurns).contains(configuration.limit)
         else { return false }

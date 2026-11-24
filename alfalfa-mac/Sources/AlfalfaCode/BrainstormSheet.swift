@@ -25,7 +25,13 @@ struct BrainstormSheet: View {
     @State private var groupName = ""
 
     private var groups: [BrainstormGroup] {
-        (try? JSONDecoder().decode([BrainstormGroup].self, from: groupData)) ?? []
+        let stored = (try? JSONDecoder().decode([BrainstormGroup].self, from: groupData)) ?? []
+        return stored.map { group in
+            BrainstormGroup(id: group.id, name: group.name, moderator: group.moderator.replacingClaudeCode,
+                            configuration: BrainstormConfiguration(
+                                limit: group.configuration.limit,
+                                participants: group.configuration.participants.map(\.replacingClaudeCode)))
+        }
     }
 
     private var configuration: BrainstormConfiguration {
@@ -46,17 +52,12 @@ struct BrainstormSheet: View {
 
     private var missingProviders: Bool {
         ([moderator] + participants.map(\.selection)).contains {
-            !$0.isClaudeCode && app.info(for: $0.model)?.missingKey != nil
+            app.info(for: $0.model)?.missingKey != nil
         }
     }
 
-    private var hasClaudeCode: Bool { participants.contains { $0.selection.isClaudeCode } }
-    private var claudeCodeInstalled: Bool { ClaudeCodeLaunch.executable(includePath: false) != nil }
-    private var hasAnthropicKey: Bool { app.providers.contains { $0.id == "anthropic" && $0.hasKey } }
-
     private var canStart: Bool {
         !cleanTopic.isEmpty && cleanTopic.count <= 4_000 && !missingProviders
-            && (!hasClaudeCode || (claudeCodeInstalled && hasAnthropicKey))
     }
 
     var body: some View {
@@ -98,15 +99,9 @@ struct BrainstormSheet: View {
             question
             roster
             turnLimit
-            if hasClaudeCode && !claudeCodeInstalled {
-                Text("Instala el CLI oficial de Claude Code para usar este participante.")
-                    .font(.callout).foregroundStyle(Theme.warning)
-            }
-            if missingProviders || (hasClaudeCode && !hasAnthropicKey) {
+            if missingProviders {
                 HStack {
-                    Text(hasClaudeCode && !hasAnthropicKey
-                         ? "Claude Code en la sala requiere una clave API de Anthropic."
-                         : "Configura los proveedores de los modelos elegidos para empezar.")
+                    Text("Configura los proveedores de los modelos elegidos para empezar.")
                         .font(.callout).foregroundStyle(Theme.warning)
                     Button("Proveedores…") {
                         UserDefaults.standard.set(SettingsSection.proveedores.rawValue, forKey: Preferences.Key.section)
@@ -225,7 +220,7 @@ struct BrainstormSheet: View {
                 participant("Moderador", selection: $moderator)
                 ForEach($participants) { $row in
                     if let index = participants.firstIndex(where: { $0.id == row.id }) {
-                        participant(BrainstormConfiguration.participantName(index), selection: $row.selection, allowsClaudeCode: true,
+                        participant(BrainstormConfiguration.participantName(index), selection: $row.selection,
                                     remove: participants.count > BrainstormConfiguration.participantRange.lowerBound
                                         ? { participants.removeAll { $0.id == row.id } } : nil)
                     }
@@ -300,33 +295,17 @@ struct BrainstormSheet: View {
     }
 
     private func modelLabel(_ participant: BrainstormParticipant) -> String {
-        if let model = participant.claudeCodeModel { return model.label + " · Claude Code" }
         let model = participant.model
         return app.label(for: model) + " · " + app.providerName(ModelProvider.id(of: model, in: app.models))
     }
 
     private func participant(_ name: String, selection: Binding<BrainstormParticipant>,
-                             allowsClaudeCode: Bool = false, remove: (() -> Void)? = nil) -> some View {
+                             remove: (() -> Void)? = nil) -> some View {
         GridRow {
             Text(name).frame(width: 124, alignment: .leading)
             Menu {
                 ModelMenuItems(app: app, groups: app.modelGroups, selected: selection.wrappedValue.model) { name in
                     selection.wrappedValue.model = name
-                }
-                if allowsClaudeCode {
-                    Section("Claude Code · API de Anthropic") {
-                        ForEach(ClaudeCodeLaunch.Model.allCases, id: \.rawValue) { model in
-                            Button {
-                                selection.wrappedValue.model = model.brainstormID
-                            } label: {
-                                if selection.wrappedValue.model == model.brainstormID {
-                                    Label(model.label, systemImage: "checkmark")
-                                } else {
-                                    Text(model.label)
-                                }
-                            }
-                        }
-                    }
                 }
             } label: {
                 Text(modelLabel(selection.wrappedValue)).lineLimit(1).truncationMode(.middle)

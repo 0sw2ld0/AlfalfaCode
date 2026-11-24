@@ -5,8 +5,14 @@ public struct BrainstormParticipant: Codable, Equatable, Sendable {
     public var effort: String
 
     public var isClaudeCode: Bool { model.hasPrefix("claude-code/") }
-    public var claudeCodeModel: ClaudeCodeLaunch.Model? {
-        ClaudeCodeLaunch.Model.allCases.first { $0.brainstormID == model }
+    public var replacingClaudeCode: Self {
+        let replacement = switch model {
+        case "claude-code/haiku": "anthropic/claude-haiku-5-5"
+        case "claude-code/sonnet": "anthropic/claude-sonnet-5-5"
+        case "claude-code/opus": "anthropic/claude-opus-5-5"
+        default: model
+        }
+        return Self(model: replacement, effort: effort)
     }
 
     public init(model: String, effort: String) {

@@ -342,14 +342,10 @@ En macOS, abre **Lluvia de ideas** desde el menú de modo. **Guardar como grupo�
 guarda el moderador, los participantes, sus modelos y esfuerzos y el máximo de
 intervenciones con un nombre que puedes volver a elegir en otras salas.
 
-Como participante puedes elegir **Claude Code** con Haiku, Sonnet u Opus y su
-esfuerzo. Requiere el CLI oficial instalado y una clave API en **Ajustes ▸
-Proveedores ▸ Anthropic**. AlfalfaCode envía el tema, el adjunto de texto y el
-contexto del turno, recoge la respuesta del CLI y suma el coste que devuelve al
-presupuesto de la sala. La intervención es de texto, con herramientas, MCP y
-Chrome desactivados. El moderador y los encargos de prototipos usan modelos
-nativos de AlfalfaCode. En `--lluvia-participantes`, los identificadores son
-`claude-code/haiku`, `claude-code/sonnet` y `claude-code/opus`.
+Para usar Haiku, Sonnet u Opus en la sala, elige un modelo del proveedor
+**Anthropic**. Los grupos guardados con participantes de Claude Code pasan
+al modelo de la misma familia en Anthropic y conservan su esfuerzo. Para
+trabajar con tu suscripción de Claude, abre Claude Code desde la barra lateral.
 
 Al terminar la discusión, usa **Prototipar…** debajo de la síntesis. Elige uno de
 los participantes y, si su modelo admite visión, adjunta una imagen de referencia.

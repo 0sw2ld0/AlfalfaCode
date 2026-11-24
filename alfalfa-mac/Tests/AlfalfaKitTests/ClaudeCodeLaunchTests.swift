@@ -2,6 +2,15 @@ import AlfalfaKit
 import XCTest
 
 final class ClaudeCodeLaunchTests: XCTestCase {
+    func testSavedBrainstormParticipantsUseAnthropic() {
+        for family in ["haiku", "sonnet", "opus"] {
+            let saved = BrainstormParticipant(model: "claude-code/" + family, effort: "high")
+            let native = BrainstormParticipant(model: "anthropic/claude-" + family + "-5-5", effort: "high")
+            XCTAssertEqual(saved.replacingClaudeCode, native)
+            XCTAssertEqual(native.replacingClaudeCode, native)
+        }
+    }
+
     func testSessionStartsInTheSelectedFolderWithTheChosenModelAndMCPDisabled() throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }

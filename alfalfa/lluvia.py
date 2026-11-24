@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-from . import claude_code
-
 MINIMO, MAXIMO = 2, 12
 MAX_PARTICIPANTES = 6
 MAX_BYTES_REFERENCIA = 16 * 1024
@@ -31,6 +29,11 @@ REGLAS = (
 )
 
 
+def validar_modelo(modelo):
+    if modelo.startswith('claude-code/'):
+        raise ValueError('Elige un modelo del proveedor Anthropic para la sala. Puedes abrir Claude Code por separado.')
+
+
 def validar(limite, seleccion):
     if type(limite) is not int or not MINIMO <= limite <= MAXIMO:
         raise ValueError('La lluvia de ideas admite de 2 a 12 intervenciones.')
@@ -43,9 +46,7 @@ def validar(limite, seleccion):
                 or not isinstance(item['model'], str) or not item['model'].strip()
                 or len(item['model']) > 256 or item['effort'] not in ESFUERZOS):
             raise ValueError('Cada participante requiere un identificador de modelo y un esfuerzo válidos.')
-        if (claude_code.es_externo(item['model'])
-                and item['model'].removeprefix(claude_code.PREFIJO) not in claude_code.MODELOS):
-            raise ValueError('Elige Haiku, Sonnet u Opus para el participante de Claude Code.')
+        validar_modelo(item['model'])
 
 
 def validar_referencia(rutas):

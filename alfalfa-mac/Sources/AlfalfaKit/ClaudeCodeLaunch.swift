@@ -4,7 +4,6 @@ public enum ClaudeCodeLaunch {
     public enum Model: String, CaseIterable {
         case haiku, sonnet, opus
 
-        public var brainstormID: String { "claude-code/" + rawValue }
         public var label: String { rawValue.capitalized }
     }
 
