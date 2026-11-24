@@ -153,6 +153,15 @@ const servidor = createServer(async (req, res) => {
     res.writeHead(404).end();
 });
 
+servidor.on('error', error => {
+    // Sin servidor no hay demo: se cierra también el agente, que si no quedaría huérfano escribiendo a nadie.
+    console.error(error.code === 'EADDRINUSE'
+        ? `El puerto ${opciones.puerto} está ocupado (¿otra demo abierta?). Ciérrala o usa --puerto N.`
+        : 'No se pudo abrir el servidor: ' + error.message);
+    agente.kill('SIGTERM');
+    process.exit(1);
+});
+
 servidor.listen(Number(opciones.puerto), '127.0.0.1', () => {
     console.log(`Demo del perfil ui en http://127.0.0.1:${opciones.puerto}`
         + (opciones.simulado ? ' (agente simulado)' : ''));

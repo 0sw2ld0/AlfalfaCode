@@ -205,3 +205,55 @@ def test_el_agente_simulado_de_la_demo_habla_pacai_valido():
     filas = next(n for n in tablas[1]['nodes'] if n['id'] == 'tabla')['props']['rows']
     assert filas[-1] == {'id': 'T-21', 'title': 'Nuevo', 'priority': 'Alta'}
     assert all(errores_de('update', t) == [] for t in tablas)
+
+
+def test_los_identificadores_con_tildes_y_enes_se_pasan_a_ascii_y_el_texto_no():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'Lista_Tareas'}, [
+        '{"id":"root","component":"Stack","children":["añadir","campo_descripción"]}',
+        '{"id":"añadir","component":"Button","props":{"label":"Añadir tarea"},'
+        '"events":{"press":[{"set":{"núm":1}},{"send":"Añadir_Tarea","with":["descripción"]}]}}',
+        '{"id":"campo_descripción","component":"Input","props":{"name":"descripción","label":"Descripción"}}',
+        '{"state":{"descripción":""}}',
+    ])
+    assert errores == []
+    assert data['view'] == 'lista_tareas'
+    nodos = {n['id']: n for n in data['nodes']}
+    assert nodos['root']['children'] == ['anadir', 'campo_descripcion']
+    assert nodos['anadir']['props']['label'] == 'Añadir tarea'
+    assert nodos['anadir']['events']['press'] == [{'set': {'num': 1}},
+                                                  {'send': 'anadir_tarea', 'with': ['descripcion']}]
+    assert nodos['campo_descripcion']['props'] == {'name': 'descripcion', 'label': 'Descripción'}
+    assert data['state'] == {'descripcion': ''}
+    assert errores_de('update', data) == []
+
+
+def test_un_set_de_su_propio_campo_en_change_se_quita():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'v'}, [
+        '{"id":"a","component":"Input","props":{"name":"titulo"},"events":{"change":{"set":{"titulo":"$value"}}}}',
+        '{"id":"b","component":"Input","props":{"name":"otro"},'
+        '"events":{"change":[{"set":{"otro":"$value","filtro":true}}]}}',
+    ])
+    assert errores == []
+    nodos = {n['id']: n for n in data['nodes']}
+    assert 'events' not in nodos['a']
+    assert nodos['b']['events'] == {'change': [{'set': {'filtro': True}}]}
+
+
+def test_un_alt_dentro_del_nodo_y_las_claves_de_mas_no_tiran_el_nodo():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'v'}, [
+        '{"id":"root","component":"Stack","alt":"Tareas de hoy","style":"x","children":[]}'])
+    assert errores == []
+    assert data['nodes'] == [{'id': 'root', 'component': 'Stack', 'children': []}]
+    assert vistas.foto('v')['alt'] == 'Tareas de hoy'
+
+
+def test_con_buscador_el_manual_dice_que_busque_antes_de_dibujar():
+    cat = Catalogo()
+    assert 'web_search' in cat.manual(web=True)
+    assert 'web_search' not in cat.manual()
+    c = Cliente(perfiles=('work', 'ui'))
+    c.saludar()
+    assert 'web_search' in c.t.manual_ui(web=True) and 'web_search' not in c.t.manual_ui()

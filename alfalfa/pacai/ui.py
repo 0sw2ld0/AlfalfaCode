@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -40,9 +41,82 @@ RESUMEN = {
     'Image': 'src (https: o data:image/…), alt',
     'Code': 'code, language',
 }
+CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
 _APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 _CIERRE = re.compile(r'^\s*```\s*$')
+
+
+def ascii_de(texto: str, minusculas: bool = False) -> str:
+    """Un identificador en el ASCII que pide el formato: `añadir_tarea` → `anadir_tarea`, `descripción` →
+    `descripcion`. Lo que no es letra, cifra, `_` o `-` pasa a `_`. Un modelo que piensa en español escribe ids y
+    nombres con tildes y eñes, y un botón no debería perderse por eso."""
+    plano = ''.join(c for c in unicodedata.normalize('NFKD', texto) if not unicodedata.combining(c))
+    plano = re.sub(r'[^A-Za-z0-9_-]', '_', plano)
+    return plano.lower() if minusculas else plano
+
+
+def _normalizar_nodo(nodo: Any) -> Any:
+    """El nodo con sus identificadores en ASCII: id, hijos, `name` de los campos, enlaces `{"$": clave}` y, en sus
+    acciones, el nombre de `send`, las claves de `with` y las de `set`. Los textos que se ven no se tocan."""
+    if not isinstance(nodo, dict):
+        return nodo
+    nodo = dict(nodo)
+    if isinstance(nodo.get('id'), str):
+        nodo['id'] = ascii_de(nodo['id'])
+    if isinstance(nodo.get('children'), list):
+        nodo['children'] = [ascii_de(h) if isinstance(h, str) else h for h in nodo['children']]
+    if isinstance(nodo.get('props'), dict):
+        props = {}
+        for clave, valor in nodo['props'].items():
+            if clave == 'name' and isinstance(valor, str):
+                valor = ascii_de(valor)
+            elif isinstance(valor, dict) and set(valor) == {'$'} and isinstance(valor['$'], str):
+                valor = {'$': ascii_de(valor['$'])}
+            props[clave] = valor
+        nodo['props'] = props
+    if isinstance(nodo.get('events'), dict):
+        nodo['events'] = {evento: ([_normalizar_accion(a) for a in spec] if isinstance(spec, list)
+                                   else _normalizar_accion(spec)) for evento, spec in nodo['events'].items()}
+        _sin_set_de_su_campo(nodo)
+    return nodo
+
+
+def _sin_set_de_su_campo(nodo: dict) -> None:
+    """Un `Input` o `Select` ya guarda lo que escribe el usuario en la clave de su `name`. Un `set` de esa misma
+    clave en su `change` sobra y la machaca (los modelos escriben `{"set": {"titulo": "$value"}}`): se quita, y el
+    `change` entero si se queda vacío."""
+    nombre = (nodo.get('props') or {}).get('name')
+    cambio = nodo['events'].get('change')
+    if nodo.get('component') not in ('Input', 'Select') or not isinstance(nombre, str) or cambio is None:
+        return
+    acciones = []
+    for accion in cambio if isinstance(cambio, list) else [cambio]:
+        if isinstance(accion, dict) and isinstance(accion.get('set'), dict) and nombre in accion['set']:
+            resto = {k: v for k, v in accion['set'].items() if k != nombre}
+            if not resto:
+                continue
+            accion = dict(accion, set=resto)
+        acciones.append(accion)
+    if acciones:
+        nodo['events']['change'] = acciones if isinstance(cambio, list) else acciones[0]
+    else:
+        del nodo['events']['change']
+        if not nodo['events']:
+            del nodo['events']
+
+
+def _normalizar_accion(accion: Any) -> Any:
+    if not isinstance(accion, dict):
+        return accion
+    accion = dict(accion)
+    if isinstance(accion.get('send'), str):
+        accion['send'] = ascii_de(accion['send'], minusculas=True)
+    if isinstance(accion.get('with'), list):
+        accion['with'] = [ascii_de(k) if isinstance(k, str) else k for k in accion['with']]
+    if isinstance(accion.get('set'), dict):
+        accion['set'] = {ascii_de(k): v for k, v in accion['set'].items()}
+    return accion
 
 
 @lru_cache(maxsize=1)
@@ -64,6 +138,13 @@ def errores_de(definicion: str, dato: Any) -> list[str]:
 
 def _acciones(spec: Any) -> list[dict]:
     return spec if isinstance(spec, list) else [spec]
+
+
+# Sólo si el motor ofrece web_search y read_web: un modelo de código no las relaciona con «noticias» o «precios».
+BUSCAR_ANTES = '''- Si la respuesta necesita información actual o de fuera (noticias, precios, tiempo, versiones,
+  datos que no sabes), búscala primero con web_search y read_web; no digas que no tienes internet. Después
+  enséñala en una pantalla y pon la url de cada fuente (en un Text o en un Button con open_url).
+'''
 
 
 @dataclass
@@ -113,8 +194,9 @@ class Catalogo:
             errores.append('El cliente no ejecuta las acciones ' + ', '.join(sorted(usadas - self.acciones)) + '.')
         return errores
 
-    def manual(self) -> str:
-        """La parte del prompt de sistema que explica al modelo cómo dibujar en este cliente."""
+    def manual(self, web: bool = False) -> str:
+        """La parte del prompt de sistema que explica al modelo cómo dibujar en este cliente. Con `web` (el motor le
+        ofrece web_search y read_web), también que busque lo que no sabe antes de dibujarlo."""
         lineas = []
         if self.base:
             lineas += ['- ' + c + ': ' + RESUMEN[c] + ('; hijos' if c in CON_HIJOS else '')
@@ -127,9 +209,16 @@ class Catalogo:
                           + ('; eventos ' + ', '.join(spec['events']) if spec.get('events') else ''))
         acciones = ', '.join(sorted(self.acciones))
         return f'''
-Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conversación. Úsalas cuando ayuden
-más que el texto: tablas para comparar, formularios para pedir varios datos, botones para elegir. Para una
-respuesta corta, escribe texto normal. Una pantalla va en un bloque cercado, una línea JSON por nodo:
+Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conversación. Responde con una
+pantalla, no con una lista o una tabla de markdown, cuando la respuesta sea:
+- una lista o una tabla de cosas (tareas, opciones, resultados, comparaciones);
+- algo que el usuario tenga que elegir, rellenar o confirmar (botones, formularios);
+- datos que se entienden mejor en un gráfico;
+- algo que te pidan «dibujar», «enseñar», «mostrar» o «ver» aquí: eso es una pantalla, no arte ASCII.
+Para enseñar algo en el chat no crees archivos ni escribas una página web: dibújalo aquí. Crea archivos sólo si te
+piden cambiar el proyecto. Para una respuesta corta (un número, una frase, una explicación) escribe texto normal,
+y puedes acompañar una pantalla con una frase antes o después. Una pantalla va en un bloque cercado, una línea JSON
+por nodo:
 
 ```{VALLA} view=tickets
 {{"id":"root","component":"Stack","children":["titulo","enviar"]}}
@@ -137,18 +226,22 @@ respuesta corta, escribe texto normal. Una pantalla va en un bloque cercado, una
 {{"id":"enviar","component":"Button","props":{{"label":"Crear"}},"events":{{"press":{{"send":"crear_ticket"}}}}}}
 ```
 
+- Ids, view, nombres de acción y claves: ASCII sin tildes ni eñes (a-z, 0-9, _), p. ej. anadir_tarea. Los textos
+  que se ven (title, label, text…) van en español normal.
 - view: nombre de la pantalla ([a-z0-9_]). Para cambiarla después, repite view y manda solo los nodos nuevos
   o distintos (un id repetido reemplaza al nodo entero). Opcional: placement=latest la mueve al mensaje actual.
 - La raíz se llama root. children son ids de otros nodos del mismo view.
 - Líneas especiales: {{"remove":["id"]}} borra nodos, {{"state":{{"clave":valor}}}} da valores iniciales a los
-  campos (Input y Select leen y escriben la clave de su name), {{"alt":"resumen"}} describe la pantalla en texto.
+  campos, {{"alt":"resumen"}} describe la pantalla en texto.
+- Input y Select guardan solos lo que escribe el usuario en la clave de su name: no les pongas change ni set para
+  eso (no existe "$value"). Un formulario sólo necesita submit con {{"send":"…","with":["esa_clave"]}}.
 - Cualquier prop puede leer el estado con {{"$":"clave"}}.
 - Acciones disponibles: {acciones}. {{"send":"nombre","with":["clave"]}} te devuelve la acción con esos
   valores como un mensaje del usuario; {{"set":{{"clave":valor}}}} cambia el estado sin llamarte;
   {{"open_url":"https://…"}} abre un enlace. Como mucho un send por evento; change solo admite set.
 - Texto plano: sin HTML ni markdown dentro de los nodos. No pidas contraseñas ni datos de pago.
 - Máximo {self.max_nodos} nodos por pantalla.
-
+''' + (BUSCAR_ANTES if web else '') + '''
 Componentes:
 ''' + '\n'.join(lineas) + '\n'
 
@@ -201,7 +294,7 @@ class Vistas:
 
     def aplicar(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
         """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores."""
-        nombre = attrs.get('view', '')
+        nombre = ascii_de(attrs.get('view', ''), minusculas=True)
         if not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui necesita view=nombre ([a-z][a-z0-9_]*).']
         placement = attrs.get('placement')
@@ -218,11 +311,19 @@ class Vistas:
                 errores.append(f'Línea {n}: no es JSON.')
                 continue
             if isinstance(dato, dict) and dato and set(dato) <= {'remove', 'state', 'alt'}:
-                quitar += [i for i in dato.get('remove', []) if isinstance(i, str)]
-                estado.update(dato.get('state', {}) if isinstance(dato.get('state'), dict) else {})
+                quitar += [ascii_de(i) for i in dato.get('remove', []) if isinstance(i, str)]
+                if isinstance(dato.get('state'), dict):
+                    estado.update({ascii_de(k): v for k, v in dato['state'].items()})
                 if isinstance(dato.get('alt'), str):
                     vista.alt = dato['alt']
                 continue
+            if isinstance(dato, dict) and 'component' in dato:
+                # Despistes inofensivos de los modelos: un `alt` dentro del nodo es el resumen de la pantalla, y
+                # otra clave que no es de un nodo se descarta en vez de perder el nodo entero.
+                if isinstance(dato.get('alt'), str):
+                    vista.alt = dato['alt']
+                dato = {k: v for k, v in dato.items() if k in CLAVES_DE_NODO}
+            dato = _normalizar_nodo(dato)
             fallos = self.catalogo.errores_del_nodo(dato)
             if not fallos and dato['id'] not in vista.nodos and len(vista.nodos) >= self.catalogo.max_nodos:
                 fallos = [f'La pantalla ya tiene {self.catalogo.max_nodos} nodos.']
