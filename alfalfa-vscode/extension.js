@@ -219,6 +219,12 @@ class ProveedorChat {
             case 'registro':
                 this.salida.show(true);
                 break;
+            case 'accionPantalla':
+                await this.accionDePantalla(m.data, m.resumen);
+                break;
+            case 'abrirEnlace':
+                await this._abrirEnlace(m.url);
+                break;
         }
     }
 
@@ -235,6 +241,14 @@ class ProveedorChat {
         const id = this.cliente.enviarTexto(ref + texto, { encauzar: encauzar && this.cliente.ocupado });
         this._post({ tipo: 'usuario', id, texto, archivo: archivo?.ruta ? archivo : undefined,
             hora: Date.now(), encauzado: encauzar && this.cliente.ocupado });
+    }
+
+    /** Un botón o formulario de una pantalla del agente (perfil `ui`): va como mensaje del usuario. */
+    async accionDePantalla(data, resumen) {
+        if (!this.cliente || this.cliente.cerrado || !data || typeof data !== 'object') return;
+        const texto = String(resumen || data.name || '').slice(0, 500);
+        const id = this.cliente.accionDePantalla(data, texto);
+        this._post({ tipo: 'usuario', id, texto, hora: Date.now(), accion: true });
     }
 
     detener() {
@@ -493,6 +507,20 @@ class ProveedorChat {
         if (titulo) this.salida.info('Parche: ' + titulo);
     }
 
+    /** Un enlace de una pantalla del agente: sólo `https:`, y antes se pregunta. */
+    async _abrirEnlace(url) {
+        let destino;
+        try {
+            destino = vscode.Uri.parse(String(url), true);
+        } catch {
+            return;
+        }
+        if (destino.scheme !== 'https') return;
+        const si = await vscode.window.showInformationMessage('¿Abrir este enlace del agente?',
+            { modal: true, detail: destino.toString(true) }, 'Abrir');
+        if (si === 'Abrir') await vscode.env.openExternal(destino);
+    }
+
     async _abrirArchivo(ruta) {
         const carpeta = vscode.workspace.workspaceFolders?.[0];
         if (!ruta || !carpeta) return;
@@ -507,12 +535,13 @@ class ProveedorChat {
     _html(webview, media) {
         const nonce = Buffer.from(require('node:crypto').randomBytes(16)).toString('base64');
         const js = webview.asWebviewUri(vscode.Uri.joinPath(media, 'chat.js'));
+        const ui = webview.asWebviewUri(vscode.Uri.joinPath(media, 'ui-global.js'));
         const css = webview.asWebviewUri(vscode.Uri.joinPath(media, 'chat.css'));
         return `<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="${css}">
 <title>AlfalfaCode</title>
@@ -561,6 +590,7 @@ class ProveedorChat {
 </form>
 <template id="hoja-grande">${hoja('hoja-marca')}</template>
 <script nonce="${nonce}" src="${js}"></script>
+<script nonce="${nonce}" type="module" src="${ui}"></script>
 </body>
 </html>`;
     }

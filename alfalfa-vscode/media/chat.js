@@ -32,6 +32,8 @@
     const aprobaciones = new Map(); // approval id → tarjeta
     const ejecuciones = new Map();  // run_id → nombre del subagente
     const propios = new Set();      // ids de input enviados desde aquí
+    const pantallas = new Map();    // perfil `ui`: nombre de la vista → {vista, sitio} (sitio: el mensaje donde se ve)
+    let pendientes = [];            // bloques `pacai.ui/1` que llegan antes de que cargue ui.js: [entrada, data]
     let avisosSistema = null;       // <details> que agrupa los mensajes de sistema seguidos
     let gasto = { sesion: null, contexto: null, limite: null };
     let modelos = [];               // [{nombre, proveedor, esfuerzos}] de `alfalfa --modelos`
@@ -202,6 +204,7 @@
                 const entrada = { el: nodo, texto: textoDe(p.blocks), rol: p.role };
                 mensajes.set(m.id, entrada);
                 pintarMensaje(entrada);
+                pantallasDe(entrada, p.blocks);
                 break;
             }
             case 'message_delta':
@@ -209,8 +212,9 @@
                 const entrada = mensajes.get(p.message_id);
                 if (!entrada) break;
                 if (m.type === 'message_delta') entrada.texto += textoDe(p.blocks);
-                else if (p.blocks?.length) entrada.texto = textoDe(p.blocks);
+                else if (p.blocks?.some(b => b.type === 'text')) entrada.texto = textoDe(p.blocks);
                 pintarMensaje(entrada);
+                pantallasDe(entrada, p.blocks);
                 break;
             }
             case 'tool_start':
@@ -252,6 +256,7 @@
                 else if (p.outcome === 'failed') aviso('error', 'El turno falló' + (p.detail ? ': ' + p.detail : '.'));
                 else if (p.outcome === 'blocked') aviso('info', 'Turno bloqueado' + (p.detail ? ': ' + p.detail : '.'));
                 for (const tarjeta of aprobaciones.values()) cerrarAprobacion(tarjeta, 'Sin respuesta');
+                for (const { vista } of pantallas.values()) vista.liberar();
                 break;
             case 'error':
                 aviso('error', p.message || p.code);
@@ -657,15 +662,56 @@
         }
     }
 
-    function usuario({ id, texto: t, encauzado, archivo: adjunto, hora }) {
+    // -- pantallas del agente (perfil `ui`) ------------------------------------------
+    /** Los bloques `pacai.ui/1` de un mensaje: cada uno actualiza su vista, que se ve bajo el mensaje. */
+    function pantallasDe(entrada, bloques) {
+        if (entrada.rol === 'system') return;
+        for (const b of bloques || []) {
+            if (b.type !== 'structured' || b.schema !== 'pacai.ui/1' || !b.data) continue;
+            if (window.PantallasPacai) pantalla(entrada, b.data);
+            else pendientes.push([entrada, b.data]);
+        }
+    }
+
+    function pantalla(entrada, data) {
+        let p = pantallas.get(data.view);
+        if (!p) {
+            p = { vista: new window.PantallasPacai.Vista(data.view, {
+                alEnviar: (accion, resumen) => vscode.postMessage({ tipo: 'accionPantalla', data: accion, resumen }),
+                alAbrir: url => vscode.postMessage({ tipo: 'abrirEnlace', url }),
+                imagenesRemotas: false,       // el CSP del panel no las deja cargar; se ve su `alt`
+            }), sitio: null };
+            pantallas.set(data.view, p);
+        }
+        if (data.rev <= p.vista.rev) return;                     // revisión vieja
+        const lugar = entrada.el;
+        const mover = p.sitio === null || ((data.placement ?? p.vista.placement) === 'latest' && p.sitio !== lugar);
+        // Donde estaba queda una copia apagada de cómo se veía antes de este cambio.
+        if (mover && p.sitio) p.vista.elemento.replaceWith(p.vista.foto());
+        const bajar = alFinal();
+        p.vista.aplicar(data);
+        if (mover) {
+            lugar.appendChild(p.vista.elemento);
+            p.sitio = lugar;
+        }
+        bajar();
+    }
+
+    window.addEventListener('pantallas-listas', () => {
+        const cola = pendientes;
+        pendientes = [];
+        for (const [entrada, data] of cola) pantalla(entrada, data);
+    });
+
+    function usuario({ id, texto: t, encauzado, archivo: adjunto, hora, accion }) {
         if (id) propios.add(id);
-        if (!titulado) {
+        if (!titulado && !accion) {
             titulado = true;
             $('titulo').textContent = t.split('\n')[0].slice(0, 80);
         }
         marcaDeTiempo(hora);
         horaPendiente = true;
-        const nodo = añadir(el('div', 'mensaje usuario' + (encauzado ? ' encauzado' : '')));
+        const nodo = añadir(el('div', 'mensaje usuario' + (encauzado ? ' encauzado' : '') + (accion ? ' accion' : '')));
         if (adjunto?.ruta) {
             const chip = el('span', 'chip', adjunto.ruta.split('/').pop() + (adjunto.lineas ? ':' + adjunto.lineas : ''));
             chip.title = adjunto.ruta;
@@ -684,6 +730,7 @@
             case 'reinicio':
                 conversacion.replaceChildren();
                 mensajes.clear(); herramientas.clear(); aprobaciones.clear(); ejecuciones.clear(); propios.clear();
+                pantallas.clear(); pendientes = [];
                 avisosSistema = null;
                 gasto = { sesion: null, contexto: null, limite: null };
                 ocupado = false; vivo = false;

@@ -7,6 +7,10 @@ const { EventEmitter } = require('node:events');
 const { createInterface } = require('node:readline');
 
 const VERSION = '0.3';
+// Perfil `ui`: el panel dibuja las pantallas del agente con el catálogo base (media/ui.js).
+const CATALOGO_UI = { version: '1', catalog: 'base', actions: ['send', 'set', 'open_url'],
+    limits: { max_nodes: 300, max_depth: 12 } };
+const ESQUEMA_ACCION = 'pacai.ui.action/1';
 // Los modos no se listan aquí: los anuncia el motor (`alfalfa.session` → `modes`) y él valida el que llega.
 const MODO_VALIDO = /^[a-z][a-z0-9_]{0,40}$/;
 
@@ -69,7 +73,7 @@ class ClientePacai extends EventEmitter {
         const lineas = createInterface({ input: proceso.stdout, crlfDelay: Infinity });
         lineas.on('line', linea => this._recibir(linea));
         this.saludo = this._enviar('hello', {
-            versions: [VERSION], profiles: ['work'], extensions: ['alfalfa'],
+            versions: [VERSION], profiles: ['work', 'ui'], extensions: ['alfalfa'], render: { ui: CATALOGO_UI },
             implementation: { name: 'alfalfa-vscode', version: o.version ?? '0.0.0' },
         });
     }
@@ -85,6 +89,22 @@ class ClientePacai extends EventEmitter {
         }
         const payload = { blocks };
         if (encauzar && this.raiz) {
+            payload.mode = 'steer';
+            payload.run_id = this.raiz;
+            payload.alfalfa = { redirect: false };
+        }
+        return this._enviar('input', payload);
+    }
+
+    /**
+     * Lo que el usuario pulsó o envió en una pantalla del agente: un `input` con su texto legible y el bloque
+     * `pacai.ui.action/1`. Con una ejecución en curso entra en ella (steer), como un mensaje.
+     */
+    accionDePantalla(data, resumen) {
+        this.iniciar();
+        const payload = { blocks: [{ type: 'text', text: resumen },
+                                   { type: 'structured', schema: ESQUEMA_ACCION, data }] };
+        if (this.raiz) {
             payload.mode = 'steer';
             payload.run_id = this.raiz;
             payload.alfalfa = { redirect: false };
@@ -191,4 +211,4 @@ function tipoDe(ruta) {
     }[ext] ?? 'text/plain';
 }
 
-module.exports = { ClientePacai, VERSION };
+module.exports = { ClientePacai, VERSION, CATALOGO_UI };

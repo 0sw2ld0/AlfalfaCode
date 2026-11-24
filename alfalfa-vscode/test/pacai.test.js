@@ -100,3 +100,37 @@ test('una secuencia rota se avisa como fallo', async () => {
     c.cerrar();
     await once(c, 'salida');
 });
+
+test('pide el perfil ui con el catálogo base', async () => {
+    const { c } = cliente();
+    const enviados = [];
+    c.on('enviado', m => enviados.push(m));
+    const empezada = esperar(c, 'session_started');
+    c.iniciar();
+    const s = await empezada;
+    const hola = enviados.find(m => m.type === 'hello');
+    assert.deepEqual(hola.payload.profiles, ['work', 'ui']);
+    assert.equal(hola.payload.render.ui.catalog, 'base');
+    assert.ok(s.payload.profiles.includes('ui'));
+    c.cerrar();
+    await once(c, 'salida');
+});
+
+test('una acción de pantalla va como input con su texto y su bloque, dentro del turno en curso', async () => {
+    const { c } = cliente();
+    const enviados = [];
+    c.on('enviado', m => enviados.push(m));
+    const peticion = esperar(c, 'approval_request');
+    c.enviarTexto('hola');
+    await peticion;                                    // el turno sigue abierto, esperando el permiso
+    const data = { view: 'tickets', rev: 2, node: 'crear', event: 'press', name: 'crear', values: { title: 'Uno' } };
+    c.accionDePantalla(data, 'Pulsé «Crear»');
+    const input = enviados.at(-1);
+    assert.equal(input.type, 'input');
+    assert.equal(input.payload.mode, 'steer');
+    assert.equal(input.payload.run_id, c.raiz);
+    assert.deepEqual(input.payload.blocks, [{ type: 'text', text: 'Pulsé «Crear»' },
+        { type: 'structured', schema: 'pacai.ui.action/1', data }]);
+    c.cerrar();
+    await once(c, 'salida');
+});
