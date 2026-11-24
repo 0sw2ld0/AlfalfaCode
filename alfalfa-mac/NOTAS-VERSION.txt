@@ -1,2 +1,2 @@
-Elige Claude Code como participante de Lluvia de ideas, con Haiku, Sonnet u Opus y el esfuerzo de tu elección.
-Los aportes aparecen en el chat de la sala y respetan su límite de intervenciones. Se requiere el CLI oficial y una clave API de Anthropic.
+Lluvia de ideas usa los modelos Claude mediante el proveedor Anthropic. Los grupos guardados conservan la familia del modelo y el esfuerzo.
+Claude Code sigue disponible en la barra lateral para abrir el CLI oficial con tu sesión de Claude.
