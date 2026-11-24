@@ -1256,7 +1256,18 @@ class WorkspaceTools:
                 from ...lluvia import reservar
                 args = reservar(self.runtime.manager, name, args)
             if name == 'spawn_agent':
-                return await subagentes.lanzar(self.runtime, args)
+                antes = len(subagentes.lista())
+                try:
+                    return await subagentes.lanzar(self.runtime, args)
+                except Exception:
+                    # Lo reservado para un participante que no llegó a existir (modelo no permitido,
+                    # mensaje demasiado largo…) se devuelve: si no, la sala queda desajustada y no
+                    # puede invitar a nadie más.
+                    task = self.runtime.manager.task
+                    if task.get('lluvia_limite') and len(subagentes.lista()) == antes and task.get('lluvia_usados'):
+                        task['lluvia_usados'] -= 1
+                        self.runtime.manager.save()
+                    raise
             if name == 'wait_agent':
                 return await subagentes.esperar(args)
             if name == 'send_input':

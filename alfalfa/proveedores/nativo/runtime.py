@@ -240,6 +240,8 @@ AVISO_DE_BUCLE = ('Esta misma llamada ya se repitió 3 veces sin que cambiara na
                   'termina y explica dónde te atascaste.')
 MAX_LLAMADAS_POR_RESPUESTA = 12
 MAX_LLAMADAS_RECIBIDAS = 100
+# Síntesis anticipadas del moderador que se descartan antes de aceptar la siguiente: falta alguien por hablar.
+MAX_DESCARTES_LLUVIA = 2
 NO_EJECUTADA_POR_TOPE = ('No se ejecutó: como mucho ' + str(MAX_LLAMADAS_POR_RESPUESTA) + ' llamadas por '
                          'respuesta. Repítela en la siguiente respuesta si aún hace falta.')
 _SUSTITUTO = re.compile('[\ud800-\udfff]')
@@ -3101,9 +3103,19 @@ class NativeRuntime:
                     es_moderador = not self.task.get('subagente_de')
                     if es_moderador and not self.task.get('lluvia_cerrada'):
                         faltan_participantes = cantidad_participantes(self.task) - len(self.manager.subagentes.lista())
-                    if faltan_participantes > 0:
-                        if permitida != 'spawn_agent':
-                            raise ValueError('La sala se interrumpió antes de dar un turno a cada participante.')
+                    if faltan_participantes > 0 and (
+                            permitida != 'spawn_agent'
+                            or self.state.get('lluvia_descartes', 0) >= MAX_DESCARTES_LLUVIA):
+                        # Ya no se puede invitar a nadie más (se agotaron los pasos o la sala se
+                        # desajustó) o el moderador insiste en cerrar: mejor una síntesis con lo
+                        # recibido que un turno fallido sin nada.
+                        faltan_participantes = 0
+                        allowed_tools = []
+                        context = context + [{'role': 'user', 'content': (
+                            'Cierra con una síntesis de los aportes recibidos. No todos los participantes '
+                            'llegaron a intervenir: dilo en la síntesis.'
+                        )}]
+                    elif faltan_participantes > 0:
                         context = context + [{'role': 'user', 'content': (
                             f'Todavía hay participantes sin primer turno ({faltan_participantes}). '
                             'Usa spawn_agent para invitar al siguiente antes de sintetizar.'
@@ -3245,7 +3257,11 @@ class NativeRuntime:
                     self.save()
                     continue
                 if faltan_participantes > 0 and not calls:
-                    # Una síntesis anticipada no entra en el historial ni se muestra al usuario.
+                    # Una síntesis anticipada no entra en el historial: se avisa y se pide que invite al
+                    # siguiente. Tras MAX_DESCARTES_LLUVIA, la próxima respuesta se acepta como síntesis.
+                    self.state['lluvia_descartes'] = self.state.get('lluvia_descartes', 0) + 1
+                    self.manager.event(self.task, 'system', 'Lluvia de ideas · El moderador quiso cerrar antes '
+                                       'de que hablaran todos; se le pide que invite al siguiente participante.')
                     self.save()
                     continue
                 medido_hasta = len(self.state['messages'])

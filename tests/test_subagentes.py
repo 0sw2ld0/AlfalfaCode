@@ -381,10 +381,64 @@ def test_lluvia_acota_al_moderador_si_insiste_en_usar_herramientas_ajenas(tmp_pa
     guion = Guion([llamada('read_file', {'path': f'{i}.txt'}) for i in range(12)], {})
 
     assert correr(s, guion) != 0
-    assert len(guion.payloads['principal']) <= 6
-    assert 'La sala se interrumpió antes de dar un turno a cada participante.' in s.m.task['summary']
-    assert not s.m.task.get('lluvia_cerrada')
+    # Sin pasos para invitar, se le pide una síntesis sin herramientas en vez de cortar la sala.
+    assert len(guion.payloads['principal']) == 6
+    assert not nombres_de_herramientas(guion.payloads['principal'][-1])
+    assert 'Cierra con una síntesis' in guion.payloads['principal'][-1]['messages'][-1]['content']
+    assert 'La sala se interrumpió' not in s.m.task.get('summary', '')
     assert not s.m.subagentes.lista()
+
+
+def test_lluvia_acepta_la_sintesis_si_el_moderador_insiste_en_cerrar(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 6
+    s.m.read_only = True
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón una idea.'}),
+            {'role': 'assistant', 'content': 'Cierre 1.'},
+            {'role': 'assistant', 'content': 'Cierre 2.'},
+            {'role': 'assistant', 'content': 'Cierre 3: síntesis con un solo aporte.'},
+        ],
+        por_agente={'a1': [{'role': 'assistant', 'content': 'Probemos A.'}]},
+    )
+
+    assert correr(s, guion) == 0
+    # Dos descartes avisados y la tercera respuesta se acepta, sin herramientas.
+    assert 'Cierre 1.' not in s.textos() and 'Cierre 2.' not in s.textos()
+    assert 'Cierre 3: síntesis con un solo aporte.' in s.textos()
+    assert sum('quiso cerrar antes de que hablaran todos' in t for t in s.textos()) == 2
+    assert not nombres_de_herramientas(guion.payloads['principal'][-1])
+    assert 'No todos los participantes' in guion.payloads['principal'][-1]['messages'][-1]['content']
+    assert s.m.task['lluvia_usados'] == 1 and s.m.task['lluvia_cerrada'] is True
+
+
+def test_lluvia_devuelve_el_turno_de_un_participante_que_no_llega_a_existir(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 4
+    s.m.read_only = True
+    s.m.task['lluvia_participantes'] = [
+        {'model': 'modelo-uno', 'effort': 'low'},
+        {'model': 'claude-code/opus', 'effort': 'low'},   # validar_modelo lo rechaza al lanzarlo
+    ]
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón una idea.'}),
+            llamada('spawn_agent', {'message': 'Contrasta la idea.'}),
+            {'role': 'assistant', 'content': 'Cierre 1.'},
+            {'role': 'assistant', 'content': 'Cierre 2.'},
+            {'role': 'assistant', 'content': 'Síntesis con lo recibido.'},
+        ],
+        por_agente={'a1': [{'role': 'assistant', 'content': 'Probemos A.'}]},
+    )
+
+    assert correr(s, guion) == 0
+    # El turno del que no pudo lanzarse no se gasta y la sala sigue cuadrada: el moderador
+    # puede volver a invitar y, si insiste en cerrar, se acepta la síntesis.
+    assert s.m.task['lluvia_usados'] == 1 and len(s.m.subagentes.lista()) == 1
+    assert 'spawn_agent' in nombres_de_herramientas(guion.payloads['principal'][2])
+    assert 'Síntesis con lo recibido.' in s.textos()
+    assert s.m.task['lluvia_cerrada'] is True
 
 
 def test_lluvia_respeta_modelos_esfuerzos_y_un_tercer_participante(tmp_path, monkeypatch):
