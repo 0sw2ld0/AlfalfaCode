@@ -41,7 +41,7 @@ Otras opciones: `--alfalfa RUTA` para elegir el ejecutable y `--puerto N`. `--he
 | Archivo | Qué hace |
 | --- | --- |
 | `servidor.mjs` | El cliente PACAI. Abre el agente por stdio y negocia `work` + `ui` con el catálogo base. Pasa los mensajes del agente a la página por Server-Sent Events (`GET /eventos`) y recibe los de la página por `POST /enviar`. Solo escucha en `127.0.0.1`, rechaza otros orígenes y solo deja pasar `input`, `approval_result` e `interrupt`. |
-| `ui.js` | El renderizador del catálogo base: una `Vista` por pantalla, que aplica los `patch` y `replace`, guarda el estado de los campos y ejecuta las acciones `send`, `set` y `open_url`. Todo se construye con `createElement` y `textContent`: el texto del agente nunca se interpreta como HTML. |
+| `ui.js` | El original del renderizador, que la extensión de VS Code copia en `alfalfa-vscode/media/ui.js`. Dibuja el catálogo base: una `Vista` por pantalla, que aplica los `patch` y `replace`, guarda el estado de los campos y ejecuta las acciones `send`, `set` y `open_url`. Todo se construye con `createElement` y `textContent`: el texto del agente nunca se interpreta como HTML. |
 | `app.js` | La página de chat: mensajes, pantallas, aprobaciones, el botón de parar y la traza de mensajes. |
 | `estilo.css` | Estilos, con tema claro y oscuro. |
 | `agente_simulado.py` | El agente de guion para `--simulado`. |

@@ -1,7 +1,7 @@
 # Perfil `ui` de PACAI (borrador 1)
 
 > Estado: **borrador**, con las preguntas del primer borrador resueltas (sección 9). El motor de AlfalfaCode
-> ya lo habla, la app de Mac dibuja las pantallas y hay una demo web (sección 8); falta VS Code.
+> ya lo habla, y la app de Mac, la extensión de VS Code y una demo web dibujan las pantallas (sección 8).
 > Esquema: [`pacai-ui-1.schema.json`](../../alfalfa/pacai/pacai-ui-1.schema.json). Ejemplo completo:
 > [`ejemplos/ui-tickets.jsonl`](ejemplos/ui-tickets.jsonl).
 
@@ -267,9 +267,13 @@ pruebas en `tests/test_pacai_ui.py`.
    coloca según `placement`. Las vistas (`AlfalfaCode/Session/Screens/`) sólo dibujan: tabla, lista, formulario,
    campos, desplegable, gráfico con Swift Charts, imagen y código. Con `--stdio` v2, una acción sale como un
    mensaje con su texto legible.
-10. **Pendiente.** El renderizador de `alfalfa-vscode` (webview; puede reutilizar `ui.js`), que el modelo se entere
-    de los nodos rechazados para corregirlos y cómo se ven las pantallas al reanudar una sesión guardada (sin
-    comprobar).
+10. **Extensión de VS Code.** Pide `ui` en su `hello` (`lib/pacai.js`) y dibuja con una copia idéntica del `ui.js`
+    de la demo (`media/ui.js`; una prueba falla si se separan), cargado como módulo por `media/ui-global.js`. Las
+    acciones van del panel a la extensión (`accionPantalla`) y de ahí al agente; los enlaces los abre la
+    extensión tras preguntar, y las imágenes remotas no se cargan (se ve su `alt`).
+11. **Pendiente.** Que el modelo se entere de los nodos rechazados para corregirlos, y cómo se ven las pantallas
+    al reanudar una sesión guardada (sin comprobar). En la app de Mac y en VS Code las pantallas de un mensaje
+    salen debajo de todo su texto, no entre los párrafos donde las escribió el modelo.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 

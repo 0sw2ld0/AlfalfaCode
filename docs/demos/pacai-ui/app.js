@@ -95,9 +95,8 @@ function aprobacion(m) {
     alFinal();
 }
 
-/** Lo que una `Vista` manda cuando el usuario pulsa o envía algo. */
-function accion(data) {
-    const resumen = data.event === 'submit' ? `Envío «${data.name}»` : `Pulso «${data.name}»`;
+/** Lo que una `Vista` manda cuando el usuario pulsa o envía algo, con su texto legible. */
+function accion(data, resumen) {
     const blocks = [{ type: 'text', text: resumen }, { type: 'structured', schema: 'pacai.ui.action/1', data }];
     // Con una ejecución en marcha entra en ella (steer); si no, abre una nueva.
     enviar('input', raiz ? { blocks, mode: 'steer', run_id: raiz } : { blocks });

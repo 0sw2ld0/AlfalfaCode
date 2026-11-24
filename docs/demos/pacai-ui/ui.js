@@ -3,6 +3,9 @@
 // Una `Vista` guarda los nodos, el estado y la revisión de una pantalla, aplica los bloques `pacai.ui/1` que manda
 // el agente y la dibuja dentro de su contenedor. Todo se construye con createElement y textContent: ningún texto
 // del agente se interpreta como HTML.
+//
+// Este archivo es el original: la extensión de VS Code lleva una copia idéntica en `alfalfa-vscode/media/ui.js`
+// (una prueba de la extensión comprueba que no se separen).
 
 const SVG = 'http://www.w3.org/2000/svg';
 const MAX_PROFUNDIDAD = 12;
@@ -10,11 +13,16 @@ const MAX_PROFUNDIDAD = 12;
 export class Vista {
     /**
      * @param {string} nombre
-     * @param {{alEnviar: (accion: object) => void}} opciones
+     * @param {{alEnviar: (accion: object, resumen: string) => void, alAbrir?: (url: string) => void,
+     *          imagenesRemotas?: boolean}} opciones
+     *   `alEnviar` recibe el `data` de `pacai.ui.action/1` y su texto legible. `alAbrir` abre un enlace `https:` (por
+     *   defecto, con confirm y window.open). Sin `imagenesRemotas`, una imagen `https:` enseña su `alt`.
      */
-    constructor(nombre, { alEnviar }) {
+    constructor(nombre, { alEnviar, alAbrir = abrirConConfirmacion, imagenesRemotas = true }) {
         this.nombre = nombre;
         this.alEnviar = alEnviar;
+        this.alAbrir = alAbrir;
+        this.imagenesRemotas = imagenesRemotas;
         this.rev = 0;
         this.nodos = new Map();
         this.estado = {};
@@ -109,15 +117,14 @@ export class Vista {
             if ('set' in accion) {
                 Object.assign(this.estado, accion.set);
             } else if ('open_url' in accion) {
-                if (/^https:\/\//.test(accion.open_url) && confirm('¿Abrir ' + accion.open_url + '?')) {
-                    window.open(accion.open_url, '_blank', 'noopener,noreferrer');
-                }
+                if (/^https:\/\//.test(accion.open_url)) this.alAbrir(accion.open_url);
             } else if ('send' in accion) {
                 const values = {};
-                for (const clave of accion.with ?? Object.keys(this.estado)) values[clave] = this.estado[clave];
+                for (const clave of accion.with ?? Object.keys(this.estado)) values[clave] = this.estado[clave] ?? null;
                 this.enviando = nodo.id;
-                this.alEnviar({ view: this.nombre, rev: this.rev, node: nodo.id, event: evento, name: accion.send,
-                                values, ...(item !== undefined && { item }) });
+                const data = { view: this.nombre, rev: this.rev, node: nodo.id, event: evento, name: accion.send,
+                               values, ...(item !== undefined && { item }) };
+                this.alEnviar(data, resumen(data, etiquetaDe(this._props(nodo.props ?? {}))));
             }
         }
         this.dibujar();
@@ -129,6 +136,34 @@ export class Vista {
 }
 
 const DE_CONTENEDOR = new Set(['Stack', 'Card', 'Form']);
+
+/**
+ * Lo que el usuario «dijo» con una acción, para la conversación y para un cliente que no dibuje pantallas. Es el
+ * mismo texto que pone la app de Mac (`ScreenActionRequest.summary`).
+ */
+export function resumen(data, etiqueta) {
+    const que = `«${etiqueta || data.name}»`;
+    if (data.event === 'submit') return 'Envié el formulario ' + que;
+    if (data.event === 'row_press' || data.event === 'item_press') {
+        return 'Elegí ' + (data.item === undefined ? que : describir(data.item));
+    }
+    return 'Pulsé ' + que;
+}
+
+function etiquetaDe(props) {
+    return ['label', 'submit_label', 'title'].map(k => props[k]).find(v => typeof v === 'string' && v) ?? null;
+}
+
+/** Una fila como «T-12 · Alta · Login falla» (sus tres primeras claves en orden alfabético); un id, tal cual. */
+function describir(item) {
+    if (!item || typeof item !== 'object') return `«${item}»`;
+    const partes = Object.keys(item).sort().slice(0, 3).map(k => item[k]).filter(v => v !== null && v !== '');
+    return '«' + partes.join(' · ') + '»';
+}
+
+function abrirConConfirmacion(url) {
+    if (confirm('¿Abrir ' + url + '?')) window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 function crear(etiqueta, clase, texto) {
     const el = document.createElement(etiqueta);
@@ -263,7 +298,8 @@ const COMPONENTES = {
         return grafico(p);
     },
     Image(nodo, p) {
-        if (typeof p.src !== 'string' || !/^(https:\/\/|data:image\/(png|jpeg|gif|webp);base64,)/.test(p.src)) {
+        const valida = typeof p.src === 'string' && /^(https:\/\/|data:image\/(png|jpeg|gif|webp);base64,)/.test(p.src);
+        if (!valida || (!this.imagenesRemotas && p.src.startsWith('https:'))) {
             return crear('p', 'ui-text ui-text-muted', p.alt ?? '');
         }
         const img = crear('img', 'ui-imagen');
