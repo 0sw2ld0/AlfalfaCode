@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PACAI · perfil ui</title>
+    <link rel="stylesheet" href="/estilo.css">
+    <script type="module" src="/app.js"></script>
+</head>
+<body>
+    <header class="cabecera">
+        <div>
+            <h1>Perfil <code>ui</code> de PACAI</h1>
+            <p class="subtitulo" id="estado">Conectando…</p>
+        </div>
+        <label class="interruptor"><input type="checkbox" id="ver-mensajes"> Ver mensajes PACAI</label>
+    </header>
+    <main class="principal">
+        <section class="chat" id="chat" aria-live="polite"></section>
+        <aside class="traza" id="traza" hidden>
+            <h2>Mensajes PACAI</h2>
+            <ol id="lista-traza"></ol>
+        </aside>
+    </main>
+    <form class="redactor" id="redactor">
+        <textarea id="texto" rows="1" placeholder="Escribe al agente… (prueba «enséñame los tickets»)" required></textarea>
+        <button type="submit" id="enviar">Enviar</button>
+        <button type="button" id="parar" hidden>Parar</button>
+    </form>
+</body>
+</html>

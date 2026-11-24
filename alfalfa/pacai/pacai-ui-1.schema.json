@@ -770,6 +770,17 @@
      "propertyNames": {
       "$ref": "#/$defs/key"
      }
+    },
+    "item": {
+     "description": "En row_press, la fila pulsada; en item_press, el id del elemento.",
+     "anyOf": [
+      {
+       "type": "object"
+      },
+      {
+       "type": "string"
+      }
+     ]
     }
    },
    "required": [

@@ -1,7 +1,7 @@
 # Perfil `ui` de PACAI (borrador 1)
 
 > Estado: **borrador**, con las preguntas del primer borrador resueltas (sección 9). El motor de AlfalfaCode
-> ya lo habla (sección 8); faltan los renderizadores de la app de Mac y de VS Code.
+> ya lo habla y hay una demo web (sección 8); faltan los renderizadores de la app de Mac y de VS Code.
 > Esquema: [`pacai-ui-1.schema.json`](../../alfalfa/pacai/pacai-ui-1.schema.json). Ejemplo completo:
 > [`ejemplos/ui-tickets.jsonl`](ejemplos/ui-tickets.jsonl).
 
@@ -192,6 +192,8 @@ un bloque `text` con un resumen legible:
 
 - Sin una ejecución en marcha, el `input` abre una nueva (`new_run`, el modo por defecto). Con una en
   marcha, va como `steer` con su `run_id`.
+- `item` dice sobre qué elemento fue el evento: en `row_press`, la fila pulsada (el objeto de `rows`); en
+  `item_press`, el `id` del elemento de la lista. Los demás eventos no lo llevan.
 - `rev` es la revisión de la vista que el usuario tenía delante. Si el agente ya la cambió, la acción puede
   estar desfasada; el agente se lo dice al modelo y el modelo decide.
 - Tras un `send`, el cliente desactiva el control que lo disparó hasta que llegue una revisión nueva de la
@@ -256,9 +258,11 @@ pruebas en `tests/test_pacai_ui.py`.
 7. **Granularidad.** El motor entrega el texto del modelo mensaje a mensaje, no token a token. Por eso hoy las
    pantallas llegan cuando el modelo termina cada mensaje, no mientras lo escribe. El formato ya admite que
    llegue nodo a nodo; queda pendiente pasar el texto en vivo desde el proveedor.
-8. **Pendiente (AlfalfaUI).** Renderizadores en `alfalfa-mac` (SwiftUI, con `Codable`) y en `alfalfa-vscode`
-   (webview), y una demo en `docs/demos/pacai-ui/`. También falta que el modelo se entere de los nodos
-   rechazados para corregirlos.
+8. **Demo web.** [`docs/demos/pacai-ui/`](../demos/pacai-ui/README.md) tiene un renderizador web del catálogo
+   base (`ui.js`, sin dependencias) y un chat que lo usa, con AlfalfaCode o con un agente simulado.
+9. **Pendiente (AlfalfaUI).** Renderizadores en `alfalfa-mac` (SwiftUI, con `Codable`) y en `alfalfa-vscode`
+   (webview; puede reutilizar `ui.js`). También falta que el modelo se entere de los nodos rechazados para
+   corregirlos.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 

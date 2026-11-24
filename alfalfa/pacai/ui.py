@@ -277,7 +277,7 @@ class Vistas:
 
 def accion_para_el_modelo(textos: list[str], data: dict, rev_actual: int | None) -> str:
     """El mensaje de usuario que lee el modelo por una acción `send` de una pantalla."""
-    datos = {k: data[k] for k in ('view', 'node', 'event', 'name', 'values')}
+    datos = {k: data[k] for k in ('view', 'node', 'event', 'name', 'values', 'item') if k in data}
     aviso = ''
     if rev_actual is not None and data['rev'] < rev_actual:
         aviso = (f'\nOjo: el usuario tenía delante la revisión {data["rev"]} de la pantalla y ya va por la '

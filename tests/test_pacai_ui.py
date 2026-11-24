@@ -154,3 +154,54 @@ async def test_una_accion_mal_formada_es_invalid_message():
     respuesta = c.enviar('input', {'blocks': [{'type': 'structured', 'schema': 'pacai.ui.action/1',
                                                'data': {'view': 'v'}}]})
     assert respuesta[-1]['payload']['code'] == 'invalid_message'
+
+
+# -- la demo web (docs/demos/pacai-ui) ---------------------------------------------------------------------
+def test_el_agente_simulado_de_la_demo_habla_pacai_valido():
+    import json
+    import subprocess
+    import sys
+    import threading
+    from pathlib import Path
+
+    from tests.pacai_comun import SESION, problemas
+
+    def sobre(seq, tipo, payload):
+        return {'pacai': '0.3', 'id': 'c_%08d' % seq, 'type': tipo, 'session': SESION, 'sender': 'client',
+                'seq': seq, 'time': '2026-11-24T10:00:00Z', 'payload': payload}
+
+    accion = {'view': 'tickets', 'rev': 2, 'node': 'nuevo', 'event': 'submit', 'name': 'crear_ticket',
+              'values': {'title': 'Nuevo', 'priority': 'high'}}
+    entrada = [sobre(1, 'hello', {'versions': ['0.3'], 'profiles': ['work', 'ui'], 'extensions': ['alfalfa'],
+                                  'render': {'ui': {'version': '1'}}}),
+               sobre(2, 'input', {'blocks': [{'type': 'text', 'text': 'tickets'}]}),
+               sobre(3, 'input', {'blocks': [{'type': 'text', 'text': 'Crear'},
+                                             {'type': 'structured', 'schema': 'pacai.ui.action/1', 'data': accion}]})]
+    script = Path(__file__).resolve().parent.parent / 'docs' / 'demos' / 'pacai-ui' / 'agente_simulado.py'
+    # EOF equivale a `close`: la entrada sigue abierta hasta que terminan las dos ejecuciones.
+    proceso = subprocess.Popen([sys.executable, str(script)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, text=True)
+    reloj = threading.Timer(20, proceso.kill)              # si se atasca, readline devuelve '' y la prueba falla
+    reloj.start()
+    try:
+        proceso.stdin.write(''.join(json.dumps(m) + '\n' for m in entrada))
+        proceso.stdin.flush()
+        del_agente = []
+        while sum(m['type'] == 'run_finished' for m in del_agente) < 2:
+            linea = proceso.stdout.readline()
+            assert linea, 'el agente simulado se cerró antes de tiempo'
+            del_agente.append(json.loads(linea))
+        proceso.stdin.close()
+        del_agente += [json.loads(linea) for linea in proceso.stdout if linea.strip()]
+        proceso.wait(10)
+    finally:
+        reloj.cancel()
+        proceso.kill()
+    # El cliente lo mandó todo al empezar (encadenado tras su `hello`); el agente contestó después.
+    assert problemas(entrada + del_agente) == []
+    tablas = [b['data'] for m in del_agente for b in m['payload'].get('blocks', [])
+              if b.get('schema') == 'pacai.ui/1' and m['type'] == 'message_end']
+    assert len(tablas) == 2
+    filas = next(n for n in tablas[1]['nodes'] if n['id'] == 'tabla')['props']['rows']
+    assert filas[-1] == {'id': 'T-21', 'title': 'Nuevo', 'priority': 'Alta'}
+    assert all(errores_de('update', t) == [] for t in tablas)
