@@ -1,2 +1,2 @@
-Abre Claude Code desde la barra lateral de AlfalfaCode y elige la carpeta, el modelo y el esfuerzo de la sesión.
-Inicia sesión o renueva tu acceso con el comando oficial de Claude Code. La sesión se abre en Terminal con los MCP y la integración de Chrome desactivados.
+Elige Claude Code como participante de Lluvia de ideas, con Haiku, Sonnet u Opus y el esfuerzo de tu elección.
+Los aportes aparecen en el chat de la sala y respetan su límite de intervenciones. Se requiere el CLI oficial y una clave API de Anthropic.
