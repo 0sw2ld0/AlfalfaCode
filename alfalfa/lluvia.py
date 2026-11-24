@@ -37,7 +37,7 @@ def validar_modelo(modelo):
 
 def validar(limite, seleccion):
     if type(limite) is not int or not MINIMO <= limite <= MAXIMO:
-        raise ValueError('La lluvia de ideas admite de 2 a 12 intervenciones.')
+        raise ValueError('La lluvia de ideas admite de 2 a 12 turnos de participantes, más la síntesis del moderador.')
     if seleccion is None:
         return
     if not isinstance(seleccion, list) or not MINIMO <= len(seleccion) <= min(MAX_PARTICIPANTES, limite):

@@ -1449,7 +1449,7 @@ def main(argv=None):
                                                                     'ejecución')
     from .lluvia import MAXIMO, MINIMO
     parser.add_argument('--lluvia-de-ideas', type=int, choices=range(MINIMO, MAXIMO + 1), metavar='TURNOS',
-                        help='Límite de intervenciones para una sesión nueva de lluvia de ideas')
+                        help='Turnos de participantes de una sesión nueva de lluvia de ideas (la síntesis va aparte)')
     parser.add_argument('--lluvia-participantes', type=json.loads, metavar='JSON',
                         help='Lista de objetos model y effort para la lluvia de ideas')
     parser.add_argument('--prototipo', action='store_true',
