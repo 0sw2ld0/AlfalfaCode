@@ -533,6 +533,7 @@ final class AppModel: ObservableObject {
     func startBrainstorm(_ topic: String, moderator: BrainstormParticipant,
                          configuration: BrainstormConfiguration, reference: URL?) -> Bool {
         guard let folder, let launcher, !moderator.model.isEmpty, !topic.isEmpty, topic.count <= 4_000,
+              !moderator.isClaudeCode,
               BrainstormConfiguration.participantRange.contains(configuration.participants.count),
               (configuration.participants.count...BrainstormConfiguration.maximumTurns).contains(configuration.limit)
         else { return false }
@@ -545,7 +546,7 @@ final class AppModel: ObservableObject {
 
     func startBrainstormPrototype(from room: LiveSession, participant: BrainstormParticipant, reference: URL?) -> Bool {
         guard let launcher, let parent = room.sessionID, let discussion = room.brainstormDiscussion,
-              info(for: participant.model)?.missingKey == nil,
+              !participant.isClaudeCode, info(for: participant.model)?.missingKey == nil,
               reference == nil || allowsImages(participant.model) else { return false }
         let task = "Idea original:\n" + discussion.idea + "\n\nSíntesis de la sala:\n" + discussion.synthesis
         let title = "Mockups · " + String(discussion.idea.prefix(64))

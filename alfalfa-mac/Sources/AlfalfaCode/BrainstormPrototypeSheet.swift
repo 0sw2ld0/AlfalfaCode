@@ -27,11 +27,11 @@ struct BrainstormPrototypeSheet: View {
     @State private var queryFailed = false
     @State private var launchFailed = false
 
-    let participants: [BrainstormParticipant]
+    let participants: [(name: String, selection: BrainstormParticipant)]
     let directory: URL
     let start: (BrainstormParticipant, URL?) -> Bool
 
-    private var participant: BrainstormParticipant { participants[selection] }
+    private var participant: BrainstormParticipant { participants[selection].selection }
     private var canSeeReference: Bool { app.allowsImages(participant.model) }
     private var missingModel: Bool { app.info(for: participant.model)?.missingKey != nil }
     private var ready: Bool {
@@ -50,8 +50,8 @@ struct BrainstormPrototypeSheet: View {
             Divider()
             Picker("Agente de la sala", selection: $selection) {
                 ForEach(participants.indices, id: \.self) { index in
-                    let name = BrainstormConfiguration.participantName(index)
-                    Text(name + " · " + app.label(for: participants[index].model)).tag(index)
+                    let candidate = participants[index]
+                    Text(candidate.name + " · " + app.label(for: candidate.selection.model)).tag(index)
                 }
             }
             if missingModel {

@@ -46,12 +46,17 @@ struct BrainstormSheet: View {
 
     private var missingProviders: Bool {
         ([moderator] + participants.map(\.selection)).contains {
-            app.info(for: $0.model)?.missingKey != nil
+            !$0.isClaudeCode && app.info(for: $0.model)?.missingKey != nil
         }
     }
 
+    private var hasClaudeCode: Bool { participants.contains { $0.selection.isClaudeCode } }
+    private var claudeCodeInstalled: Bool { ClaudeCodeLaunch.executable(includePath: false) != nil }
+    private var hasAnthropicKey: Bool { app.providers.contains { $0.id == "anthropic" && $0.hasKey } }
+
     private var canStart: Bool {
         !cleanTopic.isEmpty && cleanTopic.count <= 4_000 && !missingProviders
+            && (!hasClaudeCode || (claudeCodeInstalled && hasAnthropicKey))
     }
 
     var body: some View {
@@ -74,6 +79,7 @@ struct BrainstormSheet: View {
         .background(Theme.background)
         .foregroundStyle(Theme.text)
         .onAppear { topicFocused = true }
+        .task { await app.reloadProviders() }
         .onChange(of: configuration) { checkSelectedGroup() }
         .onChange(of: moderator) { checkSelectedGroup() }
         .alert("Guardar grupo", isPresented: $namingGroup) {
@@ -92,14 +98,21 @@ struct BrainstormSheet: View {
             question
             roster
             turnLimit
-            if missingProviders {
+            if hasClaudeCode && !claudeCodeInstalled {
+                Text("Instala el CLI oficial de Claude Code para usar este participante.")
+                    .font(.callout).foregroundStyle(Theme.warning)
+            }
+            if missingProviders || (hasClaudeCode && !hasAnthropicKey) {
                 HStack {
-                    Text("Configura los proveedores de los modelos elegidos para empezar.")
+                    Text(hasClaudeCode && !hasAnthropicKey
+                         ? "Claude Code en la sala requiere una clave API de Anthropic."
+                         : "Configura los proveedores de los modelos elegidos para empezar.")
                         .font(.callout).foregroundStyle(Theme.warning)
                     Button("Proveedores…") {
                         UserDefaults.standard.set(SettingsSection.proveedores.rawValue, forKey: Preferences.Key.section)
                         openSettings()
                     }
+                    Button("Volver a comprobar") { Task { await app.reloadProviders() } }
                 }
             }
         }
@@ -212,7 +225,7 @@ struct BrainstormSheet: View {
                 participant("Moderador", selection: $moderator)
                 ForEach($participants) { $row in
                     if let index = participants.firstIndex(where: { $0.id == row.id }) {
-                        participant(BrainstormConfiguration.participantName(index), selection: $row.selection,
+                        participant(BrainstormConfiguration.participantName(index), selection: $row.selection, allowsClaudeCode: true,
                                     remove: participants.count > BrainstormConfiguration.participantRange.lowerBound
                                         ? { participants.removeAll { $0.id == row.id } } : nil)
                     }
@@ -286,21 +299,40 @@ struct BrainstormSheet: View {
         referenceError = nil
     }
 
+    private func modelLabel(_ participant: BrainstormParticipant) -> String {
+        if let model = participant.claudeCodeModel { return model.label + " · Claude Code" }
+        let model = participant.model
+        return app.label(for: model) + " · " + app.providerName(ModelProvider.id(of: model, in: app.models))
+    }
+
     private func participant(_ name: String, selection: Binding<BrainstormParticipant>,
-                             remove: (() -> Void)? = nil) -> some View {
+                             allowsClaudeCode: Bool = false, remove: (() -> Void)? = nil) -> some View {
         GridRow {
             Text(name).frame(width: 124, alignment: .leading)
             Menu {
                 ModelMenuItems(app: app, groups: app.modelGroups, selected: selection.wrappedValue.model) { name in
                     selection.wrappedValue.model = name
                 }
+                if allowsClaudeCode {
+                    Section("Claude Code · API de Anthropic") {
+                        ForEach(ClaudeCodeLaunch.Model.allCases, id: \.rawValue) { model in
+                            Button {
+                                selection.wrappedValue.model = model.brainstormID
+                            } label: {
+                                if selection.wrappedValue.model == model.brainstormID {
+                                    Label(model.label, systemImage: "checkmark")
+                                } else {
+                                    Text(model.label)
+                                }
+                            }
+                        }
+                    }
+                }
             } label: {
-                let model = selection.wrappedValue.model
-                let provider = app.providerName(ModelProvider.id(of: model, in: app.models))
-                Text(app.label(for: model) + " · " + provider).lineLimit(1).truncationMode(.middle)
+                Text(modelLabel(selection.wrappedValue)).lineLimit(1).truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .help(app.label(for: selection.wrappedValue.model))
+            .help(modelLabel(selection.wrappedValue))
             .accessibilityLabel("Modelo de " + name)
 
             Picker("Esfuerzo de " + name, selection: selection.effort) {

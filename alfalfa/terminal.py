@@ -371,6 +371,9 @@ class TerminalManager:
                     self.task['padre'] = parent
             if model:
                 self.task['model'] = model
+            from .claude_code import es_externo
+            if es_externo(self.task['model']):
+                raise ValueError('Claude Code sólo se puede elegir como participante de Lluvia de ideas.')
             if effort:
                 self.task['effort'] = effort
             if mode is not None:

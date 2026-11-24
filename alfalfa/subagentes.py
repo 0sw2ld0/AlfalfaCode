@@ -32,6 +32,7 @@ import re
 import time
 from pathlib import Path
 
+from . import adjuntos, claude_code
 from .reintentos.fallos import es_aviso_de_transporte
 
 # Donde están los agentes del usuario de Claude Code (~/.claude/agents). La suite la cambia por un
@@ -401,6 +402,9 @@ class Subagentes:
         if equipo:
             equipo.comprobar_modelo(modelo)
         principal = self.gestor.task
+        externo = claude_code.es_externo(modelo)
+        if externo and not principal.get('lluvia_limite'):
+            raise ValueError('Claude Code sólo se puede elegir como participante de Lluvia de ideas.')
         ident = self._nombre_libre(principal['id'])
         nombre = ' '.join(str(args.get('description') or '').split())[:80] or mensaje.split('\n')[0][:60]
         task = dict(id=principal['id'] + '-' + ident, cwd=principal['cwd'], objective=mensaje, status='created',
@@ -421,8 +425,14 @@ class Subagentes:
         task[sesion.CAMPO] = principal.setdefault(sesion.CAMPO, [])
         self.carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
         sub = Subagente(ident, nombre, nombre_tipo, task, self.carpeta)
-        sub.rt = self._runtime(sub, tipo)
-        if args.get('fork_context') is True:
+        if externo:
+            tema = next((m['content'] for m in padre_rt.state.get('messages', []) if m['role'] == 'user'),
+                        principal.get('objective') or '')
+            hijo = _GestorDeSubagente(self.gestor, sub, self.avisar)
+            sub.rt = claude_code.Participante(hijo, adjuntos.sin_etiquetas(tema))
+        else:
+            sub.rt = self._runtime(sub, tipo)
+        if not externo and args.get('fork_context') is True:
             # Como fork_context de Codex: parte de lo que ya sabe el principal.
             historia = [dict(m) for m in padre_rt.state.get('messages', [])[1:]
                         if m.get('role') in ('user', 'assistant', 'tool')]
@@ -619,7 +629,8 @@ class Subagentes:
             await asyncio.gather(sub.trabajo, return_exceptions=True)
         if len(self.vivos()) >= MAX_VIVOS:
             raise ValueError('Ya hay ' + str(MAX_VIVOS) + ' subagentes trabajando; espera o cierra alguno.')
-        sub.rt = self._runtime(sub, self.tipos().get(sub.tipo, TIPOS_INTEGRADOS['general']))
+        if not claude_code.es_externo(sub.task['model']):
+            sub.rt = self._runtime(sub, self.tipos().get(sub.tipo, TIPOS_INTEGRADOS['general']))
         sub.rt.state[MOTIVO] = contaminado
         self._empezar(sub, mensaje)
         if args.get('background') is True:

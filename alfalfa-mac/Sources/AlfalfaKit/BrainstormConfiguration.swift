@@ -4,6 +4,11 @@ public struct BrainstormParticipant: Codable, Equatable, Sendable {
     public var model: String
     public var effort: String
 
+    public var isClaudeCode: Bool { model.hasPrefix("claude-code/") }
+    public var claudeCodeModel: ClaudeCodeLaunch.Model? {
+        ClaudeCodeLaunch.Model.allCases.first { $0.brainstormID == model }
+    }
+
     public init(model: String, effort: String) {
         self.model = model
         self.effort = effort

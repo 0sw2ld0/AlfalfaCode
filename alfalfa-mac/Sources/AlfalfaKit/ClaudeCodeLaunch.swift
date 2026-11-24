@@ -1,20 +1,23 @@
 import Foundation
 
 public enum ClaudeCodeLaunch {
-    public enum Model: String {
+    public enum Model: String, CaseIterable {
         case haiku, sonnet, opus
+
+        public var brainstormID: String { "claude-code/" + rawValue }
+        public var label: String { rawValue.capitalized }
     }
 
     public enum Effort: String {
         case low, medium, high, xhigh, max
     }
 
-    public static func executable() -> URL? {
+    public static func executable(includePath: Bool = true) -> URL? {
         let files = FileManager.default
         let paths = (ProcessInfo.processInfo.environment["PATH"] ?? "")
             .split(separator: ":").filter { $0.hasPrefix("/") }.map(String.init)
         let nativeBin = files.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin").path
-        return ([nativeBin] + paths + ["/opt/homebrew/bin", "/usr/local/bin"])
+        return ([nativeBin] + (includePath ? paths : []) + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"])
             .map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("claude") }
             .first { files.isExecutableFile(atPath: $0.path) }
     }

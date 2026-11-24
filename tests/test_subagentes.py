@@ -5,6 +5,7 @@ TerminalManager y Transport reales; sólo se sustituye la inferencia
 subagente, según la tarea del runtime que pregunta."""
 import asyncio
 import json
+import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -482,3 +483,65 @@ def test_prototype_only_offers_images_and_requires_approval(tmp_path, monkeypatc
     else:
         assert not (s.root / 'mockup.png').exists()
         generate.assert_not_awaited()
+
+
+def test_lluvia_da_turnos_de_texto_a_claude_code_y_respeta_el_limite(tmp_path, monkeypatch):
+    from alfalfa import claude_code
+    from alfalfa.adjuntos import con_etiquetas
+
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.read_only = True
+    s.m.task.update(lluvia_limite=4, lluvia_participantes=[
+        {'model': 'modelo-nativo', 'effort': 'low'},
+        {'model': 'claude-code/sonnet', 'effort': 'high'},
+    ])
+    referencia = s.root / 'idea.md'
+    referencia.write_text('Referencia elegida para la sala.')
+    otro = s.root / 'privado.txt'
+    otro.write_text('Contenido que no se compartió.')
+    registro = tmp_path / 'llamadas.jsonl'
+    binario = tmp_path / 'claude'
+    binario.write_text(
+        f'#!{sys.executable}\n'
+        'import json, os, pathlib, sys\n'
+        'prompt = json.load(sys.stdin)\n'
+        'assert os.environ["ANTHROPIC_API_KEY"] == "clave-api-de-prueba"\n'
+        'assert "CLAUDE_CODE_OAUTH_TOKEN" not in os.environ\n'
+        'assert pathlib.Path(os.environ["HOME"]).resolve() == pathlib.Path.cwd()\n'
+        f'with pathlib.Path({str(registro)!r}).open("a") as salida:\n'
+        '    salida.write(json.dumps({"argv": sys.argv[1:], "prompt": prompt}) + "\\n")\n'
+        'print(json.dumps({"type": "system", "subtype": "init"}))\n'
+        'print(json.dumps({"type": "result", "is_error": False, "result": "Aporte externo.", "total_cost_usd": .02}))\n'
+    )
+    binario.chmod(0o700)
+    monkeypatch.setattr(claude_code, 'ejecutable', lambda: binario)
+    monkeypatch.setattr(claude_code.ajustes, 'anthropic_clave', lambda: 'clave-api-de-prueba')
+    monkeypatch.setenv('CLAUDE_CODE_OAUTH_TOKEN', 'sesion-de-claude-privada')
+    guion = Guion([
+        llamada('spawn_agent', {'message': 'Propón un enfoque.'}),
+        llamada('spawn_agent', {'message': con_etiquetas('Contrasta la propuesta nativa.', [str(otro)]),
+                               'model': 'claude-code/opus', 'reasoning_effort': 'low'}),
+        llamada('send_input', {'agent': 'a2', 'message': 'Mejora la propuesta.'}),
+        llamada('send_input', {'agent': 'a1', 'message': 'Cierra el contraste.'}),
+        {'role': 'assistant', 'content': 'Síntesis de la sala.'},
+    ], {})
+
+    assert correr(s, guion, con_etiquetas('¿Qué interfaz probamos?', [str(referencia)])) == 0
+    primera, segunda = [json.loads(linea) for linea in registro.read_text().splitlines()]
+    argumentos = primera['argv']
+    assert argumentos[argumentos.index('--model') + 1] == 'sonnet'
+    assert argumentos[argumentos.index('--effort') + 1] == 'high'
+    assert argumentos[argumentos.index('--tools') + 1] == ''
+    assert argumentos[argumentos.index('--output-format') + 1] == 'stream-json'
+    assert {'--bare', '--strict-mcp-config', '--no-chrome', '--no-session-persistence'} <= set(argumentos)
+    assert primera['prompt']['pregunta'] == '¿Qué interfaz probamos?'
+    assert 'Referencia elegida' in primera['prompt']['referencia']
+    assert 'Contrasta la propuesta nativa' in primera['prompt']['mensaje_del_moderador']
+    assert str(otro) not in str(primera)
+    assert 'Aporte externo.' in segunda['prompt']['aportes_propios_previos']
+    assert 'Es tu última intervención' in segunda['prompt']['mensaje_del_moderador']
+    assert s.m.task['lluvia_usados'] == 4
+    assert s.m.subagentes.agentes['a2'].task['coste_usd'] == pytest.approx(.04)
+    assert s.m.task['coste_usd'] >= .04
+    assert '**Contraste**\n\nAporte externo.' in s.textos()
+    assert 'a2' not in guion.payloads

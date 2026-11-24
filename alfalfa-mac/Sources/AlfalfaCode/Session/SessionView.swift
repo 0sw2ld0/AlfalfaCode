@@ -40,9 +40,9 @@ struct SessionView: View {
             }
         }
         .sheet(isPresented: $prototyping) {
-            if let configuration = session.brainstorm {
+            if !prototypeParticipants.isEmpty {
                 BrainstormPrototypeSheet(
-                    participants: configuration.participants,
+                    participants: prototypeParticipants,
                     directory: session.cwd,
                     start: { app.startBrainstormPrototype(from: session, participant: $0, reference: $1) }
                 )
@@ -51,6 +51,13 @@ struct SessionView: View {
     }
 
     // MARK: - Propiedades privadas
+
+    private var prototypeParticipants: [(name: String, selection: BrainstormParticipant)] {
+        (session.brainstorm?.participants ?? []).enumerated().compactMap { index, participant in
+            guard !participant.isClaudeCode else { return nil }
+            return (BrainstormConfiguration.participantName(index), participant)
+        }
+    }
 
     private var activityStore: BrowserActivityStore? {
         guard let id = session.sessionID else { return nil }
@@ -141,7 +148,7 @@ struct SessionView: View {
                                  isFirstPending: firstPending.map { isPermission(item, $0) } ?? false,
                                  closesRun: closesRun(items, index), liveWork: index == liveWork)
                             .id(item.id)
-                        if item.id == synthesisID {
+                        if item.id == synthesisID, !prototypeParticipants.isEmpty {
                             Button { prototyping = true } label: {
                                 Label("Prototipar…", systemImage: "photo")
                             }
