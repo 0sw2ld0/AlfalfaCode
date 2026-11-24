@@ -85,11 +85,11 @@ export class Vista {
         if (profundidad >= MAX_PROFUNDIDAD || vistos.has(nodo.id)) return document.createTextNode('');
         vistos.add(nodo.id);
         const p = this._props(nodo.props ?? {});
-        const dibujar = COMPONENTES[nodo.component];
+        const dibujar = COMPONENTES[nodo.component] ?? PROPIOS.get(nodo.component)?.dibujar;
         if (!dibujar) return document.createTextNode('');          // fuera del catálogo: no se dibuja
         const el = dibujar.call(this, nodo, p);
         el.dataset.nodo = nodo.id;
-        if (DE_CONTENEDOR.has(nodo.component)) {
+        if (DE_CONTENEDOR.has(nodo.component) || PROPIOS.get(nodo.component)?.hijos) {
             const destino = el.querySelector(':scope > .ui-hijos') ?? el;
             for (const id of nodo.children ?? []) {
                 const hijo = this.nodos.get(id);
@@ -136,6 +136,24 @@ export class Vista {
 }
 
 const DE_CONTENEDOR = new Set(['Stack', 'Card', 'Form']);
+// Componentes propios del cliente (los que declara en `render.ui.components`): nombre → {dibujar, hijos}.
+const PROPIOS = new Map();
+
+/**
+ * Registra cómo dibuja este cliente uno de sus componentes propios. `dibujar(nodo, props, util)` devuelve un
+ * elemento; `props` ya trae los enlaces `{"$": clave}` resueltos y `util` da `crear(etiqueta, clase, texto)` y
+ * `evento(nombre, item)` para disparar los eventos del nodo. Con `hijos`, sus hijos van dentro de `.ui-hijos`
+ * (o al final del elemento). Como en los base, nada del agente se interpreta como HTML: usa `crear` o textContent.
+ */
+export function registrarComponente(nombre, dibujar, { hijos = false } = {}) {
+    if (COMPONENTES[nombre]) throw new Error('No se puede sustituir un componente base: ' + nombre);
+    PROPIOS.set(nombre, {
+        hijos,
+        dibujar(nodo, props) {
+            return dibujar(nodo, props, { crear, evento: (nombreEvento, item) => this._evento(nodo, nombreEvento, item) });
+        },
+    });
+}
 
 /**
  * Lo que el usuario «dijo» con una acción, para la conversación y para un cliente que no dibuje pantallas. Es el
@@ -184,19 +202,42 @@ function campo(etiqueta, control, requerido) {
 
 const COMPONENTES = {
     Stack(nodo, p) {
-        return crear('div', `ui-stack ui-${p.direction === 'horizontal' ? 'fila' : 'columna'} ui-gap-${p.gap ?? 'medium'}`);
+        const sentido = { horizontal: 'fila', grid: 'rejilla' }[p.direction] ?? 'columna';
+        return crear('div', `ui-stack ui-${sentido} ui-gap-${p.gap ?? 'medium'}`);
     },
     Card(nodo, p) {
         const el = crear('section', 'ui-card');
+        const imagen = typeof p.image === 'string' && /^(https:\/\/|data:image\/(png|jpeg|gif|webp);base64,)/.test(p.image)
+            && (this.imagenesRemotas || !p.image.startsWith('https:'));
+        if (imagen) {
+            const img = crear('img', 'ui-card-imagen');
+            img.src = p.image;
+            img.alt = '';                              // decorativa: el título ya dice qué es
+            img.referrerPolicy = 'no-referrer';
+            img.loading = 'lazy';
+            el.append(img);
+        }
+        if (p.meta) el.append(crear('p', 'ui-card-meta', p.meta));
         if (p.title) el.append(crear('h3', 'ui-card-titulo', p.title));
         if (p.subtitle) el.append(crear('p', 'ui-card-subtitulo', p.subtitle));
+        if (Array.isArray(p.tags) && p.tags.length) {
+            const chips = crear('div', 'ui-card-tags');
+            for (const tag of p.tags.slice(0, 8)) chips.append(crear('span', 'ui-chip', tag));
+            el.append(chips);
+        }
+        if (p.detail) {
+            // El detalle se despliega aquí, sin volver a llamar al agente.
+            const detalle = crear('details', 'ui-card-detalle');
+            detalle.append(crear('summary', null, 'Ver más'), crear('p', null, p.detail));
+            el.append(detalle);
+        }
         el.append(crear('div', 'ui-hijos'));
         if (nodo.events?.press) {
             el.classList.add('ui-pulsable');
             el.tabIndex = 0;
             el.addEventListener('click', ev => {
                 // Un control dentro de la tarjeta tiene su propio evento.
-                if (ev.target.closest('.ui-card') === el && !ev.target.closest('button, input, select, textarea, tr, li')) {
+                if (ev.target.closest('.ui-card') === el && !ev.target.closest('button, input, select, textarea, tr, li, details')) {
                     this._evento(nodo, 'press');
                 }
             });

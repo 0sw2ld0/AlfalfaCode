@@ -28,8 +28,9 @@ EVENTOS = {'Card': ['press'], 'Table': ['row_press'], 'List': ['item_press'], 'B
            'Form': ['submit'], 'Input': ['change'], 'Select': ['change']}
 # Para el modelo: una línea por componente base (las propiedades exactas están en el esquema).
 RESUMEN = {
-    'Stack': 'direction (vertical|horizontal), gap (none|small|medium|large)',
-    'Card': 'title, subtitle',
+    'Stack': 'direction (vertical|horizontal|grid: tarjetas en columnas), gap (none|small|medium|large)',
+    'Card': 'title, subtitle, image (https:), meta (línea pequeña: fecha · tema), tags [texto], '
+            'detail (texto largo que el usuario despliega con «Ver más»)',
     'Text': 'text (texto plano), style (body|title|subtitle|caption|muted)',
     'Table': 'columns [{key, label}], rows [objetos]',
     'List': 'items [{id, title, subtitle}]',
@@ -144,6 +145,9 @@ def _acciones(spec: Any) -> list[dict]:
 BUSCAR_ANTES = '''- Si la respuesta necesita información actual o de fuera (noticias, precios, tiempo, versiones,
   datos que no sabes), búscala primero con web_search y read_web; no digas que no tienes internet. Después
   enséñala en una pantalla y pon la url de cada fuente (en un Text o en un Button con open_url).
+- No te rindas a la primera: si read_web falla (429, 403, error), lee otro de los resultados que ya tienes;
+  prueba al menos tres fuentes. Los títulos, fragmentos y fechas de los resultados de web_search ya sirven para
+  una tarjeta si citas su url. Si algo queda sin verificar, dilo en la tarjeta en vez de dejar al usuario sin nada.
 '''
 
 
@@ -226,6 +230,8 @@ por nodo:
 {{"id":"enviar","component":"Button","props":{{"label":"Crear"}},"events":{{"press":{{"send":"crear_ticket"}}}}}}
 ```
 
+- Para varias cosas con contenido (noticias, productos, resultados): un Stack direction=grid de Card, cada una con
+  title, meta, tags y su detail (el texto completo o un resumen largo), y un Button «Abrir fuente» con open_url.
 - Ids, view, nombres de acción y claves: ASCII sin tildes ni eñes (a-z, 0-9, _), p. ej. anadir_tarea. Los textos
   que se ven (title, label, text…) van en español normal.
 - view: nombre de la pantalla ([a-z0-9_]). Para cambiarla después, repite view y manda solo los nodos nuevos

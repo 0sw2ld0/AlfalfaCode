@@ -204,10 +204,8 @@ struct ScreenImage: View {
         let source = context.text("src", of: node) ?? ""
         let alt = context.text("alt", of: node) ?? ""
         Group {
-            if let image = Self.inline(source) {
-                Image(nsImage: image).resizable().scaledToFit()
-            } else if let url = URL(string: source), url.scheme == "https" {
-                AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }
+            if let picture = Self.picture(source, fill: false) {
+                picture
             } else {
                 Text(alt).font(.system(size: 13)).foregroundStyle(Theme.muted)
             }
@@ -215,6 +213,20 @@ struct ScreenImage: View {
         .frame(maxWidth: 520, maxHeight: 360, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .accessibilityLabel(alt)
+    }
+
+    // MARK: - Métodos públicos
+
+    /// La imagen de una fuente válida (`https:` o `data:image/…;base64,`); nil si no lo es. `fill` la recorta para
+    /// llenar su marco (la de una tarjeta); si no, se ve entera.
+    @ViewBuilder static func picture(_ source: String, fill: Bool = true) -> (some View)? {
+        if let image = inline(source) {
+            Image(nsImage: image).resizable().aspectRatio(contentMode: fill ? .fill : .fit)
+        } else if let url = URL(string: source), url.scheme == "https" {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: fill ? .fill : .fit)
+            } placeholder: { ProgressView() }
+        }
     }
 
     // MARK: - Métodos privados
@@ -226,4 +238,41 @@ struct ScreenImage: View {
               let data = Data(base64Encoded: String(source[source.index(after: comma)...])) else { return nil }
         return NSImage(data: data)
     }
+}
+
+/// Lo que una tarjeta lleva además de título y subtítulo: sus etiquetas y su detalle, que se despliega con «Ver más»
+/// sin volver a llamar al agente.
+struct ScreenCardExtras: View {
+
+    // MARK: - Propiedades
+
+    let tags: [String]
+    let detail: String?
+
+    var body: some View {
+        if !tags.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(Array(tags.prefix(8).enumerated()), id: \.offset) { _, tag in
+                        Text(tag).font(.system(size: 11)).foregroundStyle(Theme.text)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(Capsule().fill(Theme.alfalfa.opacity(0.16)))
+                    }
+                }
+            }
+        }
+        if let detail, !detail.isEmpty {
+            DisclosureGroup(isExpanded: $expanded) {
+                Text(detail).font(.system(size: 13)).foregroundStyle(Theme.text).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+            } label: {
+                Text(expanded ? "Ver menos" : "Ver más").font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.alfalfa)
+            }
+        }
+    }
+
+    // MARK: - Propiedades privadas
+
+    @State private var expanded = false
 }

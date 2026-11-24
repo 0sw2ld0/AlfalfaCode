@@ -343,3 +343,10 @@ tr.ui-pulsable:hover, li.ui-pulsable:hover, .ui-card.ui-pulsable:hover { backgro
 .ui-fondo-3 { background: var(--s3); } .ui-fondo-4 { background: var(--s4); } .ui-fondo-5 { background: var(--s5); }
 .ui-imagen { max-width: 100%; border-radius: 4px; }
 .ui-codigo { margin: 0; padding: 8px; border-radius: 4px; background: var(--codigo); overflow-x: auto; }
+.ui-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.ui-card-imagen { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; }
+.ui-card-meta { margin: 0; font-size: .8em; color: var(--alfalfa); font-weight: 600; text-transform: uppercase; }
+.ui-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.ui-chip { font-size: .8em; padding: 1px 7px; border-radius: 999px; background: var(--codigo); }
+.ui-card-detalle summary { cursor: pointer; color: var(--vscode-textLink-foreground); }
+.ui-card-detalle p { margin: 4px 0 0; white-space: pre-wrap; }

@@ -135,8 +135,8 @@ propiedades está en `pacai-ui-1.schema.json` (`$defs/base_props`).
 
 | Componente | Propiedades principales | Hijos | Eventos |
 | --- | --- | --- | --- |
-| `Stack` | `direction` (`vertical`/`horizontal`), `gap` (`none`/`small`/`medium`/`large`) | sí | — |
-| `Card` | `title`, `subtitle` | sí | `press` |
+| `Stack` | `direction` (`vertical`/`horizontal`/`grid`: tarjetas en columnas según el ancho), `gap` (`none`/`small`/`medium`/`large`) | sí | — |
+| `Card` | `title`, `subtitle`, `image` (`https:` o `data:image/…`), `meta` (línea pequeña: «19 nov · Salud»), `tags` (etiquetas), `detail` (texto largo que el usuario despliega con «Ver más», sin llamar al agente) | sí | `press` |
 | `Text` | `text` (texto plano, sin markdown), `style` (`body`/`title`/`subtitle`/`caption`/`muted`) | no | — |
 | `Table` | `columns` (`[{key, label}]`), `rows` (lista de objetos) | no | `row_press` |
 | `List` | `items` (`[{id, title, subtitle?}]`) | no | `item_press` |

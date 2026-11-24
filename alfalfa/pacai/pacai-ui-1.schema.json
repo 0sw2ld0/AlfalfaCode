@@ -802,7 +802,8 @@
        {
         "enum": [
          "vertical",
-         "horizontal"
+         "horizontal",
+         "grid"
         ]
        },
        {
@@ -843,6 +844,44 @@
       ]
      },
      "subtitle": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "image": {
+      "type": "string",
+      "pattern": "^(https://|data:image/(png|jpeg|gif|webp);base64,)"
+     },
+     "meta": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "tags": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 8
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "detail": {
       "anyOf": [
        {
         "type": "string"

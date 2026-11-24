@@ -46,15 +46,26 @@ struct ScreenNodeView: View {
     }
 
     @ViewBuilder private var stack: some View {
-        if context.text("direction", of: node) == "horizontal" {
+        switch context.text("direction", of: node) {
+        case "horizontal":
             HStack(alignment: .center, spacing: spacing) { children }
-        } else {
+        case "grid":
+            // Tarjetas en columnas, tantas como quepan.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: spacing, alignment: .top)],
+                      alignment: .leading, spacing: spacing) { children }
+        default:
             VStack(alignment: .leading, spacing: spacing) { children }
         }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let image = ScreenImage.picture(context.text("image", of: node) ?? "") {
+                image.frame(maxWidth: .infinity, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            if let meta = context.text("meta", of: node) {
+                Text(meta.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.alfalfa)
+            }
             if let title = context.text("title", of: node) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
@@ -63,6 +74,8 @@ struct ScreenNodeView: View {
                     }
                 }
             }
+            ScreenCardExtras(tags: node.prop("tags", in: context.state)?.array?.map(\.text) ?? [],
+                             detail: context.text("detail", of: node))
             children
         }
         .frame(maxWidth: .infinity, alignment: .leading)

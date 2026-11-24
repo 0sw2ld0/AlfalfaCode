@@ -104,7 +104,9 @@ function accion(data, resumen) {
 
 function ocupado(si) {
     parar.hidden = !si;
-    estado.textContent = si ? 'El agente está trabajando…' : `Sesión ${sesion?.slice(0, 10) ?? ''}… · perfil ui activo`;
+    // Un tema puede poner su propio texto de espera (`data-trabajando` en <body>).
+    const trabajando = document.body.dataset.trabajando || 'El agente está trabajando…';
+    estado.textContent = si ? trabajando : `Sesión ${sesion?.slice(0, 10) ?? ''}… · perfil ui activo`;
     if (!si) for (const { vista } of vistas.values()) vista.liberar();
 }
 
@@ -123,7 +125,7 @@ function recibir(m) {
         vistas = new Map();
         mensajes = new Map();
         raiz = null;
-        chat.replaceChildren();
+        chat.replaceChildren(...chat.querySelectorAll(':scope > .bienvenida'));   // la bienvenida del tema se queda
         listaTraza.replaceChildren();
         return;
     }
