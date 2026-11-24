@@ -169,10 +169,14 @@ class ClientePacai:
         return bloques
 
     def abrir(self, apertura):
-        salida = [self.mensaje('hello', {'versions': ['0.3'], 'profiles': ['work'], 'extensions': ['alfalfa'],
+        # El mismo `hello` que `PacaiClient.start()`: perfiles `work` y `ui`, el navegador y el catálogo base.
+        salida = [self.mensaje('hello', {'versions': ['0.3'], 'profiles': ['work', 'ui'], 'extensions': ['alfalfa'],
                                          'client_tools': [{'name': 'browser',
                                                            'description': 'El navegador propio de la app de Mac',
-                                                           'input_schema': {'type': 'object'}}]})]
+                                                           'input_schema': {'type': 'object'}}],
+                                         'render': {'ui': {'version': '1', 'catalog': 'base',
+                                                           'actions': ['send', 'set', 'open_url'],
+                                                           'limits': {'max_nodes': 300, 'max_depth': 12}}}})]
         if apertura.get('task') is not None or apertura.get('attachments'):
             self.esperando = True
             salida.append(self.mensaje('input', {'blocks': self.bloques(apertura.get('task') or '',

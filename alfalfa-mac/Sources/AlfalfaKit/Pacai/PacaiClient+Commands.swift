@@ -11,7 +11,11 @@ extension PacaiClient {
     /// `permiso_resuelto` de v2).
     public func send(_ command: AlfalfaCommand) -> Output {
         switch command {
-        case let .message(text, images, id): return message(command, text: text, images: images, id: id)
+        case let .message(text, images, id): return input(command, blocks: Self.blocks(text, images), id: id)
+        case let .screenAction(request, id):
+            return input(command, blocks: [["type": "text", "text": request.summary],
+                                           ["type": "structured", "schema": ScreenActionRequest.schema,
+                                            "data": request.data]], id: id)
         case let .permission(id, approved, session, site, always):
             return permission(id, approved: approved, session: session, site: site, always: always)
         case let .browserReply(reply):
@@ -82,12 +86,13 @@ extension PacaiClient {
         held.firstIndex { if case let .message(_, _, heldID) = $0 { return heldID == id } else { return false } }
     }
 
-    private func message(_ command: AlfalfaCommand, text: String, images: [String], id: String?) -> Output {
+    /// Un `input` del usuario (un mensaje o una acción de pantalla): entra en la ejecución en marcha o abre una.
+    private func input(_ command: AlfalfaCommand, blocks: [[String: Any]], id: String?) -> Output {
         if awaitingRun {
             held.append(command)
             return Output()
         }
-        var payload: [String: Any] = ["blocks": Self.blocks(text, images)]
+        var payload: [String: Any] = ["blocks": blocks]
         if let rootRun {
             // Con una ejecución en marcha entra en ella en la siguiente inferencia, sin cortar la respuesta
             // (`mensaje` de v2); «Redirigir» es aparte.

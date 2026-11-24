@@ -6,7 +6,7 @@
     "recibido": {
      "version": 2,
      "tipo": "sesion",
-     "id": "8446f942b81d47e9",
+     "id": "8eaa83ad65cc47fe",
      "cwd": "/proyecto",
      "modelo": "deepseek-v4.1-flash:cloud",
      "esfuerzo": "medium",
@@ -53,8 +53,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "Inicio spawn_agent · {'message': 'Revisa el README', 'description': 'Revisor', 'agent_type': 'explorador'}",
-     "hora": 1794813498.546536,
-     "turno": "1feb875ba0884e2e",
+     "hora": 1795539749.0717912,
+     "turno": "9d99d8306820423e",
      "herramienta": {
       "nombre": "spawn_agent",
       "fase": "inicio",
@@ -69,8 +69,8 @@
      "tipo": "evento",
      "rol": "system",
      "texto": "Subagente a1 (explorador, deepseek-v4.1-flash:cloud) empezó: Revisor",
-     "hora": 1794813498.5495942,
-     "turno": "1feb875ba0884e2e"
+     "hora": 1795539749.074751,
+     "turno": "9d99d8306820423e"
     }
    },
    {
@@ -84,7 +84,7 @@
        "tipo": "explorador",
        "estado": "trabajando",
        "modelo": "deepseek-v4.1-flash:cloud",
-       "desde": 1794813498.548699,
+       "desde": 1795539749.073893,
        "hasta": null,
        "actividad": "",
        "pasos": 0,
@@ -101,7 +101,7 @@
      "agente": "a1",
      "rol": "agent",
      "texto": "Informe del subagente",
-     "hora": 1794813498.588664
+     "hora": 1795539749.1109939
     }
    },
    {
@@ -115,7 +115,7 @@
        "tipo": "explorador",
        "estado": "trabajando",
        "modelo": "deepseek-v4.1-flash:cloud",
-       "desde": 1794813498.548699,
+       "desde": 1795539749.073893,
        "hasta": null,
        "actividad": "Informe del subagente",
        "pasos": 0,
@@ -131,8 +131,8 @@
      "tipo": "evento",
      "rol": "system",
      "texto": "Subagente a1 «Revisor» terminado: Informe del subagente",
-     "hora": 1794813498.6039739,
-     "turno": "1feb875ba0884e2e"
+     "hora": 1795539749.127383,
+     "turno": "9d99d8306820423e"
     }
    },
    {
@@ -146,8 +146,8 @@
        "tipo": "explorador",
        "estado": "terminado",
        "modelo": "deepseek-v4.1-flash:cloud",
-       "desde": 1794813498.548699,
-       "hasta": 1794813498.60115,
+       "desde": 1795539749.073893,
+       "hasta": 1795539749.1240928,
        "actividad": "",
        "pasos": 0,
        "informe": "Informe del subagente",
@@ -162,8 +162,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "spawn_agent\n{\"agent\": \"a1\", \"name\": \"Revisor\", \"type\": \"explorador\", \"status\": \"terminado\", \"result\": \"Informe del subagente\"}",
-     "hora": 1794813498.6080608,
-     "turno": "1feb875ba0884e2e",
+     "hora": 1795539749.132242,
+     "turno": "9d99d8306820423e",
      "herramienta": {
       "nombre": "spawn_agent",
       "fase": "fin"
@@ -201,8 +201,8 @@
      "tipo": "evento",
      "rol": "agent",
      "texto": "Hecho: Lanza un subagente",
-     "hora": 1794813498.6163452,
-     "turno": "1feb875ba0884e2e"
+     "hora": 1795539749.141495,
+     "turno": "9d99d8306820423e"
     }
    },
    {
@@ -220,7 +220,7 @@
      "resumen": "Hecho: Lanza un subagente",
      "codigo_salida": 0,
      "tokens": 6,
-     "turno": "1feb875ba0884e2e",
+     "turno": "9d99d8306820423e",
      "tokens_turno": 6
     }
    },
@@ -257,7 +257,8 @@
         "0.3"
        ],
        "profiles": [
-        "work"
+        "work",
+        "ui"
        ],
        "extensions": [
         "alfalfa"
@@ -270,7 +271,22 @@
           "type": "object"
          }
         }
-       ]
+       ],
+       "render": {
+        "ui": {
+         "version": "1",
+         "catalog": "base",
+         "actions": [
+          "send",
+          "set",
+          "open_url"
+         ],
+         "limits": {
+          "max_nodes": 300,
+          "max_depth": 12
+         }
+        }
+       }
       }
      },
      {
@@ -298,25 +314,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_ad2c816808ead6e6",
+     "id": "m_9e5e67f6f48085c6",
      "type": "hello",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 1,
-     "time": "2026-11-16T07:18:20.042Z",
+     "time": "2026-11-24T17:02:30.555Z",
      "payload": {
       "versions": [
        "0.3"
       ],
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "implementation": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      }
     }
@@ -324,23 +341,24 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_4c2542e8909c845a",
+     "id": "m_fcf3e0ccf0826b17",
      "type": "session_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 2,
-     "time": "2026-11-16T07:18:20.042Z",
+     "time": "2026-11-24T17:02:30.555Z",
      "payload": {
       "version": "0.3",
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "agent": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      },
      "reply_to": "c_0000000000000001"
@@ -349,14 +367,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_af69f58e4011596f",
+     "id": "m_eddc14597c488fcb",
      "type": "alfalfa.session",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 3,
-     "time": "2026-11-16T07:18:20.043Z",
+     "time": "2026-11-24T17:02:30.555Z",
      "payload": {
-      "id": "11b28afbea4c4852",
+      "id": "571c728d75454ccf",
       "cwd": "/proyecto",
       "model": "deepseek-v4.1-flash:cloud",
       "effort": "medium",
@@ -369,12 +387,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_0c6dfb20f8857c05",
+     "id": "m_02b11ab695ea5b75",
      "type": "run_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 4,
-     "time": "2026-11-16T07:18:20.048Z",
+     "time": "2026-11-24T17:02:30.562Z",
      "payload": {
       "input_id": "c_0000000000000002"
      }
@@ -383,12 +401,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9e8cfc49201aa43c",
+     "id": "m_a51758ddfbf6d568",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 5,
-     "time": "2026-11-16T07:18:20.057Z",
+     "time": "2026-11-24T17:02:30.570Z",
      "payload": {
       "active": true
      }
@@ -397,14 +415,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_f51f24a7350f727d",
+     "id": "m_0cd4f7b561158b28",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 6,
-     "time": "2026-11-16T07:18:20.127Z",
+     "time": "2026-11-24T17:02:30.621Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -413,18 +431,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_a1b74990c36540d6",
+     "id": "m_d3d5556726b2cc15",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 7,
-     "time": "2026-11-16T07:18:20.127Z",
+     "time": "2026-11-24T17:02:30.621Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -438,12 +456,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_dc37cb1706dff7f6",
+     "id": "m_09de68dd2a56a389",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 8,
-     "time": "2026-11-16T07:18:20.127Z",
+     "time": "2026-11-24T17:02:30.621Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 3
@@ -454,14 +472,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_3201cc0cb1896ac3",
+     "id": "m_6c7229efdade3252",
      "type": "tool_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 9,
-     "time": "2026-11-16T07:18:20.131Z",
+     "time": "2026-11-24T17:02:30.625Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "name": "spawn_agent",
       "arguments": {
        "message": "Revisa el README",
@@ -478,7 +496,7 @@
         "description": "Encargar a un subagente: Revisor",
         "ongoing": "Encargando a un subagente: Revisor"
        },
-       "turn": "2123b5567c6044d4"
+       "turn": "d62f5e78148c422b"
       }
      }
     }
@@ -486,17 +504,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_1edb99d7f900e818",
+     "id": "m_68d2c52001758a72",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 10,
-     "time": "2026-11-16T07:18:20.135Z",
+     "time": "2026-11-24T17:02:30.628Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "role": "system",
       "alfalfa": {
-       "turn": "2123b5567c6044d4"
+       "turn": "d62f5e78148c422b"
       }
      }
     }
@@ -504,14 +522,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_318711b6ec602a52",
+     "id": "m_7bf44d32e2d57469",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 11,
-     "time": "2026-11-16T07:18:20.135Z",
+     "time": "2026-11-24T17:02:30.628Z",
      "payload": {
-      "message_id": "m_1edb99d7f900e818",
+      "message_id": "m_68d2c52001758a72",
       "blocks": [
        {
         "type": "text",
@@ -524,33 +542,33 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d73784763adff08e",
+     "id": "m_74dba0db817352d6",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 12,
-     "time": "2026-11-16T07:18:20.135Z",
+     "time": "2026-11-24T17:02:30.628Z",
      "payload": {
-      "message_id": "m_1edb99d7f900e818"
+      "message_id": "m_68d2c52001758a72"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_f6f4c5804f133eec",
+     "id": "m_399c614996758e23",
      "type": "run_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 13,
-     "time": "2026-11-16T07:18:20.135Z",
+     "time": "2026-11-24T17:02:30.629Z",
      "payload": {
-      "parent_run_id": "m_0c6dfb20f8857c05",
+      "parent_run_id": "m_02b11ab695ea5b75",
       "agent": {
        "name": "explorador",
        "description": "Revisor"
       },
-      "tool_call_id": "m_3201cc0cb1896ac3",
+      "tool_call_id": "m_6c7229efdade3252",
       "alfalfa": {
        "agent": "a1"
       }
@@ -560,12 +578,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_5e529b05f4afa6ec",
+     "id": "m_ed20d5dc692ff421",
      "type": "alfalfa.subagents",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 14,
-     "time": "2026-11-16T07:18:20.135Z",
+     "time": "2026-11-24T17:02:30.629Z",
      "payload": {
       "subagents": [
        {
@@ -574,7 +592,7 @@
         "type": "explorador",
         "status": "working",
         "model": "deepseek-v4.1-flash:cloud",
-        "since": 1794813500.1339362,
+        "since": 1795539750.627702,
         "until": null,
         "activity": "",
         "steps": 0,
@@ -588,14 +606,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d08c42607891f7ba",
+     "id": "m_f5d9b00889762e3c",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 15,
-     "time": "2026-11-16T07:18:20.176Z",
+     "time": "2026-11-24T17:02:30.662Z",
      "payload": {
-      "run_id": "m_f6f4c5804f133eec",
+      "run_id": "m_399c614996758e23",
       "role": "assistant"
      }
     }
@@ -603,14 +621,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_7a86fe25834a46d8",
+     "id": "m_62ea6ab284908006",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 16,
-     "time": "2026-11-16T07:18:20.176Z",
+     "time": "2026-11-24T17:02:30.662Z",
      "payload": {
-      "message_id": "m_d08c42607891f7ba",
+      "message_id": "m_f5d9b00889762e3c",
       "blocks": [
        {
         "type": "text",
@@ -623,26 +641,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d2af5ff8442acdd3",
+     "id": "m_a6372c3cbbdee427",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 17,
-     "time": "2026-11-16T07:18:20.176Z",
+     "time": "2026-11-24T17:02:30.662Z",
      "payload": {
-      "message_id": "m_d08c42607891f7ba"
+      "message_id": "m_f5d9b00889762e3c"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_af001df7f9bc7675",
+     "id": "m_7a5983907d2f9bd9",
      "type": "alfalfa.subagents",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 18,
-     "time": "2026-11-16T07:18:20.177Z",
+     "time": "2026-11-24T17:02:30.663Z",
      "payload": {
       "subagents": [
        {
@@ -651,7 +669,7 @@
         "type": "explorador",
         "status": "working",
         "model": "deepseek-v4.1-flash:cloud",
-        "since": 1794813500.1339362,
+        "since": 1795539750.627702,
         "until": null,
         "activity": "Informe del subagente",
         "steps": 0,
@@ -665,17 +683,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_0309b49b1c78d9b4",
+     "id": "m_3ded7e04508b815f",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 19,
-     "time": "2026-11-16T07:18:20.193Z",
+     "time": "2026-11-24T17:02:30.683Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "role": "system",
       "alfalfa": {
-       "turn": "2123b5567c6044d4"
+       "turn": "d62f5e78148c422b"
       }
      }
     }
@@ -683,14 +701,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_c8de228e3816e3f9",
+     "id": "m_a53e561d90a4f55f",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 20,
-     "time": "2026-11-16T07:18:20.193Z",
+     "time": "2026-11-24T17:02:30.683Z",
      "payload": {
-      "message_id": "m_0309b49b1c78d9b4",
+      "message_id": "m_3ded7e04508b815f",
       "blocks": [
        {
         "type": "text",
@@ -703,28 +721,28 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_4ff70096779548c8",
+     "id": "m_d2baad15c6d0f7f5",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 21,
-     "time": "2026-11-16T07:18:20.193Z",
+     "time": "2026-11-24T17:02:30.683Z",
      "payload": {
-      "message_id": "m_0309b49b1c78d9b4"
+      "message_id": "m_3ded7e04508b815f"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_3807e00b25cb865e",
+     "id": "m_010542b8d9edba05",
      "type": "run_finished",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 22,
-     "time": "2026-11-16T07:18:20.193Z",
+     "time": "2026-11-24T17:02:30.684Z",
      "payload": {
-      "run_id": "m_f6f4c5804f133eec",
+      "run_id": "m_399c614996758e23",
       "outcome": "success"
      }
     }
@@ -732,12 +750,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_c7f5b508dcdd8a3d",
+     "id": "m_ea705656e7631000",
      "type": "alfalfa.subagents",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 23,
-     "time": "2026-11-16T07:18:20.193Z",
+     "time": "2026-11-24T17:02:30.684Z",
      "payload": {
       "subagents": [
        {
@@ -746,8 +764,8 @@
         "type": "explorador",
         "status": "completed",
         "model": "deepseek-v4.1-flash:cloud",
-        "since": 1794813500.1339362,
-        "until": 1794813500.189719,
+        "since": 1795539750.627702,
+        "until": 1795539750.6804018,
         "activity": "",
         "steps": 0,
         "report": "Informe del subagente",
@@ -760,14 +778,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_c8e2c0b8168e860f",
+     "id": "m_41a072bec42940f4",
      "type": "tool_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 24,
-     "time": "2026-11-16T07:18:20.197Z",
+     "time": "2026-11-24T17:02:30.688Z",
      "payload": {
-      "tool_call_id": "m_3201cc0cb1896ac3",
+      "tool_call_id": "m_6c7229efdade3252",
       "status": "success",
       "output": [
        {
@@ -780,7 +798,7 @@
         "name": "spawn_agent",
         "phase": "end"
        },
-       "turn": "2123b5567c6044d4"
+       "turn": "d62f5e78148c422b"
       }
      }
     }
@@ -788,14 +806,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_4d06535876d18adf",
+     "id": "m_0edbae97e1f509cd",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 25,
-     "time": "2026-11-16T07:18:20.204Z",
+     "time": "2026-11-24T17:02:30.695Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -804,18 +822,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_03b75aaf08331bbc",
+     "id": "m_107de9430bc004e6",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 26,
-     "time": "2026-11-16T07:18:20.204Z",
+     "time": "2026-11-24T17:02:30.695Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -829,12 +847,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_83a494b993899cd4",
+     "id": "m_561b7bdc93c11270",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 27,
-     "time": "2026-11-16T07:18:20.204Z",
+     "time": "2026-11-24T17:02:30.695Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 6
@@ -845,17 +863,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_20dd67b405c3e45b",
+     "id": "m_196a1f770a5a1ae9",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 28,
-     "time": "2026-11-16T07:18:20.206Z",
+     "time": "2026-11-24T17:02:30.697Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "role": "assistant",
       "alfalfa": {
-       "turn": "2123b5567c6044d4"
+       "turn": "d62f5e78148c422b"
       }
      }
     }
@@ -863,14 +881,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_ab460e5280bfe03e",
+     "id": "m_4b7495d2bec2cf20",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 29,
-     "time": "2026-11-16T07:18:20.206Z",
+     "time": "2026-11-24T17:02:30.697Z",
      "payload": {
-      "message_id": "m_20dd67b405c3e45b",
+      "message_id": "m_196a1f770a5a1ae9",
       "blocks": [
        {
         "type": "text",
@@ -883,26 +901,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_0a8dc42e86a09e60",
+     "id": "m_51b6e2ecc50012ec",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 30,
-     "time": "2026-11-16T07:18:20.206Z",
+     "time": "2026-11-24T17:02:30.697Z",
      "payload": {
-      "message_id": "m_20dd67b405c3e45b"
+      "message_id": "m_196a1f770a5a1ae9"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_07de0686460f23eb",
+     "id": "m_4e6c914441dc996f",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 31,
-     "time": "2026-11-16T07:18:20.213Z",
+     "time": "2026-11-24T17:02:30.705Z",
      "payload": {
       "active": false
      }
@@ -911,14 +929,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_508f05b8102041bf",
+     "id": "m_c3b1556dfe928402",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 32,
-     "time": "2026-11-16T07:18:20.213Z",
+     "time": "2026-11-24T17:02:30.705Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "alfalfa": {
        "turn_tokens": 6
       }
@@ -928,19 +946,19 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_790862b94f251118",
+     "id": "m_c994c17c02e66b5d",
      "type": "alfalfa.closing",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 33,
-     "time": "2026-11-16T07:18:20.213Z",
+     "time": "2026-11-24T17:02:30.705Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "status": "completed",
       "summary": "Hecho: Lanza un subagente",
       "exit_code": 0,
       "tokens": 6,
-      "turn": "2123b5567c6044d4",
+      "turn": "d62f5e78148c422b",
       "turn_tokens": 6
      }
     }
@@ -948,14 +966,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_eed10f3f458116b5",
+     "id": "m_0e8aa88680dcc983",
      "type": "run_finished",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 34,
-     "time": "2026-11-16T07:18:20.213Z",
+     "time": "2026-11-24T17:02:30.705Z",
      "payload": {
-      "run_id": "m_0c6dfb20f8857c05",
+      "run_id": "m_02b11ab695ea5b75",
       "outcome": "success"
      }
     }
@@ -963,12 +981,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_0bd14688837eca15",
+     "id": "m_2dd831d7ae26248c",
      "type": "close",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 35,
-     "time": "2026-11-16T07:18:21.221Z",
+     "time": "2026-11-24T17:02:31.718Z",
      "payload": {
       "reason": "Hecho: Lanza un subagente",
       "alfalfa": {

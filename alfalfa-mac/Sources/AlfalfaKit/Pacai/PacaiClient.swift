@@ -50,6 +50,8 @@ public final class PacaiClient: @unchecked Sendable {
         var text: String
         var time: Double
         var turn: Any?
+        /// Los bloques `pacai.ui/1` del mensaje (perfil `ui`), en orden: salen con su texto en `pantallas`.
+        var screens: [[String: Any]] = []
     }
 
     // MARK: - Constantes
@@ -113,9 +115,10 @@ public final class PacaiClient: @unchecked Sendable {
     /// El `hello` y, encadenado tras él, el `input` con el que abre la sesión, si lo hay.
     public func start() -> Output {
         var output = Output(lines: [envelope("hello", [
-            "versions": [Self.version], "profiles": ["work"], "extensions": ["alfalfa"],
+            "versions": [Self.version], "profiles": ["work", "ui"], "extensions": ["alfalfa"],
             "client_tools": [["name": Self.browser, "description": "El navegador propio de la app de Mac",
-                              "input_schema": ["type": "object"]]]
+                              "input_schema": ["type": "object"]]],
+            "render": ["ui": Self.screenCatalog]
         ])])
         if opening.task != nil || !opening.attachments.isEmpty {
             awaitingRun = true
@@ -215,12 +218,14 @@ public final class PacaiClient: @unchecked Sendable {
         case "message_delta":
             guard let key = payload["message_id"] as? String else { return [] }
             messages[key]?.text += Self.text(of: payload["blocks"])
+            messages[key]?.screens += ScreenUpdate.blocks(payload["blocks"])
             return []
         default:
             guard let key = payload["message_id"] as? String, var open = messages.removeValue(forKey: key) else {
                 return []
             }
             open.text += Self.text(of: payload["blocks"])
+            open.screens += ScreenUpdate.blocks(payload["blocks"])
             let role = open.role == "assistant" ? "agent" : open.role
             if let agent = subruns[open.run] {
                 return decoded(["tipo": "subagente_evento", "agente": agent, "rol": role, "texto": open.text,
@@ -228,6 +233,7 @@ public final class PacaiClient: @unchecked Sendable {
             }
             var event: [String: Any] = ["rol": role, "texto": open.text, "hora": open.time]
             event["turno"] = open.turn
+            if !open.screens.isEmpty { event["pantallas"] = open.screens }
             event.merge(messageFields.removeValue(forKey: key) ?? [:]) { current, _ in current }
             return decoded(PacaiExtension.agentEvent(event))
         }

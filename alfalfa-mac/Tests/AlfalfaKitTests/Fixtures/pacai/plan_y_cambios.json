@@ -6,7 +6,7 @@
     "recibido": {
      "version": 2,
      "tipo": "sesion",
-     "id": "8de86db9ea444cbc",
+     "id": "1b03e05b05fc4387",
      "cwd": "/proyecto",
      "modelo": "deepseek-v4.1-flash:cloud",
      "esfuerzo": "medium",
@@ -53,8 +53,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "Inicio update_plan · {'explanation': 'Voy por partes', 'plan': [{'step': 'Escribir la nota', 'status': 'in_progress'}, {'step': 'Repasarla', 'status': 'pending'}]}",
-     "hora": 1794813603.897998,
-     "turno": "cc1346633fe84d60",
+     "hora": 1795539753.491819,
+     "turno": "a0827244cea64d82",
      "herramienta": {
       "nombre": "update_plan",
       "fase": "inicio",
@@ -86,8 +86,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "update_plan\n{\"ok\": true, \"plan\": \"Voy por partes\\n[>] Escribir la nota\\n[ ] Repasarla\"}",
-     "hora": 1794813603.900816,
-     "turno": "cc1346633fe84d60",
+     "hora": 1795539753.495439,
+     "turno": "a0827244cea64d82",
      "herramienta": {
       "nombre": "update_plan",
       "fase": "fin"
@@ -100,8 +100,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "Inicio write_file · {'path': 'nota.txt', 'content': 'hola\\n', 'expected_sha256': 'NEW'}",
-     "hora": 1794813603.903062,
-     "turno": "cc1346633fe84d60",
+     "hora": 1795539753.498205,
+     "turno": "a0827244cea64d82",
      "herramienta": {
       "nombre": "write_file",
       "fase": "inicio",
@@ -117,8 +117,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "write_file\n{\"path\": \"nota.txt\", \"before\": \"NEW\", \"after\": \"133ee989293f92736301280c6f14c89d521200c17dcdcecca30cd20705332d44\"}",
-     "hora": 1794813603.906365,
-     "turno": "cc1346633fe84d60",
+     "hora": 1795539753.502618,
+     "turno": "a0827244cea64d82",
      "herramienta": {
       "nombre": "write_file",
       "fase": "fin"
@@ -156,8 +156,8 @@
      "tipo": "evento",
      "rol": "agent",
      "texto": "Hecho: planifica y escribe la nota",
-     "hora": 1794813603.914399,
-     "turno": "cc1346633fe84d60"
+     "hora": 1795539753.5126579,
+     "turno": "a0827244cea64d82"
     }
    },
    {
@@ -175,7 +175,7 @@
      "resumen": "Hecho: planifica y escribe la nota",
      "codigo_salida": 0,
      "tokens": 6,
-     "turno": "cc1346633fe84d60",
+     "turno": "a0827244cea64d82",
      "tokens_turno": 6
     }
    },
@@ -212,7 +212,8 @@
         "0.3"
        ],
        "profiles": [
-        "work"
+        "work",
+        "ui"
        ],
        "extensions": [
         "alfalfa"
@@ -225,7 +226,22 @@
           "type": "object"
          }
         }
-       ]
+       ],
+       "render": {
+        "ui": {
+         "version": "1",
+         "catalog": "base",
+         "actions": [
+          "send",
+          "set",
+          "open_url"
+         ],
+         "limits": {
+          "max_nodes": 300,
+          "max_depth": 12
+         }
+        }
+       }
       }
      },
      {
@@ -253,25 +269,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_704362968c59f176",
+     "id": "m_2e782df3ddb7fc64",
      "type": "hello",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 1,
-     "time": "2026-11-16T07:20:04.363Z",
+     "time": "2026-11-24T17:02:34.059Z",
      "payload": {
       "versions": [
        "0.3"
       ],
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "implementation": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      }
     }
@@ -279,23 +296,24 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_c36631871ce42ed6",
+     "id": "m_fa7fa512eb86d4b5",
      "type": "session_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 2,
-     "time": "2026-11-16T07:20:04.363Z",
+     "time": "2026-11-24T17:02:34.059Z",
      "payload": {
       "version": "0.3",
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "agent": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      },
      "reply_to": "c_0000000000000001"
@@ -304,14 +322,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b9275a108f3083b3",
+     "id": "m_880467cc29fbd081",
      "type": "alfalfa.session",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 3,
-     "time": "2026-11-16T07:20:04.363Z",
+     "time": "2026-11-24T17:02:34.059Z",
      "payload": {
-      "id": "bb32a01036624ff8",
+      "id": "6758568761b54f5b",
       "cwd": "/proyecto",
       "model": "deepseek-v4.1-flash:cloud",
       "effort": "medium",
@@ -324,12 +342,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_f6a059b8bfe45564",
+     "id": "m_6db10cf94322428a",
      "type": "run_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 4,
-     "time": "2026-11-16T07:20:04.367Z",
+     "time": "2026-11-24T17:02:34.066Z",
      "payload": {
       "input_id": "c_0000000000000002"
      }
@@ -338,12 +356,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_58bf4689c42447cc",
+     "id": "m_b64420143e5b5d79",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 5,
-     "time": "2026-11-16T07:20:04.404Z",
+     "time": "2026-11-24T17:02:34.108Z",
      "payload": {
       "active": true
      }
@@ -352,14 +370,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_eb3613faafb3daca",
+     "id": "m_9f2ee6c7b233af1d",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 6,
-     "time": "2026-11-16T07:20:04.465Z",
+     "time": "2026-11-24T17:02:34.165Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -368,18 +386,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_81efbb9e045be125",
+     "id": "m_3c265d9e3bfdb319",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 7,
-     "time": "2026-11-16T07:20:04.465Z",
+     "time": "2026-11-24T17:02:34.165Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -393,12 +411,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_a9e017ea6a267460",
+     "id": "m_065c144a3dc5e7a2",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 8,
-     "time": "2026-11-16T07:20:04.465Z",
+     "time": "2026-11-24T17:02:34.165Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 3
@@ -409,14 +427,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_3552296f05c1d284",
+     "id": "m_981f218f43adc2c0",
      "type": "tool_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 9,
-     "time": "2026-11-16T07:20:04.469Z",
+     "time": "2026-11-24T17:02:34.170Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "name": "update_plan",
       "arguments": {
        "explanation": "Voy por partes",
@@ -441,7 +459,7 @@
         "description": "Actualizar el plan",
         "ongoing": "Actualizando el plan"
        },
-       "turn": "53bde63713594b34"
+       "turn": "ba8d9a86637443c0"
       }
      }
     }
@@ -449,14 +467,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_5c6679ab39b8429a",
+     "id": "m_77e49e966a304dce",
      "type": "plan_updated",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 10,
-     "time": "2026-11-16T07:20:04.469Z",
+     "time": "2026-11-24T17:02:34.170Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "steps": [
        {
         "text": "Escribir la nota",
@@ -476,14 +494,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_592db6459c4e6600",
+     "id": "m_5bd7fd0ca73d7e85",
      "type": "tool_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 11,
-     "time": "2026-11-16T07:20:04.472Z",
+     "time": "2026-11-24T17:02:34.173Z",
      "payload": {
-      "tool_call_id": "m_3552296f05c1d284",
+      "tool_call_id": "m_981f218f43adc2c0",
       "status": "success",
       "output": [
        {
@@ -496,7 +514,7 @@
         "name": "update_plan",
         "phase": "end"
        },
-       "turn": "53bde63713594b34"
+       "turn": "ba8d9a86637443c0"
       }
      }
     }
@@ -504,14 +522,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_29fafd52147ec667",
+     "id": "m_69915fe317d8107b",
      "type": "tool_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 12,
-     "time": "2026-11-16T07:20:04.474Z",
+     "time": "2026-11-24T17:02:34.176Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "name": "write_file",
       "arguments": {
        "path": "nota.txt",
@@ -529,7 +547,7 @@
         "ongoing": "Creando nota.txt",
         "target": "nota.txt"
        },
-       "turn": "53bde63713594b34"
+       "turn": "ba8d9a86637443c0"
       }
      }
     }
@@ -537,14 +555,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_109fb25bad57ed85",
+     "id": "m_11095b253c2c187f",
      "type": "tool_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 13,
-     "time": "2026-11-16T07:20:04.477Z",
+     "time": "2026-11-24T17:02:34.180Z",
      "payload": {
-      "tool_call_id": "m_29fafd52147ec667",
+      "tool_call_id": "m_69915fe317d8107b",
       "status": "success",
       "output": [
        {
@@ -557,7 +575,7 @@
         "name": "write_file",
         "phase": "end"
        },
-       "turn": "53bde63713594b34"
+       "turn": "ba8d9a86637443c0"
       }
      }
     }
@@ -565,14 +583,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_5e76f7ed02115c6a",
+     "id": "m_775344b2b982f945",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 14,
-     "time": "2026-11-16T07:20:04.483Z",
+     "time": "2026-11-24T17:02:34.187Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -581,18 +599,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_7c30108e7a46f13b",
+     "id": "m_cd16571ed544a8e1",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 15,
-     "time": "2026-11-16T07:20:04.483Z",
+     "time": "2026-11-24T17:02:34.187Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -606,12 +624,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_3a46b1124d55dc6f",
+     "id": "m_8eee09755c9ff16a",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 16,
-     "time": "2026-11-16T07:20:04.483Z",
+     "time": "2026-11-24T17:02:34.187Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 6
@@ -622,17 +640,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_1ef1a2b01dfb28d9",
+     "id": "m_6f73101e1bf454e0",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 17,
-     "time": "2026-11-16T07:20:04.485Z",
+     "time": "2026-11-24T17:02:34.189Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "role": "assistant",
       "alfalfa": {
-       "turn": "53bde63713594b34"
+       "turn": "ba8d9a86637443c0"
       }
      }
     }
@@ -640,14 +658,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b3fd6098b9c8b5d5",
+     "id": "m_66c24363cd5e67d5",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 18,
-     "time": "2026-11-16T07:20:04.485Z",
+     "time": "2026-11-24T17:02:34.189Z",
      "payload": {
-      "message_id": "m_1ef1a2b01dfb28d9",
+      "message_id": "m_6f73101e1bf454e0",
       "blocks": [
        {
         "type": "text",
@@ -660,26 +678,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_6d5581e9e6866017",
+     "id": "m_d2ae6eed2bfb4a97",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 19,
-     "time": "2026-11-16T07:20:04.485Z",
+     "time": "2026-11-24T17:02:34.189Z",
      "payload": {
-      "message_id": "m_1ef1a2b01dfb28d9"
+      "message_id": "m_6f73101e1bf454e0"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_bfbe63a6dbb68988",
+     "id": "m_49570a666752ac88",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 20,
-     "time": "2026-11-16T07:20:04.500Z",
+     "time": "2026-11-24T17:02:34.212Z",
      "payload": {
       "active": false
      }
@@ -688,14 +706,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_19859e650e2c94bc",
+     "id": "m_a25a2ede803366eb",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 21,
-     "time": "2026-11-16T07:20:04.536Z",
+     "time": "2026-11-24T17:02:34.256Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "alfalfa": {
        "turn_tokens": 6
       }
@@ -705,14 +723,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_8bdf1e11c8e6e6ac",
+     "id": "m_bd8606d29653374a",
      "type": "diff_updated",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 22,
-     "time": "2026-11-16T07:20:04.536Z",
+     "time": "2026-11-24T17:02:34.256Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "files": [
        {
         "path": "nota.txt",
@@ -727,19 +745,19 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b4dcdea875ac7a28",
+     "id": "m_acd17e4609b90e97",
      "type": "alfalfa.closing",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 23,
-     "time": "2026-11-16T07:20:04.536Z",
+     "time": "2026-11-24T17:02:34.256Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "status": "completed",
       "summary": "Hecho: planifica y escribe la nota",
       "exit_code": 0,
       "tokens": 6,
-      "turn": "53bde63713594b34",
+      "turn": "ba8d9a86637443c0",
       "turn_tokens": 6
      }
     }
@@ -747,14 +765,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_51b0861e66ce4744",
+     "id": "m_9c2ef46ec1556a1a",
      "type": "run_finished",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 24,
-     "time": "2026-11-16T07:20:04.536Z",
+     "time": "2026-11-24T17:02:34.256Z",
      "payload": {
-      "run_id": "m_f6a059b8bfe45564",
+      "run_id": "m_6db10cf94322428a",
       "outcome": "success"
      }
     }
@@ -762,12 +780,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_c83140f1d4c69cf6",
+     "id": "m_de6287b17a4f145c",
      "type": "close",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 25,
-     "time": "2026-11-16T07:20:04.539Z",
+     "time": "2026-11-24T17:02:34.259Z",
      "payload": {
       "reason": "Hecho: planifica y escribe la nota",
       "alfalfa": {

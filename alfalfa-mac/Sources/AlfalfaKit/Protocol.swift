@@ -36,6 +36,8 @@ public struct AgentEvent: Equatable, Sendable {
     public var queueID: String? = nil
     /// Lo que trae la carpeta sin autorizar (`importadas`): la conversación lo pinta con «Revisar y autorizar…».
     public var importNotice: ImportNotice? = nil
+    /// Las pantallas que dibujó el agente en este mensaje (perfil `ui` de PACAI, `pantallas`), en orden.
+    public var screens: [ScreenUpdate] = []
 }
 
 /// Una orden en segundo plano (`run_command` con `background`), como los background
@@ -1035,7 +1037,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
                           priceWarning: PriceWarning.parse(row["tarifa"], text: text),
                           compaction: compaction(row["compactacion"]), tool: ToolInfo.parse(row["herramienta"]),
                           undo: UndoStep.parse(row["deshacer"], text: text), queueID: Self.text(row["id_cola"]),
-                          importNotice: role == "system" ? ImportNotice.parse(row["importadas"], text: text) : nil)
+                          importNotice: role == "system" ? ImportNotice.parse(row["importadas"], text: text) : nil,
+                          screens: ScreenUpdate.list(row["pantallas"]))
     }
 
     /// Sólo los booleanos JSON: NSNumber también convertiría 0 y 1.

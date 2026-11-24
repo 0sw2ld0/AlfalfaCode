@@ -23,7 +23,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 1,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.789Z",
      "payload": {
       "input_id": "c_0000000000000001"
      }
@@ -35,7 +35,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 2,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.789Z",
      "payload": {
       "id": "abc123def4567890",
       "cwd": "/proyecto",
@@ -70,7 +70,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 3,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.789Z",
      "payload": {
       "id": "abc123def4567890",
       "cwd": "/proyecto",
@@ -108,7 +108,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 4,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "run_command",
@@ -168,7 +168,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 5,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000004",
       "status": "error",
@@ -226,7 +226,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 6,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "apply_patch",
@@ -273,7 +273,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 7,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000006",
       "status": "success",
@@ -311,7 +311,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 8,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "role": "assistant",
@@ -327,7 +327,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 9,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_0000000000000008",
       "blocks": [
@@ -345,7 +345,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 10,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_0000000000000008"
      }
@@ -369,7 +369,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 11,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "role": "system",
@@ -385,7 +385,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 12,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_000000000000000b",
       "blocks": [
@@ -403,7 +403,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 13,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_000000000000000b"
      }
@@ -430,7 +430,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 14,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "role": "system",
       "text": "Compactando…",
@@ -468,7 +468,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 15,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "role": "system",
       "text": "Conversación compactada",
@@ -506,7 +506,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 16,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "role": "system",
       "text": "No se pudo compactar",
@@ -544,7 +544,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 17,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "role": "system",
       "text": "Pasado 200K cobra el doble",
@@ -613,7 +613,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 18,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "context_tokens": 28400,
@@ -627,7 +627,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 19,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tokens": 28400,
       "limit": 262144,
@@ -686,7 +686,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 20,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "context_tokens": 1
@@ -699,7 +699,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 21,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tokens": 1,
       "limit": 0
@@ -722,7 +722,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 22,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "cost": {
        "amount": 0.125,
@@ -763,7 +763,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 23,
-     "time": "2026-11-18T03:45:51.513Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "steps": [
@@ -819,7 +819,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 24,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "processes": [
        {
@@ -937,7 +937,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 25,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "parent_run_id": "m_0000000000000001",
       "agent": {
@@ -956,7 +956,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 26,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000019",
       "outcome": "success"
@@ -969,7 +969,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 27,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "subagents": [
        {
@@ -1085,7 +1085,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 28,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "session": {
        "spent": 4.2,
@@ -1131,7 +1131,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 29,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "session": {
        "spent": 1.0,
@@ -1173,7 +1173,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 30,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "service": "alfalfa",
       "quotas": [
@@ -1206,7 +1206,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 31,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "active": true
      }
@@ -1227,7 +1227,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 32,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "text": "Preparando deshacer… (8306 archivos, 1,2 GB)"
      }
@@ -1247,7 +1247,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 33,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {}
     }
    ]
@@ -1268,7 +1268,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 34,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "cola-x",
       "removed": false,
@@ -1292,7 +1292,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 35,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "cola-y",
       "removed": true
@@ -1337,7 +1337,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 36,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "review": {
        "turn": "t9",
@@ -1385,7 +1385,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 37,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "review": {
        "turn": "t9",
@@ -1414,7 +1414,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 38,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "review": {
        "turn": "t9",
@@ -1488,7 +1488,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 39,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "queue": {
        "id": "q1",
@@ -1575,7 +1575,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 40,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "queue": {
        "id": "q1",
@@ -1623,7 +1623,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 41,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "ap1",
       "kind": "skill",
@@ -1658,7 +1658,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 42,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "ap2",
       "kind": "memory",
@@ -1686,7 +1686,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 43,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "ap1",
       "applied": true,
@@ -1713,7 +1713,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 44,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "ap2",
       "applied": false,
@@ -1738,7 +1738,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 45,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "id": "fedcba9876543210",
       "continued_from": "abc123def4567890"
@@ -1776,7 +1776,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 46,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "code": "alfalfa.engine_error",
       "message": "El modelo m no ve imágenes.",
@@ -1816,7 +1816,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 47,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "code": "alfalfa.engine_error",
       "message": "No se pudo iniciar o ejecutar la sesión."
@@ -1855,7 +1855,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 48,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -1881,7 +1881,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 49,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000030",
@@ -1927,7 +1927,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 50,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000030",
       "status": "success"
@@ -1965,7 +1965,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 51,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -1989,7 +1989,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 52,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000033",
@@ -2032,7 +2032,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 53,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000033",
       "status": "success"
@@ -2066,7 +2066,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 54,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2091,7 +2091,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 55,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000036",
@@ -2131,7 +2131,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 56,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000036",
       "status": "success"
@@ -2159,7 +2159,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 57,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2183,7 +2183,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 58,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000039",
@@ -2216,7 +2216,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 59,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000039",
       "status": "success"
@@ -2252,7 +2252,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 60,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2278,7 +2278,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 61,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_000000000000003c",
@@ -2322,7 +2322,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 62,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_000000000000003c",
       "status": "success"
@@ -2359,7 +2359,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 63,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2384,7 +2384,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 64,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_000000000000003f",
@@ -2428,7 +2428,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 65,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_000000000000003f",
       "status": "success"
@@ -2456,7 +2456,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 66,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2480,7 +2480,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 67,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000042",
@@ -2514,7 +2514,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 68,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000042",
       "status": "success"
@@ -2548,7 +2548,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 69,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "request_permission",
@@ -2572,7 +2572,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 70,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "tool_call_id": "m_0000000000000045",
@@ -2611,7 +2611,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 71,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000045",
       "status": "success"
@@ -2646,7 +2646,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 72,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "browser",
@@ -2688,7 +2688,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 73,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "name": "browser",
@@ -2748,7 +2748,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 74,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "role": "system",
@@ -2792,7 +2792,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 75,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_000000000000004a",
       "blocks": [
@@ -2810,7 +2810,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 76,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "message_id": "m_000000000000004a"
      }
@@ -2865,7 +2865,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 77,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "cost": {
@@ -2884,7 +2884,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 78,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "status": "blocked",
@@ -2931,7 +2931,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 79,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000048",
       "status": "cancelled"
@@ -2944,7 +2944,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 80,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "tool_call_id": "m_0000000000000049",
       "status": "cancelled"
@@ -2957,7 +2957,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 81,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000001",
       "outcome": "blocked",
@@ -2984,7 +2984,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 82,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "input_id": "c_0000000000000033"
      }
@@ -2996,7 +2996,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 83,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000052",
       "status": "cut",
@@ -3013,7 +3013,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 84,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.790Z",
      "payload": {
       "run_id": "m_0000000000000052",
       "outcome": "interrupted"
@@ -3039,7 +3039,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 85,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.791Z",
      "payload": {
       "input_id": "c_0000000000000034"
      }
@@ -3051,7 +3051,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 86,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.791Z",
      "payload": {
       "run_id": "m_0000000000000055",
       "outcome": "interrupted"
@@ -3064,7 +3064,7 @@
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 87,
-     "time": "2026-11-18T03:45:51.514Z",
+     "time": "2026-11-24T17:02:58.791Z",
      "payload": {
       "reason": "Fallo de ejecución",
       "alfalfa": {

@@ -79,6 +79,13 @@ struct PacaiTranscript {
             for pattern in [#"\b(time|since|until|date): (Optional\()?[0-9.e+-]+"#] {
                 text = text.replacingOccurrences(of: pattern, with: "$1: 0", options: .regularExpression)
             }
+            // La pasada PACAI negocia el perfil `ui`: su prompt de sistema lleva el catálogo de pantallas y v2 no.
+            // Los tamaños en tokens, que lo cuentan, no se comparan; todo lo demás, sí.
+            for pattern in [#"\b(tokens|tools|before|after|estimate): (Optional\()?[0-9]+"#] {
+                text = text.replacingOccurrences(of: pattern, with: "$1: $2N", options: .regularExpression)
+            }
+            text = text.replacingOccurrences(of: #"unos [0-9]+ → [0-9]+ tokens"#, with: "unos N → M tokens",
+                                             options: .regularExpression)
             let ids = try? NSRegularExpression(pattern: #"\b(m_[0-9a-f]{16}|[0-9a-f]{32}|[0-9a-f]{10,16})\b"#)
             let range = NSRange(text.startIndex..., in: text)
             for match in (ids?.matches(in: text, range: range) ?? []).reversed() {

@@ -6,7 +6,7 @@
     "recibido": {
      "version": 2,
      "tipo": "sesion",
-     "id": "1f356a913b674341",
+     "id": "f754d170c2a449f6",
      "cwd": "/proyecto",
      "modelo": "deepseek-v4.1-flash:cloud",
      "esfuerzo": "medium",
@@ -53,8 +53,8 @@
      "tipo": "evento",
      "rol": "agent",
      "texto": "Hecho: Hola",
-     "hora": 1794813237.483466,
-     "turno": "e26a5b076dbb4e00"
+     "hora": 1795539754.713491,
+     "turno": "8435d43716e64381"
     }
    },
    {
@@ -72,7 +72,7 @@
      "resumen": "Hecho: Hola",
      "codigo_salida": 0,
      "tokens": 3,
-     "turno": "e26a5b076dbb4e00",
+     "turno": "8435d43716e64381",
      "tokens_turno": 3
     }
    },
@@ -99,7 +99,7 @@
      "tipo": "evento",
      "rol": "system",
      "texto": "Compactando el contexto (manual)…",
-     "hora": 1794813237.52272,
+     "hora": 1795539754.7407181,
      "compactacion": {
       "estado": "en_curso",
       "motivo": "manual"
@@ -112,7 +112,7 @@
      "tipo": "evento",
      "rol": "system",
      "texto": "Contexto compactado (manual): unos 3168 → 3350 tokens; el historial completo sigue guardado.",
-     "hora": 1794813237.5259788,
+     "hora": 1795539754.743221,
      "compactacion": {
       "estado": "hecha",
       "motivo": "manual",
@@ -193,7 +193,8 @@
         "0.3"
        ],
        "profiles": [
-        "work"
+        "work",
+        "ui"
        ],
        "extensions": [
         "alfalfa"
@@ -206,7 +207,22 @@
           "type": "object"
          }
         }
-       ]
+       ],
+       "render": {
+        "ui": {
+         "version": "1",
+         "catalog": "base",
+         "actions": [
+          "send",
+          "set",
+          "open_url"
+         ],
+         "limits": {
+          "max_nodes": 300,
+          "max_depth": 12
+         }
+        }
+       }
       }
      },
      {
@@ -234,25 +250,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b1fd3af09e4f37b9",
+     "id": "m_ae6145774e2d6f64",
      "type": "hello",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 1,
-     "time": "2026-11-16T07:13:58.640Z",
+     "time": "2026-11-24T17:02:35.770Z",
      "payload": {
       "versions": [
        "0.3"
       ],
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "implementation": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      }
     }
@@ -260,23 +277,24 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_167675b1c24c20ad",
+     "id": "m_8d0fac75f4bc2382",
      "type": "session_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 2,
-     "time": "2026-11-16T07:13:58.640Z",
+     "time": "2026-11-24T17:02:35.770Z",
      "payload": {
       "version": "0.3",
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "agent": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      },
      "reply_to": "c_0000000000000001"
@@ -285,14 +303,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_3fc5cca462f6cca3",
+     "id": "m_96c7c6ff73a6c349",
      "type": "alfalfa.session",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 3,
-     "time": "2026-11-16T07:13:58.640Z",
+     "time": "2026-11-24T17:02:35.770Z",
      "payload": {
-      "id": "5bca0859200e4af8",
+      "id": "41c0124d71354421",
       "cwd": "/proyecto",
       "model": "deepseek-v4.1-flash:cloud",
       "effort": "medium",
@@ -305,12 +323,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9c9ef0754a615f91",
+     "id": "m_08898e89e515ab41",
      "type": "run_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 4,
-     "time": "2026-11-16T07:13:58.647Z",
+     "time": "2026-11-24T17:02:35.777Z",
      "payload": {
       "input_id": "c_0000000000000002"
      }
@@ -319,12 +337,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_246ffa44938d5c27",
+     "id": "m_9eb76a9fd513bf0b",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 5,
-     "time": "2026-11-16T07:13:58.657Z",
+     "time": "2026-11-24T17:02:35.785Z",
      "payload": {
       "active": true
      }
@@ -333,14 +351,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_14c88d2de2b9c47e",
+     "id": "m_3aa5c2703a8e4978",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 6,
-     "time": "2026-11-16T07:13:58.737Z",
+     "time": "2026-11-24T17:02:35.839Z",
      "payload": {
-      "run_id": "m_9c9ef0754a615f91",
+      "run_id": "m_08898e89e515ab41",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -349,18 +367,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_52425fe66792b64f",
+     "id": "m_d9fd6b2368483ffb",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 7,
-     "time": "2026-11-16T07:13:58.737Z",
+     "time": "2026-11-24T17:02:35.839Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -374,12 +392,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_ac5ff280b1adc6f7",
+     "id": "m_efc7e33fcb6a3e1c",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 8,
-     "time": "2026-11-16T07:13:58.737Z",
+     "time": "2026-11-24T17:02:35.839Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 3
@@ -390,17 +408,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_daea464d44c14085",
+     "id": "m_1efac997a5b4eb3d",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 9,
-     "time": "2026-11-16T07:13:58.739Z",
+     "time": "2026-11-24T17:02:35.841Z",
      "payload": {
-      "run_id": "m_9c9ef0754a615f91",
+      "run_id": "m_08898e89e515ab41",
       "role": "assistant",
       "alfalfa": {
-       "turn": "55163bf8a90a4b82"
+       "turn": "aa895ecb61ea44e6"
       }
      }
     }
@@ -408,14 +426,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_1e445ee6adbfa6aa",
+     "id": "m_0263f547f0713b7a",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 10,
-     "time": "2026-11-16T07:13:58.739Z",
+     "time": "2026-11-24T17:02:35.841Z",
      "payload": {
-      "message_id": "m_daea464d44c14085",
+      "message_id": "m_1efac997a5b4eb3d",
       "blocks": [
        {
         "type": "text",
@@ -428,26 +446,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d500f767bb176b81",
+     "id": "m_8a975d685b0e6a9a",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 11,
-     "time": "2026-11-16T07:13:58.739Z",
+     "time": "2026-11-24T17:02:35.841Z",
      "payload": {
-      "message_id": "m_daea464d44c14085"
+      "message_id": "m_1efac997a5b4eb3d"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_206c3d5dfb99268e",
+     "id": "m_a0f8467fde7a91bd",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 12,
-     "time": "2026-11-16T07:13:58.756Z",
+     "time": "2026-11-24T17:02:35.861Z",
      "payload": {
       "active": false
      }
@@ -456,14 +474,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_bae73176c7345ae1",
+     "id": "m_461f581e14c622af",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 13,
-     "time": "2026-11-16T07:13:58.756Z",
+     "time": "2026-11-24T17:02:35.861Z",
      "payload": {
-      "run_id": "m_9c9ef0754a615f91",
+      "run_id": "m_08898e89e515ab41",
       "alfalfa": {
        "turn_tokens": 3
       }
@@ -473,19 +491,19 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_279b83273f5937eb",
+     "id": "m_54736cc73574ec2d",
      "type": "alfalfa.closing",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 14,
-     "time": "2026-11-16T07:13:58.756Z",
+     "time": "2026-11-24T17:02:35.861Z",
      "payload": {
-      "run_id": "m_9c9ef0754a615f91",
+      "run_id": "m_08898e89e515ab41",
       "status": "completed",
       "summary": "Hecho: Hola",
       "exit_code": 0,
       "tokens": 3,
-      "turn": "55163bf8a90a4b82",
+      "turn": "aa895ecb61ea44e6",
       "turn_tokens": 3
      }
     }
@@ -493,14 +511,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_0a973fee35c36b5e",
+     "id": "m_0aeec20c658f486d",
      "type": "run_finished",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 15,
-     "time": "2026-11-16T07:13:58.756Z",
+     "time": "2026-11-24T17:02:35.861Z",
      "payload": {
-      "run_id": "m_9c9ef0754a615f91",
+      "run_id": "m_08898e89e515ab41",
       "outcome": "success"
      }
     }
@@ -525,12 +543,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_565f2980e406d132",
+     "id": "m_c53371e2f54201a6",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 16,
-     "time": "2026-11-16T07:13:58.765Z",
+     "time": "2026-11-24T17:02:35.869Z",
      "payload": {
       "active": true
      }
@@ -539,16 +557,16 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_61a9f83fac29d6cc",
+     "id": "m_5f0ffeb59ea2b063",
      "type": "alfalfa.notice",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 17,
-     "time": "2026-11-16T07:13:58.776Z",
+     "time": "2026-11-24T17:02:35.873Z",
      "payload": {
       "role": "system",
       "text": "Compactando el contexto (manual)…",
-      "time": 1794813238.7761989,
+      "time": 1795539755.8730721,
       "compaction": {
        "status": "in_progress",
        "reason": "manual"
@@ -559,24 +577,24 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_dfbeb6a1be6fff77",
+     "id": "m_6714a1703442a6b7",
      "type": "alfalfa.notice",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 18,
-     "time": "2026-11-16T07:13:58.779Z",
+     "time": "2026-11-24T17:02:35.875Z",
      "payload": {
       "role": "system",
-      "text": "Contexto compactado (manual): unos 3168 → 3350 tokens; el historial completo sigue guardado.",
-      "time": 1794813238.779148,
+      "text": "Contexto compactado (manual): unos 3798 → 3980 tokens; el historial completo sigue guardado.",
+      "time": 1795539755.875444,
       "compaction": {
        "status": "done",
        "reason": "manual",
-       "before": 3168,
-       "after": 3350,
+       "before": 3798,
+       "after": 3980,
        "summary": "Hecho: Sé conciso y concreto (rutas, órdenes, identificadores, dato",
        "composition": {
-        "system.content": 3138,
+        "system.content": 3769,
         "user.content": 2,
         "assistant.content": 4
        },
@@ -588,14 +606,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_1339f1e272df845f",
+     "id": "m_e26609279b98938b",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 19,
-     "time": "2026-11-16T07:13:58.779Z",
+     "time": "2026-11-24T17:02:35.875Z",
      "payload": {
-      "context_tokens": 206,
+      "context_tokens": 205,
       "context_limit": 1048576
      }
     }
@@ -603,23 +621,23 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_8c07752db11306c2",
+     "id": "m_5cbf365c95c1ccf1",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 20,
-     "time": "2026-11-16T07:13:58.779Z",
+     "time": "2026-11-24T17:02:35.875Z",
      "payload": {
-      "tokens": 206,
+      "tokens": 205,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "plugins": 0,
        "messages": 204
       },
-      "estimated": 206,
+      "estimated": 205,
       "threshold": 943718,
       "memory": []
      }
@@ -628,12 +646,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_702ec60fa85d557e",
+     "id": "m_7eb84755eef599bb",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 21,
-     "time": "2026-11-16T07:13:58.779Z",
+     "time": "2026-11-24T17:02:35.875Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 6
@@ -644,12 +662,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_ea663dd84f593c83",
+     "id": "m_7ca7d06aed49b0a0",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 22,
-     "time": "2026-11-16T07:13:58.785Z",
+     "time": "2026-11-24T17:02:35.880Z",
      "payload": {
       "active": false
      }
@@ -658,12 +676,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_f14399739657452a",
+     "id": "m_38a627bda0574c70",
      "type": "close",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 23,
-     "time": "2026-11-16T07:13:59.391Z",
+     "time": "2026-11-24T17:02:36.482Z",
      "payload": {
       "reason": "Hecho: Hola",
       "alfalfa": {

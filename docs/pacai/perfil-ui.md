@@ -1,7 +1,7 @@
 # Perfil `ui` de PACAI (borrador 1)
 
 > Estado: **borrador**, con las preguntas del primer borrador resueltas (sección 9). El motor de AlfalfaCode
-> ya lo habla y hay una demo web (sección 8); faltan los renderizadores de la app de Mac y de VS Code.
+> ya lo habla, la app de Mac dibuja las pantallas y hay una demo web (sección 8); falta VS Code.
 > Esquema: [`pacai-ui-1.schema.json`](../../alfalfa/pacai/pacai-ui-1.schema.json). Ejemplo completo:
 > [`ejemplos/ui-tickets.jsonl`](ejemplos/ui-tickets.jsonl).
 
@@ -260,9 +260,16 @@ pruebas en `tests/test_pacai_ui.py`.
    llegue nodo a nodo; queda pendiente pasar el texto en vivo desde el proveedor.
 8. **Demo web.** [`docs/demos/pacai-ui/`](../demos/pacai-ui/README.md) tiene un renderizador web del catálogo
    base (`ui.js`, sin dependencias) y un chat que lo usa, con AlfalfaCode o con un agente simulado.
-9. **Pendiente (AlfalfaUI).** Renderizadores en `alfalfa-mac` (SwiftUI, con `Codable`) y en `alfalfa-vscode`
-   (webview; puede reutilizar `ui.js`). También falta que el modelo se entere de los nodos rechazados para
-   corregirlos.
+9. **App de Mac.** Pide `ui` en su `hello` con el catálogo base (`PacaiScreens.swift`). El modelo puro está en
+   `AlfalfaKit/Screens/` (`Screen`, `ScreenUpdate`, `ScreenNode`, `ScreenValue`): aplica los bloques y resuelve los
+   eventos sin SwiftUI, y lo prueban `ScreenTests` y `ScreenFlowTests`. Las pantallas llegan con el texto de su
+   mensaje (`AgentEvent.screens`) y entran en la conversación como elementos `.screen`, que `ScreenTimeline`
+   coloca según `placement`. Las vistas (`AlfalfaCode/Session/Screens/`) sólo dibujan: tabla, lista, formulario,
+   campos, desplegable, gráfico con Swift Charts, imagen y código. Con `--stdio` v2, una acción sale como un
+   mensaje con su texto legible.
+10. **Pendiente.** El renderizador de `alfalfa-vscode` (webview; puede reutilizar `ui.js`), que el modelo se entere
+    de los nodos rechazados para corregirlos y cómo se ven las pantallas al reanudar una sesión guardada (sin
+    comprobar).
 
 ## 9. Decisiones (24 de noviembre de 2026)
 

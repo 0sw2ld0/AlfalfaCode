@@ -53,6 +53,8 @@ struct ItemView: View {
             LearningCard(proposal: proposal, state: state, session: session)
         case let .importNotice(_, notice, authorized):
             ImportNoticeCard(notice: notice, authorized: authorized, session: session)
+        case let .screen(_, screen, live):
+            ScreenView(screen: screen, live: live, session: session)
         }
     }
 

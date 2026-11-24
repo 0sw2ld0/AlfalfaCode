@@ -338,6 +338,17 @@ final class LiveSession: ObservableObject, Identifiable {
 
     func dismissWrapUp(_ id: Int) { timeline.dismissWrapUp(id: id) }
 
+    /// Las pantallas del agente (perfil `ui`) sólo responden con un motor que lee.
+    var acceptsScreenActions: Bool { process?.acceptsInput == true }
+
+    /// Un botón o un formulario de una pantalla del agente: va como respuesta del usuario, con su texto legible.
+    func act(_ request: ScreenActionRequest) {
+        guard let process, process.acceptsInput else { return }
+        let queueID = Self.newQueueID()
+        timeline.addUser(request.summary, queued: true, queueID: queueID)
+        process.send(.screenAction(request, id: queueID))
+    }
+
     func queue(_ action: TaskQueueAction, tasks: [String] = [], mode: String = "serie", parallelism: Int = 2,
                initial: Bool = false) {
         guard canSend else { return }

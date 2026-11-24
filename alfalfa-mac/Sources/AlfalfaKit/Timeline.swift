@@ -121,13 +121,16 @@ public enum TimelineItem: Equatable, Identifiable, Sendable {
     /// Lo que trae la carpeta sin autorizar, con «Revisar y autorizar…»; `authorized`: lo que se autorizó desde
     /// aquí, que esta sesión no carga.
     case importNotice(id: Int, ImportNotice, authorized: [String])
+    /// Una pantalla que dibujó el agente (perfil `ui`); `live` si es la que se puede usar (una que bajó a un
+    /// mensaje posterior deja aquí una copia apagada).
+    case screen(id: Int, Screen, live: Bool)
 
     public var id: Int {
         switch self {
         case let .user(id, _, _), let .agent(id, _), let .events(id, _), let .permission(id, _, _), let .notice(id, _),
              let .wrapUp(id, _, _), let .info(id, _, _), let .compaction(id, _),
              let .priceWarning(id, _, _), let .undo(id, _, _), let .learning(id, _, _),
-             let .importNotice(id, _, _): return id
+             let .importNotice(id, _, _), let .screen(id, _, _): return id
         }
     }
 }
@@ -277,6 +280,8 @@ public struct Timeline: Equatable, Sendable {
     /// El usuario ya escribió algo encima de la frase sugerida: no vuelve hasta el próximo cierre.
     public private(set) var suggestionDismissed = false
     private var counter = 0
+    /// Por pantalla del perfil `ui`, el id del elemento que se puede usar.
+    private var liveScreens: [String: Int] = [:]
 
     public init() {}
 
@@ -523,6 +528,7 @@ public struct Timeline: Equatable, Sendable {
             case let .undo(_, step, _): parts.append("> " + step.text)
             case let .learning(_, proposal, _): parts.append("> **Aprendizaje propuesto:** " + proposal.title)
             case let .importNotice(_, notice, _): parts.append("> " + notice.text)
+            case let .screen(_, screen, true): parts.append("> *Pantalla:* " + screen.alt)
             default: break
             }
         }
@@ -746,9 +752,13 @@ public struct Timeline: Equatable, Sendable {
             // La misma respuesta dos veces seguidas (sesiones guardadas por motores anteriores,
             // cuando el modelo la repetía tras recordarle una operación sin resolver): una basta.
             if case let .agent(_, previous)? = items.last, previous == event.text { return }
-            let id = nextID()
-            items.append(.agent(id: id, text: event.text))
-            if event.time > 0 { agentTimes[id] = event.time }
+            // Un mensaje que sólo trae pantallas no deja una respuesta vacía.
+            if !event.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || event.screens.isEmpty {
+                let id = nextID()
+                items.append(.agent(id: id, text: event.text))
+                if event.time > 0 { agentTimes[id] = event.time }
+            }
+            ScreenTimeline.apply(event.screens, to: &items, live: &liveScreens, counter: &counter)
             if status == .idle || status == .blocked || status == .starting { status = .working }
         default:
             // El resultado de una herramienta (no su «Inicio») cierra la orden en marcha.

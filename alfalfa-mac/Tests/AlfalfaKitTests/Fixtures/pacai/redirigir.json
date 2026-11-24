@@ -6,7 +6,7 @@
     "recibido": {
      "version": 2,
      "tipo": "sesion",
-     "id": "aa66302c3a9c41a7",
+     "id": "c33ab2b38154442b",
      "cwd": "/proyecto",
      "modelo": "deepseek-v4.1-flash:cloud",
      "esfuerzo": "medium",
@@ -53,8 +53,8 @@
      "tipo": "evento",
      "rol": "tool",
      "texto": "Inicio run_command · {'argv': ['sleep', '3'], 'purpose': 'Esperar'}",
-     "hora": 1794813024.1214159,
-     "turno": "cfd74848ce924c24",
+     "hora": 1795539741.944674,
+     "turno": "0e613c8998c747bc",
      "herramienta": {
       "nombre": "run_command",
       "fase": "inicio",
@@ -93,9 +93,9 @@
      "version": 2,
      "tipo": "evento",
      "rol": "tool",
-     "texto": "run_command\n{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"c9dc1c03bebb4ca9\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}",
-     "hora": 1794813027.189655,
-     "turno": "cfd74848ce924c24",
+     "texto": "run_command\n{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"026fba2f1c0e4a8e\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}",
+     "hora": 1795539745.031713,
+     "turno": "0e613c8998c747bc",
      "herramienta": {
       "nombre": "run_command",
       "fase": "fin",
@@ -113,9 +113,9 @@
      "tipo": "evento",
      "rol": "user",
      "texto": "mira esto ya",
-     "hora": 1794813027.196209,
+     "hora": 1795539745.0368,
      "id_cola": "cola-cinco-0005",
-     "turno": "cfd74848ce924c24"
+     "turno": "0e613c8998c747bc"
     }
    },
    {
@@ -149,8 +149,8 @@
      "tipo": "evento",
      "rol": "agent",
      "texto": "Hecho: mira esto ya",
-     "hora": 1794813027.2021601,
-     "turno": "cfd74848ce924c24"
+     "hora": 1795539745.041955,
+     "turno": "0e613c8998c747bc"
     }
    },
    {
@@ -168,7 +168,7 @@
      "resumen": "Hecho: mira esto ya",
      "codigo_salida": 0,
      "tokens": 6,
-     "turno": "cfd74848ce924c24",
+     "turno": "0e613c8998c747bc",
      "tokens_turno": 6
     }
    },
@@ -205,7 +205,8 @@
         "0.3"
        ],
        "profiles": [
-        "work"
+        "work",
+        "ui"
        ],
        "extensions": [
         "alfalfa"
@@ -218,7 +219,22 @@
           "type": "object"
          }
         }
-       ]
+       ],
+       "render": {
+        "ui": {
+         "version": "1",
+         "catalog": "base",
+         "actions": [
+          "send",
+          "set",
+          "open_url"
+         ],
+         "limits": {
+          "max_nodes": 300,
+          "max_depth": 12
+         }
+        }
+       }
       }
      },
      {
@@ -246,25 +262,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d4f32082b1a4c182",
+     "id": "m_96b98c618a4a554b",
      "type": "hello",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 1,
-     "time": "2026-11-16T07:10:27.726Z",
+     "time": "2026-11-24T17:02:25.467Z",
      "payload": {
       "versions": [
        "0.3"
       ],
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "implementation": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      }
     }
@@ -272,23 +289,24 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_e0d04f8474ac4b8a",
+     "id": "m_c4d91204e8210d96",
      "type": "session_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 2,
-     "time": "2026-11-16T07:10:27.726Z",
+     "time": "2026-11-24T17:02:25.467Z",
      "payload": {
       "version": "0.3",
       "profiles": [
-       "work"
+       "work",
+       "ui"
       ],
       "extensions": [
        "alfalfa"
       ],
       "agent": {
        "name": "alfalfa",
-       "version": "0.99.22"
+       "version": "0.99.28"
       }
      },
      "reply_to": "c_0000000000000001"
@@ -297,14 +315,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b31b0857da0c1135",
+     "id": "m_94aab97f46312dc8",
      "type": "alfalfa.session",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 3,
-     "time": "2026-11-16T07:10:27.727Z",
+     "time": "2026-11-24T17:02:25.468Z",
      "payload": {
-      "id": "a0f1145caa6040b3",
+      "id": "83a04861bc5c4010",
       "cwd": "/proyecto",
       "model": "deepseek-v4.1-flash:cloud",
       "effort": "medium",
@@ -317,12 +335,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_8ae05ac30dca9ffc",
+     "id": "m_e1b8d7d9638deeda",
      "type": "run_started",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 4,
-     "time": "2026-11-16T07:10:27.733Z",
+     "time": "2026-11-24T17:02:25.474Z",
      "payload": {
       "input_id": "c_0000000000000002"
      }
@@ -331,12 +349,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_a10dd293556fc974",
+     "id": "m_aa0d8e53a397d68f",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 5,
-     "time": "2026-11-16T07:10:27.743Z",
+     "time": "2026-11-24T17:02:25.482Z",
      "payload": {
       "active": true
      }
@@ -345,14 +363,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9ddf3db88e1016d7",
+     "id": "m_36df4d32b25cd755",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 6,
-     "time": "2026-11-16T07:10:27.823Z",
+     "time": "2026-11-24T17:02:25.534Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -361,18 +379,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_5e043d567d5d783b",
+     "id": "m_51509757510de7f9",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 7,
-     "time": "2026-11-16T07:10:27.823Z",
+     "time": "2026-11-24T17:02:25.534Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -386,12 +404,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_dd526b698eb1c9a3",
+     "id": "m_95ce32eaec1fa8db",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 8,
-     "time": "2026-11-16T07:10:27.823Z",
+     "time": "2026-11-24T17:02:25.534Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 3
@@ -402,14 +420,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_19dfaae844ebc27a",
+     "id": "m_d8f8bdedbc6cce25",
      "type": "tool_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 9,
-     "time": "2026-11-16T07:10:27.829Z",
+     "time": "2026-11-24T17:02:25.538Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "name": "run_command",
       "arguments": {
        "argv": [
@@ -429,7 +447,7 @@
         "ongoing": "Esperando",
         "command": "sleep 3"
        },
-       "turn": "939a7eff9c974c4a"
+       "turn": "531f4a271afe4b74"
       }
      }
     }
@@ -457,7 +475,7 @@
         }
        ],
        "mode": "steer",
-       "run_id": "m_8ae05ac30dca9ffc",
+       "run_id": "m_e1b8d7d9638deeda",
        "alfalfa": {
         "redirect": false
        }
@@ -485,19 +503,19 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_479979514d433b6a",
+     "id": "m_ee1584313fae0ef2",
      "type": "tool_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 10,
-     "time": "2026-11-16T07:10:30.895Z",
+     "time": "2026-11-24T17:02:28.599Z",
      "payload": {
-      "tool_call_id": "m_19dfaae844ebc27a",
+      "tool_call_id": "m_d8f8bdedbc6cce25",
       "status": "success",
       "output": [
        {
         "type": "text",
-        "text": "{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"047a2f0fd9c54889\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}"
+        "text": "{\"exit_code\": 0, \"output\": \"\", \"truncated\": false, \"output_storage_truncated\": false, \"execution_complete\": true, \"sandbox\": \"seatbelt\", \"intento\": \"7c927928056a480a\", \"permisos\": [], \"red\": false, \"argv\": [\"sleep\", \"3\"], \"cwd\": \"/proyecto\", \"purpose\": \"Esperar\", \"classification\": {\"status\": \"passed\", \"disposition\": \"pass\", \"cause\": \"exit_zero\", \"message\": \"La operación terminó con código 0.\"}, \"operation_id\": \"operation-000001\"}"
        }
       ],
       "alfalfa": {
@@ -510,7 +528,7 @@
          "status": "passed"
         }
        },
-       "turn": "939a7eff9c974c4a"
+       "turn": "531f4a271afe4b74"
       }
      }
     }
@@ -518,30 +536,30 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9e45d30c2b9161fd",
+     "id": "m_8b10e79c03eeb4bb",
      "type": "alfalfa.user_message",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 11,
-     "time": "2026-11-16T07:10:30.901Z",
+     "time": "2026-11-24T17:02:28.604Z",
      "payload": {
       "text": "mira esto ya",
       "input_id": "cola-cinco-0005",
-      "turn": "939a7eff9c974c4a"
+      "turn": "531f4a271afe4b74"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_b1545e565ec5db32",
+     "id": "m_de858dd85a1b5fc5",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 12,
-     "time": "2026-11-16T07:10:30.905Z",
+     "time": "2026-11-24T17:02:28.606Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "context_tokens": 2,
       "context_limit": 1048576
      }
@@ -550,18 +568,18 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_8b814fa8051b3ac1",
+     "id": "m_e445065c4658a35b",
      "type": "alfalfa.context",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 13,
-     "time": "2026-11-16T07:10:30.905Z",
+     "time": "2026-11-24T17:02:28.606Z",
      "payload": {
       "tokens": 2,
       "limit": 1048576,
       "breakdown": {
        "system": 0,
-       "tools": 2,
+       "tools": 1,
        "mcp": 0,
        "messages": 0,
        "plugins": 0
@@ -575,12 +593,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_a93e78e1092d5fed",
+     "id": "m_764c9d211ebcbfa7",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 14,
-     "time": "2026-11-16T07:10:30.905Z",
+     "time": "2026-11-24T17:02:28.607Z",
      "payload": {
       "alfalfa": {
        "total_tokens": 6
@@ -591,17 +609,17 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_ec4b2d4b92c41e01",
+     "id": "m_773b8f7dca6a2cda",
      "type": "message_start",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 15,
-     "time": "2026-11-16T07:10:30.907Z",
+     "time": "2026-11-24T17:02:28.608Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "role": "assistant",
       "alfalfa": {
-       "turn": "939a7eff9c974c4a"
+       "turn": "531f4a271afe4b74"
       }
      }
     }
@@ -609,14 +627,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_72d8b462a831d769",
+     "id": "m_28fc8f1e123dbb1e",
      "type": "message_delta",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 16,
-     "time": "2026-11-16T07:10:30.907Z",
+     "time": "2026-11-24T17:02:28.608Z",
      "payload": {
-      "message_id": "m_ec4b2d4b92c41e01",
+      "message_id": "m_773b8f7dca6a2cda",
       "blocks": [
        {
         "type": "text",
@@ -629,26 +647,26 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9d7717d9296c8bca",
+     "id": "m_af7b639f82e679f7",
      "type": "message_end",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 17,
-     "time": "2026-11-16T07:10:30.907Z",
+     "time": "2026-11-24T17:02:28.608Z",
      "payload": {
-      "message_id": "m_ec4b2d4b92c41e01"
+      "message_id": "m_773b8f7dca6a2cda"
      }
     }
    },
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_e8b7a75fbf10644e",
+     "id": "m_fd8e1ceda006fbf7",
      "type": "alfalfa.awake",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 18,
-     "time": "2026-11-16T07:10:30.924Z",
+     "time": "2026-11-24T17:02:28.628Z",
      "payload": {
       "active": false
      }
@@ -657,14 +675,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_acac9a198b9879a0",
+     "id": "m_930af6ebb72ae3af",
      "type": "usage",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 19,
-     "time": "2026-11-16T07:10:30.924Z",
+     "time": "2026-11-24T17:02:28.628Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "alfalfa": {
        "turn_tokens": 6
       }
@@ -674,19 +692,19 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d4ba09dc0ad5c664",
+     "id": "m_27b4da885a3d19af",
      "type": "alfalfa.closing",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 20,
-     "time": "2026-11-16T07:10:30.924Z",
+     "time": "2026-11-24T17:02:28.628Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "status": "completed",
       "summary": "Hecho: mira esto ya",
       "exit_code": 0,
       "tokens": 6,
-      "turn": "939a7eff9c974c4a",
+      "turn": "531f4a271afe4b74",
       "turn_tokens": 6
      }
     }
@@ -694,14 +712,14 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_9b39626539a6c37c",
+     "id": "m_28ecd817c5800014",
      "type": "run_finished",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 21,
-     "time": "2026-11-16T07:10:30.924Z",
+     "time": "2026-11-24T17:02:28.628Z",
      "payload": {
-      "run_id": "m_8ae05ac30dca9ffc",
+      "run_id": "m_e1b8d7d9638deeda",
       "outcome": "success"
      }
     }
@@ -709,12 +727,12 @@
    {
     "recibido": {
      "pacai": "0.3",
-     "id": "m_d935f3dbf77b1814",
+     "id": "m_319cbf60f59c8877",
      "type": "close",
      "session": "s_0123456789abcdef0123456789abcdef",
      "sender": "agent",
      "seq": 22,
-     "time": "2026-11-16T07:10:30.930Z",
+     "time": "2026-11-24T17:02:28.634Z",
      "payload": {
       "reason": "Hecho: mira esto ya",
       "alfalfa": {

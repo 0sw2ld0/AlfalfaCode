@@ -13,7 +13,7 @@ final class PacaiClientTests: XCTestCase {
         XCTAssertEqual(lines.map { $0["type"] as? String }, ["hello", "input"])
         let hello = try XCTUnwrap(lines.first?["payload"] as? [String: Any])
         XCTAssertEqual(hello["versions"] as? [String], ["0.3"])
-        XCTAssertEqual(hello["profiles"] as? [String], ["work"])
+        XCTAssertEqual(hello["profiles"] as? [String], ["work", "ui"])
         XCTAssertEqual(hello["extensions"] as? [String], ["alfalfa"])
         XCTAssertEqual((hello["client_tools"] as? [[String: Any]])?.first?["name"] as? String, "browser")
         let input = try XCTUnwrap(lines.last?["payload"] as? [String: Any])

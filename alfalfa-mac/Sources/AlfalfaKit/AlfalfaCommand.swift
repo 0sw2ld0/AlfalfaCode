@@ -41,6 +41,9 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case reviewCode(turn: String, model: String)
     case cancelCodeReview
     case taskQueue(TaskQueueAction, tasks: [String] = [], mode: String = "serie", parallelism: Int = 2)
+    /// El usuario pulsó o envió algo en una pantalla del agente (perfil `ui`). `--stdio` v2 no tiene pantallas:
+    /// allí sale como un mensaje con su texto legible.
+    case screenAction(ScreenActionRequest, id: String? = nil)
 
     public var line: String {
         let object: [String: Any]
@@ -78,6 +81,8 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case let .learning(id, apply): object = ["tipo": "aprendizaje", "id": id, "aplicar": apply]
         case let .reviewCode(turn, model): object = ["tipo": "revisar_codigo", "turno": turn, "modelo": model]
         case .cancelCodeReview: object = ["tipo": "cancelar_revision_codigo"]
+        case let .screenAction(request, id):
+            object = ["tipo": "mensaje", "texto": request.summary].merging(id.map { ["id": $0] } ?? [:]) { $1 }
         case let .taskQueue(action, tasks, mode, parallelism):
             var fields: [String: Any] = ["tipo": "encargos", "accion": action.rawValue]
             if action == .prepare { fields.merge(["encargos": tasks, "modo": mode, "paralelos": parallelism]) { _, v in v } }
