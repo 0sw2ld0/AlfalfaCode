@@ -13,9 +13,10 @@ MODERAR = (
     'Modera una lluvia de ideas con los participantes reales de esta sesión. Usa spawn_agent una '
     'vez por participante. El primero propone alternativas, el segundo las contrasta y los demás '
     'aportan otra perspectiva. Da a cada uno la pregunta y los aportes anteriores que necesite. '
-    'Después usa send_input para continuar por turnos. Si ya hay un acuerdo útil, sintetiza '
-    'sin consumir el resto de las intervenciones. Recoge el acuerdo o las alternativas, el '
-    'desacuerdo pendiente y un próximo paso reversible. Atribuye únicamente aportes recibidos.'
+    'Cada participante debe tener un primer turno antes de que puedas sintetizar. Después usa send_input '
+    'si hacen falta más turnos. Si ya hay un acuerdo útil, sintetiza sin consumir el resto de las '
+    'intervenciones. La síntesis del moderador cuenta como una intervención adicional. Recoge el acuerdo '
+    'o las alternativas, el desacuerdo pendiente y un próximo paso reversible. Atribuye sólo aportes recibidos.'
 )
 
 PARTICIPAR = (
@@ -55,14 +56,17 @@ def validar_referencia(rutas):
     return MAX_BYTES_REFERENCIA
 
 
+def cantidad_participantes(task):
+    return len(task.get('lluvia_participantes') or PAPELES)
+
+
 def herramienta(task):
     limite = task.get('lluvia_limite', 0)
     usados = task.get('lluvia_usados', 0)
     if (usados >= limite or task.get('lluvia_cerrada') or task.get('subagente_de')
             or task.get('runtime_step', 0) >= limite + 4):
         return None
-    cantidad = len(task.get('lluvia_participantes', PAPELES))
-    return 'spawn_agent' if usados < cantidad else 'send_input'
+    return 'spawn_agent' if usados < cantidad_participantes(task) else 'send_input'
 
 
 def reservar(gestor, nombre, args):
@@ -76,8 +80,9 @@ def reservar(gestor, nombre, args):
         raise ValueError('No queda un turno disponible para esta intervención. Sintetiza los aportes recibidos.')
     turno = usados + 1
     ultimo = turno == task['lluvia_limite']
-    instrucciones = (' Es tu última intervención. Concreta el acuerdo, las diferencias y el próximo paso.'
-                     if ultimo else ' Puedes señalar que ya hay acuerdo y que procede cerrar antes del límite.')
+    instrucciones = (' Es tu última intervención disponible en la sala. Concreta el acuerdo, las diferencias '
+                     'y el próximo paso para la síntesis del moderador.'
+                     if ultimo else ' Si ya hay acuerdo, indícalo para la síntesis.')
     opciones = dict(args, message=(
         f'Intervención {turno} de hasta {task["lluvia_limite"]}.'
         + instrucciones + '\n\n' + sin_etiquetas(args['message'])), background=False)

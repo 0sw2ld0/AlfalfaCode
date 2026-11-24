@@ -2798,7 +2798,7 @@ class NativeRuntime:
         if self.task.get('lluvia_limite'):
             from ...lluvia import MODERAR, PARTICIPAR, REGLAS
             rol = (PARTICIPAR if self.task.get('subagente_de') else
-                   MODERAR + ' Máximo de intervenciones: ' + str(self.task['lluvia_limite']) + '.')
+                   MODERAR + ' Máximo de turnos de participantes: ' + str(self.task['lluvia_limite']) + '.')
             self.system_parts = {}
             return rol + REGLAS
         system = self.instructions+'\n'+(self.task.get('agent_instructions') or '')
@@ -3093,13 +3093,24 @@ class NativeRuntime:
                                       if t['function']['name'] not in self.excluded_tools]
                 if self.task.get('prototipo'):
                     allowed_tools = [tool for tool in allowed_tools if tool['function']['name'] == 'generate_image']
+                faltan_participantes = 0
                 if lluvia_limite:
-                    from ...lluvia import herramienta
+                    from ...lluvia import cantidad_participantes, herramienta
                     permitida = herramienta(self.task)
                     allowed_tools = [tool for tool in allowed_tools if tool['function']['name'] == permitida]
-                    if permitida is None and not self.task.get('subagente_de'):
+                    es_moderador = not self.task.get('subagente_de')
+                    if es_moderador and not self.task.get('lluvia_cerrada'):
+                        faltan_participantes = cantidad_participantes(self.task) - len(self.manager.subagentes.lista())
+                    if faltan_participantes > 0:
+                        if permitida != 'spawn_agent':
+                            raise ValueError('La sala se interrumpió antes de dar un turno a cada participante.')
                         context = context + [{'role': 'user', 'content': (
-                            'Cierra con una síntesis de los aportes recibidos. Ya no hay intervenciones disponibles.'
+                            f'Todavía hay participantes sin primer turno ({faltan_participantes}). '
+                            'Usa spawn_agent para invitar al siguiente antes de sintetizar.'
+                        )}]
+                    elif permitida is None and es_moderador:
+                        context = context + [{'role': 'user', 'content': (
+                            'Cierra con una síntesis de los aportes recibidos. Ya no quedan turnos de participantes.'
                         )}]
                 if self.compaction == 'codex' and not final_review:
                     from ...compactacion import tokens_aprox
@@ -3231,6 +3242,10 @@ class NativeRuntime:
                     self.state['messages'].append({'role': 'user', 'content': (
                         'Tu última respuesta llegó vacía. Continúa: usa una herramienta para el siguiente '
                         'paso o, si ya terminaste, entrega el resumen final.')})
+                    self.save()
+                    continue
+                if faltan_participantes > 0 and not calls:
+                    # Una síntesis anticipada no entra en el historial ni se muestra al usuario.
                     self.save()
                     continue
                 medido_hasta = len(self.state['messages'])

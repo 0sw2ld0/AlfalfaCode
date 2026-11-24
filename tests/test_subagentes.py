@@ -381,8 +381,9 @@ def test_lluvia_acota_al_moderador_si_insiste_en_usar_herramientas_ajenas(tmp_pa
     guion = Guion([llamada('read_file', {'path': f'{i}.txt'}) for i in range(12)], {})
 
     assert correr(s, guion) != 0
-    assert len(guion.payloads['principal']) == 6
-    assert not nombres_de_herramientas(guion.payloads['principal'][-1])
+    assert len(guion.payloads['principal']) <= 6
+    assert 'La sala se interrumpió antes de dar un turno a cada participante.' in s.m.task['summary']
+    assert not s.m.task.get('lluvia_cerrada')
     assert not s.m.subagentes.lista()
 
 
@@ -399,8 +400,8 @@ def test_lluvia_respeta_modelos_esfuerzos_y_un_tercer_participante(tmp_path, mon
         principal=[
             llamada('spawn_agent', {'message': 'Propón la primera idea.', 'model': 'sustituto'}),
             llamada('spawn_agent', {'message': 'Contrasta la idea.'}),
+            {'role': 'assistant', 'content': 'Cierre prematuro: los dos primeros están de acuerdo.'},
             llamada('spawn_agent', {'message': 'Evalúa la viabilidad.'}),
-            llamada('send_input', {'agent': 'a3', 'message': 'Cierra la propuesta.'}),
             {'role': 'assistant', 'content': 'Decisión registrada.'},
         ],
         por_agente={},
@@ -410,10 +411,15 @@ def test_lluvia_respeta_modelos_esfuerzos_y_un_tercer_participante(tmp_path, mon
 
     assert [(a.nombre, a.task['model'], a.task['effort'], a.turnos)
             for a in s.m.subagentes.agentes.values()] == [
-        ('Propuesta', 'modelo-uno', 'low', 2),
+        ('Propuesta', 'modelo-uno', 'low', 1),
         ('Contraste', 'modelo-dos', 'high', 1),
         ('Participante 3', 'modelo-tres', 'medium', 1),
     ]
+    assert 'Cierre prematuro' not in s.textos()
+    assert 'Cierre prematuro' not in str(guion.payloads)
+    assert 'participantes sin primer turno (1)' in guion.payloads['principal'][3]['messages'][-1]['content']
+    assert 'Decisión registrada.' in s.textos()
+    assert s.m.task['lluvia_usados'] == 3 and s.m.task['lluvia_cerrada'] is True
     assert 'que no debe llegar a la sala' not in str(guion.payloads)
 
 

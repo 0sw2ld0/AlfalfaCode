@@ -244,8 +244,8 @@ struct BrainstormSheet: View {
                 HStack(spacing: 0) {
                     Button("Reducir máximo", systemImage: "minus") { limit -= 1 }
                         .disabled(limit <= participants.count)
-                    Text(limit.formatted()).monospacedDigit().frame(minWidth: 28)
-                        .accessibilityLabel("\(limit) intervenciones")
+                    Text((limit + 1).formatted()).monospacedDigit().frame(minWidth: 28)
+                        .accessibilityLabel("\(limit + 1) intervenciones en total")
                     Button("Aumentar máximo", systemImage: "plus") { limit += 1 }
                         .disabled(limit >= BrainstormConfiguration.maximumTurns)
                 }
@@ -254,7 +254,7 @@ struct BrainstormSheet: View {
                 .padding(.horizontal, 4).frame(height: 26)
                 .background(Theme.selection, in: RoundedRectangle(cornerRadius: 6))
             }
-            Text("La sala puede cerrar antes si hay acuerdo.")
+            Text("Mínimo de \(participants.count + 1) intervenciones, con un primer turno por participante y la síntesis del moderador.")
                 .font(.callout).foregroundStyle(Theme.secondary)
         }
     }

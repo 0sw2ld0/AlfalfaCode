@@ -340,7 +340,11 @@ del resultado. [Generar un PNG con Codex](guia/imagenes.md#generar-un-png-con-co
 
 En macOS, abre **Lluvia de ideas** desde el menú de modo. **Guardar como grupo…**
 guarda el moderador, los participantes, sus modelos y esfuerzos y el máximo de
-intervenciones con un nombre que puedes volver a elegir en otras salas.
+intervenciones con un nombre que puedes volver a elegir en otras salas. La sala
+sólo puede cerrar por acuerdo después del primer turno de todos los participantes.
+El máximo de la app incluye la síntesis final del moderador. Por ejemplo, con
+tres participantes el mínimo es de cuatro intervenciones en total. El límite
+de la CLI y de PACAI cuenta los turnos de participantes y la síntesis va aparte.
 
 Para usar Haiku, Sonnet u Opus en la sala, elige un modelo del proveedor
 **Anthropic**. Los grupos guardados con participantes de Claude Code pasan
