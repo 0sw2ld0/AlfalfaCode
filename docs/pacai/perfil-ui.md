@@ -1,0 +1,297 @@
+# Perfil `ui` de PACAI (borrador 1)
+
+> Estado: **borrador**, con las preguntas del primer borrador resueltas (sección 9). El motor de AlfalfaCode
+> ya lo habla (sección 8); faltan los renderizadores de la app de Mac y de VS Code.
+> Esquema: [`pacai-ui-1.schema.json`](../../alfalfa/pacai/pacai-ui-1.schema.json). Ejemplo completo:
+> [`ejemplos/ui-tickets.jsonl`](ejemplos/ui-tickets.jsonl).
+
+El perfil `ui` deja que el agente dibuje pantallas dentro del chat mientras conversa: tarjetas, tablas,
+formularios, botones, gráficos. El cliente las va mostrando a medida que llegan, y lo que el usuario hace en
+ellas (pulsar un botón, enviar un formulario) vuelve al agente como un mensaje más de la conversación.
+
+Funciona con PACAI 0.3 tal como está: no añade tipos de mensaje. Usa tres piezas que el núcleo ya tiene:
+
+| Pieza del núcleo | Para qué la usa `ui` |
+| --- | --- |
+| `hello.payload.render` | El cliente declara qué sabe dibujar (su catálogo de componentes). |
+| bloque `structured` en `message_start`, `message_delta` y `message_end` | El agente manda las pantallas, por partes. |
+| bloque `structured` en `input` | El cliente devuelve las acciones del usuario. |
+
+**AlfalfaUI** es el nombre del kit de AlfalfaCode que implementa este perfil: los renderizadores de la app
+de Mac (SwiftUI) y de la extensión de VS Code (web), y el traductor del motor. El formato es de PACAI y vale
+para cualquier agente.
+
+## 1. Ideas de partida
+
+- **El cliente manda en lo que se dibuja.** El agente solo puede usar los componentes que el cliente declaró.
+  Nada de HTML, scripts ni estilos libres.
+- **Se dibuja mientras llega.** Una pantalla es una lista plana de nodos. Cada nodo llega solo y se muestra en
+  cuanto llega; los hijos pueden llegar después que el padre.
+- **Cambiar es mandar lo que cambia.** Un nodo con un `id` que ya existe reemplaza al anterior. En el turno
+  siguiente el agente manda solo los nodos nuevos o distintos.
+- **Una pantalla siempre puede reconstruirse.** Al cerrar el mensaje, el agente manda la pantalla completa.
+  Un cliente que reanuda o llega tarde no tiene que reconstruir la historia.
+- **Todo se valida con JSON Schema.** Lo que ya usa PACAI. No hay un lenguaje propio que analizar.
+
+## 2. Negociación
+
+El cliente pide el perfil en `profiles` y describe lo que sabe dibujar en `render.ui`:
+
+```json
+{"type": "hello", "sender": "client", "payload": {
+  "versions": ["0.3"], "profiles": ["work", "ui"], "extensions": ["alfalfa"],
+  "render": {"ui": {
+    "version": "1",
+    "catalog": "base",
+    "components": {
+      "Ticket": {"description": "Un ticket con su estado", "props": {"type": "object",
+        "properties": {"title": {"type": "string"}, "status": {"enum": ["open", "closed"]}},
+        "required": ["title"]}, "children": false, "events": ["press"]}
+    },
+    "actions": ["send", "set", "open_url"],
+    "limits": {"max_nodes": 300, "max_depth": 12}
+  }}
+}}
+```
+
+| Campo | Significado |
+| --- | --- |
+| `version` | Versión del perfil. Este borrador es la `"1"`. |
+| `catalog` | `"base"` (los 12 componentes de la sección 4) o `"none"` (solo los de `components`). Por defecto, `"base"`. |
+| `components` | Componentes propios del cliente. Cada uno: `description` (para el modelo), `props` (JSON Schema), `children` (si admite hijos) y `events`. Un nombre propio no puede pisar uno del catálogo base. |
+| `actions` | Acciones que el cliente sabe ejecutar. Por defecto, las tres. |
+| `limits` | Nodos por pantalla y profundidad máxima. Por defecto, 300 y 12. |
+
+Si el agente admite el perfil, lo incluye en los `profiles` de `session_started`. Si el cliente pide `ui`
+sin `render.ui`, vale el catálogo base con todas las acciones y los límites por defecto. Un agente que no
+negoció `ui` no manda pantallas; un cliente que recibe un bloque `pacai.ui/1` sin haberlo negociado lo ignora.
+
+## 3. Pantallas: lo que manda el agente
+
+Una **vista** es una pantalla con nombre (`view`). Vive toda la sesión: el agente puede actualizarla en
+mensajes posteriores. Dónde se muestra lo sugiere el agente con `placement` (`inline`: en el mensaje donde
+apareció por primera vez; `latest`: en el último mensaje que la tocó). Sin esa pista, decide el cliente.
+
+El agente la manda en bloques `structured` con `schema: "pacai.ui/1"`, dentro de los mensajes de siempre:
+
+```json
+{"type": "message_delta", "payload": {"message_id": "m_00000011", "blocks": [
+  {"type": "structured", "schema": "pacai.ui/1", "data": {
+    "view": "tickets", "op": "patch", "rev": 1,
+    "nodes": [
+      {"id": "root", "component": "Stack", "children": ["titulo", "tabla", "nuevo"]},
+      {"id": "titulo", "component": "Text", "props": {"text": "3 tickets abiertos", "style": "title"}}
+    ]
+  }}
+]}}
+```
+
+| Campo | Significado |
+| --- | --- |
+| `view` | Nombre de la vista, único en la sesión. `[a-z][a-z0-9_]*`. |
+| `op` | `patch`: mezcla los nodos con los que ya hay. `replace`: la vista completa; lo que no venga se borra. |
+| `rev` | Revisión de la vista. Sube en cada bloque que la toca. El cliente descarta un bloque con `rev` menor o igual que el que ya tiene. |
+| `nodes` | Nodos nuevos o que cambian. |
+| `remove` | Ids de nodos que se borran (solo en `patch`). |
+| `state` | Valores iniciales o nuevos del estado de la vista (sección 5). En `patch` se mezclan por clave. |
+| `alt` | Resumen en texto de la vista, para accesibilidad, registros y clientes que no dibujan. Obligatorio en `replace`. |
+| `placement` | Opcional. `inline` o `latest` (ver arriba). Vale la última pista recibida para esa vista. |
+
+### Nodos
+
+```json
+{"id": "enviar", "component": "Button", "props": {"label": "Crear", "variant": "primary"},
+ "events": {"press": {"send": "crear_ticket", "with": ["title", "priority"]}}}
+```
+
+| Campo | Significado |
+| --- | --- |
+| `id` | Único dentro de la vista. La raíz se llama `root`. |
+| `component` | Componente: uno del catálogo negociado. |
+| `props` | Propiedades, según el esquema del componente. Un valor `{"$": "nombre"}` se lee del estado de la vista. |
+| `children` | Ids de los hijos, en orden. Solo en componentes que admiten hijos. |
+| `events` | Qué hacer en cada evento del componente (sección 5). |
+
+Reglas para dibujar mientras llega:
+
+1. El cliente dibuja desde `root`. Un hijo que todavía no llegó no ocupa sitio (o muestra un hueco de
+   carga); cuando llega, aparece en su lugar.
+2. Un nodo con un `id` conocido reemplaza al anterior **entero** (no se mezclan sus `props`).
+3. Un nodo que nadie referencia no se dibuja. Un ciclo en `children` se corta en el primer nodo repetido.
+4. Al terminar el mensaje (`message_end`), el agente manda un `replace` de cada vista que el mensaje tocó.
+   Es la foto de referencia: si difiere de lo que el cliente fue montando, gana la foto.
+
+### Validación
+
+- **El agente valida antes de mandar.** Un nodo con un componente fuera del catálogo, propiedades que no
+  cumplen su esquema o más nodos que `max_nodes` no sale. AlfalfaCode se lo dice al modelo para que lo corrija.
+- **El cliente es tolerante.** Si aun así le llega un nodo que no entiende, no lo dibuja y sigue. Nunca
+  rompe la sesión por una pantalla.
+
+## 4. Catálogo base
+
+Doce componentes que cualquier cliente con `catalog: "base"` sabe dibujar. El esquema exacto de sus
+propiedades está en `pacai-ui-1.schema.json` (`$defs/base_props`).
+
+| Componente | Propiedades principales | Hijos | Eventos |
+| --- | --- | --- | --- |
+| `Stack` | `direction` (`vertical`/`horizontal`), `gap` (`none`/`small`/`medium`/`large`) | sí | — |
+| `Card` | `title`, `subtitle` | sí | `press` |
+| `Text` | `text` (texto plano, sin markdown), `style` (`body`/`title`/`subtitle`/`caption`/`muted`) | no | — |
+| `Table` | `columns` (`[{key, label}]`), `rows` (lista de objetos) | no | `row_press` |
+| `List` | `items` (`[{id, title, subtitle?}]`) | no | `item_press` |
+| `Button` | `label`, `variant` (`primary`/`secondary`/`danger`), `disabled` | no | `press` |
+| `Form` | `submit_label` | sí | `submit` |
+| `Input` | `name`, `label`, `kind` (`text`/`number`/`multiline`/`email`/`date`), `placeholder`, `required` | no | `change` |
+| `Select` | `name`, `label`, `options` (`[{value, label}]`), `multiple` | no | `change` |
+| `Chart` | `kind` (`bar`/`line`/`pie`), `labels`, `series` (`[{name, values}]`) | no | — |
+| `Image` | `src` (`https:` o `data:image/…`), `alt` (obligatorio) | no | — |
+| `Code` | `code`, `language` | no | — |
+
+El aspecto (colores, tipografía, márgenes) es del cliente: la app de Mac dibuja con SwiftUI y VS Code con su
+tema. El agente describe **qué** hay, no **cómo** se ve.
+
+## 5. Estado y acciones
+
+### Estado de la vista
+
+Cada vista tiene un estado: un objeto plano de valores. Los campos de un formulario (`Input`, `Select`) leen
+y escriben en él la clave de su `name`. Cualquier propiedad puede leerlo con `{"$": "clave"}`. El agente da
+valores iniciales con `state`; el usuario los cambia al escribir. El estado vive en el cliente: el agente solo
+lo ve cuando una acción `send` se lo manda. (La ruta `/client/ui/` de `shared_state` queda reservada para una
+versión futura; un cliente de la versión 1 no escribe en ella.)
+
+### Acciones
+
+En `events`, cada evento lleva una acción o una lista de acciones, que se ejecutan en orden:
+
+| Acción | Forma | Qué hace |
+| --- | --- | --- |
+| `send` | `{"send": "nombre", "with": ["clave", …]}` | Devuelve la acción al agente con los valores pedidos del estado. Sin `with`, manda todo el estado. |
+| `set` | `{"set": {"clave": valor}}` | Cambia el estado de la vista. No llama al agente. |
+| `open_url` | `{"open_url": "https://…"}` | Abre un enlace. Solo `https:`. El cliente puede pedir confirmación. |
+
+Como mucho un `send` por evento. Las acciones solo se disparan por un gesto del usuario: el cliente nunca
+manda un `send` por su cuenta. El evento `change` solo admite `set`: llamar al modelo en cada tecla gastaría un
+turno por pulsación. No hay acción que ejecute una herramienta sin pasar por el modelo.
+
+### Lo que manda el cliente
+
+Un `send` se convierte en un `input` con un bloque `structured` de `schema: "pacai.ui.action/1"` y, delante,
+un bloque `text` con un resumen legible:
+
+```json
+{"type": "input", "sender": "client", "payload": {"blocks": [
+  {"type": "text", "text": "Crear ticket: «Error al iniciar sesión», prioridad alta"},
+  {"type": "structured", "schema": "pacai.ui.action/1", "data": {
+    "view": "tickets", "rev": 3, "node": "enviar", "event": "press", "name": "crear_ticket",
+    "values": {"title": "Error al iniciar sesión", "priority": "high"}
+  }}
+]}}
+```
+
+- Sin una ejecución en marcha, el `input` abre una nueva (`new_run`, el modo por defecto). Con una en
+  marcha, va como `steer` con su `run_id`.
+- `rev` es la revisión de la vista que el usuario tenía delante. Si el agente ya la cambió, la acción puede
+  estar desfasada; el agente se lo dice al modelo y el modelo decide.
+- Tras un `send`, el cliente desactiva el control que lo disparó hasta que llegue una revisión nueva de la
+  vista o termine la ejecución. Evita el doble envío.
+- El bloque `text` es lo que el usuario «dijo». Un cliente que no conozca el perfil, o un registro, lo
+  entiende sin dibujar nada.
+
+## 6. Reanudar y llegar tarde
+
+El `replace` de cada `message_end` es la foto de la vista. Un `snapshot` lleva los últimos mensajes en
+`last_messages`; con el último `message_end` de cada vista, el cliente la dibuja como estaba. El estado que el
+usuario había escrito y no envió se pierde: vive solo en el cliente que lo tenía.
+
+## 7. Seguridad
+
+- **Sin código.** Ni HTML, ni scripts, ni CSS, ni markdown que se interprete. `Text` es texto plano.
+- **Enlaces e imágenes.** `open_url` solo con `https:` y siempre por un gesto del usuario. `Image` solo con
+  `https:` o `data:image/png|jpeg|gif|webp`. El cliente puede no cargar imágenes remotas (revelan que la
+  pantalla se abrió) o pedir permiso.
+- **Nada de credenciales.** El agente no debe pedir contraseñas ni tarjetas en un formulario, y el cliente
+  puede negarse a dibujar un `Input` cuyo `name` o `label` lo sugiera. Un formulario del agente nunca debe
+  parecer una pantalla del sistema o de otra aplicación.
+- **Límites.** El cliente aplica `max_nodes`, `max_depth` y `limits.max_message_bytes` del núcleo aunque el
+  agente no lo haga.
+- **Lo que vuelve es entrada del usuario.** Una acción `send` llega al agente con la misma confianza que un
+  mensaje escrito. Los permisos de las herramientas no cambian por venir de un botón.
+
+## 8. Cómo lo hace AlfalfaCode (informativo)
+
+Esto no forma parte del perfil; es cómo encaja en el motor. El código está en `alfalfa/pacai/ui.py`, y las
+pruebas en `tests/test_pacai_ui.py`.
+
+1. **Negociación.** `alfalfa --pacai` ofrece `ui` en su `hello`. Si el cliente lo pide, el transporte valida su
+   `render.ui` contra `$defs/declaration`. Una declaración inválida recibe `error` `invalid_message` y la
+   sesión sigue sin el perfil.
+2. **Prompt.** Con `ui` negociado, el motor añade al prompt de sistema, en cada petición, una sección generada
+   desde el catálogo (`Catalogo.manual()`): los componentes, sus propiedades y eventos, las acciones que el
+   cliente ejecuta y cuándo conviene dibujar en vez de escribir.
+3. **Salida del modelo.** El modelo escribe la pantalla en un bloque cercado, con un nodo JSON por línea:
+
+   ````text
+   ```pacai-ui view=tickets placement=latest
+   {"id":"root","component":"Stack","children":["titulo","tabla"]}
+   {"id":"titulo","component":"Text","props":{"text":"3 tickets abiertos","style":"title"}}
+   {"state":{"priority":"medium"}}
+   ```
+   ````
+
+   Además de los nodos, el bloque admite tres líneas especiales: `{"remove":[ids]}`, `{"state":{…}}` y
+   `{"alt":"…"}`. El traductor separa el texto de los bloques (`partir`) y valida cada nodo contra el catálogo.
+   Cada bloque sale como un `patch` en su propio `message_delta`, y al final el `message_end` lleva la foto
+   (`replace`) de cada vista que el mensaje tocó. El bloque no sale como texto; lo que el modelo escriba antes
+   y después, sí. Una valla sin cerrar (respuesta cortada) se procesa igual.
+4. **Lo rechazado.** Los nodos que no pasan la validación no salen. El cliente recibe
+   `alfalfa.ui_rejected` (`view`, `errors`) si negoció la extensión `alfalfa`.
+5. **Historia.** El modelo conserva en su historia el bloque tal como lo escribió, así puede mandar solo los
+   nodos que cambian en el turno siguiente.
+6. **Acciones.** Un `input` con `pacai.ui.action/1` se valida contra `$defs/action` y llega al modelo como un
+   mensaje del usuario: el texto del cliente, `[Acción en la pantalla]` y los datos en JSON. Si la `rev` es
+   anterior a la actual, se añade un aviso de que la acción puede estar desfasada. Sin el perfil, la acción
+   recibe `not_negotiated`.
+7. **Granularidad.** El motor entrega el texto del modelo mensaje a mensaje, no token a token. Por eso hoy las
+   pantallas llegan cuando el modelo termina cada mensaje, no mientras lo escribe. El formato ya admite que
+   llegue nodo a nodo; queda pendiente pasar el texto en vivo desde el proveedor.
+8. **Pendiente (AlfalfaUI).** Renderizadores en `alfalfa-mac` (SwiftUI, con `Codable`) y en `alfalfa-vscode`
+   (webview), y una demo en `docs/demos/pacai-ui/`. También falta que el modelo se entere de los nodos
+   rechazados para corregirlos.
+
+## 9. Decisiones (24 de noviembre de 2026)
+
+Las preguntas abiertas del primer borrador, ya resueltas:
+
+1. **Dónde se muestra una vista que se actualiza: pista del agente.** El campo opcional `placement` de una
+   actualización dice `inline` (la vista se queda en el mensaje donde nació) o `latest` (se mueve al último
+   mensaje que la tocó, y en su sitio anterior queda una foto estática). Sin `placement`, decide el cliente.
+   Vale la última pista recibida.
+2. **`change` no puede llevar `send`.** Solo admite `set`. Un filtro en vivo se hace con estado local; para
+   llamar al agente hace falta un gesto explícito (`press`, `submit`, `row_press`, `item_press`). Así no se
+   gasta un turno del modelo por tecla. El esquema lo comprueba.
+3. **No hay acción `call` en la versión 1.** Todo lo que vuelve al agente pasa por el modelo con `send`. Una
+   acción que ejecute una herramienta sin el modelo abre más superficie de seguridad; se reevaluará con casos
+   reales.
+4. **El estado de la vista es local.** Vive en el cliente y solo viaja con `send`. La ruta `/client/ui/<vista>`
+   de `shared_state` queda reservada para una versión 2 que refleje el estado en vivo; un cliente de la
+   versión 1 no debe escribir en ella.
+5. **Coste en tokens: medido.** Con la vista final del ejemplo (tabla de 3 tickets y formulario de 2 campos),
+   contada con el tokenizador `o200k_base` (el de Claude es distinto; las proporciones sirven de guía):
+
+   | Forma | Tokens |
+   | --- | --- |
+   | La misma información en markdown, sin interacción | 75 |
+   | `pacai-ui`, vista completa | 276 |
+   | `pacai-ui` con claves de una letra (`c`, `p`, `kids`, `on`) | 276 |
+   | Sintaxis de línea al estilo OpenUI Lang (aproximada) | 197 |
+   | `pacai-ui`, turno siguiente con `patch` (2 nodos) | 158 |
+
+   Conclusiones: una pantalla cuesta unas 3,7 veces lo que el texto equivalente, y un 40 % más que una
+   sintaxis propia de línea. El `patch` ahorra un 43 % frente a reescribir la vista. Se acepta ese 40 % a cambio
+   de validar con JSON Schema y no tener que escribir un analizador en cada cliente.
+6. **Claves legibles.** El primer borrador usaba claves de una letra (`c`, `p`, `kids`, `on`) para ahorrar
+   tokens, pero no ahorran nada: `c` y `component` son un token cada una. El coste está en la puntuación de
+   JSON y en los datos. Los nodos usan `component`, `props`, `children` y `events`, que el modelo y las
+   personas entienden mejor, y la declaración de un componente propio dice `children` en vez de `kids`.

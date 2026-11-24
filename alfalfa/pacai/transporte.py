@@ -38,11 +38,12 @@ from .nombres import de_la_orden, respuesta_del_navegador
 from .sobre import MAX_BYTES, Emisor, ahora, bytes_de_linea, codificar, nueva_sesion, prefijo_que_cabe
 from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
+from .ui import ESQUEMA_ACCION, Catalogo, accion_para_el_modelo, errores_de
 
 __all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS', 'caducidad_de', 'ENTORNO_CADUCIDAD']
 
 NOMBRE = 'alfalfa'
-PERFILES = ('work',)
+PERFILES = ('work', 'ui')
 EXTENSIONES = ('alfalfa',)
 # Variable de entorno con los segundos que espera una aprobación (por defecto no caduca: `CADUCIDAD_APROBACION`).
 ENTORNO_CADUCIDAD = 'ALFALFA_CADUCIDAD_APROBACION'
@@ -482,9 +483,20 @@ class TransportePacai(Transport):
         # una cuarta parte del máximo deja sitio a todo lo demás.
         max_argumentos = max(1024, self.max_bytes // 4)
         herramientas = [h['name'] for h in p.get('client_tools', []) if isinstance(h, dict) and h.get('name')]
+        catalogo = None
+        if 'ui' in perfiles:
+            # Perfil `ui`: el catálogo llega en `render.ui`; sin él vale el base. Uno inválido deja la sesión sin `ui`.
+            declaracion = (p.get('render') or {}).get('ui')
+            fallos = errores_de('declaration', declaracion) if declaracion is not None else []
+            if fallos:
+                perfiles.remove('ui')
+                self._error('invalid_message', 'render.ui no es válido; la sesión sigue sin el perfil ui: '
+                            + '; '.join(fallos[:3]), m['id'])
+            else:
+                catalogo = Catalogo.de(declaracion)
         self.t = Traductor(self.emisor, perfiles=perfiles, extensiones=extensiones, herramientas_cliente=herramientas,
                            caducidad=self.caducidad, reloj=self.reloj, max_argumentos=max_argumentos,
-                           max_bytes=self.max_bytes)
+                           max_bytes=self.max_bytes, ui=catalogo)
         self.t.al_rechazar_navegador = self._rechazar_navegador
         agente = {'name': NOMBRE, 'version': __version__}
         self._enviar(self.emisor.mensaje('hello', {'versions': [VERSION], 'profiles': list(PERFILES),
@@ -567,6 +579,11 @@ class TransportePacai(Transport):
     def _c_input(self, m):
         p = m['payload']
         propio = self._propio(p)
+        if any(b.get('type') == 'structured' and b.get('schema') == ESQUEMA_ACCION for b in p['blocks']):
+            m = self._accion_de_pantalla(m)
+            if m is None:
+                return
+            p = m['payload']
         if any(b.get('type') == 'structured' for b in p['blocks']):
             return self._pedir_trabajo(m)
         if propio.get('continue') is True:
@@ -596,6 +613,30 @@ class TransportePacai(Transport):
         else:
             # Con un trabajo en marcha el mensaje pasa: el motor lo para antes de abrir el turno, como en v2.
             self._entregar(m['id'], texto, imagenes, archivos, eco=eco)
+
+    # -- perfil `ui` ---------------------------------------------------------
+    def manual_ui(self) -> str:
+        """La parte del prompt de sistema con el catálogo del cliente; vacía sin el perfil `ui`."""
+        vistas = self.t.vistas if self.t is not None else None
+        return vistas.catalogo.manual() if vistas is not None else ''
+
+    def _accion_de_pantalla(self, m: dict) -> dict | None:
+        """Un `input` con `pacai.ui.action/1`: el mismo `input` con un solo bloque de texto para el modelo (None y un
+        error enviado si no vale)."""
+        if self.t.vistas is None:
+            return self._error('not_negotiated', 'Las acciones de pantalla necesitan el perfil ui.', m['id'])
+        bloques = m['payload']['blocks']
+        acciones = [b for b in bloques if b.get('type') == 'structured']
+        if len(acciones) != 1 or any(b.get('type') != 'text' for b in bloques if b not in acciones):
+            return self._error('invalid_message', 'Una acción de pantalla va en un solo bloque structured, con bloques '
+                               'text opcionales.', m['id'])
+        fallos = errores_de('action', acciones[0].get('data'))
+        if fallos:
+            return self._error('invalid_message', 'Acción de pantalla inválida: ' + '; '.join(fallos[:3]), m['id'])
+        data = acciones[0]['data']
+        texto = accion_para_el_modelo([b['text'] for b in bloques if b.get('type') == 'text'], data,
+                                      self.t.vistas.rev(data['view']))
+        return dict(m, payload=dict(m['payload'], blocks=[{'type': 'text', 'text': texto}]))
 
     # -- trabajo fuera de un turno (`TRABAJOS`) ------------------------------
     def _pedir_trabajo(self, m: dict) -> None:

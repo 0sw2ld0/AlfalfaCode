@@ -372,9 +372,10 @@ y la app también para sus consultas de una pasada (`--json`) y para los Ajustes
 ### Qué es PACAI
 
 PACAI (*Protocol for Agent Communication And Interfaces*) es el protocolo común entre un **agente** y un **cliente**
-(app, móvil, widget, terminal…). AlfalfaCode es su primera implementación: **PACAI-Core + perfil `work` + extensión
-`alfalfa`**, sobre el transporte stdio. Quedan fuera por ahora la reanudación en red, WebSocket y SSE, y los perfiles
-`voice`, `shared_state` y `expression`.
+(app, móvil, widget, terminal…). AlfalfaCode es su primera implementación: **PACAI-Core + perfiles `work` y `ui` +
+extensión `alfalfa`**, sobre el transporte stdio. El perfil `ui` (borrador) deja que el agente dibuje pantallas en el
+chat; está descrito en [pacai/perfil-ui.md](pacai/perfil-ui.md). Quedan fuera por ahora la reanudación en red,
+WebSocket y SSE, y los perfiles `voice`, `shared_state` y `expression`.
 
 ### Cómo se usa
 

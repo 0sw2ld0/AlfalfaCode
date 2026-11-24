@@ -41,7 +41,7 @@ def test_el_saludo_negocia_y_suelta_lo_que_el_motor_dijo_mientras_tanto():
     assert tipos(salida) == ['hello', 'session_started', 'alfalfa.session', 'alfalfa.budget']
     hola, empezada = salida[0], salida[1]
     assert hola['sender'] == 'agent' and hola['session'] == SESION and hola['seq'] == 1
-    assert hola['payload']['versions'] == ['0.3'] and hola['payload']['profiles'] == ['work']
+    assert hola['payload']['versions'] == ['0.3'] and hola['payload']['profiles'] == ['work', 'ui']
     assert hola['payload']['extensions'] == ['alfalfa'] and hola['payload']['implementation']['name'] == 'alfalfa'
     assert empezada['reply_to'] == c.ultimo['id'] and empezada['session'] == SESION
     assert empezada['payload']['version'] == '0.3'

@@ -827,7 +827,9 @@ class TerminalManager:
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else '')
                              + (getattr(self.navegador, 'manual', navegador_manual()) if self.navegador is not None
                                 and 'browser_navigate' not in excluidas() else '')
-                             + self.aprendizaje.manual(),
+                             + self.aprendizaje.manual()
+                             # Perfil `ui` de PACAI: el catálogo de pantallas que el cliente sabe dibujar.
+                             + getattr(self.transport, 'manual_ui', str)(),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
                              excluded_tools=excluidas() + (ESCRITURA
                                                          if self.read_only or modos.solo_lee(modos.modo_de(self.task))

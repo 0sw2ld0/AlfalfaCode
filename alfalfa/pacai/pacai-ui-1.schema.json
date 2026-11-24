@@ -1,0 +1,1261 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "pacai-ui-1.schema.json",
+ "title": "Perfil ui de PACAI, borrador 1",
+ "description": "Tres formas: la declaración del cliente (hello.payload.render.ui), el data de un bloque structured 'pacai.ui/1' (agente) y el data de un bloque structured 'pacai.ui.action/1' (cliente). Elige con $ref a #/$defs/declaration, #/$defs/update o #/$defs/action.",
+ "$defs": {
+  "name": {
+   "type": "string",
+   "pattern": "^[a-z][a-z0-9_]*$",
+   "maxLength": 64
+  },
+  "key": {
+   "type": "string",
+   "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+   "maxLength": 64
+  },
+  "node_id": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_-]+$",
+   "maxLength": 64
+  },
+  "component": {
+   "type": "string",
+   "pattern": "^[A-Z][A-Za-z0-9]*$",
+   "maxLength": 64
+  },
+  "ref": {
+   "type": "object",
+   "properties": {
+    "$": {
+     "type": "string",
+     "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    }
+   },
+   "required": [
+    "$"
+   ],
+   "additionalProperties": false
+  },
+  "declaration": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "const": "1"
+    },
+    "catalog": {
+     "enum": [
+      "base",
+      "none"
+     ]
+    },
+    "components": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/component",
+      "not": {
+       "enum": [
+        "Stack",
+        "Card",
+        "Text",
+        "Table",
+        "List",
+        "Button",
+        "Form",
+        "Input",
+        "Select",
+        "Chart",
+        "Image",
+        "Code"
+       ]
+      }
+     },
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "description": {
+        "type": "string"
+       },
+       "props": {
+        "type": "object"
+       },
+       "children": {
+        "type": "boolean"
+       },
+       "events": {
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/name"
+        }
+       }
+      },
+      "required": [
+       "props"
+      ],
+      "additionalProperties": true
+     }
+    },
+    "actions": {
+     "type": "array",
+     "items": {
+      "enum": [
+       "send",
+       "set",
+       "open_url"
+      ]
+     },
+     "uniqueItems": true
+    },
+    "limits": {
+     "type": "object",
+     "properties": {
+      "max_nodes": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "max_depth": {
+       "type": "integer",
+       "minimum": 1
+      }
+     },
+     "required": [],
+     "additionalProperties": true
+    }
+   },
+   "required": [
+    "version"
+   ],
+   "additionalProperties": true
+  },
+  "action_spec": {
+   "anyOf": [
+    {
+     "oneOf": [
+      {
+       "type": "object",
+       "properties": {
+        "send": {
+         "$ref": "#/$defs/name"
+        },
+        "with": {
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/key"
+         },
+         "uniqueItems": true
+        }
+       },
+       "required": [
+        "send"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "set": {
+         "type": "object",
+         "propertyNames": {
+          "$ref": "#/$defs/key"
+         }
+        }
+       },
+       "required": [
+        "set"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "open_url": {
+         "type": "string",
+         "pattern": "^https://"
+        }
+       },
+       "required": [
+        "open_url"
+       ],
+       "additionalProperties": false
+      }
+     ]
+    },
+    {
+     "type": "array",
+     "items": {
+      "oneOf": [
+       {
+        "type": "object",
+        "properties": {
+         "send": {
+          "$ref": "#/$defs/name"
+         },
+         "with": {
+          "type": "array",
+          "items": {
+           "$ref": "#/$defs/key"
+          },
+          "uniqueItems": true
+         }
+        },
+        "required": [
+         "send"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "set": {
+          "type": "object",
+          "propertyNames": {
+           "$ref": "#/$defs/key"
+          }
+         }
+        },
+        "required": [
+         "set"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "open_url": {
+          "type": "string",
+          "pattern": "^https://"
+         }
+        },
+        "required": [
+         "open_url"
+        ],
+        "additionalProperties": false
+       }
+      ]
+     },
+     "minItems": 1,
+     "not": {
+      "contains": {
+       "required": [
+        "send"
+       ]
+      },
+      "minContains": 2
+     }
+    }
+   ]
+  },
+  "node": {
+   "allOf": [
+    {
+     "type": "object",
+     "properties": {
+      "id": {
+       "$ref": "#/$defs/node_id"
+      },
+      "component": {
+       "$ref": "#/$defs/component"
+      },
+      "props": {
+       "type": "object"
+      },
+      "children": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/node_id"
+       }
+      },
+      "events": {
+       "type": "object",
+       "propertyNames": {
+        "$ref": "#/$defs/name"
+       },
+       "additionalProperties": {
+        "$ref": "#/$defs/action_spec"
+       }
+      }
+     },
+     "required": [
+      "id",
+      "component"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Stack"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Stack"
+       },
+       "events": {
+        "maxProperties": 0
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Card"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Card"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "press"
+         ]
+        }
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Text"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Text"
+       },
+       "events": {
+        "maxProperties": 0
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Table"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Table"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "row_press"
+         ]
+        }
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "List"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/List"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "item_press"
+         ]
+        }
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Button"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Button"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "press"
+         ]
+        }
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Form"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Form"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "submit"
+         ]
+        }
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Input"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Input"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "change"
+         ]
+        },
+        "properties": {
+         "change": {
+          "$ref": "#/$defs/local_action_spec"
+         }
+        }
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Select"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Select"
+       },
+       "events": {
+        "propertyNames": {
+         "enum": [
+          "change"
+         ]
+        },
+        "properties": {
+         "change": {
+          "$ref": "#/$defs/local_action_spec"
+         }
+        }
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Chart"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Chart"
+       },
+       "events": {
+        "maxProperties": 0
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Image"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Image"
+       },
+       "events": {
+        "maxProperties": 0
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "component": {
+        "const": "Code"
+       }
+      },
+      "required": [
+       "component"
+      ]
+     },
+     "then": {
+      "properties": {
+       "props": {
+        "$ref": "#/$defs/base_props/Code"
+       },
+       "events": {
+        "maxProperties": 0
+       }
+      },
+      "not": {
+       "required": [
+        "children"
+       ]
+      },
+      "required": [
+       "props"
+      ]
+     }
+    }
+   ]
+  },
+  "update": {
+   "allOf": [
+    {
+     "type": "object",
+     "properties": {
+      "view": {
+       "$ref": "#/$defs/name"
+      },
+      "op": {
+       "enum": [
+        "patch",
+        "replace"
+       ]
+      },
+      "rev": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "nodes": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/node"
+       }
+      },
+      "remove": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/node_id"
+       }
+      },
+      "state": {
+       "type": "object",
+       "propertyNames": {
+        "$ref": "#/$defs/key"
+       }
+      },
+      "alt": {
+       "type": "string"
+      },
+      "placement": {
+       "enum": [
+        "inline",
+        "latest"
+       ]
+      }
+     },
+     "required": [
+      "view",
+      "op",
+      "rev"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "replace"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "nodes",
+       "alt"
+      ],
+      "not": {
+       "required": [
+        "remove"
+       ]
+      },
+      "properties": {
+       "nodes": {
+        "contains": {
+         "properties": {
+          "id": {
+           "const": "root"
+          }
+         },
+         "required": [
+          "id"
+         ]
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  "action": {
+   "type": "object",
+   "properties": {
+    "view": {
+     "$ref": "#/$defs/name"
+    },
+    "rev": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "node": {
+     "$ref": "#/$defs/node_id"
+    },
+    "event": {
+     "$ref": "#/$defs/name"
+    },
+    "name": {
+     "$ref": "#/$defs/name"
+    },
+    "values": {
+     "type": "object",
+     "propertyNames": {
+      "$ref": "#/$defs/key"
+     }
+    }
+   },
+   "required": [
+    "view",
+    "rev",
+    "node",
+    "event",
+    "name",
+    "values"
+   ],
+   "additionalProperties": false
+  },
+  "base_props": {
+   "Stack": {
+    "type": "object",
+    "properties": {
+     "direction": {
+      "anyOf": [
+       {
+        "enum": [
+         "vertical",
+         "horizontal"
+        ]
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "gap": {
+      "anyOf": [
+       {
+        "enum": [
+         "none",
+         "small",
+         "medium",
+         "large"
+        ]
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   },
+   "Card": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "subtitle": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   },
+   "Text": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "style": {
+      "anyOf": [
+       {
+        "enum": [
+         "body",
+         "title",
+         "subtitle",
+         "caption",
+         "muted"
+        ]
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "additionalProperties": false
+   },
+   "Table": {
+    "type": "object",
+    "properties": {
+     "columns": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string",
+         "minLength": 1
+        },
+        "label": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "key"
+       ],
+       "additionalProperties": false
+      },
+      "minItems": 1
+     },
+     "rows": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "object"
+        }
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [
+     "columns",
+     "rows"
+    ],
+    "additionalProperties": false
+   },
+   "List": {
+    "type": "object",
+    "properties": {
+     "items": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "id": {
+           "type": "string",
+           "minLength": 1
+          },
+          "title": {
+           "type": "string"
+          },
+          "subtitle": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "id",
+          "title"
+         ],
+         "additionalProperties": false
+        }
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [
+     "items"
+    ],
+    "additionalProperties": false
+   },
+   "Button": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "variant": {
+      "anyOf": [
+       {
+        "enum": [
+         "primary",
+         "secondary",
+         "danger"
+        ]
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "disabled": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [
+     "label"
+    ],
+    "additionalProperties": false
+   },
+   "Form": {
+    "type": "object",
+    "properties": {
+     "submit_label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   },
+   "Input": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "$ref": "#/$defs/key"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "kind": {
+      "enum": [
+       "text",
+       "number",
+       "multiline",
+       "email",
+       "date"
+      ]
+     },
+     "placeholder": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "required": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   },
+   "Select": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "$ref": "#/$defs/key"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "options": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "value": {
+           "type": "string"
+          },
+          "label": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "value"
+         ],
+         "additionalProperties": false
+        },
+        "minItems": 1
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "multiple": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "name",
+     "options"
+    ],
+    "additionalProperties": false
+   },
+   "Chart": {
+    "type": "object",
+    "properties": {
+     "kind": {
+      "enum": [
+       "bar",
+       "line",
+       "pie"
+      ]
+     },
+     "labels": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "series": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string"
+          },
+          "values": {
+           "type": "array",
+           "items": {
+            "type": "number"
+           }
+          }
+         },
+         "required": [
+          "values"
+         ],
+         "additionalProperties": false
+        },
+        "minItems": 1
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "series"
+    ],
+    "additionalProperties": false
+   },
+   "Image": {
+    "type": "object",
+    "properties": {
+     "src": {
+      "type": "string",
+      "pattern": "^(https://|data:image/(png|jpeg|gif|webp);base64,)"
+     },
+     "alt": {
+      "type": "string",
+      "minLength": 1
+     }
+    },
+    "required": [
+     "src",
+     "alt"
+    ],
+    "additionalProperties": false
+   },
+   "Code": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/ref"
+       }
+      ]
+     },
+     "language": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "local_action_spec": {
+   "description": "Acciones de un evento change: solo set, nunca send.",
+   "anyOf": [
+    {
+     "type": "object",
+     "properties": {
+      "set": {
+       "type": "object",
+       "propertyNames": {
+        "$ref": "#/$defs/key"
+       }
+      }
+     },
+     "required": [
+      "set"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "set": {
+        "type": "object",
+        "propertyNames": {
+         "$ref": "#/$defs/key"
+        }
+       }
+      },
+      "required": [
+       "set"
+      ],
+      "additionalProperties": false
+     },
+     "minItems": 1
+    }
+   ]
+  }
+ }
+}

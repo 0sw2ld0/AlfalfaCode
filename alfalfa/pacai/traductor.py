@@ -18,6 +18,7 @@ from typing import Any, Callable
 from .jcs import digest
 from .nombres import TIPOS, en_ingles, peticion_del_navegador, razon
 from .sobre import MAX_BYTES, Emisor, ahora, bytes_de_linea, codificar, en_segundos, prefijo_que_cabe
+from .ui import ESQUEMA_UI, VALLA, Catalogo, Vistas, partir
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
@@ -211,9 +212,12 @@ def _fallo(datos: dict) -> bool:
 class Traductor:
     def __init__(self, emisor: Emisor, *, perfiles=(), extensiones=(), herramientas_cliente=(),
                  caducidad: float | None = CADUCIDAD_APROBACION, reloj: Callable[[], datetime] = ahora,
-                 max_argumentos: int = MAX_ARGUMENTOS, max_bytes: int = MAX_BYTES):
+                 max_argumentos: int = MAX_ARGUMENTOS, max_bytes: int = MAX_BYTES,
+                 ui: Catalogo | None = None):
         self.emisor, self.reloj, self.max_argumentos = emisor, reloj, max_argumentos
         self.max_bytes = max_bytes
+        # Perfil `ui`: el catálogo del cliente y sus pantallas (None si no se negoció).
+        self.vistas = Vistas(ui) if ui is not None and 'ui' in perfiles else None
         self.perfiles, self.extensiones = set(perfiles), set(extensiones)
         self.herramientas_cliente = set(herramientas_cliente)
         self.caducidad = caducidad
@@ -414,10 +418,36 @@ class Traductor:
         inicio = self._msg('message_start', {'run_id': run_id, 'role': rol,
                                              **self._alfalfa({k: v for k, v in (extra or {}).items() if v})})
         salida = [inicio]
-        n = 0
+        if self.vistas is None or '```' + VALLA not in texto:
+            return salida + self._deltas(inicio['id'], texto) + [self._msg('message_end',
+                                                                           {'message_id': inicio['id']})]
+        # Perfil `ui`: el texto sale como texto; cada bloque ```pacai-ui, como un `patch` de su vista; al cerrar,
+        # la foto (`replace`) de cada vista que tocó el mensaje.
+        tocadas: list[str] = []
+        for trozo in partir(texto):
+            if trozo[0] == 'text':
+                salida += self._deltas(inicio['id'], trozo[1]) if trozo[1].strip() else []
+                continue
+            data, errores = self.vistas.aplicar(trozo[1], trozo[2])
+            if errores:
+                salida += self._ext('ui_rejected', {'run_id': run_id, 'message_id': inicio['id'],
+                                                    'view': trozo[1].get('view'), 'errors': errores})
+            if data is None:
+                continue
+            if data['view'] not in tocadas:
+                tocadas.append(data['view'])
+            salida.append(self._msg('message_delta', {'message_id': inicio['id'], 'blocks': [
+                {'type': 'structured', 'schema': ESQUEMA_UI, 'data': data}]}))
+        fotos = [{'type': 'structured', 'schema': ESQUEMA_UI, 'data': self.vistas.foto(v)} for v in tocadas]
+        salida.append(self._msg('message_end', {'message_id': inicio['id'], **({'blocks': fotos} if fotos else {})}))
+        return salida
+
+    def _deltas(self, message_id: str, texto: str) -> list[dict]:
+        """El texto en `message_delta` que caben en `max_bytes` cada uno (un carácter, como poco)."""
+        salida, n = [], 0
         while n < len(texto):
             bloque = {'type': 'text', 'text': ''}
-            delta = self._msg('message_delta', {'message_id': inicio['id'], 'blocks': [bloque]})
+            delta = self._msg('message_delta', {'message_id': message_id, 'blocks': [bloque]})
             espacio = self.max_bytes - bytes_de_linea(codificar(delta))
             bloque['text'] = prefijo_que_cabe(texto[n:n + TROZO], espacio)
             if not bloque['text']:
@@ -425,7 +455,6 @@ class Traductor:
                 bloque['text'] = texto[n:]
             n += len(bloque['text'])
             salida.append(delta)
-        salida.append(self._msg('message_end', {'message_id': inicio['id']}))
         return salida
 
     def _v2_evento(self, campos: dict) -> list[dict]:
