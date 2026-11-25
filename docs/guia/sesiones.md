@@ -103,14 +103,16 @@ mensaje, y lo que viene de fuera lleva «de fuera».
 En «Nuevo encargo», elige una carpeta y un modelo. Abre el menú de modo
 junto al esfuerzo, selecciona «Lluvia de ideas…» y escribe una pregunta. Elige un modelo y esfuerzo para el moderador y
 para cada participante. Puedes combinar proveedores y añadir hasta seis
-participantes. Reciben la pregunta y los aportes que el moderador comparte.
+participantes. Cada uno recibe tu pregunta y el texto de los aportes de los demás
+que todavía no leyó, además del enfoque que le pide el moderador.
 Cada proveedor aplica su cuota o sus cargos. Con «Adjuntar archivo…» puedes
 seleccionar un Markdown o un archivo de texto de hasta 16 KiB. El moderador
 y cada participante reciben el archivo al intervenir por primera vez.
 
 El máximo es de 12 intervenciones en total (6 de forma predeterminada), con
-al menos una por participante disponible. El moderador puede sintetizar antes
-si hay acuerdo. Al alcanzar el máximo, el motor deshabilita las intervenciones
+al menos una por participante disponible. Si el máximo alcanza para dos rondas
+completas, el moderador hace la segunda antes de sintetizar, para que cada participante
+critique a los demás. Después puede sintetizar antes si hay acuerdo. Al alcanzar el máximo, el motor deshabilita las intervenciones
 y queda la síntesis. Los aportes aparecen con su autor en la conversación.
 La sesión es de solo lectura y aplica los presupuestos habituales. Al reabrir una sesión
 que ya empezó el debate, puedes consultar los aportes y pedir otra síntesis.

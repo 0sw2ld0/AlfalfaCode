@@ -342,6 +342,8 @@ En macOS, abre **Lluvia de ideas** desde el menú de modo. **Guardar como grupo�
 guarda el moderador, los participantes, sus modelos y esfuerzos y el máximo de
 intervenciones con un nombre que puedes volver a elegir en otras salas. La sala
 sólo puede cerrar por acuerdo después del primer turno de todos los participantes.
+Si el límite de turnos de participantes alcanza para dos rondas completas, también
+exige la segunda, en la que cada participante critica los aportes de los demás.
 El máximo de la app incluye la síntesis final del moderador. Por ejemplo, con
 tres participantes el mínimo es de cuatro intervenciones en total. El límite
 de la CLI y de PACAI cuenta los turnos de participantes y la síntesis va aparte.

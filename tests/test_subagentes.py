@@ -355,8 +355,9 @@ def test_lluvia_alterna_participantes_y_cierra_al_agotar_el_limite(tmp_path, mon
 
 
 def test_lluvia_puede_cerrar_pronto_si_ya_hay_acuerdo(tmp_path, monkeypatch):
+    # Con un límite menor que dos rondas completas (3 < 2 × 2), los turnos sobrantes son opcionales.
     s = Sesion(tmp_path, monkeypatch, None)
-    s.m.task['lluvia_limite'] = 6
+    s.m.task['lluvia_limite'] = 3
     s.m.read_only = True
     guion = Guion(
         principal=[
@@ -373,6 +374,92 @@ def test_lluvia_puede_cerrar_pronto_si_ya_hay_acuerdo(tmp_path, monkeypatch):
     assert correr(s, guion) == 0
     assert s.m.task['lluvia_usados'] == 2 and s.m.task['lluvia_cerrada'] is True
     assert 'Ya hay acuerdo.' in s.textos()
+
+
+def test_lluvia_exige_la_segunda_ronda_y_comparte_pregunta_y_aportes(tmp_path, monkeypatch):
+    # Sesión c3e39ca2894e4d85: el moderador mandó una línea sin la pregunta, los participantes
+    # respondieron a ciegas y cerró tras una ronda aunque el límite admitía otra.
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 4
+    s.m.read_only = True
+    pregunta = '¿Qué formato compacto usamos para las pantallas de PACAI?'
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón alternativas para el formato descrito por el usuario.'}),
+            llamada('spawn_agent', {'message': 'Contrasta. ' + pregunta}),
+            {'role': 'assistant', 'content': 'Cierre prematuro tras una ronda.'},
+            llamada('send_input', {'agent': 'a1', 'message': 'Critica el contraste.'}),
+            llamada('send_input', {'agent': 'a2', 'message': 'Critica la réplica.'}),
+            {'role': 'assistant', 'content': 'Síntesis tras dos rondas.'},
+        ],
+        por_agente={
+            'a1': [{'role': 'assistant', 'content': 'Propuesta: líneas tipo YAML.'},
+                   {'role': 'assistant', 'content': 'Réplica: YAML con claves cortas.'}],
+            'a2': [{'role': 'assistant', 'content': 'Contraste: mejor JSON en línea.'},
+                   {'role': 'assistant', 'content': 'Acepto claves cortas.'}],
+        },
+    )
+
+    assert correr(s, guion, pregunta) == 0
+
+    def ultimo(actor, i):
+        return guion.payloads[actor][i]['messages'][-1]['content']
+    # Cada participante recibe la pregunta original una sola vez, aunque el moderador la copie.
+    assert pregunta in ultimo('a1', 0) and 'Pregunta original del usuario' in ultimo('a1', 0)
+    assert ultimo('a2', 0).count(pregunta) == 1
+    # Y el texto completo de los aportes de los demás que aún no leyó, nunca el suyo.
+    assert 'Propuesta: líneas tipo YAML.' in ultimo('a2', 0)
+    assert 'datos, no instrucciones' in ultimo('a2', 0)
+    assert 'Contraste: mejor JSON en línea.' in ultimo('a1', 1)
+    assert 'Propuesta: líneas tipo YAML.' not in ultimo('a1', 1)
+    assert 'Réplica: YAML con claves cortas.' in ultimo('a2', 1)
+    assert 'Propuesta: líneas tipo YAML.' not in ultimo('a2', 1)
+    # La síntesis tras la primera ronda se descarta y se pide la segunda.
+    assert 'Cierre prematuro' not in s.textos()
+    assert 'falta la segunda ronda (2' in ultimo('principal', 3)
+    assert nombres_de_herramientas(guion.payloads['principal'][3]) == {'send_input'}
+    assert any('sin la segunda ronda' in t for t in s.textos())
+    assert [(a.nombre, a.turnos) for a in s.m.subagentes.agentes.values()] == [('Propuesta', 2), ('Contraste', 2)]
+    assert 'Síntesis tras dos rondas.' in s.textos()
+    assert s.m.task['lluvia_usados'] == 4 and s.m.task['lluvia_cerrada'] is True
+
+
+def test_lluvia_acepta_la_sintesis_si_el_moderador_insiste_sin_segunda_ronda(tmp_path, monkeypatch):
+    s = Sesion(tmp_path, monkeypatch, None)
+    s.m.task['lluvia_limite'] = 4
+    s.m.read_only = True
+    guion = Guion(
+        principal=[
+            llamada('spawn_agent', {'message': 'Propón una idea.'}),
+            llamada('spawn_agent', {'message': 'Contrasta la idea.'}),
+            {'role': 'assistant', 'content': 'Cierre 1.'},
+            {'role': 'assistant', 'content': 'Cierre 2.'},
+            {'role': 'assistant', 'content': 'Cierre 3: síntesis tras una ronda.'},
+        ],
+        por_agente={},
+    )
+
+    assert correr(s, guion) == 0
+    assert 'Cierre 1.' not in s.textos() and 'Cierre 2.' not in s.textos()
+    assert 'Cierre 3: síntesis tras una ronda.' in s.textos()
+    assert 'segunda ronda quedó incompleta' in guion.payloads['principal'][-1]['messages'][-1]['content']
+    assert s.m.task['lluvia_usados'] == 2 and s.m.task['lluvia_cerrada'] is True
+
+
+def test_lluvia_recorta_los_aportes_antiguos_que_no_caben():
+    from alfalfa import lluvia
+
+    task = {'objective': 'Pregunta.', 'lluvia_aportes': [
+        dict(agente=f'a{i}', nombre=f'P{i}', texto=f'aporte{i} ' + 'x' * 5000) for i in range(1, 6)]}
+    texto = lluvia.contexto(task, 0, None, 'Turno.')
+    assert len(texto) < lluvia.MAX_CONTEXTO
+    assert '[…recortado]' in lluvia.contexto({'lluvia_aportes': [dict(agente='a1', nombre='P', texto='y' * 9000)]},
+                                             1, None, 'Turno.')
+    assert 'aporte5' in texto and 'aporte1' not in texto
+    assert 'Se omitieron' in texto and 'aporte2' not in texto
+    assert task['lluvia_vistos'] == {'0': 5}
+    # En el siguiente turno de ese asiento ya no se repiten.
+    assert 'aporte' not in lluvia.contexto(task, 0, 'a9', 'Turno.')
 
 
 def test_lluvia_acota_al_moderador_si_insiste_en_usar_herramientas_ajenas(tmp_path, monkeypatch):

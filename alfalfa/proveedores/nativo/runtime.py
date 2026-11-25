@@ -1306,6 +1306,8 @@ class NativeRuntime:
         fichas = self._preparar_archivos(text, fallos)
         if self.task.get('lluvia_limite') and not self.task.get('subagente_de'):
             self.task.setdefault('lluvia_referencia', fichas)
+            # La pregunta que la sala entrega a cada participante (lluvia.contexto).
+            self.task.setdefault('lluvia_pregunta', text)
         if fichas:
             message['archivos'] = fichas
         if fallos:
@@ -3101,28 +3103,42 @@ class NativeRuntime:
                     allowed_tools = [tool for tool in allowed_tools if tool['function']['name'] == 'generate_image']
                 faltan_participantes = 0
                 if lluvia_limite:
-                    from ...lluvia import cantidad_participantes, herramienta
+                    from ...lluvia import cantidad_participantes, herramienta, turnos_obligatorios
                     permitida = herramienta(self.task)
                     allowed_tools = [tool for tool in allowed_tools if tool['function']['name'] == permitida]
                     es_moderador = not self.task.get('subagente_de')
+                    sin_primer_turno = segunda_ronda = 0
                     if es_moderador and not self.task.get('lluvia_cerrada'):
-                        faltan_participantes = cantidad_participantes(self.task) - len(self.manager.subagentes.lista())
+                        sin_primer_turno = cantidad_participantes(self.task) - len(self.manager.subagentes.lista())
+                        segunda_ronda = turnos_obligatorios(self.task) - self.task.get('lluvia_usados', 0)
+                    # Turnos que deben ocurrir antes de aceptar la síntesis: el primero de cada
+                    # participante y, si el límite admite dos rondas completas, la segunda.
+                    faltan_participantes = max(sin_primer_turno, segunda_ronda, 0)
+                    esperada = 'spawn_agent' if sin_primer_turno > 0 else 'send_input'
                     if faltan_participantes > 0 and (
-                            permitida != 'spawn_agent'
+                            permitida != esperada
                             or self.state.get('lluvia_descartes', 0) >= MAX_DESCARTES_LLUVIA):
-                        # Ya no se puede invitar a nadie más (se agotaron los pasos o la sala se
-                        # desajustó) o el moderador insiste en cerrar: mejor una síntesis con lo
-                        # recibido que un turno fallido sin nada.
+                        # Ya no se puede dar el turno (se agotaron los pasos o la sala se desajustó)
+                        # o el moderador insiste en cerrar: mejor una síntesis con lo recibido que
+                        # un turno fallido sin nada.
                         faltan_participantes = 0
                         allowed_tools = []
                         context = context + [{'role': 'user', 'content': (
                             'Cierra con una síntesis de los aportes recibidos. No todos los participantes '
-                            'llegaron a intervenir: dilo en la síntesis.'
+                            'llegaron a intervenir: dilo en la síntesis.' if sin_primer_turno > 0 else
+                            'Cierra con una síntesis de los aportes recibidos. La segunda ronda quedó '
+                            'incompleta: dilo en la síntesis.'
+                        )}]
+                    elif sin_primer_turno > 0:
+                        context = context + [{'role': 'user', 'content': (
+                            f'Todavía hay participantes sin primer turno ({sin_primer_turno}). '
+                            'Usa spawn_agent para invitar al siguiente antes de sintetizar.'
                         )}]
                     elif faltan_participantes > 0:
                         context = context + [{'role': 'user', 'content': (
-                            f'Todavía hay participantes sin primer turno ({faltan_participantes}). '
-                            'Usa spawn_agent para invitar al siguiente antes de sintetizar.'
+                            f'Antes de sintetizar falta la segunda ronda ({faltan_participantes} intervenciones). '
+                            'Usa send_input para que el siguiente participante critique los aportes de los '
+                            'demás o tu síntesis provisional.'
                         )}]
                     elif permitida is None and es_moderador:
                         context = context + [{'role': 'user', 'content': (
@@ -3261,11 +3277,14 @@ class NativeRuntime:
                     self.save()
                     continue
                 if faltan_participantes > 0 and not calls:
-                    # Una síntesis anticipada no entra en el historial: se avisa y se pide que invite al
+                    # Una síntesis anticipada no entra en el historial: se avisa y se pide el turno
                     # siguiente. Tras MAX_DESCARTES_LLUVIA, la próxima respuesta se acepta como síntesis.
                     self.state['lluvia_descartes'] = self.state.get('lluvia_descartes', 0) + 1
-                    self.manager.event(self.task, 'system', 'Lluvia de ideas · El moderador quiso cerrar antes '
-                                       'de que hablaran todos; se le pide que invite al siguiente participante.')
+                    self.manager.event(self.task, 'system', (
+                        'Lluvia de ideas · El moderador quiso cerrar antes de que hablaran todos; se le pide '
+                        'que invite al siguiente participante.' if sin_primer_turno > 0 else
+                        'Lluvia de ideas · El moderador quiso cerrar sin la segunda ronda; se le pide que '
+                        'dé el turno al siguiente participante.'))
                     self.save()
                     continue
                 medido_hasta = len(self.state['messages'])

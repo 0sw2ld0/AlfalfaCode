@@ -32,7 +32,7 @@ import re
 import time
 from pathlib import Path
 
-from .lluvia import validar_modelo
+from .lluvia import registrar_aporte, validar_modelo
 from .reintentos.fallos import es_aviso_de_transporte
 
 # Donde están los agentes del usuario de Claude Code (~/.claude/agents). La suite la cambia por un
@@ -542,6 +542,7 @@ class Subagentes:
                 pass
             final = sub.informe.strip().splitlines()[0][:200] if sub.informe.strip() else sub.error[:200]
             if sub.task.get('lluvia_limite') and sub.estado == 'terminado' and sub.informe.strip():
+                registrar_aporte(self.gestor.task, sub.id, sub.nombre, sub.informe)
                 self.gestor.event(self.gestor.task, 'agent', '**' + sub.nombre + '**\n\n'
                                   + sub.informe[:MAX_INFORME])
             else:
