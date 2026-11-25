@@ -61,7 +61,7 @@ struct MemorySettings: View {
                     .toggleStyle(.switch).disabled(busy)
             }
             Toggle("Aprender en esta carpeta", isOn: Binding(get: { state.learnsHere }, set: { value in
-                Task { await change(["proyecto", value ? "sí" : "no"]) }
+                Task { await change(["proyecto", String(value)]) }
             }))
             .toggleStyle(.switch).disabled(busy || folder == nil)
         }
@@ -222,7 +222,7 @@ struct MemorySettings: View {
     }
 
     private func setting(_ key: String, _ value: Bool) async {
-        await change(["ajustes", key, value ? "sí" : "no"])
+        await change(["ajustes", key, String(value)])
     }
 
     private func change(_ arguments: [String]) async {
