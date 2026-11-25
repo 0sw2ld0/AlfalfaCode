@@ -50,10 +50,188 @@ Data {"name":"q","query":{"tipo":…}} con children espera sus argumentos y gana
 CIERRE = ('\nResponde sólo con el bloque de la pantalla, sin texto antes ni después, sin herramientas ni comentarios.')
 
 
+# -- otros formatos de salida: A2UI v1.0 y json-render ----------------------------------------------------------
+# Para comparar la validez al primer intento con el mismo catálogo. El modelo escribe el formato ajeno y aquí se
+# convierte a nodos `pacai.ui/1` y se valida igual que los otros brazos. Los eventos (`events`, con las acciones de
+# PACAI) son una adaptación nuestra: ni A2UI ni json-render tienen exactamente esas acciones.
+FORMATO_A2UI = '''Pantallas en el chat: escribe cada pantalla en un bloque ```a2ui con mensajes A2UI v1.0, uno por línea:
+{"version":"1.0","createSurface":{"surfaceId":"<view>","catalogId":"cuymercado"}}
+{"version":"1.0","updateComponents":{"surfaceId":"<view>","components":[{"id":"root","component":"Stack","direction":"vertical","children":["titulo"]},{"id":"titulo","component":"Text","text":"Hola","style":"title"}]}}
+- Cada componente lleva id, component, sus props al mismo nivel, children (ids) y, si tiene eventos,
+  events ({"press":{"send":"nombre","with":["clave"]}}). La raíz se llama root.
+- Leer el estado: {"@path":"/clave"} (también dentro de query); una salida de Calc o Data: {"@path":"/m/pct"}.
+- Cambio de una pantalla que ya existe: sólo updateComponents con los componentes nuevos o cambiados, enteros
+  (un id repetido sustituye al componente). Para quitar uno, sácalo de los children de su padre.
+- Input y Select guardan solos lo que escribe el usuario en la clave de su name.'''  # noqa: E501
+FORMATO_JR = '''Pantallas en el chat: escribe cada pantalla en un bloque ```json-render view=<view> con un spec de json-render:
+{"root":"root","elements":{"root":{"type":"Stack","props":{"direction":"vertical"},"children":["titulo"]},"titulo":{"type":"Text","props":{"text":"Hola","style":"title"},"children":[]}}}
+- Cada elemento lleva type, props, children (ids) y, si tiene eventos, events ({"press":{"send":"nombre","with":["clave"]}}).
+  La raíz se llama root.
+- Leer el estado: {"$state":"/clave"} (también dentro de query); una salida de Calc o Data: {"$state":"/m/pct"}.
+- Cambio de una pantalla que ya existe: un bloque ```json-render view=<view> con operaciones JSON Patch sobre el spec,
+  una por línea: {"op":"replace","path":"/elements/x/props/title","value":"…"}, {"op":"add","path":"/elements/x/children/-","value":"y"},
+  {"op":"add","path":"/elements/y","value":{…}}, {"op":"remove","path":"/elements/y"}.
+- Input y Select guardan solos lo que escribe el usuario en la clave de su name.'''  # noqa: E501
+VALLAS = {'json': 'pacai-ui', 'lang': 'pacai-ui-lang', 'a2ui': 'a2ui', 'jsonrender': 'json-render'}
+
+
+def _piezas_en(enlace: str) -> str:
+    """Las líneas de piezas con la forma de leer el estado de otro formato."""
+    return re.sub(r'\{"\$":"([a-z_.]+)"\}',
+                  lambda m: '{"' + enlace + '":"/' + m.group(1).replace('.', '/') + '"}', PIEZAS_JSON)
+
+
 def sistema(formato: str) -> str:
     if formato == 'lang':
         return CAT.manual() + CIERRE
+    if formato in ('a2ui', 'jsonrender'):
+        componentes = 'Componentes:' + CAT_JSON.manual().split('Componentes:', 1)[1]
+        cabeza, enlace = (FORMATO_A2UI, '@path') if formato == 'a2ui' else (FORMATO_JR, '$state')
+        return cabeza + '\n\n' + componentes + '\n' + _piezas_en(enlace) + '\n' + CIERRE
     return CAT_JSON.manual() + '\n' + PIEZAS_JSON + '\n' + CIERRE
+
+
+def _compacto(o) -> str:
+    return json.dumps(o, ensure_ascii=False, separators=(',', ':'))
+
+
+def _a_enlace(valor, clave):
+    """Un nodo de PACAI → el enlace de otro formato (`{"$":"m.pct"}` → `{"@path":"/m/pct"}`), en profundidad."""
+    if isinstance(valor, dict):
+        if set(valor) == {'$'}:
+            return {clave: '/' + valor['$'].replace('.', '/')}
+        return {k: _a_enlace(v, clave) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_a_enlace(v, clave) for v in valor]
+    return valor
+
+
+def _de_enlace(valor, clave):
+    if isinstance(valor, dict):
+        if set(valor) == {clave} and isinstance(valor[clave], str):
+            return {'$': valor[clave].strip('/').replace('/', '.')}
+        return {k: _de_enlace(v, clave) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_de_enlace(v, clave) for v in valor]
+    return valor
+
+
+def tablero_en(formato: str) -> str:
+    nodos = [json.loads(x) for x in MUESTRAS['tablero']['json'].splitlines()]
+    if formato == 'a2ui':
+        componentes = []
+        for n in nodos:
+            c = {'id': n['id'], 'component': n['component'],
+                 **{k: _a_enlace(v, '@path') for k, v in (n.get('props') or {}).items()}}
+            if 'children' in n:
+                c['children'] = n['children']
+            componentes.append(c)
+        crear = {'version': '1.0', 'createSurface': {'surfaceId': 'tablero', 'catalogId': 'cuymercado'}}
+        return '\n'.join([_compacto(crear),
+                          _compacto({'version': '1.0', 'updateComponents': {'surfaceId': 'tablero',
+                                                                             'components': componentes}})])
+    return _compacto({'root': 'root', 'elements': {n['id']: {
+        'type': n['component'], 'props': {k: _a_enlace(v, '$state') for k, v in (n.get('props') or {}).items()},
+        'children': n.get('children', [])} for n in nodos}})
+
+
+def _nodo(ident, componente, props, hijos, eventos):
+    nodo = {'id': ident, 'component': componente}
+    if props:
+        nodo['props'] = props
+    if hijos:                                   # un `children: []` de una hoja no es un error del formato
+        nodo['children'] = hijos
+    if eventos:
+        nodo['events'] = eventos
+    return nodo
+
+
+def mapa_de_a2ui(lineas, base=None):
+    """Los nodos que deja un bloque A2UI (sobre `base` si es un cambio); ValueError si no es A2UI válido."""
+    mapa = dict(base or {})
+    for linea in lineas:
+        m = json.loads(linea)
+        if not isinstance(m, dict) or m.get('version') != '1.0':
+            raise ValueError('Cada mensaje A2UI lleva "version":"1.0".')
+        cuerpo = m.get('createSurface') or m.get('updateComponents')
+        if not isinstance(cuerpo, dict):
+            raise ValueError('Mensaje A2UI desconocido: ' + ', '.join(k for k in m if k != 'version'))
+        for c in cuerpo.get('components') or []:
+            if not isinstance(c, dict) or not isinstance(c.get('id'), str) or not isinstance(c.get('component'), str):
+                raise ValueError('Un componente A2UI sin id o component.')
+            props = {k: _de_enlace(v, '@path') for k, v in c.items()
+                     if k not in ('id', 'component', 'children', 'events')}
+            mapa[c['id']] = _nodo(c['id'], c['component'], props, c.get('children'), c.get('events'))
+    return mapa
+
+
+def _puntero(ruta):
+    return [p.replace('~1', '/').replace('~0', '~') for p in ruta.split('/')[1:]]
+
+
+def aplicar_parche(spec, ops):
+    """JSON Patch (add, replace, remove) sobre un spec de json-render."""
+    for op in ops:
+        partes = _puntero(op['path'])
+        padre = spec
+        for p in partes[:-1]:
+            padre = padre[int(p)] if isinstance(padre, list) else padre[p]
+        ultimo = partes[-1]
+        if op['op'] == 'remove':
+            del padre[int(ultimo) if isinstance(padre, list) else ultimo]
+        elif op['op'] in ('add', 'replace'):
+            if isinstance(padre, list):
+                if ultimo == '-':
+                    padre.append(op['value'])
+                elif op['op'] == 'add':
+                    padre.insert(int(ultimo), op['value'])
+                else:
+                    padre[int(ultimo)] = op['value']
+            else:
+                if op['op'] == 'replace' and ultimo not in padre:
+                    raise ValueError('replace de algo que no existe: ' + op['path'])
+                padre[ultimo] = op['value']
+        else:
+            raise ValueError('Operación no admitida: ' + str(op.get('op')))
+    return spec
+
+
+def mapa_de_jsonrender(lineas, base_spec=None):
+    texto = ''.join(lineas).strip()
+    if base_spec is not None and texto.startswith('[{'):          # el documento JSON Patch estándar, un array
+        spec = aplicar_parche(json.loads(json.dumps(base_spec)), json.loads(texto))
+    elif base_spec is not None and lineas and lineas[0].lstrip().startswith('{"op"'):
+        spec = aplicar_parche(json.loads(json.dumps(base_spec)), [json.loads(x) for x in lineas])
+    else:
+        spec = json.loads(''.join(lineas))
+    if not isinstance(spec, dict) or spec.get('root') != 'root' or not isinstance(spec.get('elements'), dict):
+        raise ValueError('El spec necesita "root":"root" y elements.')
+    mapa = {}
+    for ident, el in spec['elements'].items():
+        if not isinstance(el, dict) or not isinstance(el.get('type'), str):
+            raise ValueError(f'El elemento {ident} no tiene type.')
+        mapa[ident] = _nodo(ident, el['type'], _de_enlace(el.get('props') or {}, '$state'), el.get('children'),
+                            el.get('events'))
+    return mapa
+
+
+def validar_mapa(mapa, a2ui=False):
+    """Los errores de una pantalla ya convertida a nodos de PACAI, con las mismas reglas que los otros brazos."""
+    if a2ui:                                    # en A2UI un componente que no cuelga de nadie no se dibuja
+        vivos, pila = set(), ['root']
+        while pila:
+            i = pila.pop()
+            if i in mapa and i not in vivos:
+                vivos.add(i)
+                pila += mapa[i].get('children', [])
+        mapa = {i: n for i, n in mapa.items() if i in vivos}
+    errores = [f'{i}: ' + '; '.join(e[:2]) for i, n in mapa.items() if (e := CAT.errores_del_nodo(n))]
+    errores += [f'{i}: {m}' for i, m in piezas.errores_del_arbol(mapa, CAT.consultas)]
+    if 'root' not in mapa:
+        errores.append('Falta root.')
+    for i, nodo in mapa.items():
+        errores += [f'{h} no existe (hijo de {i}).' for h in nodo.get('children', []) if h not in mapa]
+    return mapa, errores
 
 
 # -- tareas ---------------------------------------------------------------------------------------------------
@@ -250,6 +428,9 @@ def mensaje_de_tarea(formato: str, tarea) -> str:
     nombre, tipo, texto, _ = tarea
     if tipo == 'alta':
         return texto
+    if formato in ('a2ui', 'jsonrender'):
+        return ('Pantalla actual (view=tablero), lo que mandaste:\n' + tablero_en(formato)
+                + '\n\nCambio que pide el usuario: ' + texto)
     if formato == 'lang':
         return ('Pantalla actual (view=tablero), con su revisión:\n' + pantalla_base('lang').resumen_lang('tablero')
                 + '\n\nCambio que pide el usuario: ' + texto)
@@ -258,7 +439,7 @@ def mensaje_de_tarea(formato: str, tarea) -> str:
 
 
 # -- lectura de la respuesta en streaming ---------------------------------------------------------------------
-_VALLA = re.compile(r'^\s*```(pacai-ui(?:-lang)?)((?:\s+[a-z_]+=\S+)*)\s*$')
+_VALLA = re.compile(r'^\s*```(pacai-ui(?:-lang)?|a2ui|json-render)((?:\s+[a-z_]+=\S+)*)\s*$')
 
 
 class Lector:
@@ -318,7 +499,21 @@ def validar(formato: str, tarea, lector: Lector, previo=None):
     nombre, tipo, _, comprobar = tarea
     if lector.attrs is None:
         return False, False, ['No hay bloque de pantalla.'], previo
-    valla_ok = lector.attrs['valla'] == ('pacai-ui-lang' if formato == 'lang' else 'pacai-ui')
+    valla_ok = lector.attrs['valla'] == VALLAS[formato]
+    if formato in ('a2ui', 'jsonrender'):
+        try:
+            if formato == 'a2ui':
+                base = mapa_de_a2ui(tablero_en('a2ui').splitlines()) if tipo == 'cambio' else None
+                mapa = mapa_de_a2ui(lector.lineas, base)
+            else:
+                base = json.loads(tablero_en('jsonrender')) if tipo == 'cambio' else None
+                mapa = mapa_de_jsonrender(lector.lineas, base)
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            return False, False, ['No se puede leer: ' + str(exc)[:200]], None
+        mapa, errores = validar_mapa(mapa, formato == 'a2ui')
+        if not valla_ok:
+            errores = ['Valla equivocada.'] + errores
+        return not errores, bool(mapa) and not errores and _seguro(comprobar, mapa), errores, None
     if formato == 'lang' and tipo == 'alta':
         flujo = previo or lector.flujo
         if previo is not None:
@@ -450,6 +645,7 @@ async def main() -> None:
     args.add_argument('--repeticiones', type=int, default=2)
     args.add_argument('--simultaneas', type=int, default=4)
     args.add_argument('--solo', help='tareas separadas por comas')
+    args.add_argument('--formatos', default='json,lang', help='json, lang, a2ui y jsonrender, separados por comas')
     args.add_argument('--esfuerzo', choices=('low', 'medium', 'high'), help='esfuerzo que se pide al servicio')
     opciones = args.parse_args()
     ESFUERZO['valor'] = opciones.esfuerzo
@@ -460,7 +656,7 @@ async def main() -> None:
         sys.exit('El proveedor Alfalfa (suscripción CUY) no está activado en este equipo.')
     tareas = [t for t in TAREAS if not opciones.solo or t[0] in opciones.solo.split(',')]
     trabajos = [(m, f, t, r) for r in range(opciones.repeticiones) for t in tareas for m in MODELOS
-                for f in ('json', 'lang')]
+                for f in opciones.formatos.split(',')]
     semaforo = asyncio.Semaphore(opciones.simultaneas)
     salida = Path(opciones.salida).open('a', encoding='utf-8')
 
