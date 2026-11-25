@@ -337,7 +337,96 @@ def _piezas_en(enlace: str) -> str:
                   lambda m: '{"' + enlace + '":"/' + m.group(1).replace('.', '/') + '"}', PIEZAS_JSON)
 
 
+# -- prompt con un ejemplo por componente ----------------------------------------------------------------------
+# Los ejemplos se escriben una vez como nodos `pacai.ui/1` (los de CuyMercado salen del campo `example` de la
+# declaración) y se traducen a la sintaxis de cada formato. Cubren los fallos vistos: enlaces en vez de literales
+# (Filters, Stat), `options` como objetos, los `kind` de Input (multiline, no textarea) y el alcance de los slots de
+# Data y Calc (quien lee `q.hoy` va dentro del Data; `m.pct` lo publica un Calc llamado m).
+EJEMPLOS_BASE = {
+    'Stack': [{'id': 'fila', 'component': 'Stack', 'props': {'direction': 'horizontal', 'gap': 'small'},
+               'children': ['a', 'b']}],
+    'Card': [{'id': 'tarjeta', 'component': 'Card', 'props': {'title': 'Palta', 'meta': 'hoy · fruta',
+                                                              'tags': ['fruta'], 'detail': 'Sube un 3 %.'},
+              'events': {'press': {'send': 'abrir_producto'}}}],
+    'Text': [{'id': 'nota', 'component': 'Text', 'props': {'text': 'Precios por kilo', 'style': 'caption'}}],
+    'Table': [{'id': 'tabla', 'component': 'Table', 'props': {
+        'columns': [{'key': 'producto', 'label': 'Producto'}], 'rows': [{'producto': 'Palta'}]}}],
+    'List': [{'id': 'lista', 'component': 'List', 'props': {'items': [{'id': 'a1', 'title': 'Palta',
+                                                                      'subtitle': 'fruta'}]}}],
+    'Button': [{'id': 'enviar', 'component': 'Button', 'props': {'label': 'Enviar', 'variant': 'primary'},
+                'events': {'press': {'send': 'enviar', 'with': ['correo']}}}],
+    'Form': [{'id': 'contacto', 'component': 'Form', 'props': {'submit_label': 'Mandar'}, 'children': ['correo'],
+              'events': {'submit': {'send': 'contacto', 'with': ['correo']}}},
+             {'id': 'correo', 'component': 'Input', 'props': {'name': 'correo', 'label': 'Correo', 'kind': 'email',
+                                                               'required': True}}],
+    'Input': [{'id': 'cantidad', 'component': 'Input', 'props': {'name': 'cantidad', 'label': 'Cantidad',
+                                                                  'kind': 'number', 'required': True, 'min': 1,
+                                                                  'max': 500, 'step': 1}},
+              {'id': 'mensaje', 'component': 'Input', 'props': {'name': 'mensaje', 'label': 'Mensaje',
+                                                                 'kind': 'multiline'}}],
+    'Select': [{'id': 'ver', 'component': 'Select', 'props': {'name': 'vista', 'label': 'Ver', 'options': [
+        {'value': 'resumen', 'label': 'Resumen'}, {'value': 'detalle', 'label': 'Detalle'}]}},
+               {'id': 'detalle', 'component': 'Stack', 'props': {'si': {'$': 'vista', 'es': 'detalle'}},
+                'children': ['tabla']}],
+    'Chart': [{'id': 'grafico', 'component': 'Chart', 'props': {'kind': 'line', 'labels': ['lun', 'mar'],
+                                                                'series': [{'name': 'Palta', 'values': [6.2, 6.4]}]}}],
+    'Image': [{'id': 'foto', 'component': 'Image', 'props': {'src': 'https://ejemplo.pe/palta.png', 'alt': 'Palta'}}],
+    'Code': [{'id': 'codigo', 'component': 'Code', 'props': {'code': 'print(1)', 'language': 'python'}}],
+    'Calc': [{'id': 'm', 'component': 'Calc', 'props': {'name': 'm', 'preset': 'margen', 'compra': {'$': 'compra'},
+                                                         'venta': {'$': 'venta'}, 'cantidad': {'$': 'cantidad'}}},
+             {'id': 'margen', 'component': 'Text', 'props': {'text': 'Margen:', 'value': {'$': 'm.pct'},
+                                                              'rojo': {'$': 'm.perdida'}}}],
+    'Data': [{'id': 'datos', 'component': 'Data', 'props': {'name': 'q', 'query': {'tipo': 'formPedido'}},
+              'children': ['producto', 'fecha']},
+             {'id': 'producto', 'component': 'Select', 'props': {'name': 'producto', 'label': 'Producto',
+                                                                  'required': True, 'options': {'$': 'q.lista'}}},
+             {'id': 'fecha', 'component': 'Input', 'props': {'name': 'fecha', 'label': 'Fecha', 'kind': 'date',
+                                                              'min': {'$': 'q.hoy'}}}],
+}
+EJEMPLOS = {**EJEMPLOS_BASE, **{n: s['example'] for n, s in DECLARACION['components'].items() if s.get('example')}}
+CON_EJEMPLOS = {'valor': False}
+
+
+def _a2ui_componente(n):
+    c = {'id': n['id'], 'component': n['component'],
+         **{k: _a_enlace(v, '@path') for k, v in (n.get('props') or {}).items()}}
+    for k in ('children', 'events'):
+        if k in n:
+            c[k] = n[k]
+    return c
+
+
+def ejemplo_en(formato, nodos):
+    if formato == 'lang':
+        return ui_lang.a_lang(nodos, CAT)
+    if formato == 'openui':
+        return a_openui(nodos)
+    if formato == 'a2ui':
+        return '\n'.join(_compacto(_a2ui_componente(n)) for n in nodos)
+    if formato == 'jsonrender':
+        return '\n'.join(json.dumps(n['id']) + ':' + _compacto(
+            {'type': n['component'], 'props': _a_enlace(n.get('props') or {}, '$state'),
+             'children': n.get('children', []), **({'events': n['events']} if 'events' in n else {})})
+            for n in nodos)
+    return '\n'.join(_compacto(n) for n in nodos)
+
+
+def bloque_de_ejemplos(formato):
+    cabeza = {'a2ui': 'Ejemplos, un componente A2UI por línea (van dentro de components):',
+              'jsonrender': 'Ejemplos, un elemento por línea (van dentro de elements):',
+              'json': 'Ejemplos, un nodo por línea:', 'lang': 'Ejemplos, una línea por nodo:',
+              'openui': 'Ejemplos, una sentencia por línea:'}[formato]
+    return '\n' + cabeza + '\n' + '\n'.join(ejemplo_en(formato, nodos) for nodos in EJEMPLOS.values()) + '\n'
+
+
 def sistema(formato: str) -> str:
+    texto = _sistema(formato)
+    if CON_EJEMPLOS['valor']:
+        texto = texto[:-len(CIERRE)] + bloque_de_ejemplos(formato) + CIERRE
+    return texto
+
+
+def _sistema(formato: str) -> str:
     if formato == 'lang':
         return CAT.manual() + CIERRE
     if formato == 'openui':
@@ -880,7 +969,7 @@ async def una(proveedor, modelo, formato, tarea, repeticion):
                  'primera_pieza': lector.primera_pieza, 'trozos': lector.trozos,
                  'entrada': uso.get('prompt_eval_count'),
                  'salida': uso.get('eval_count'), 'cache': uso.get('alfalfa_cache'), 'coste': coste(precio, uso),
-                 'respuesta': lector.texto[:4000]}
+                 'respuesta': lector.texto[:4000], 'ejemplos': CON_EJEMPLOS['valor']}
         if not valida:
             if formato == 'lang' and tipo == 'alta' and estado is not None:
                 peticion = estado.peticion([ui_lang.Diagnostico(None, None, d) for d in diagnosticos])
@@ -898,7 +987,7 @@ async def una(proveedor, modelo, formato, tarea, repeticion):
                 fila |= {'valida_tras_reintento': valida2, 'exacta_tras_reintento': exacta2,
                          'diagnosticos_reintento': diag2[:6], 'entrada_reintento': uso2.get('prompt_eval_count'),
                          'salida_reintento': uso2.get('eval_count'), 'coste_reintento': coste(precio, uso2),
-                         'total_reintento': total2}
+                         'total_reintento': total2, 'respuesta_reintento': lector2.texto[:4000]}
             except Exception as exc:  # noqa: BLE001
                 fila |= {'error_reintento': str(exc)[:300]}
         else:
@@ -913,9 +1002,11 @@ async def main() -> None:
     args.add_argument('--simultaneas', type=int, default=4)
     args.add_argument('--solo', help='tareas separadas por comas')
     args.add_argument('--formatos', default='json,lang', help='json, lang, a2ui y jsonrender, separados por comas')
+    args.add_argument('--ejemplos', action='store_true', help='un ejemplo por componente en el prompt')
     args.add_argument('--esfuerzo', choices=('low', 'medium', 'high'), help='esfuerzo que se pide al servicio')
     opciones = args.parse_args()
     ESFUERZO['valor'] = opciones.esfuerzo
+    CON_EJEMPLOS['valor'] = opciones.ejemplos
     from alfalfa.proveedores.alfalfa import Alfalfa
 
     proveedor = Alfalfa()

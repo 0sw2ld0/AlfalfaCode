@@ -19,7 +19,21 @@
       "inherit": {
         "period": "periodo",
         "family": "familia"
-      }
+      },
+      "example": [
+        {
+          "id": "filtros",
+          "component": "Filters",
+          "props": {
+            "period": {
+              "$": "periodo"
+            },
+            "family": {
+              "$": "familia"
+            }
+          }
+        }
+      ]
     },
     "Grid": {
       "props": {
@@ -34,7 +48,20 @@
         "additionalProperties": false
       },
       "children": true,
-      "description": "Rejilla de tarjetas; columns de 1 a 6."
+      "description": "Rejilla de tarjetas; columns de 1 a 6.",
+      "example": [
+        {
+          "id": "cifras",
+          "component": "Grid",
+          "props": {
+            "columns": 3
+          },
+          "children": [
+            "c_sub",
+            "c_baj"
+          ]
+        }
+      ]
     },
     "Panel": {
       "props": {
@@ -51,7 +78,19 @@
       },
       "children": true,
       "positional": "title",
-      "description": "Panel con título y piezas dentro."
+      "description": "Panel con título y piezas dentro.",
+      "example": [
+        {
+          "id": "p_bajo",
+          "component": "Panel",
+          "props": {
+            "title": "Lo que más bajó"
+          },
+          "children": [
+            "barras"
+          ]
+        }
+      ]
     },
     "Stat": {
       "props": {
@@ -105,7 +144,27 @@
         "period": "periodo",
         "family": "familia"
       },
-      "description": "Una cifra. query {\"tipo\":\"totales\",\"campo\":\"subieron|bajaron|iguales\"}; icon subio|bajo|igual; period y family enlazados."
+      "description": "Una cifra. query {\"tipo\":\"totales\",\"campo\":\"subieron|bajaron|iguales\"}; icon subio|bajo|igual; period y family enlazados.",
+      "example": [
+        {
+          "id": "c_sub",
+          "component": "Stat",
+          "props": {
+            "label": "Subieron",
+            "icon": "subio",
+            "period": {
+              "$": "periodo"
+            },
+            "family": {
+              "$": "familia"
+            },
+            "query": {
+              "tipo": "totales",
+              "campo": "subieron"
+            }
+          }
+        }
+      ]
     },
     "PriceBars": {
       "props": {
@@ -150,7 +209,26 @@
         "period": "periodo",
         "family": "familia"
       },
-      "description": "Barras de productos. query {\"tipo\":\"productos\",\"orden\":\"sube|baja\",\"limite\":1-20}; period y family enlazados."
+      "description": "Barras de productos. query {\"tipo\":\"productos\",\"orden\":\"sube|baja\",\"limite\":1-20}; period y family enlazados.",
+      "example": [
+        {
+          "id": "barras",
+          "component": "PriceBars",
+          "props": {
+            "period": {
+              "$": "periodo"
+            },
+            "family": {
+              "$": "familia"
+            },
+            "query": {
+              "tipo": "productos",
+              "orden": "baja",
+              "limite": 6
+            }
+          }
+        }
+      ]
     },
     "PriceLines": {
       "props": {
@@ -202,7 +280,28 @@
         "period": "periodo",
         "family": "familia"
       },
-      "description": "Historial de precios. query {\"tipo\":\"historial\",\"productos\":[\"palta\",…]}; period y family enlazados."
+      "description": "Historial de precios. query {\"tipo\":\"historial\",\"productos\":[\"palta\",…]}; period y family enlazados.",
+      "example": [
+        {
+          "id": "hist",
+          "component": "PriceLines",
+          "props": {
+            "period": {
+              "$": "periodo"
+            },
+            "family": {
+              "$": "familia"
+            },
+            "query": {
+              "tipo": "historial",
+              "productos": [
+                "palta",
+                "limon"
+              ]
+            }
+          }
+        }
+      ]
     }
   },
   "queries": {
