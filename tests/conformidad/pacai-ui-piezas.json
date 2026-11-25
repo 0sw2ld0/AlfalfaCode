@@ -1,0 +1,1681 @@
+{
+ "version": 1,
+ "descripcion": "Vectores compartidos de las piezas declarativas de PACAI UI Lang (prototipo). Los corre alfalfa/pacai/piezas.py (tests/test_pacai_ui_lang.py) y docs/demos/pacai-ui/ui.js (conformidad.mjs). Los de donde=[\"motor\"] sólo los corre el motor. Las consultas de los de arbol son las de catalogo-cuymercado.json.",
+ "vectores": [
+  {
+   "id": "decimal-1",
+   "tipo": "decimal",
+   "entrada": "12,5",
+   "esperado": "12.5"
+  },
+  {
+   "id": "decimal-2",
+   "tipo": "decimal",
+   "entrada": "12.5",
+   "esperado": "12.5"
+  },
+  {
+   "id": "decimal-3",
+   "tipo": "decimal",
+   "entrada": " 7 ",
+   "esperado": "7"
+  },
+  {
+   "id": "decimal-4",
+   "tipo": "decimal",
+   "entrada": "-0.000001",
+   "esperado": "-0.000001"
+  },
+  {
+   "id": "decimal-5",
+   "tipo": "decimal",
+   "entrada": "1.234,5",
+   "esperado": null
+  },
+  {
+   "id": "decimal-6",
+   "tipo": "decimal",
+   "entrada": "1e3",
+   "esperado": null
+  },
+  {
+   "id": "decimal-7",
+   "tipo": "decimal",
+   "entrada": "0.1234567",
+   "esperado": null
+  },
+  {
+   "id": "decimal-8",
+   "tipo": "decimal",
+   "entrada": "1234567890123",
+   "esperado": null
+  },
+  {
+   "id": "decimal-9",
+   "tipo": "decimal",
+   "entrada": 3,
+   "esperado": "3"
+  },
+  {
+   "id": "decimal-10",
+   "tipo": "decimal",
+   "entrada": true,
+   "esperado": null
+  },
+  {
+   "id": "formatear-1",
+   "tipo": "formatear",
+   "valor": "1234.5",
+   "formato": "dinero",
+   "esperado": "1.234,50"
+  },
+  {
+   "id": "formatear-2",
+   "tipo": "formatear",
+   "valor": "0.125",
+   "formato": "dinero",
+   "esperado": "0,12"
+  },
+  {
+   "id": "formatear-3",
+   "tipo": "formatear",
+   "valor": "0.135",
+   "formato": "dinero",
+   "esperado": "0,14"
+  },
+  {
+   "id": "formatear-4",
+   "tipo": "formatear",
+   "valor": "-1234567.005",
+   "formato": "dinero",
+   "esperado": "-1.234.567,00"
+  },
+  {
+   "id": "formatear-5",
+   "tipo": "formatear",
+   "valor": "-0.0001",
+   "formato": "dinero",
+   "esperado": "0,00"
+  },
+  {
+   "id": "formatear-6",
+   "tipo": "formatear",
+   "valor": "0.25",
+   "formato": "fraccion",
+   "esperado": "25,0 %"
+  },
+  {
+   "id": "formatear-7",
+   "tipo": "formatear",
+   "valor": "-0.0625",
+   "formato": "fraccion",
+   "esperado": "-6,2 %"
+  },
+  {
+   "id": "formatear-8",
+   "tipo": "formatear",
+   "valor": "0.33333",
+   "formato": "fraccion",
+   "esperado": "33,3 %"
+  },
+  {
+   "id": "formatear-9",
+   "tipo": "formatear",
+   "valor": "1999.5",
+   "formato": "entero",
+   "esperado": "2.000"
+  },
+  {
+   "id": "formatear-10",
+   "tipo": "formatear",
+   "valor": "2.5",
+   "formato": "entero",
+   "esperado": "2"
+  },
+  {
+   "id": "formatear-11",
+   "tipo": "formatear",
+   "valor": "1234.5",
+   "formato": "numero",
+   "esperado": "1.234,5"
+  },
+  {
+   "id": "formatear-12",
+   "tipo": "formatear",
+   "valor": true,
+   "formato": "bool",
+   "esperado": "sí"
+  },
+  {
+   "id": "formatear-13",
+   "tipo": "formatear",
+   "valor": null,
+   "formato": "dinero",
+   "esperado": "—"
+  },
+  {
+   "id": "formatear-14",
+   "tipo": "formatear",
+   "valor": "abc",
+   "formato": "dinero",
+   "esperado": "—"
+  },
+  {
+   "id": "formatear-15",
+   "tipo": "formatear",
+   "valor": "café",
+   "formato": "texto",
+   "esperado": "café"
+  },
+  {
+   "id": "calc-1",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": 10,
+   "venta": "12.5",
+   "cantidad": 4,
+   "esperado": {
+    "pct": "0.2",
+    "u": "2.5",
+    "total": "10",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-2",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "10",
+   "venta": "8",
+   "cantidad": "3",
+   "esperado": {
+    "pct": "-0.25",
+    "u": "-2",
+    "total": "-6",
+    "perdida": true
+   }
+  },
+  {
+   "id": "calc-3",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "3",
+   "venta": "3",
+   "cantidad": "0",
+   "esperado": {
+    "pct": "0",
+    "u": "0",
+    "total": "0",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-4",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "5",
+   "venta": "0",
+   "cantidad": "1",
+   "esperado": {
+    "pct": null,
+    "u": "-5",
+    "total": "-5",
+    "perdida": true
+   }
+  },
+  {
+   "id": "calc-5",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": null,
+   "venta": "3",
+   "cantidad": "2",
+   "esperado": {
+    "pct": null,
+    "u": null,
+    "total": null,
+    "perdida": null
+   }
+  },
+  {
+   "id": "calc-6",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "1",
+   "venta": "2",
+   "cantidad": "",
+   "esperado": {
+    "pct": "0.5",
+    "u": "1",
+    "total": null,
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-7",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "1",
+   "venta": "3",
+   "cantidad": "1",
+   "esperado": {
+    "pct": "0.666667",
+    "u": "2",
+    "total": "2",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-8",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "1.999999",
+   "venta": "2",
+   "cantidad": "1",
+   "esperado": {
+    "pct": "0",
+    "u": "0.000001",
+    "total": "0.000001",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-9",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "1.999997",
+   "venta": "2",
+   "cantidad": "1",
+   "esperado": {
+    "pct": "0.000002",
+    "u": "0.000003",
+    "total": "0.000003",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-10",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "10,5",
+   "venta": "12,6",
+   "cantidad": "2",
+   "esperado": {
+    "pct": "0.166667",
+    "u": "2.1",
+    "total": "4.2",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-11",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "0",
+   "venta": "999999999999",
+   "cantidad": "999999999999",
+   "esperado": {
+    "pct": "1",
+    "u": "999999999999",
+    "total": null,
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-12",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "0",
+   "venta": "0.333333",
+   "cantidad": "0.5",
+   "esperado": {
+    "pct": "1",
+    "u": "0.333333",
+    "total": "0.166666",
+    "perdida": false
+   }
+  },
+  {
+   "id": "calc-13",
+   "tipo": "calc",
+   "preset": "margen",
+   "compra": "1",
+   "venta": "abc",
+   "cantidad": "2",
+   "esperado": {
+    "pct": null,
+    "u": null,
+    "total": null,
+    "perdida": null
+   }
+  },
+  {
+   "id": "validar-1",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "required": true
+   },
+   "valor": "",
+   "esperado": "obligatorio"
+  },
+  {
+   "id": "validar-2",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number"
+   },
+   "valor": "",
+   "esperado": null
+  },
+  {
+   "id": "validar-3",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "step": 1
+   },
+   "valor": "1.5",
+   "esperado": "paso"
+  },
+  {
+   "id": "validar-4",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "min": 1,
+    "max": 500,
+    "step": 1
+   },
+   "valor": "500",
+   "esperado": null
+  },
+  {
+   "id": "validar-5",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "min": 1,
+    "max": 500,
+    "step": 1
+   },
+   "valor": "501",
+   "esperado": "maximo"
+  },
+  {
+   "id": "validar-6",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "min": 1,
+    "max": 500,
+    "step": 1
+   },
+   "valor": "0",
+   "esperado": "minimo"
+  },
+  {
+   "id": "validar-7",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number"
+   },
+   "valor": "1,5",
+   "esperado": null
+  },
+  {
+   "id": "validar-8",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number"
+   },
+   "valor": "uno",
+   "esperado": "numero"
+  },
+  {
+   "id": "validar-9",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "min": 0.5,
+    "step": 0.25
+   },
+   "valor": "1.25",
+   "esperado": null
+  },
+  {
+   "id": "validar-10",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "number",
+    "min": 0.5,
+    "step": 0.25
+   },
+   "valor": "1.3",
+   "esperado": "paso"
+  },
+  {
+   "id": "validar-11",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "date",
+    "min": "2026-11-25"
+   },
+   "valor": "2026-11-24",
+   "esperado": "minimo"
+  },
+  {
+   "id": "validar-12",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "date",
+    "min": "2026-11-25"
+   },
+   "valor": "2026-11-25",
+   "esperado": null
+  },
+  {
+   "id": "validar-13",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "date"
+   },
+   "valor": "2026-02-29",
+   "esperado": "fecha"
+  },
+  {
+   "id": "validar-14",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "date"
+   },
+   "valor": "2028-02-29",
+   "esperado": null
+  },
+  {
+   "id": "validar-15",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "date",
+    "min": null
+   },
+   "valor": "2026-01-01",
+   "esperado": null
+  },
+  {
+   "id": "validar-16",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "email"
+   },
+   "valor": "ana@ejemplo.pe",
+   "esperado": null
+  },
+  {
+   "id": "validar-17",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "email"
+   },
+   "valor": "ana@ejemplo",
+   "esperado": "correo"
+  },
+  {
+   "id": "validar-18",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "email",
+    "required": true
+   },
+   "valor": "   ",
+   "esperado": "obligatorio"
+  },
+  {
+   "id": "validar-19",
+   "tipo": "validar",
+   "componente": "Select",
+   "props": {
+    "required": true,
+    "options": [
+     {
+      "value": "palta"
+     },
+     {
+      "value": "limón"
+     }
+    ]
+   },
+   "valor": "",
+   "esperado": "obligatorio"
+  },
+  {
+   "id": "validar-20",
+   "tipo": "validar",
+   "componente": "Select",
+   "props": {
+    "options": [
+     {
+      "value": "limón"
+     }
+    ]
+   },
+   "valor": "limón",
+   "esperado": null
+  },
+  {
+   "id": "validar-21",
+   "tipo": "validar",
+   "componente": "Select",
+   "props": {
+    "options": [
+     {
+      "value": "palta"
+     },
+     {
+      "value": "limón"
+     }
+    ]
+   },
+   "valor": "mango",
+   "esperado": "opcion"
+  },
+  {
+   "id": "validar-22",
+   "tipo": "validar",
+   "componente": "Input",
+   "props": {
+    "kind": "text",
+    "required": true
+   },
+   "valor": "hola",
+   "esperado": null
+  },
+  {
+   "id": "visibles-cambiar-select",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_vista",
+      "resumen",
+      "detalle"
+     ]
+    },
+    {
+     "id": "sel_vista",
+     "component": "Select",
+     "props": {
+      "name": "vista",
+      "label": "vista",
+      "options": [
+       {
+        "value": "resumen"
+       },
+       {
+        "value": "detalle"
+       }
+      ]
+     }
+    },
+    {
+     "id": "resumen",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "resumen"
+      }
+     },
+     "children": [
+      "s1",
+      "s2",
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "component": "Text",
+     "props": {
+      "text": "s1"
+     }
+    },
+    {
+     "id": "s2",
+     "component": "Text",
+     "props": {
+      "text": "s2"
+     }
+    },
+    {
+     "id": "s3",
+     "component": "Text",
+     "props": {
+      "text": "s3"
+     }
+    },
+    {
+     "id": "detalle",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "detalle"
+      }
+     },
+     "children": [
+      "tabla",
+      "grafico"
+     ]
+    },
+    {
+     "id": "tabla",
+     "component": "Table",
+     "props": {
+      "columns": [
+       {
+        "key": "p",
+        "label": "Producto"
+       }
+      ],
+      "rows": []
+     }
+    },
+    {
+     "id": "grafico",
+     "component": "Chart",
+     "props": {
+      "kind": "line",
+      "labels": [],
+      "series": []
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_vista",
+      "resumen",
+      "s1",
+      "s2",
+      "s3"
+     ]
+    },
+    {
+     "estado": {
+      "vista": "detalle"
+     },
+     "esperado": [
+      "root",
+      "sel_vista",
+      "detalle",
+      "tabla",
+      "grafico"
+     ]
+    },
+    {
+     "estado": {
+      "vista": "resumen"
+     },
+     "esperado": [
+      "root",
+      "sel_vista",
+      "resumen",
+      "s1",
+      "s2",
+      "s3"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-es-con-errata",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_vista",
+      "resumen",
+      "detalle"
+     ]
+    },
+    {
+     "id": "sel_vista",
+     "component": "Select",
+     "props": {
+      "name": "vista",
+      "label": "vista",
+      "options": [
+       {
+        "value": "resumen"
+       },
+       {
+        "value": "detalle"
+       }
+      ]
+     }
+    },
+    {
+     "id": "resumen",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "resumen"
+      }
+     },
+     "children": [
+      "s1",
+      "s2",
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "component": "Text",
+     "props": {
+      "text": "s1"
+     }
+    },
+    {
+     "id": "s2",
+     "component": "Text",
+     "props": {
+      "text": "s2"
+     }
+    },
+    {
+     "id": "s3",
+     "component": "Text",
+     "props": {
+      "text": "s3"
+     }
+    },
+    {
+     "id": "detalle",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "detalles"
+      }
+     },
+     "children": [
+      "tabla",
+      "grafico"
+     ]
+    },
+    {
+     "id": "tabla",
+     "component": "Table",
+     "props": {
+      "columns": [
+       {
+        "key": "p",
+        "label": "Producto"
+       }
+      ],
+      "rows": []
+     }
+    },
+    {
+     "id": "grafico",
+     "component": "Chart",
+     "props": {
+      "kind": "line",
+      "labels": [],
+      "series": []
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {
+      "vista": "detalle"
+     },
+     "esperado": [
+      "root",
+      "sel_vista"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-nfd-en-es",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_bebida",
+      "t"
+     ]
+    },
+    {
+     "id": "sel_bebida",
+     "component": "Select",
+     "props": {
+      "name": "bebida",
+      "label": "bebida",
+      "options": [
+       {
+        "value": "café"
+       },
+       {
+        "value": "té"
+       }
+      ]
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "bebida",
+       "es": "café"
+      }
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_bebida",
+      "t"
+     ]
+    },
+    {
+     "estado": {
+      "bebida": "té"
+     },
+     "esperado": [
+      "root",
+      "sel_bebida"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-nfd-en-option",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_bebida",
+      "t"
+     ]
+    },
+    {
+     "id": "sel_bebida",
+     "component": "Select",
+     "props": {
+      "name": "bebida",
+      "label": "bebida",
+      "options": [
+       {
+        "value": "café"
+       },
+       {
+        "value": "té"
+       }
+      ]
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "bebida",
+       "es": "café"
+      }
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_bebida",
+      "t"
+     ]
+    },
+    {
+     "estado": {
+      "bebida": "café"
+     },
+     "esperado": [
+      "root",
+      "sel_bebida",
+      "t"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-required-empieza-vacio",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_p",
+      "t"
+     ]
+    },
+    {
+     "id": "sel_p",
+     "component": "Select",
+     "props": {
+      "name": "p",
+      "label": "p",
+      "options": [
+       {
+        "value": "a"
+       },
+       {
+        "value": "b"
+       }
+      ],
+      "required": true
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "p",
+       "es": "a"
+      }
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_p"
+     ]
+    },
+    {
+     "estado": {
+      "p": "a"
+     },
+     "esperado": [
+      "root",
+      "sel_p",
+      "t"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-padre-oculto",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_v",
+      "caja"
+     ]
+    },
+    {
+     "id": "sel_v",
+     "component": "Select",
+     "props": {
+      "name": "v",
+      "label": "v",
+      "options": [
+       {
+        "value": "x"
+       },
+       {
+        "value": "y"
+       }
+      ]
+     }
+    },
+    {
+     "id": "caja",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "v",
+       "es": "y"
+      }
+     },
+     "children": [
+      "t"
+     ]
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "v",
+       "es": "x"
+      }
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_v"
+     ]
+    },
+    {
+     "estado": {
+      "v": "y"
+     },
+     "esperado": [
+      "root",
+      "sel_v",
+      "caja"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "visibles-mayusculas",
+   "tipo": "visibles",
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_vista",
+      "t"
+     ]
+    },
+    {
+     "id": "sel_vista",
+     "component": "Select",
+     "props": {
+      "name": "vista",
+      "label": "vista",
+      "options": [
+       {
+        "value": "resumen"
+       },
+       {
+        "value": "detalle"
+       }
+      ]
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "vista",
+       "es": "Resumen"
+      }
+     }
+    }
+   ],
+   "pasos": [
+    {
+     "estado": {},
+     "esperado": [
+      "root",
+      "sel_vista"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "argumentos-falta-uno",
+   "tipo": "argumentos",
+   "query": {
+    "tipo": "comparar",
+    "a": {
+     "$": "pa"
+    },
+    "b": {
+     "$": "pb"
+    }
+   },
+   "estado": {
+    "pa": "palta"
+   },
+   "esperado": null
+  },
+  {
+   "id": "argumentos-completos",
+   "tipo": "argumentos",
+   "query": {
+    "tipo": "comparar",
+    "a": {
+     "$": "pa"
+    },
+    "b": {
+     "$": "pb"
+    }
+   },
+   "estado": {
+    "pa": "palta",
+    "pb": "limon"
+   },
+   "esperado": {
+    "tipo": "comparar",
+    "a": "palta",
+    "b": "limon"
+   }
+  },
+  {
+   "id": "argumentos-vacio-espera",
+   "tipo": "argumentos",
+   "query": {
+    "tipo": "comparar",
+    "a": {
+     "$": "pa"
+    },
+    "b": {
+     "$": "pb"
+    }
+   },
+   "estado": {
+    "pa": "",
+    "pb": "limon"
+   },
+   "esperado": null
+  },
+  {
+   "id": "argumentos-sin-enlaces",
+   "tipo": "argumentos",
+   "query": {
+    "tipo": "formPedido"
+   },
+   "estado": {},
+   "esperado": {
+    "tipo": "formPedido"
+   }
+  },
+  {
+   "id": "argumentos-en-lista",
+   "tipo": "argumentos",
+   "query": {
+    "tipo": "historial",
+    "productos": [
+     {
+      "$": "pa"
+     },
+     "limon"
+    ]
+   },
+   "estado": {
+    "pa": "palta"
+   },
+   "esperado": {
+    "tipo": "historial",
+    "productos": [
+     "palta",
+     "limon"
+    ]
+   }
+  },
+  {
+   "id": "arbol-es-no-es-opcion",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_vista",
+      "resumen",
+      "detalle"
+     ]
+    },
+    {
+     "id": "sel_vista",
+     "component": "Select",
+     "props": {
+      "name": "vista",
+      "label": "vista",
+      "options": [
+       {
+        "value": "resumen"
+       },
+       {
+        "value": "detalle"
+       }
+      ]
+     }
+    },
+    {
+     "id": "resumen",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "resumen"
+      }
+     },
+     "children": [
+      "s1",
+      "s2",
+      "s3"
+     ]
+    },
+    {
+     "id": "s1",
+     "component": "Text",
+     "props": {
+      "text": "s1"
+     }
+    },
+    {
+     "id": "s2",
+     "component": "Text",
+     "props": {
+      "text": "s2"
+     }
+    },
+    {
+     "id": "s3",
+     "component": "Text",
+     "props": {
+      "text": "s3"
+     }
+    },
+    {
+     "id": "detalle",
+     "component": "Stack",
+     "props": {
+      "si": {
+       "$": "vista",
+       "es": "detalles"
+      }
+     },
+     "children": [
+      "tabla",
+      "grafico"
+     ]
+    },
+    {
+     "id": "tabla",
+     "component": "Table",
+     "props": {
+      "columns": [
+       {
+        "key": "p",
+        "label": "Producto"
+       }
+      ],
+      "rows": []
+     }
+    },
+    {
+     "id": "grafico",
+     "component": "Chart",
+     "props": {
+      "kind": "line",
+      "labels": [],
+      "series": []
+     }
+    }
+   ],
+   "esperado": [
+    [
+     "detalle",
+     "no es una opción de vista"
+    ]
+   ]
+  },
+  {
+   "id": "arbol-si-sin-select",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "t"
+     ]
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "modo",
+       "es": "a"
+      }
+     }
+    }
+   ],
+   "esperado": [
+    [
+     "t",
+     "que no escribe ningún Select"
+    ]
+   ]
+  },
+  {
+   "id": "arbol-nfd-vale",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "sel_bebida",
+      "t"
+     ]
+    },
+    {
+     "id": "sel_bebida",
+     "component": "Select",
+     "props": {
+      "name": "bebida",
+      "label": "bebida",
+      "options": [
+       {
+        "value": "café"
+       },
+       {
+        "value": "té"
+       }
+      ]
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "text": "t",
+      "si": {
+       "$": "bebida",
+       "es": "café"
+      }
+     }
+    }
+   ],
+   "esperado": []
+  },
+  {
+   "id": "arbol-slot-fuera-de-data",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "datos",
+      "fecha"
+     ]
+    },
+    {
+     "id": "datos",
+     "component": "Data",
+     "props": {
+      "name": "q",
+      "query": {
+       "tipo": "formPedido"
+      }
+     },
+     "children": []
+    },
+    {
+     "id": "fecha",
+     "component": "Input",
+     "props": {
+      "name": "fecha",
+      "kind": "date",
+      "min": {
+       "$": "q.hoy"
+      }
+     }
+    }
+   ],
+   "esperado": [
+    [
+     "fecha",
+     "no existe aquí"
+    ]
+   ]
+  },
+  {
+   "id": "arbol-slot-dentro-de-data",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "datos"
+     ]
+    },
+    {
+     "id": "datos",
+     "component": "Data",
+     "props": {
+      "name": "q",
+      "query": {
+       "tipo": "formPedido"
+      }
+     },
+     "children": [
+      "fecha"
+     ]
+    },
+    {
+     "id": "fecha",
+     "component": "Input",
+     "props": {
+      "name": "fecha",
+      "kind": "date",
+      "min": {
+       "$": "q.hoy"
+      }
+     }
+    }
+   ],
+   "esperado": []
+  },
+  {
+   "id": "arbol-consulta-no-declarada",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "datos"
+     ]
+    },
+    {
+     "id": "datos",
+     "component": "Data",
+     "props": {
+      "name": "q",
+      "query": {
+       "tipo": "clientes"
+      }
+     },
+     "children": [
+      "fecha"
+     ]
+    },
+    {
+     "id": "fecha",
+     "component": "Input",
+     "props": {
+      "name": "fecha",
+      "kind": "date",
+      "min": {
+       "$": "q.hoy"
+      }
+     }
+    }
+   ],
+   "esperado": [
+    [
+     "datos",
+     "no la declara la app"
+    ]
+   ]
+  },
+  {
+   "id": "arbol-calc-slot-desconocido",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "m",
+      "t"
+     ]
+    },
+    {
+     "id": "m",
+     "component": "Calc",
+     "props": {
+      "name": "m",
+      "preset": "margen",
+      "compra": {
+       "$": "c"
+      },
+      "venta": {
+       "$": "v"
+      },
+      "cantidad": {
+       "$": "n"
+      }
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "value": {
+       "$": "m.margen"
+      }
+     }
+    }
+   ],
+   "esperado": [
+    [
+     "t",
+     "no publica margen"
+    ]
+   ]
+  },
+  {
+   "id": "arbol-calc-slots-validos",
+   "tipo": "arbol",
+   "donde": [
+    "motor"
+   ],
+   "nodos": [
+    {
+     "id": "root",
+     "component": "Stack",
+     "children": [
+      "m",
+      "t"
+     ]
+    },
+    {
+     "id": "m",
+     "component": "Calc",
+     "props": {
+      "name": "m",
+      "preset": "margen",
+      "compra": {
+       "$": "c"
+      },
+      "venta": {
+       "$": "v"
+      },
+      "cantidad": {
+       "$": "n"
+      }
+     }
+    },
+    {
+     "id": "t",
+     "component": "Text",
+     "props": {
+      "value": {
+       "$": "m.pct"
+      },
+      "rojo": {
+       "$": "m.perdida"
+      }
+     }
+    }
+   ],
+   "esperado": []
+  }
+ ]
+}

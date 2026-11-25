@@ -2,6 +2,13 @@
 // Las pantallas (`pacai.ui/1`) las dibuja `Vista` (ui.js); sus acciones vuelven como `input` con `pacai.ui.action/1`.
 import { Vista } from './ui.js';
 
+// Con `--ui-lang` el servidor declara las piezas declarativas y resuelve sus consultas (prototipo).
+const piezas = await fetch('/config').then(r => r.json()).then(({ piezas: activas, consultas }) => (activas ? {
+    piezas: true, consultas,
+    consultar: query => fetch('/consulta', { method: 'POST', headers: { 'content-type': 'application/json' },
+                                             body: JSON.stringify(query) }).then(r => r.json()),
+} : {})).catch(() => ({}));
+
 const chat = document.getElementById('chat');
 const estado = document.getElementById('estado');
 const redactor = document.getElementById('redactor');
@@ -59,7 +66,7 @@ function anadirTexto(el, contenido) {
 function pantalla(el, data) {
     let entrada = vistas.get(data.view);
     if (!entrada) {
-        entrada = { vista: new Vista(data.view, { alEnviar: accion }), sitio: null };
+        entrada = { vista: new Vista(data.view, { alEnviar: accion, ...piezas }), sitio: null };
         vistas.set(data.view, entrada);
     }
     if (data.rev <= entrada.vista.rev) return;                  // revisión vieja

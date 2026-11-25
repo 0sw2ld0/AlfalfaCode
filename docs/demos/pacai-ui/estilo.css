@@ -133,3 +133,12 @@ tr.ui-pulsable:hover, li.ui-pulsable:hover, .ui-card.ui-pulsable:hover { backgro
 .ui-card-detalle[open] summary::before { content: "▾ "; }
 .ui-card-detalle p { margin: 6px 0 0; white-space: pre-wrap; color: var(--tinta); }
 .ui-rejilla > .ui-card > .ui-hijos { margin-top: auto; }
+
+/* Piezas declarativas (prototipo de PACAI UI Lang). */
+.ui-rojo { color: var(--peligro); }
+.ui-error { display: block; margin-top: 4px; font-size: 12px; color: var(--peligro); }
+.ui-control[aria-invalid="true"] { border-color: var(--peligro); }
+.ui-data > .ui-hijos { display: contents; }
+body.piezas { display: block; height: auto; padding: 24px; }
+body.piezas #casos { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+body.piezas .caso { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 16px; }

@@ -635,8 +635,10 @@ class TransportePacai(Transport):
         if fallos:
             return self._error('invalid_message', 'Acción de pantalla inválida: ' + '; '.join(fallos[:3]), m['id'])
         data = acciones[0]['data']
+        vistas = self.t.vistas
+        pantalla = vistas.resumen_lang(data['view']) if vistas.catalogo.lang and data['view'] in vistas.vistas else ''
         texto = accion_para_el_modelo([b['text'] for b in bloques if b.get('type') == 'text'], data,
-                                      self.t.vistas.rev(data['view']))
+                                      vistas.rev(data['view']), pantalla)
         return dict(m, payload=dict(m['payload'], blocks=[{'type': 'text', 'text': texto}]))
 
     # -- trabajo fuera de un turno (`TRABAJOS`) ------------------------------

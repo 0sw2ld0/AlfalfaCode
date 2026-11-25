@@ -23,6 +23,9 @@ Abre un agente PACAI y sirve la demo en http://127.0.0.1:PUERTO.
   --modelo MODELO   Modelo para AlfalfaCode. Por defecto, el configurado.
   --carpeta RUTA    Carpeta de trabajo del agente. Por defecto, la actual.
   --puerto N        Puerto local. Por defecto: 4173.
+  --ui-lang         Prototipo de PACAI UI Lang: enciende ALFALFA_PACAI_UI_LANG en el agente, declara las piezas
+                    declarativas (Calc, Data, si, rojo…) y resuelve sus consultas de ejemplo. /piezas las enseña
+                    sin agente.
   --help            Muestra esta ayuda.`;
 
 const ESTATICOS = {
@@ -30,7 +33,17 @@ const ESTATICOS = {
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
     '/ui.js': ['ui.js', 'text/javascript; charset=utf-8'],
     '/estilo.css': ['estilo.css', 'text/css; charset=utf-8'],
+    '/piezas': ['piezas.html', 'text/html; charset=utf-8'],
+    '/piezas.js': ['piezas.js', 'text/javascript; charset=utf-8'],
 };
+// Las consultas que declara la app para las piezas `Data` (con --ui-lang). Las resuelve este servidor: el cliente
+// nunca lee el reloj ni compone la frase.
+const CONSULTAS = {
+    formPedido: { args: {}, out: { lista: 'opciones', hoy: 'fecha' } },
+    comparar: { args: { a: 'texto', b: 'texto' }, out: { frase: 'texto', series: 'series' } },
+};
+const PRODUCTOS = { palta: ['Palta', [620, 640, 655, 690]], limon: ['Limón', [410, 395, 420, 455]],
+                    papa: ['Papa', [180, 175, 182, 190]] };
 // Lo que la página puede mandar al agente. El sobre (id, sesión, seq, hora) lo pone el servidor.
 const PERMITIDOS = new Set(['input', 'approval_result', 'interrupt']);
 
@@ -41,6 +54,7 @@ const { values: opciones } = parseArgs({
         modelo: { type: 'string' },
         carpeta: { type: 'string', default: process.cwd() },
         puerto: { type: 'string', default: '4173' },
+        'ui-lang': { type: 'boolean', default: false },
         help: { type: 'boolean', default: false },
     },
 });
@@ -58,7 +72,8 @@ const oyentes = new Set();
 const [ejecutable, argumentos] = opciones.simulado
     ? [join(RAIZ, '.venv', 'bin', 'python'), [join(AQUI, 'agente_simulado.py')]]
     : [opciones.alfalfa, ['--pacai', ...(opciones.modelo ? ['--modelo', opciones.modelo] : [])]];
-const agente = spawn(ejecutable, argumentos, { cwd: opciones.carpeta, stdio: ['pipe', 'pipe', 'inherit'] });
+const entorno = opciones['ui-lang'] ? { ...process.env, ALFALFA_PACAI_UI_LANG: '1' } : process.env;
+const agente = spawn(ejecutable, argumentos, { cwd: opciones.carpeta, stdio: ['pipe', 'pipe', 'inherit'], env: entorno });
 agente.on('error', error => {
     console.error('No se pudo abrir el agente (' + ejecutable + '): ' + error.message);
     process.exit(1);
@@ -97,11 +112,31 @@ function difundir(mensaje) {
 enviar('hello', {
     versions: [VERSION], profiles: ['work', 'ui'], extensions: ['alfalfa'],
     render: { ui: { version: '1', catalog: 'base', actions: ['send', 'set', 'open_url'],
-                    limits: { max_nodes: 300, max_depth: 12 } } },
+                    limits: { max_nodes: 300, max_depth: 12 },
+                    ...(opciones['ui-lang'] && { pieces: true, queries: CONSULTAS }) } },
     implementation: { name: 'pacai-ui-demo', version: '0.1.0' },
 });
 
 // -- el servidor web ---------------------------------------------------------------------------------
+/** Una consulta de una pieza Data. `hoy` sale del reloj de este servidor; la frase la compone él. */
+function consultar(query) {
+    if (query?.tipo === 'formPedido') {
+        return { lista: Object.entries(PRODUCTOS).map(([value, [label]]) => ({ value, label })),
+                 hoy: new Date().toISOString().slice(0, 10) };
+    }
+    if (query?.tipo === 'comparar' && PRODUCTOS[query.a] && PRODUCTOS[query.b]) {
+        const [nombreA, a] = PRODUCTOS[query.a];
+        const [nombreB, b] = PRODUCTOS[query.b];
+        const ultimoA = a.at(-1), ultimoB = b.at(-1);
+        const decimas = Math.round(Math.abs(ultimoA - ultimoB) * 1000 / ultimoB);
+        const pct = `${Math.floor(decimas / 10)},${decimas % 10} %`;
+        return { frase: ultimoA === ultimoB ? `${nombreA} y ${nombreB} cuestan lo mismo.`
+                     : `${nombreA} está un ${pct} más ${ultimoA > ultimoB ? 'caro' : 'barato'} que ${nombreB}.`,
+                 series: [{ name: nombreA, values: a.map(v => v / 100) }, { name: nombreB, values: b.map(v => v / 100) }] };
+    }
+    return {};
+}
+
 function leerCuerpo(req) {
     return new Promise((resolver, rechazar) => {
         let cuerpo = '';
@@ -138,6 +173,19 @@ const servidor = createServer(async (req, res) => {
         for (const mensaje of historial) res.write('data: ' + JSON.stringify(mensaje) + '\n\n');
         oyentes.add(res);
         req.on('close', () => oyentes.delete(res));
+        return;
+    }
+    if (req.method === 'GET' && ruta === '/config') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+            .end(JSON.stringify({ piezas: opciones['ui-lang'], consultas: opciones['ui-lang'] ? CONSULTAS : {} }));
+        return;
+    }
+    if (req.method === 'POST' && ruta === '/consulta') {
+        try {
+            res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(consultar(JSON.parse(await leerCuerpo(req)))));
+        } catch (error) {
+            res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: error.message }));
+        }
         return;
     }
     if (req.method === 'POST' && ruta === '/enviar') {

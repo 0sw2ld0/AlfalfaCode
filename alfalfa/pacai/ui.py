@@ -84,12 +84,12 @@ EJEMPLOS_BASE = {
 }
 CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
-_APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
+_APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 # La misma valla al final de una línea con texto delante («Aquí está:```pacai-ui view=x»): algunos modelos escriben
 # una frase o su razonamiento y abren el bloque sin saltar de línea. Sólo cuenta si tras la valla no queda más que
 # sus atributos, si el texto de delante no lleva comillas invertidas (una valla citada en `código`) y si no estamos
 # dentro de otro bloque de código.
-_APERTURA_A_MEDIA_LINEA = re.compile(r'```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
+_APERTURA_A_MEDIA_LINEA = re.compile(r'```' + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 _CIERRE = re.compile(r'^\s*```\s*$')
 _OTRA_VALLA = re.compile(r'^\s*```')
 
@@ -172,15 +172,19 @@ def esquema() -> dict:
 
 
 @lru_cache(maxsize=8)
-def _validador(definicion: str):
+def _validador(definicion: str, con_piezas: bool = False):
     import jsonschema
 
+    if con_piezas:
+        from .piezas import esquema_piezas
+        return jsonschema.Draft202012Validator({**esquema_piezas(), '$ref': '#/$defs/' + definicion})
     return jsonschema.Draft202012Validator({**esquema(), '$ref': '#/$defs/' + definicion})
 
 
-def errores_de(definicion: str, dato: Any) -> list[str]:
-    """Errores de `dato` contra `$defs/<definicion>` del esquema (`declaration`, `node`, `update`, `action`)."""
-    return [e.message for e in _validador(definicion).iter_errors(dato)]
+def errores_de(definicion: str, dato: Any, con_piezas: bool = False) -> list[str]:
+    """Errores de `dato` contra `$defs/<definicion>` del esquema (`declaration`, `node`, `update`, `action`).
+    `con_piezas`: el esquema con las piezas declarativas del prototipo (`piezas.esquema_piezas`)."""
+    return [e.message for e in _validador(definicion, con_piezas).iter_errors(dato)]
 
 
 def _acciones(spec: Any) -> list[dict]:
@@ -204,33 +208,50 @@ class Catalogo:
     acciones: frozenset[str] = frozenset({'send', 'set', 'open_url'})
     max_nodos: int = MAX_NODOS
     max_profundidad: int = MAX_PROFUNDIDAD
+    # Prototipo de la 3.ª y 4.ª lluvia, sólo con ALFALFA_PACAI_UI_LANG=1 (ui_lang.py): `lang` enseña y lee PACAI UI
+    # Lang; `piezas` (si además el cliente declara `pieces: true`) admite Calc, Data, si, rojo, min/max/step…
+    # `consultas`: las que declara la app en `queries` ({tipo: {"args": …, "out": {slot: tipo}}}).
+    lang: bool = False
+    piezas: bool = False
+    consultas: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
-    def de(cls, declaracion: dict | None) -> Catalogo:
-        """El catálogo de una declaración ya validada (`errores_de('declaration', …)`); None vale la de por defecto."""
+    def de(cls, declaracion: dict | None, entorno: dict | None = None) -> Catalogo:
+        """El catálogo de una declaración ya validada (`errores_de('declaration', …)`); None vale la de por defecto.
+        `entorno`: dónde mirar el flag del prototipo (por defecto, las variables de entorno)."""
+        from .ui_lang import activo
+
         d = declaracion or {}
         limites = d.get('limits') or {}
+        lang = activo(entorno)
+        piezas = lang and d.get('pieces') is True
         return cls(base=d.get('catalog', 'base') == 'base', propios=dict(d.get('components') or {}),
                    acciones=frozenset(d.get('actions', ('send', 'set', 'open_url'))),
                    max_nodos=limites.get('max_nodes', MAX_NODOS),
-                   max_profundidad=limites.get('max_depth', MAX_PROFUNDIDAD))
+                   max_profundidad=limites.get('max_depth', MAX_PROFUNDIDAD), lang=lang, piezas=piezas,
+                   consultas=dict(d.get('queries') or {}) if piezas and isinstance(d.get('queries'), dict) else {})
 
     def componentes(self) -> list[str]:
-        return (list(BASE) if self.base else []) + list(self.propios)
+        from .piezas import COMPONENTES
+
+        return (list(BASE) if self.base else []) + (list(COMPONENTES) if self.piezas else []) + list(self.propios)
 
     def errores_del_nodo(self, nodo: Any) -> list[str]:
-        errores = errores_de('node', nodo)
+        errores = errores_de('node', nodo, self.piezas)
         if errores or not isinstance(nodo, dict):
             return errores
         nombre = nodo['component']
-        if nombre in BASE and not self.base or nombre not in BASE and nombre not in self.propios:
+        if nombre not in self.componentes():
             return ['El componente ' + nombre + ' no está en el catálogo del cliente.']
         if nombre in self.propios:
             spec = self.propios[nombre]
             import jsonschema
 
-            errores += [e.message for e in jsonschema.Draft202012Validator(spec['props'])
-                        .iter_errors(nodo.get('props', {}))]
+            props = dict(nodo.get('props', {}))
+            si = props.pop('si', None) if self.piezas else None
+            errores += [e.message for e in jsonschema.Draft202012Validator(spec['props']).iter_errors(props)]
+            if si is not None:
+                errores += errores_de('si', si, True)
             if nodo.get('children') and not spec.get('children'):
                 errores.append(nombre + ' no admite hijos.')
             fuera = set(nodo.get('events', {})) - set(spec.get('events', []))
@@ -257,7 +278,10 @@ class Catalogo:
     def manual(self, web: bool = False, ejemplos: bool = True) -> str:
         """La parte del prompt de sistema que explica al modelo cómo dibujar en este cliente. Con `web` (el motor le
         ofrece web_search y read_web), también que busque lo que no sabe antes de dibujarlo. Con `ejemplos`, un
-        ejemplo por componente (sin él, sólo la lista de props: así se mide la diferencia)."""
+        ejemplo por componente (sin él, sólo la lista de props: así se mide la diferencia). Con el flag de PACAI UI
+        Lang, el formato compacto en vez del JSON."""
+        if self.lang:
+            return self._manual_lang(web)
         lineas = []
         if self.base:
             lineas += ['- ' + c + ': ' + RESUMEN[c] + ('; hijos' if c in CON_HIJOS else '')
@@ -316,8 +340,23 @@ Componentes:
                 + '\n'.join(json.dumps(n, ensure_ascii=False, separators=(',', ':')) for n in nodos) + '\n')
 
 
-def partir(texto: str) -> list[tuple]:
+    def _manual_lang(self, web: bool) -> str:
+        from .ui_lang import prompt, prompt_piezas
+
+        piezas = prompt_piezas(self)
+        return ('''
+Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conversación. Responde con una pantalla
+cuando la respuesta sea una lista, una tabla, algo que elegir o rellenar, un gráfico o algo que te pidan enseñar aquí;
+para una respuesta corta escribe texto normal. No crees archivos para enseñar algo en el chat.
+''' + (BUSCAR_ANTES if web else '') + prompt(self) + '\n' + (piezas + '\n' if piezas else '')
+                + f'Acciones: {", ".join(sorted(self.acciones))}; como mucho un send por evento. Texto plano, sin '
+                f'HTML ni markdown en los nodos. Máximo {self.max_nodos} nodos.\n')
+
+
+def partir(texto: str, lang: bool = False) -> list[tuple]:
     """Trozos del texto del modelo: ('text', str) o ('ui', atributos, líneas). Una valla sin cerrar llega al final.
+    Con `lang` (el flag de PACAI UI Lang), una valla ```pacai-ui-lang lleva `lang: True` en sus atributos; sin él es
+    texto, como siempre.
 
     La valla de apertura también vale al final de una línea con texto delante (ese texto queda como texto normal),
     salvo dentro de otro bloque de código o citada entre comillas invertidas. Sólo se encuentra el bloque: su
@@ -334,13 +373,17 @@ def partir(texto: str) -> list[tuple]:
                 media = _APERTURA_A_MEDIA_LINEA.search(linea)
                 if media and linea[:media.start()].strip() and '`' not in linea[:media.start()]:
                     abre, delante = media, linea[:media.start()].rstrip() + '\n'
+            if abre and not lang and abre.group('lang'):
+                abre, delante = None, ''           # sin el flag, una valla pacai-ui-lang es texto, como siempre
             if abre:
                 if delante:
                     texto_actual.append(delante)
                 if texto_actual:
                     trozos.append(('text', ''.join(texto_actual)))
                     texto_actual = []
-                attrs = dict(a.split('=', 1) for a in abre.group('attrs').split())
+                attrs: dict[str, Any] = dict(a.split('=', 1) for a in abre.group('attrs').split())
+                if abre.group('lang'):
+                    attrs['lang'] = True
                 ui = (attrs, [])
             else:
                 if _OTRA_VALLA.match(linea):
@@ -378,6 +421,8 @@ class Vistas:
 
     def aplicar(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
         """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores."""
+        if attrs.get('lang') is True:
+            return self.aplicar_lang(attrs, lineas)
         nombre = ascii_de(attrs.get('view', ''), minusculas=True)
         if not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui necesita view=nombre ([a-z][a-z0-9_]*).']
@@ -434,6 +479,50 @@ class Vistas:
             data['placement'] = placement
         return data, errores
 
+    def aplicar_lang(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
+        """Un bloque ```pacai-ui-lang (prototipo): sin `rev`, un alta completa que sustituye la vista; con `rev=N`,
+        un cambio atómico contra esa revisión. Sin el flag se rechaza y el modelo debe usar el JSON."""
+        from .ui_lang import Flujo, aplicar_cambio
+
+        if not self.catalogo.lang:
+            return None, ['Este motor no tiene PACAI UI Lang activado: usa el bloque pacai-ui con JSON.']
+        nombre = attrs.get('view', '')
+        if not isinstance(nombre, str) or not _NOMBRE.match(nombre):
+            return None, ['El bloque pacai-ui-lang necesita view=nombre ([a-z][a-z0-9_]*).']
+        texto = '\n'.join(lineas)
+        if 'rev' in attrs:
+            vista = self.vistas.get(nombre)
+            if vista is None:
+                return None, [f'La vista {nombre} no existe: mándala entera, sin rev.']
+            if str(vista.rev) != str(attrs['rev']):
+                return None, [f'El cambio es contra la revisión {attrs["rev"]} y {nombre} va por la {vista.rev}.']
+            cambio, diagnosticos = aplicar_cambio(vista.nodos, texto, self.catalogo)
+            if cambio is None:
+                return None, [d.texto() for d in diagnosticos]
+            vista.nodos = cambio.nodos
+            vista.rev += 1
+            data: dict[str, Any] = {'view': nombre, 'op': 'patch', 'rev': vista.rev, 'nodes': cambio.actualizados}
+            if cambio.borrados:
+                data['remove'] = cambio.borrados
+            return data, cambio.avisos
+        flujo = Flujo(self.catalogo)
+        flujo.alimentar(texto + '\n')
+        nodos, diagnosticos = flujo.cerrar()
+        if not nodos:
+            return None, [d.texto() for d in diagnosticos]
+        vista = self.vistas.setdefault(nombre, Vista())
+        vista.nodos = {n['id']: n for n in nodos}
+        vista.rev += 1
+        return ({'view': nombre, 'op': 'replace', 'rev': vista.rev, 'nodes': nodos, 'alt': self._resumen(vista)},
+                [d.texto() for d in diagnosticos])
+
+    def resumen_lang(self, nombre: str) -> str:
+        """Lo que lee el modelo para cambiar la vista sin que se la reenvíen (revisión e ids, sin queries)."""
+        from .ui_lang import fichas, resumen
+
+        vista = self.vistas[nombre]
+        return resumen(vista.nodos, vista.rev, fichas(self.catalogo))
+
     def foto(self, nombre: str) -> dict:
         """El `replace` de la vista entera, con su resumen: la foto de referencia del `message_end`."""
         vista = self.vistas[nombre]
@@ -460,8 +549,9 @@ class Vistas:
         return ('Pantalla: ' + ' · '.join(textos))[:300] if textos else 'Pantalla sin texto.'
 
 
-def accion_para_el_modelo(textos: list[str], data: dict, rev_actual: int | None) -> str:
-    """El mensaje de usuario que lee el modelo por una acción `send` de una pantalla."""
+def accion_para_el_modelo(textos: list[str], data: dict, rev_actual: int | None, pantalla: str = '') -> str:
+    """El mensaje de usuario que lee el modelo por una acción `send` de una pantalla. `pantalla`: con PACAI UI Lang,
+    el resumen de la vista (revisión e ids) para que pueda cambiarla con un bloque `rev=N`."""
     datos = {k: data[k] for k in ('view', 'node', 'event', 'name', 'values', 'item') if k in data}
     aviso = ''
     if rev_actual is not None and data['rev'] < rev_actual:
@@ -471,4 +561,4 @@ def accion_para_el_modelo(textos: list[str], data: dict, rev_actual: int | None)
         aviso = '\nOjo: esa pantalla no existe en esta sesión.'
     resumen = '\n'.join(t for t in textos if t.strip())
     return ((resumen + '\n\n') if resumen else '') + '[Acción en la pantalla] ' + json.dumps(
-        datos, ensure_ascii=False) + aviso
+        datos, ensure_ascii=False) + aviso + (f'\nPantalla {data["view"]} ahora:\n{pantalla}' if pantalla else '')

@@ -424,7 +424,7 @@ class Traductor:
         # Perfil `ui`: el texto sale como texto; cada bloque ```pacai-ui, como un `patch` de su vista; al cerrar,
         # la foto (`replace`) de cada vista que tocó el mensaje.
         tocadas: list[str] = []
-        for trozo in partir(texto):
+        for trozo in partir(texto, lang=self.vistas.catalogo.lang):
             if trozo[0] == 'text':
                 salida += self._deltas(inicio['id'], trozo[1]) if trozo[1].strip() else []
                 continue

@@ -321,3 +321,53 @@ Las preguntas abiertas del primer borrador, ya resueltas:
    tokens, pero no ahorran nada: `c` y `component` son un token cada una. El coste está en la puntuación de
    JSON y en los datos. Los nodos usan `component`, `props`, `children` y `events`, que el modelo y las
    personas entienden mejor, y la declaración de un componente propio dice `children` en vez de `kids`.
+
+## 10. Prototipo: PACAI UI Lang y piezas declarativas (detrás de un flag)
+
+Sale de la 3.ª y la 4.ª lluvia de ideas. **Está apagado por defecto**: sin `ALFALFA_PACAI_UI_LANG=1` en el entorno
+del motor no cambia nada y el JSON de arriba sigue siendo el camino normal. Se revierte apagando el flag. La app de
+Mac no lo conoce y no hace falta: el motor sigue mandando `pacai.ui/1`.
+
+**PACAI UI Lang** (`alfalfa/pacai/ui_lang.py`) es una forma compacta, sólo datos, de escribir los mismos nodos. El
+motor la traduce exacta a `pacai.ui/1` y los clientes no cambian:
+
+```text
+root Stack direction=vertical gap=medium > filtros,cifras,p_bajo,fuente
+p_bajo Panel "Lo que más bajó" > bajo_top
+bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
+```
+
+- Una línea por nodo, `id Comp ["posicional"] clave=valor … > hijo,hijo`, en DFS desde `root`, en una valla
+  ```` ```pacai-ui-lang view=nombre ````. El posicional es la prop que declara el catálogo (`positional` en un
+  componente propio; en los base, `Text.text`, `Card.title`, `Button.label`…). `query`, objetos y listas van en
+  JSON compacto; una palabra suelta es un enum; `$clave` es `{"$": "clave"}`; `@evento={…}` lleva sus acciones.
+- **Herencia:** un componente propio declara `inherit` (`{"period": "periodo"}`) y el motor pone el enlace si la prop
+  falta. Un valor explícito gana. Un default sólo se rellena si el esquema de la prop lo declara.
+- **Cambios:** la valla lleva `rev=N`, la revisión que el motor le enseña al modelo. `~id` cambia props y conserva
+  los hijos, `+>` añade al final, `-id` borra (no si tiene más de un padre) y `>` exige la lista completa de hijos
+  actuales. Todo el bloque se aplica o nada. El modelo ve la pantalla como un resumen (`Vistas.resumen_lang`: ids,
+  componentes, posicionales y listas de hijos completas, sin queries).
+- **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
+  existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
+  mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor
+  entrega el texto del modelo por mensajes enteros (y el servicio Alfalfa tampoco lo trocea), así que en la práctica
+  las publicaciones salen juntas al cerrar el mensaje.
+- **Prompt:** `ui_lang.prompt` lo genera del catálogo, con 15 líneas como mucho.
+
+**Piezas declarativas** (`alfalfa/pacai/piezas.py`, y en la web la opción `piezas` de `Vista`). Sólo con el flag y si
+el cliente declara `"pieces": true` en `render.ui`:
+
+| Pieza | Props | Qué hace |
+| --- | --- | --- |
+| `Calc` | `name`, `preset: "margen"`, `compra`, `venta`, `cantidad` | Publica `name.pct` (fracción), `name.u` y `name.total` (dinero) y `name.perdida` (bool). Margen = (venta − compra) / venta. |
+| `si` | `{"$": clave, "es": valor}` en cualquier nodo | Se ve sólo si el estado vale `valor` (comparado en NFC). El motor exige que `valor` sea una `option` del Select de esa clave. |
+| `rojo`, `value` | en `Text` | `value` escribe un slot tipado con el formateador común (tras `text`, si lo hay); `rojo` lo pinta en rojo si vale `true`. |
+| `required`, `kind`, `min`, `max`, `step` | en `Input` (`required` también en `Select`) | Semántica de PACAI: `1.5` con `step=1` falla en todos los clientes. Un Select sin `required` empieza en su primera opción; con él, vacío. |
+| `Form` | — | Bloquea su propio `submit` mientras un campo visible de su subárbol no vale. Otros botones con `send` no se bloquean. |
+| `Data` | `name`, `query: {"tipo": …}`, hijos | Pide una consulta que declara la app en `queries` (`{"tipo": {"args": …, "out": {slot: tipo}}}`), espera a tener sus argumentos y vale la última respuesta. Sus salidas sólo se leen en su subárbol (`{"$": "q.hoy"}`). |
+
+El formateador escribe sin locale: dinero con 2 decimales, fracción como porcentaje con 1 decimal, miles con punto y
+decimales con coma, nulo «—». Los números van en coma fija (×10⁶, half-even). No hay AST, ni evaluador de
+expresiones, ni perfil `pacai.ui-logica/1`. Web y Python pasan los mismos vectores
+(`tests/conformidad/pacai-ui-piezas.json`; en la web, `node docs/demos/pacai-ui/conformidad.mjs`). Swift no los
+implementa todavía.

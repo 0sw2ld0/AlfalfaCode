@@ -16,20 +16,10 @@
         },
         "additionalProperties": false
       },
-      "example": [
-        {
-          "id": "filtros",
-          "component": "Filters",
-          "props": {
-            "period": {
-              "$": "periodo"
-            },
-            "family": {
-              "$": "familia"
-            }
-          }
-        }
-      ]
+      "inherit": {
+        "period": "periodo",
+        "family": "familia"
+      }
     },
     "Grid": {
       "props": {
@@ -44,20 +34,7 @@
         "additionalProperties": false
       },
       "children": true,
-      "description": "Rejilla de tarjetas; columns de 1 a 6.",
-      "example": [
-        {
-          "id": "cifras",
-          "component": "Grid",
-          "props": {
-            "columns": 3
-          },
-          "children": [
-            "c_sub",
-            "c_baj"
-          ]
-        }
-      ]
+      "description": "Rejilla de tarjetas; columns de 1 a 6."
     },
     "Panel": {
       "props": {
@@ -73,19 +50,8 @@
         "additionalProperties": false
       },
       "children": true,
-      "description": "Panel con título y piezas dentro.",
-      "example": [
-        {
-          "id": "p_bajo",
-          "component": "Panel",
-          "props": {
-            "title": "Lo que más bajó"
-          },
-          "children": [
-            "barras"
-          ]
-        }
-      ]
+      "positional": "title",
+      "description": "Panel con título y piezas dentro."
     },
     "Stat": {
       "props": {
@@ -134,27 +100,12 @@
         ],
         "additionalProperties": false
       },
-      "description": "Una cifra. query {\"tipo\":\"totales\",\"campo\":\"subieron|bajaron|iguales\"}; icon subio|bajo|igual; period y family enlazados.",
-      "example": [
-        {
-          "id": "c_sub",
-          "component": "Stat",
-          "props": {
-            "label": "Subieron",
-            "icon": "subio",
-            "period": {
-              "$": "periodo"
-            },
-            "family": {
-              "$": "familia"
-            },
-            "query": {
-              "tipo": "totales",
-              "campo": "subieron"
-            }
-          }
-        }
-      ]
+      "positional": "label",
+      "inherit": {
+        "period": "periodo",
+        "family": "familia"
+      },
+      "description": "Una cifra. query {\"tipo\":\"totales\",\"campo\":\"subieron|bajaron|iguales\"}; icon subio|bajo|igual; period y family enlazados."
     },
     "PriceBars": {
       "props": {
@@ -195,26 +146,11 @@
         ],
         "additionalProperties": false
       },
-      "description": "Barras de productos. query {\"tipo\":\"productos\",\"orden\":\"sube|baja\",\"limite\":1-20}; period y family enlazados.",
-      "example": [
-        {
-          "id": "barras",
-          "component": "PriceBars",
-          "props": {
-            "period": {
-              "$": "periodo"
-            },
-            "family": {
-              "$": "familia"
-            },
-            "query": {
-              "tipo": "productos",
-              "orden": "baja",
-              "limite": 6
-            }
-          }
-        }
-      ]
+      "inherit": {
+        "period": "periodo",
+        "family": "familia"
+      },
+      "description": "Barras de productos. query {\"tipo\":\"productos\",\"orden\":\"sube|baja\",\"limite\":1-20}; period y family enlazados."
     },
     "PriceLines": {
       "props": {
@@ -262,28 +198,31 @@
         ],
         "additionalProperties": false
       },
-      "description": "Historial de precios. query {\"tipo\":\"historial\",\"productos\":[\"palta\",…]}; period y family enlazados.",
-      "example": [
-        {
-          "id": "hist",
-          "component": "PriceLines",
-          "props": {
-            "period": {
-              "$": "periodo"
-            },
-            "family": {
-              "$": "familia"
-            },
-            "query": {
-              "tipo": "historial",
-              "productos": [
-                "palta",
-                "limon"
-              ]
-            }
-          }
-        }
-      ]
+      "inherit": {
+        "period": "periodo",
+        "family": "familia"
+      },
+      "description": "Historial de precios. query {\"tipo\":\"historial\",\"productos\":[\"palta\",…]}; period y family enlazados."
     }
-  }
+  },
+  "queries": {
+    "formPedido": {
+      "args": {},
+      "out": {
+        "lista": "opciones",
+        "hoy": "fecha"
+      }
+    },
+    "comparar": {
+      "args": {
+        "a": "texto",
+        "b": "texto"
+      },
+      "out": {
+        "frase": "texto",
+        "series": "series"
+      }
+    }
+  },
+  "pieces": true
 }

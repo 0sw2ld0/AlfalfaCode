@@ -36,6 +36,18 @@ Abre `alfalfa --pacai` en esa carpeta con el modelo que tengas configurado (o el
 el catálogo en su prompt y decide cuándo dibujar. Las aprobaciones de herramientas salen en el chat con botones.
 Otras opciones: `--alfalfa RUTA` para elegir el ejecutable y `--puerto N`. `--help` las lista todas.
 
+## Prototipo: PACAI UI Lang y piezas declarativas
+
+```sh
+node docs/demos/pacai-ui/servidor.mjs --ui-lang --carpeta ~/mi-proyecto
+```
+
+`--ui-lang` abre AlfalfaCode con `ALFALFA_PACAI_UI_LANG=1`, declara las piezas (`pieces: true`) y dos consultas de
+ejemplo (`formPedido` y `comparar`) que resuelve el propio servidor. <http://127.0.0.1:4173/piezas> enseña las
+cuatro pantallas de la 4.ª lluvia (margen, vista que cambia, pedido con validación y comparar) sin agente ni gasto.
+`node docs/demos/pacai-ui/conformidad.mjs` pasa los vectores compartidos con el motor. Está descrito en
+[perfil-ui.md §10](../../pacai/perfil-ui.md#10-prototipo-pacai-ui-lang-y-piezas-declarativas-detrás-de-un-flag).
+
 ## Cómo está hecha
 
 | Archivo | Qué hace |
@@ -44,6 +56,8 @@ Otras opciones: `--alfalfa RUTA` para elegir el ejecutable y `--puerto N`. `--he
 | `ui.js` | El original del renderizador, que la extensión de VS Code copia en `alfalfa-vscode/media/ui.js`. Dibuja el catálogo base: una `Vista` por pantalla, que aplica los `patch` y `replace`, guarda el estado de los campos y ejecuta las acciones `send`, `set` y `open_url`. Todo se construye con `createElement` y `textContent`: el texto del agente nunca se interpreta como HTML. |
 | `app.js` | La página de chat: mensajes, pantallas, aprobaciones, el botón de parar y la traza de mensajes. Un tema puede poner en `<body>` el texto de la barra de estado: `data-trabajando` mientras el agente trabaja y `data-listo` cuando espera (sin él, la sesión). |
 | `estilo.css` | Estilos, con tema claro y oscuro. |
+| `piezas.html`, `piezas.js` | Las cuatro pantallas de las piezas declarativas, sin agente (`/piezas`, con `--ui-lang`). |
+| `conformidad.mjs` | Corre los vectores de `tests/conformidad/pacai-ui-piezas.json` contra `ui.js`. |
 | `agente_simulado.py` | El agente de guion para `--simulado`. |
 
 Al recargar la página, el servidor reenvía la sesión entera y la página la vuelve a montar. La prueba
