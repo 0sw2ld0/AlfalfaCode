@@ -479,13 +479,14 @@ def gratis_ahora(red=False):
     return filas
 
 
-def coste(precio, entrada, salida, cache=0, escrita=0):
+def coste(precio, entrada, salida, cache=0, escrita=0, escrita_1h=0):
     """USD de una llamada con los precios por millón del catálogo; None sin precio.
 
     `entrada` es el prompt entero; `cache`, lo leído de la caché y `escrita`, lo
     escrito en ella (Anthropic lo cobra a 1,25 veces la entrada si el catálogo no
-    dice otra cosa). Con un tramo por longitud, un prompt más largo que el tramo
-    paga toda la petición a su precio.
+    dice otra cosa); `escrita_1h`, lo escrito en la caché de una hora (al doble de
+    la entrada). Con un tramo por longitud, un prompt más largo que el tramo paga
+    toda la petición a su precio.
     """
     if not precio or not isinstance(entrada, int) or not isinstance(salida, int):
         return None
@@ -494,10 +495,12 @@ def coste(precio, entrada, salida, cache=0, escrita=0):
         precio = tramo
     cache = cache if isinstance(cache, int) and 0 <= cache <= entrada else 0
     escrita = escrita if isinstance(escrita, int) and 0 <= escrita <= entrada - cache else 0
+    escrita_1h = escrita_1h if isinstance(escrita_1h, int) and 0 <= escrita_1h <= entrada - cache - escrita else 0
     lectura = precio.get('cache_lectura', precio['entrada'])
     escritura = precio.get('cache_escritura', precio['entrada'] * 1.25)
-    return ((entrada - cache - escrita) * precio['entrada'] + cache * lectura + escrita * escritura
-            + salida * precio['salida']) / 1_000_000
+    escritura_1h = precio.get('cache_escritura_1h', precio['entrada'] * 2)
+    return ((entrada - cache - escrita - escrita_1h) * precio['entrada'] + cache * lectura + escrita * escritura
+            + escrita_1h * escritura_1h + salida * precio['salida']) / 1_000_000
 
 
 def tarifa(precio, proveedor=None, modelo=None):

@@ -56,6 +56,13 @@ VISION = {'gpt-6-luna': True, 'claude-haiku-5-5': True, 'glm-5.3-flash': True, '
 SOPORTE = 'soporte@cuycoders.dev'
 MAX_TEXTO = 8_000
 MAX_REGISTRO = 60_000
+# Lo que cobra Ollama Cloud por los modelos que el servicio sirve desde ahí (USD por millón, en punta), como en la
+# tabla `FIJOS` de alfalfa_cloud/precios.py. Los de OpenAI y Anthropic salen de sus propios catálogos.
+PRECIOS_OLLAMA = {
+    'glm-5.3-flash': (0.15, 0.03, 0.50), 'deepseek-v4.1-flash': (0.30, 0.006, 1.20),
+    'kimi-k3': (3.00, 0.30, 15.00), 'kimi-k3.1-pro': (2.00, 0.20, 10.00), 'glm-5.3': (1.40, 0.26, 4.40),
+    'deepseek-v4-pro': (1.32, 0.044, 3.96), 'gemma4:31b': (0.14, 0.05, 0.40),
+}
 
 
 def _ventanas(fila):
@@ -329,6 +336,24 @@ def cabeceras(codigo, firma_de, metodo, ruta, cuerpo):
             'X-Alfalfa-Firma': firma_de(canonico(metodo, ruta, marca, nonce, cuerpo))}
 
 
+def _con_cache(valor):
+    """Pasa los tokens de caché del servicio a los campos con que el motor calcula el coste (como hacen los
+    proveedores de OpenAI y Anthropic). Devuelve si cambió algo. El servicio no manda dólares: sólo tokens."""
+    if not isinstance(valor, dict):
+        return False
+    def entero(clave):
+        n = valor.get(clave)
+        return n if type(n) is int and n >= 0 else 0
+    leidos = entero('prompt_eval_cached_count')
+    escritos, escritos_1h = entero('prompt_eval_cache_write_count'), entero('prompt_eval_cache_write_1h_count')
+    if not (leidos or escritos or escritos_1h):
+        return False
+    valor['alfalfa_cache'] = leidos
+    valor['alfalfa_cache_escritura'] = escritos
+    valor['alfalfa_cache_escritura_1h'] = escritos_1h
+    return True
+
+
 def _cuotas(valor):
     """Las filas de cuota de una respuesta del servicio, con su nombre visible."""
     filas = (valor.get('alfalfa') or {}).get('cuotas') if isinstance(valor, dict) else None
@@ -385,14 +410,21 @@ class Transporte(httpx.AsyncBaseTransport):
         contenido = await respuesta.aread()
         await respuesta.aclose()
         try:
-            cuotas = _cuotas(json.loads(contenido))
+            valor = json.loads(contenido)
         except ValueError:
-            cuotas = None
+            valor = None
+        cuotas = _cuotas(valor)
+        encabezados = respuesta.headers
+        if _con_cache(valor):
+            contenido = json.dumps(valor, ensure_ascii=False).encode()
+            # El cuerpo ya no es el que llegó: ni su longitud ni su compresión valen.
+            encabezados = [(k, v) for k, v in respuesta.headers.items()
+                           if k.lower() not in ('content-length', 'content-encoding')]
         if cuotas is not None:
             self.tarea['alfalfa_cuotas'] = cuotas
             if self.al_cambiar_cuota:
                 self.al_cambiar_cuota(cuotas)
-        return httpx.Response(respuesta.status_code, headers=respuesta.headers, content=contenido,
+        return httpx.Response(respuesta.status_code, headers=encabezados, content=contenido,
                               extensions=respuesta.extensions)
 
     async def aclose(self):
@@ -425,6 +457,22 @@ class Alfalfa(Proveedor):
     def codigo(self):
         from .. import ajustes
         return ajustes.alfalfa_codigo()
+
+    def precio(self, modelo):
+        """El precio del modelo de detrás, para estimar el coste del turno (el código lo paga el servicio, no
+        quien lo usa). GPT y Claude, con sus tramos de contexto largo, del catálogo de OpenAI y Anthropic; los de
+        Ollama Cloud, de `PRECIOS_OLLAMA`. Un modelo que no está en ninguno (uno que el titular añadió): None."""
+        nombre = str(modelo or '').removeprefix('alfalfa/')
+        if nombre.startswith('gpt-'):
+            from .openai import OpenAI
+            return OpenAI().precio(nombre)
+        if nombre.startswith('claude-'):
+            from .anthropic import Anthropic
+            return Anthropic().precio(nombre)
+        if nombre in PRECIOS_OLLAMA:
+            entrada, cache, salida = PRECIOS_OLLAMA[nombre]
+            return {'entrada': entrada, 'cache_lectura': cache, 'salida': salida}
+        return None
 
     def configurado(self):
         from .. import ajustes

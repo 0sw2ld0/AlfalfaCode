@@ -235,3 +235,12 @@ def test_la_copia_del_paquete_esta_validada():
     assert datos['fuente'] == catalogo.URL
     assert catalogo._revalidar(datos['proveedores']).keys() == datos['proveedores'].keys()
     assert (catalogo.MINIMO.parent / 'PROCEDENCIA.md').read_text().count('models.dev') >= 3
+
+
+def test_la_escritura_de_una_hora_cuesta_el_doble_de_la_entrada():
+    from alfalfa import catalogo
+    precio = {'entrada': 0.10, 'salida': 0.50, 'cache_lectura': 0.01, 'cache_escritura': 0.125}
+    # 1.000 de entrada: 100 leídos, 200 escritos a 5 minutos, 300 a una hora y 400 sin caché.
+    assert catalogo.coste(precio, 1_000, 0, 100, 200, 300) == pytest.approx(
+        (400 * 0.10 + 100 * 0.01 + 200 * 0.125 + 300 * 0.20) / 1e6)
+    assert catalogo.coste(precio, 1_000, 0, 100, 200) == catalogo.coste(precio, 1_000, 0, 100, 200, 0)

@@ -1581,10 +1581,14 @@ class NativeRuntime:
         # Anthropic cobra aparte lo que escribe en la caché.
         escrita = response.get('alfalfa_cache_escritura')
         escrita = escrita if type(escrita) is int else 0
+        # El servicio Alfalfa separa lo escrito en la caché de una hora, que Anthropic cobra más caro.
+        escrita_1h = response.get('alfalfa_cache_escritura_1h')
+        escrita_1h = escrita_1h if type(escrita_1h) is int else 0
         self.task['tokens_entrada'] = (self.task.get('tokens_entrada') or 0) + entrada
         self.task['tokens_salida'] = (self.task.get('tokens_salida') or 0) + salida
         precio = getattr(self, '_precio', None)
-        coste = catalogo.coste(precio, entrada, salida, cache, escrita)
+        coste = catalogo.coste(precio, entrada, salida, cache, escrita, escrita_1h)
+        escrita += escrita_1h
         # Lo que habría costado sin caché, para enseñar lo que ahorra (Ollama no la da).
         sin_cache = catalogo.coste(precio, entrada, salida) if coste is not None and (cache or escrita) else None
         datos_cache = {'leidos': cache, 'escritos': escrita, 'sin_cache': sin_cache,

@@ -427,3 +427,46 @@ def test_la_orden_dice_que_queda_por_defecto(servicio, monkeypatch, capsys):
     monkeypatch.setattr(sys, 'stdin', io.StringIO(CODIGO + '\n'))
     assert main(['--activar-codigo']) == 0
     assert 'Es tu proveedor por defecto' in capsys.readouterr().out
+
+
+def test_un_turno_con_cache_suma_el_coste_con_el_precio_del_modelo_de_detras(servicio, tmp_path, monkeypatch):
+    # El servicio sólo manda tokens; el precio es el de GPT-6 Luna en el catálogo de OpenAI.
+    from alfalfa import catalogo
+    from alfalfa.stdio import Transport
+    from alfalfa.terminal import TerminalManager
+    proveedores.obtener('alfalfa').activar(CODIGO)
+    servicio.respuestas = [(200, {
+        'model': 'gpt-6-luna', 'done': True, 'done_reason': 'stop', 'prompt_eval_count': 10_000,
+        'prompt_eval_cached_count': 8_000, 'eval_count': 200,
+        'message': {'role': 'assistant', 'content': 'Hola desde Alfalfa.'}})]
+    monkeypatch.chdir(tmp_path)
+    m = TerminalManager('Hola', home=tmp_path / 'home', model='alfalfa/gpt-6-luna', effort='low', auto=True,
+                        transport=Transport(io.StringIO()))
+    try:
+        assert asyncio.run(asyncio.wait_for(m.run('Hola'), 60)) == 0, m.task.get('summary')
+        precio = proveedores.obtener('alfalfa').precio('gpt-6-luna')
+        esperado = catalogo.coste(precio, 10_000, 200, 8_000)
+        assert m.task['coste_usd'] == pytest.approx(esperado)
+        assert esperado == pytest.approx((2_000 * 0.10 + 8_000 * 0.01 + 200 * 0.50) / 1e6)
+    finally:
+        m.close()
+
+
+def test_los_tokens_de_cache_del_servicio_pasan_a_los_campos_del_motor():
+    from alfalfa.proveedores.alfalfa import _con_cache
+    valor = {'prompt_eval_count': 9, 'prompt_eval_cached_count': 4, 'prompt_eval_cache_write_count': 2,
+             'prompt_eval_cache_write_1h_count': 1}
+    assert _con_cache(valor)
+    assert (valor['alfalfa_cache'], valor['alfalfa_cache_escritura'], valor['alfalfa_cache_escritura_1h']) == (4, 2, 1)
+    sin = {'prompt_eval_count': 9}
+    assert not _con_cache(sin) and 'alfalfa_cache' not in sin
+    assert not _con_cache({'prompt_eval_cached_count': -3}) and not _con_cache(None)
+
+
+def test_el_precio_es_el_del_modelo_de_detras():
+    a = proveedores.obtener('alfalfa')
+    assert a.precio('gpt-6-luna') == proveedores.obtener('openai').precio('gpt-6-luna')
+    assert a.precio('alfalfa/claude-haiku-5-5') == proveedores.obtener('anthropic').precio('claude-haiku-5-5')
+    assert a.precio('claude-haiku-5-5')['tramo']['desde'] == 100_000
+    assert a.precio('glm-5.3-flash') == {'entrada': 0.15, 'cache_lectura': 0.03, 'salida': 0.50}
+    assert a.precio('un-modelo-del-titular') is None
