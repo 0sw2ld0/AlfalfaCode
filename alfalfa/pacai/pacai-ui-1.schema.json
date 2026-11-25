@@ -87,6 +87,15 @@
         "items": {
          "$ref": "#/$defs/name"
         }
+       },
+       "example": {
+        "description": "Uno o varios nodos pacai.ui/1 que enseñan al modelo a usar el componente.",
+        "type": "array",
+        "items": {
+         "$ref": "#/$defs/node"
+        },
+        "minItems": 1,
+        "maxItems": 4
        }
       },
       "required": [

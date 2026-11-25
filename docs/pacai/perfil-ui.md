@@ -58,7 +58,7 @@ El cliente pide el perfil en `profiles` y describe lo que sabe dibujar en `rende
 | --- | --- |
 | `version` | Versión del perfil. Este borrador es la `"1"`. |
 | `catalog` | `"base"` (los 12 componentes de la sección 4) o `"none"` (solo los de `components`). Por defecto, `"base"`. |
-| `components` | Componentes propios del cliente. Cada uno: `description` (para el modelo), `props` (JSON Schema), `children` (si admite hijos) y `events`. Un nombre propio no puede pisar uno del catálogo base. |
+| `components` | Componentes propios del cliente. Cada uno: `description` (para el modelo), `props` (JSON Schema), `children` (si admite hijos), `events` y, opcional, `example`: de 1 a 4 nodos `pacai.ui/1` que enseñan al modelo a usarlo (enlaces `{"$": …}`, la forma de su `query`…). Un nombre propio no puede pisar uno del catálogo base. |
 | `actions` | Acciones que el cliente sabe ejecutar. Por defecto, las tres. |
 | `limits` | Nodos por pantalla y profundidad máxima. Por defecto, 300 y 12. |
 
@@ -274,6 +274,12 @@ pruebas en `tests/test_pacai_ui.py`.
 11. **Pendiente.** Que el modelo se entere de los nodos rechazados para corregirlos, y cómo se ven las pantallas
     al reanudar una sesión guardada (sin comprobar). En la app de Mac y en VS Code las pantallas de un mensaje
     salen debajo de todo su texto, no entre los párrafos donde las escribió el modelo.
+
+12. **Un ejemplo por componente en el prompt.** `Catalogo.manual()` añade, tras la lista de componentes, un nodo de
+    ejemplo por componente base (`EJEMPLOS_BASE` en `alfalfa/pacai/ui.py`) y el `example` de cada componente propio.
+    Un ejemplo de la app que no pasa su propio esquema no entra. Son unos 600 tokens más de entrada; en el piloto
+    con GPT-6 Luna y Claude Haiku 5.5 (52 tareas, 624 peticiones), las pantallas válidas a la primera pasaron del
+    86–89 % al 97 %. `scripts/muestra_ejemplos_ui.py` repite la medida.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 

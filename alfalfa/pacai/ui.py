@@ -42,6 +42,44 @@ RESUMEN = {
     'Image': 'src (https: o data:image/…), alt',
     'Code': 'code, language',
 }
+# Un ejemplo por componente base para el prompt (los propios traen el suyo en `example`). Son la forma exacta que se
+# copia: enlaces {"$": …} en vez de literales, `options` como objetos, los `kind` de Input y sus eventos. Con ellos,
+# las pantallas válidas a la primera de GPT-6 Luna y Claude Haiku 5.5 subieron del 86–89 % al 97 % (624 peticiones).
+EJEMPLOS_BASE = {
+    'Stack': [{'id': 'fila', 'component': 'Stack', 'props': {'direction': 'horizontal', 'gap': 'small'},
+               'children': ['guardar', 'cancelar']}],
+    'Card': [{'id': 'palta', 'component': 'Card', 'props': {'title': 'Palta', 'meta': 'hoy · fruta', 'tags': ['fruta'],
+                                                            'detail': 'Sube un 3 % esta semana.'},
+              'events': {'press': {'send': 'abrir_producto'}}}],
+    'Text': [{'id': 'nota', 'component': 'Text', 'props': {'text': 'Precios por kilo', 'style': 'caption'}},
+             {'id': 'eleccion', 'component': 'Text', 'props': {'text': {'$': 'moneda'}}}],
+    'Table': [{'id': 'tickets', 'component': 'Table', 'props': {
+        'columns': [{'key': 'id', 'label': 'Id'}, {'key': 'titulo', 'label': 'Título'}],
+        'rows': [{'id': 'T-1', 'titulo': 'Login falla'}]}, 'events': {'row_press': {'send': 'abrir_ticket'}}}],
+    'List': [{'id': 'tareas', 'component': 'List', 'props': {'items': [{'id': 't1', 'title': 'Comprar palta',
+                                                                       'subtitle': 'hoy'}]},
+              'events': {'item_press': {'send': 'ver_tarea'}}}],
+    'Button': [{'id': 'guardar', 'component': 'Button', 'props': {'label': 'Guardar', 'variant': 'primary'},
+                'events': {'press': {'send': 'guardar', 'with': ['nombre']}}},
+               {'id': 'abrir_nota', 'component': 'Button', 'props': {'label': 'Abrir fuente'},
+                'events': {'press': {'open_url': 'https://ejemplo.pe/nota'}}}],
+    'Form': [{'id': 'contacto', 'component': 'Form', 'props': {'submit_label': 'Mandar'},
+              'children': ['correo', 'mensaje'], 'events': {'submit': {'send': 'contacto',
+                                                                       'with': ['correo', 'mensaje']}}}],
+    'Input': [{'id': 'correo', 'component': 'Input', 'props': {'name': 'correo', 'label': 'Correo', 'kind': 'email',
+                                                                'required': True}},
+              {'id': 'mensaje', 'component': 'Input', 'props': {'name': 'mensaje', 'label': 'Mensaje',
+                                                                 'kind': 'multiline'}},
+              {'id': 'cantidad', 'component': 'Input', 'props': {'name': 'cantidad', 'label': 'Cantidad',
+                                                                  'kind': 'number', 'placeholder': 'p. ej. 20'}},
+              {'id': 'fecha', 'component': 'Input', 'props': {'name': 'fecha', 'label': 'Fecha', 'kind': 'date'}}],
+    'Select': [{'id': 'moneda', 'component': 'Select', 'props': {'name': 'moneda', 'label': 'Moneda', 'options': [
+        {'value': 'pen', 'label': 'Soles'}, {'value': 'usd', 'label': 'Dólares'}]}}],
+    'Chart': [{'id': 'ventas', 'component': 'Chart', 'props': {'kind': 'line', 'labels': ['ene', 'feb'],
+                                                               'series': [{'name': 'Palta', 'values': [6.2, 6.4]}]}}],
+    'Image': [{'id': 'foto', 'component': 'Image', 'props': {'src': 'https://ejemplo.pe/palta.png', 'alt': 'Palta'}}],
+    'Code': [{'id': 'codigo', 'component': 'Code', 'props': {'code': 'print("hola")', 'language': 'python'}}],
+}
 CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
 _APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
@@ -198,9 +236,20 @@ class Catalogo:
             errores.append('El cliente no ejecuta las acciones ' + ', '.join(sorted(usadas - self.acciones)) + '.')
         return errores
 
-    def manual(self, web: bool = False) -> str:
+    def ejemplos(self) -> list[dict]:
+        """Los nodos de ejemplo del prompt: los de los componentes base y el `example` de cada componente propio.
+        Un ejemplo que no pasa el catálogo se salta: el prompt nunca enseña una forma que el validador rechaza."""
+        nodos = [n for c in BASE for n in EJEMPLOS_BASE[c]] if self.base else []
+        for spec in self.propios.values():
+            ejemplo = spec.get('example') if isinstance(spec.get('example'), list) else []
+            if ejemplo and not any(self.errores_del_nodo(n) for n in ejemplo):
+                nodos += ejemplo
+        return nodos
+
+    def manual(self, web: bool = False, ejemplos: bool = True) -> str:
         """La parte del prompt de sistema que explica al modelo cómo dibujar en este cliente. Con `web` (el motor le
-        ofrece web_search y read_web), también que busque lo que no sabe antes de dibujarlo."""
+        ofrece web_search y read_web), también que busque lo que no sabe antes de dibujarlo. Con `ejemplos`, un
+        ejemplo por componente (sin él, sólo la lista de props: así se mide la diferencia)."""
         lineas = []
         if self.base:
             lineas += ['- ' + c + ': ' + RESUMEN[c] + ('; hijos' if c in CON_HIJOS else '')
@@ -249,7 +298,14 @@ por nodo:
 - Máximo {self.max_nodos} nodos por pantalla.
 ''' + (BUSCAR_ANTES if web else '') + '''
 Componentes:
-''' + '\n'.join(lineas) + '\n'
+''' + '\n'.join(lineas) + '\n' + (self._bloque_de_ejemplos() if ejemplos else '')
+
+    def _bloque_de_ejemplos(self) -> str:
+        nodos = self.ejemplos()
+        if not nodos:
+            return ''
+        return ('\nEjemplos, un nodo por línea (copia la forma; los ids y los textos son tuyos):\n'
+                + '\n'.join(json.dumps(n, ensure_ascii=False, separators=(',', ':')) for n in nodos) + '\n')
 
 
 def partir(texto: str) -> list[tuple]:

@@ -257,3 +257,42 @@ def test_con_buscador_el_manual_dice_que_busque_antes_de_dibujar():
     c = Cliente(perfiles=('work', 'ui'))
     c.saludar()
     assert 'web_search' in c.t.manual_ui(web=True) and 'web_search' not in c.t.manual_ui()
+
+
+# -- ejemplos por componente en el prompt -----------------------------------------------------------------
+def _cuymercado():
+    import json
+    from pathlib import Path
+    ruta = Path(__file__).with_name('conformidad') / 'catalogo-cuymercado.json'
+    return json.loads(ruta.read_text(encoding='utf-8'))
+
+
+def test_cada_componente_base_trae_un_ejemplo_que_pasa_el_catalogo():
+    from alfalfa.pacai.ui import BASE, EJEMPLOS_BASE
+    cat = Catalogo()
+    assert set(EJEMPLOS_BASE) == set(BASE)
+    for nodo in cat.ejemplos():
+        assert cat.errores_del_nodo(nodo) == [], nodo
+    ejemplos = [n for n in cat.ejemplos()]
+    # Los fallos vistos en el piloto: options como objetos, los kind de Input y leer el estado con {"$": …}.
+    assert all(isinstance(o, dict) for n in ejemplos if n['component'] == 'Select' for o in n['props']['options'])
+    assert {n['props'].get('kind') for n in ejemplos if n['component'] == 'Input'} >= {'email', 'multiline',
+                                                                                        'number', 'date'}
+    assert any(n['props'].get('text') == {'$': 'moneda'} for n in ejemplos if n['component'] == 'Text')
+
+
+def test_el_manual_lleva_los_ejemplos_del_catalogo_y_los_de_la_app():
+    declaracion = _cuymercado()
+    assert errores_de('declaration', declaracion) == []
+    cat = Catalogo.de(declaracion)
+    manual = cat.manual()
+    assert 'Ejemplos, un nodo por línea' in manual
+    assert ('{"id":"filtros","component":"Filters","props":{"period":{"$":"periodo"},"family":{"$":"familia"}}}'
+            in manual)
+    assert '"options":[{"value":"pen","label":"Soles"}' in manual
+    assert 'Ejemplos' not in cat.manual(ejemplos=False)
+    # Un ejemplo de la app que no pasa su propio esquema no entra en el prompt.
+    declaracion['components']['Stat']['example'] = [{'id': 'mal', 'component': 'Stat', 'props': {'label': 'X'}}]
+    assert '"id":"mal"' not in Catalogo.de(declaracion).manual()
+    declaracion['components']['Stat']['example'] = []
+    assert errores_de('declaration', declaracion)               # minItems: 1
