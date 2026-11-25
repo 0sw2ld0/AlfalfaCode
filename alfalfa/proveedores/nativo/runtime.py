@@ -1341,8 +1341,11 @@ class NativeRuntime:
             except (OSError, ValueError) as exc:
                 fallos.append(str(exc))
         if fichas:
-            from ...contenido_externo import registrar
-            registrar(self, 'adjunto')
+            from ...contenido_externo import REFERENCIA_LLUVIA, registrar
+            # El archivo con el que se abre la lluvia de ideas (aún sin `lluvia_referencia`) es la
+            # pregunta del usuario; uno que llegue después es un adjunto más.
+            referencia = tope is not None and 'lluvia_referencia' not in self.task
+            registrar(self, REFERENCIA_LLUVIA if referencia else 'adjunto')
             aviso = adjuntos.aviso_de_coste(fichas)
             if aviso:
                 self.manager.event(self.task, 'system', aviso)

@@ -593,6 +593,87 @@ def test_lluvia_comparte_solo_la_referencia_elegida_con_cada_participante(tmp_pa
 
 
 
+class GuionTrasLeerLaWeb(Guion):
+    """El moderador ya leyó la web antes de invitar (p. ej. una sesión reanudada)."""
+
+    def request(self):
+        base = super().request()
+
+        async def request(rt, client, endpoint, payload, **kwargs):
+            if endpoint != '/api/show' and not rt.task.get('subagente_de'):
+                from alfalfa.contenido_externo import registrar
+                registrar(rt, 'read_web')
+            return await base(rt, client, endpoint, payload, **kwargs)
+        return request
+
+
+def _sala_con_referencia(tmp_path, monkeypatch, guion_cls=Guion):
+    from alfalfa.adjuntos import con_etiquetas
+
+    s = Sesion(tmp_path, monkeypatch, None, respuesta=False)
+    s.m.task['lluvia_limite'] = 2
+    s.m.read_only = True
+    referencia = s.root / 'pregunta.md'
+    referencia.write_text('# Pregunta larga del usuario\n')
+    guion = guion_cls(
+        principal=[llamada('spawn_agent', {'message': 'Propón.'}),
+                   llamada('spawn_agent', {'message': 'Contrasta.'}),
+                   {'role': 'assistant', 'content': 'Síntesis.'}],
+        por_agente={})
+    correr(s, guion, con_etiquetas('Debate esto.', [str(referencia)]))
+    tarjetas = [e for e in s.eventos('permiso') if e.get('motivo') == 'contenido_externo']
+    return s, tarjetas
+
+
+def test_lluvia_con_referencia_invita_sin_pedir_permiso(tmp_path, monkeypatch):
+    s, tarjetas = _sala_con_referencia(tmp_path, monkeypatch)
+    assert tarjetas == []
+    assert s.m.task['lluvia_usados'] == 2 and len(s.m.subagentes.lista()) == 2
+
+
+def test_lluvia_que_leyo_otro_contenido_externo_sigue_pidiendo_permiso(tmp_path, monkeypatch):
+    s, tarjetas = _sala_con_referencia(tmp_path, monkeypatch, GuionTrasLeerLaWeb)
+    assert tarjetas and 'read_web' in tarjetas[0]['justificacion']
+    assert s.m.subagentes.lista() == []  # rechazado: nadie entra en la sala
+
+
+def test_lluvia_un_adjunto_posterior_no_es_la_referencia():
+    from alfalfa import contenido_externo as externo
+
+    task = {'lluvia_limite': 2, 'lluvia_participantes': None}
+    rt = type('Rt', (), {'task': task})()
+    assert externo.turno_de_lluvia(rt, 'spawn_agent', [externo.REFERENCIA_LLUVIA])
+    assert not externo.turno_de_lluvia(rt, 'spawn_agent', [externo.REFERENCIA_LLUVIA, 'adjunto'])
+    assert not externo.turno_de_lluvia(rt, 'spawn_agent', ['adjunto'])
+    assert not externo.turno_de_lluvia(rt, 'close_agent', [externo.REFERENCIA_LLUVIA])
+    # Primero cada participante entra con spawn_agent; send_input aún no es su turno.
+    assert not externo.turno_de_lluvia(rt, 'send_input', [externo.REFERENCIA_LLUVIA])
+    task.update(lluvia_limite=4, lluvia_usados=2)  # segunda ronda: ahora sí
+    assert externo.turno_de_lluvia(rt, 'send_input', [externo.REFERENCIA_LLUVIA])
+    assert not externo.turno_de_lluvia(rt, 'spawn_agent', [externo.REFERENCIA_LLUVIA])
+    task['lluvia_usados'] = 4  # sin turnos: nada
+    assert not externo.turno_de_lluvia(rt, 'send_input', [externo.REFERENCIA_LLUVIA])
+    task['lluvia_usados'] = 0
+    task['subagente_de'] = 'x'
+    assert not externo.turno_de_lluvia(rt, 'spawn_agent', [externo.REFERENCIA_LLUVIA])
+    del task['subagente_de'], task['lluvia_limite']
+    assert not externo.turno_de_lluvia(rt, 'spawn_agent', [externo.REFERENCIA_LLUVIA])
+
+
+def test_sesion_normal_con_adjunto_pide_permiso_para_spawn_agent(tmp_path, monkeypatch):
+    from alfalfa.adjuntos import con_etiquetas
+
+    s = Sesion(tmp_path, monkeypatch, None, respuesta=False)
+    adjunto = s.root / 'nota.md'
+    adjunto.write_text('# Nota\n')
+    guion = Guion(principal=[llamada('spawn_agent', {'message': 'Revisa.', 'description': 'Revisar'}),
+                             {'role': 'assistant', 'content': 'Ok.'}], por_agente={})
+    correr(s, guion, con_etiquetas('Usa un subagente.', [str(adjunto)]))
+    tarjetas = [e for e in s.eventos('permiso') if e.get('motivo') == 'contenido_externo']
+    assert tarjetas and '(adjunto)' in tarjetas[0]['justificacion']
+    assert s.m.subagentes.lista() == []
+
+
 @pytest.mark.parametrize('approved', [True, False])
 def test_prototype_only_offers_images_and_requires_approval(tmp_path, monkeypatch, approved):
     from alfalfa.proveedores.nativo import imagenes

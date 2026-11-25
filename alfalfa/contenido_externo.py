@@ -223,7 +223,10 @@ def secretos(runtime):
 # cada `git status` esperaba al usuario, también en Auto y en Omitir permisos.
 # Su salida sigue llegando al modelo marcada como datos (`externa`).
 CONTAMINAN = frozenset({'read_web', 'web_search', 'app_state', 'buscar_sesiones', 'adjunto',
-                         'delegate_antigravity'})
+                         'delegate_antigravity', 'referencia_lluvia'})
+# El archivo con el que se abre una lluvia de ideas: es la pregunta del usuario. Contamina como
+# cualquier adjunto, salvo para los turnos de participante que reserva el motor (`turno_de_lluvia`).
+REFERENCIA_LLUVIA = 'referencia_lluvia'
 # Un subagente sólo trae contenido externo si él mismo lo leyó.
 SUBAGENTES = frozenset({'spawn_agent', 'wait_agent', 'send_input', 'list_agents'})
 
@@ -512,10 +515,25 @@ def _hay_sandbox(runtime):
             and getattr(runtime, 'process_sandbox', None) is not None)
 
 
+def turno_de_lluvia(runtime, nombre, origenes):
+    """¿Es el turno de participante que el motor deja abrir al moderador de una lluvia de ideas
+    (lluvia.herramienta: spawn_agent o send_input, con modelo, mensaje y número de turnos fijados
+    por lluvia.reservar) y lo único externo que se leyó es el archivo de referencia de la sala?
+    Ese archivo lo eligió el usuario como pregunta: pedir un sí por cada participante sobra. Con
+    cualquier otro origen (otro adjunto, la web, MCP, lo que traiga un participante) se pregunta."""
+    task = getattr(runtime, 'task', None)
+    if not isinstance(task, dict) or not task.get('lluvia_limite') or task.get('subagente_de'):
+        return False
+    if nombre not in ('spawn_agent', 'send_input') or set(origenes) != {REFERENCIA_LLUVIA}:
+        return False
+    from .lluvia import herramienta
+    return herramienta(task) == nombre
+
+
 async def autorizar(runtime, nombre, args):
     """El sí extra tras leer contenido externo, sólo para lo arriesgado (ver `riesgo`)."""
     origenes = contaminada(runtime)
-    if not origenes:
+    if not origenes or turno_de_lluvia(runtime, nombre, origenes):
         return
     raiz = Path(runtime.task['cwd']).resolve() if isinstance(getattr(runtime, 'task', None), dict) \
         and runtime.task.get('cwd') else Path.cwd().resolve()

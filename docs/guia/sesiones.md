@@ -107,7 +107,9 @@ participantes. Cada uno recibe tu pregunta y el texto de los aportes de los dem�
 que todavía no leyó, además del enfoque que le pide el moderador.
 Cada proveedor aplica su cuota o sus cargos. Con «Adjuntar archivo…» puedes
 seleccionar un Markdown o un archivo de texto de hasta 16 KiB. El moderador
-y cada participante reciben el archivo al intervenir por primera vez.
+y cada participante reciben el archivo al intervenir por primera vez. Ese archivo
+es tu pregunta: aunque cuenta como contenido externo, invitar a los participantes
+no pide una aprobación por cada turno. Si la sesión leyó otro contenido externo (otro adjunto, la web, MCP…), sí la pide.
 
 El máximo es de 12 intervenciones en total (6 de forma predeterminada), con
 al menos una por participante disponible. Si el máximo alcanza para dos rondas

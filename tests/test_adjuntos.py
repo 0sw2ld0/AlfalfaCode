@@ -320,3 +320,14 @@ def test_la_cli_adjunta_con_archivo(tmp_path, informe, monkeypatch):
     assert vistos['encargo'] == adjuntos.con_etiquetas('Resume', [str(informe)])
     with pytest.raises(SystemExit):
         terminal.main(['--stdio', '--archivo', os.path.join(tmp_path, 'nada.exe'), 'Resume'])
+
+
+def test_en_la_lluvia_solo_el_primer_adjunto_es_la_referencia(m, tmp_path):
+    m.task['lluvia_limite'] = 2
+    rt = NativeRuntime(m, m.task)
+    (tmp_path / 'pregunta.md').write_text('# Pregunta\n')
+    (tmp_path / 'otro.md').write_text('# Otro\n')
+    rt.user_message(adjuntos.con_etiquetas('Debate', [str(tmp_path / 'pregunta.md')]))
+    assert rt.state[contenido_externo.MOTIVO] == [contenido_externo.REFERENCIA_LLUVIA]
+    rt.user_message(adjuntos.con_etiquetas('Y esto', [str(tmp_path / 'otro.md')]))
+    assert rt.state[contenido_externo.MOTIVO] == [contenido_externo.REFERENCIA_LLUVIA, 'adjunto']
