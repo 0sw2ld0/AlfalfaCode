@@ -104,9 +104,10 @@ function accion(data, resumen) {
 
 function ocupado(si) {
     parar.hidden = !si;
-    // Un tema puede poner su propio texto de espera (`data-trabajando` en <body>).
-    const trabajando = document.body.dataset.trabajando || 'El agente está trabajando…';
-    estado.textContent = si ? trabajando : `Sesión ${sesion?.slice(0, 10) ?? ''}… · perfil ui activo`;
+    // Un tema puede poner sus propios textos en <body>: `data-trabajando` mientras el agente trabaja y `data-listo`
+    // cuando espera (sin él, la sesión, que sirve para depurar la demo).
+    const { trabajando = 'El agente está trabajando…', listo } = document.body.dataset;
+    estado.textContent = si ? trabajando : listo ?? `Sesión ${sesion?.slice(0, 10) ?? ''}… · perfil ui activo`;
     if (!si) for (const { vista } of vistas.values()) vista.liberar();
 }
 
