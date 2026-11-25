@@ -1,2 +1,1 @@
-El agente puede dibujar pantallas en el chat (tarjetas, tablas, listas, formularios y gráficos) cuando ayudan a responder, también en la extensión de VS Code.
-La lluvia de ideas da un turno a cada participante antes de cerrar y termina con una síntesis aunque no se pueda invitar a todos.
+Con un código de Alfalfa, el coste estimado de cada turno se calcula con los tokens de caché y el precio del modelo que hay detrás.
