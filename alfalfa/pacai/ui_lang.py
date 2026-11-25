@@ -15,13 +15,14 @@ Una línea por nodo, en DFS desde `root`:
 - Herencia: el catálogo declara `inherit` (`{"period": "periodo"}`) y el motor pone `{"$": "periodo"}` si la prop
   falta. Un valor explícito prevalece.
 
-Cambios (bloque con `rev=N`, la revisión que el motor le dio al modelo), aplicados enteros o nada:
+Cambios (versión 2: bloque con `rev=N`, la revisión que el motor le dio al modelo), aplicados enteros o nada. Sin
+operadores, como el JSON de hoy: cada línea es el nodo entero.
 
-    ~id ["pos"] clave=valor …   cambia props y conserva los hijos
-    ~id … +> a,b                 añade hijos al final (uno que ya estaba se ignora con un aviso)
-    ~id … > a,b,c                exige la lista completa de hijos actuales no borrados (sirve para reordenar)
-    -id                          borra el nodo (no si tiene más de un padre) y lo que sólo colgaba de él
-    id Comp …                    alta de un nodo nuevo
+    id Comp …                    alta si el id es nuevo; si ya existe, lo sustituye (con todos sus hijos tras >)
+    -id                          borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él
+
+Un hijo que la línea del padre deja fuera también se va. Una línea idéntica a lo que ya hay se ignora, y en el
+reintento de un alta la línea de un id que ya existe lo sustituye: reparaciones que nunca cambian lo pedido.
 
 Streaming (`Flujo`): se parsea sólo la línea completa; cada una se valida al llegar y se publica en cuanto ella y
 sus ancestros hasta `root` existen. Por contenedor se publica sólo el prefijo contiguo de hijos llegados, así que
@@ -346,9 +347,13 @@ class Flujo:
             if leida.tipo != 'alta':
                 raise ErrorDeLinea('En un alta completa sólo van líneas de nodo (los cambios llevan rev=N).',
                                    leida.ident)
-            if leida.ident in self.nodos:
-                raise ErrorDeLinea('Ese id ya está definido.', leida.ident)
             nodo = nodo_de(leida, self.catalogo, self.tabla)
+            if leida.ident in self.nodos:
+                if self.nodos[leida.ident] == nodo:
+                    return []                      # la misma línea otra vez: no cambia nada
+                if not self.reintentado:
+                    raise ErrorDeLinea('Ese id ya está definido con otro contenido.', leida.ident)
+                self.publicado.pop(leida.ident, None)   # en el reintento, un id que ya existe se sustituye
         except ErrorDeLinea as exc:
             self.diagnosticos.append(Diagnostico(self.n, exc.ident, exc.motivo))
             return []
@@ -435,7 +440,8 @@ class Flujo:
                 + '\n'.join('- ' + d.texto() for d in diagnosticos))
 
     def reintentar(self, texto: str) -> tuple[list[dict], list[Diagnostico]]:
-        """Las líneas que manda el modelo tras `peticion`. Una sola vez; no sustituye nodos que ya valían."""
+        """Las líneas que manda el modelo tras `peticion`, una sola vez. Una línea idéntica a una que ya valía se
+        ignora y la de un id que ya existe lo sustituye: el modelo suele reenviar el bloque entero."""
         if self.reintentado:
             raise RuntimeError('Sólo se pide una vez.')
         self.reintentado = True
@@ -471,98 +477,58 @@ def _padres(nodos: dict[str, dict]) -> dict[str, list[str]]:
 
 def aplicar_cambio(nodos: dict[str, dict], texto: str, catalogo: Catalogo,
                    tabla: dict[str, Ficha] | None = None) -> tuple[Cambio | None, list[Diagnostico]]:
-    """Un bloque de cambios contra la pantalla `nodos`. Entero o nada: con un solo diagnóstico, None y la pantalla
-    se queda como estaba. La revisión la compara quien llama (`Vistas`)."""
+    """Un bloque de cambios contra la pantalla `nodos` (versión 2, sin operadores). Entero o nada: con un solo
+    diagnóstico, None y la pantalla se queda como estaba. La revisión la compara quien llama (`Vistas`).
+
+    - Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye (con su herencia).
+    - `-id` borra el nodo y lo quita de los hijos de sus padres; lo que sólo colgaba de él también se va.
+    - Un hijo que el padre reescrito deja fuera de su lista deja de dibujarse y se borra.
+    - Reparaciones que no cambian lo pedido: una línea idéntica a lo que ya hay (o repetida igual en el bloque) se
+      ignora. Dos líneas distintas del mismo id sí son un error: no se adivina cuál quería."""
     tabla = tabla if tabla is not None else fichas(catalogo)
     diagnosticos: list[Diagnostico] = []
-    lineas: list[tuple[int, Linea]] = []
-    for n, linea in enumerate((x for x in texto.splitlines() if x.strip()), 1):
+    escritos: dict[str, dict] = {}
+    bajas: list[tuple[int, str]] = []
+    for n, texto_linea in enumerate((x for x in texto.splitlines() if x.strip()), 1):
         try:
-            lineas.append((n, leer_linea(linea)))
+            linea = leer_linea(texto_linea)
+            if linea.tipo == 'cambio':
+                raise ErrorDeLinea('Un cambio es la línea entera del nodo («id Comp …», con todos sus hijos tras >), '
+                                   'sin ~ ni +>.', linea.ident)
+            if linea.tipo == 'baja':
+                bajas.append((n, linea.ident))
+                continue
+            nodo = nodo_de(linea, catalogo, tabla)
         except ErrorDeLinea as exc:
             diagnosticos.append(Diagnostico(n, exc.ident, exc.motivo))
+            continue
+        if linea.ident in escritos and escritos[linea.ident] != nodo:
+            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} va dos veces con contenido distinto.'))
+            continue
+        escritos[linea.ident] = nodo
     nuevos = copy.deepcopy(nodos)
-    padres = _padres(nodos)
-    altas: dict[str, dict] = {}
     tocados: set[str] = set()
     borrados: list[str] = []
-    avisos: list[str] = []
-    vistos: set[str] = set()
-    for n, linea in lineas:
-        if linea.ident in vistos and linea.tipo != 'alta':
-            diagnosticos.append(Diagnostico(n, linea.ident, 'Un mismo id sólo cambia una vez por bloque.'))
-        vistos.add(linea.ident)
-    # Bajas primero: `>` se valida sin depender del orden de las líneas.
-    for n, linea in (x for x in lineas if x[1].tipo == 'baja'):
-        if linea.ident not in nodos:
-            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} no está en la pantalla.'))
-        elif linea.ident == 'root':
+    for ident, nodo in escritos.items():
+        if nodos.get(ident) != nodo:
+            nuevos[ident] = copy.deepcopy(nodo)
+            tocados.add(ident)
+    for n, ident in bajas:
+        if ident == 'root':
             diagnosticos.append(Diagnostico(n, 'root', 'root no se borra.'))
-        elif len(padres.get(linea.ident, [])) > 1:
-            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} tiene más de un padre: '
-                                            + ', '.join(padres[linea.ident]) + '.'))
+        elif ident in escritos:
+            diagnosticos.append(Diagnostico(n, ident, f'{ident} se borra y se escribe en el mismo bloque.'))
+        elif ident not in nodos:
+            diagnosticos.append(Diagnostico(n, ident, f'{ident} no está en la pantalla.'))
         else:
-            nuevos.pop(linea.ident, None)
-            borrados.append(linea.ident)
-            for padre in padres.get(linea.ident, []):
-                if padre in nuevos:
-                    nuevos[padre]['children'] = [h for h in nuevos[padre]['children'] if h != linea.ident]
+            nuevos.pop(ident, None)
+            borrados.append(ident)
+            for padre, nodo in nuevos.items():
+                if ident in nodo.get('children', []):
+                    nodo['children'] = [h for h in nodo['children'] if h != ident]
                     tocados.add(padre)
-    for n, linea in (x for x in lineas if x[1].tipo == 'alta'):
-        if linea.ident in nodos or linea.ident in altas:
-            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} ya existe: cámbialo con ~{linea.ident}.'))
-            continue
-        try:
-            altas[linea.ident] = nodo_de(linea, catalogo, tabla)
-        except ErrorDeLinea as exc:
-            diagnosticos.append(Diagnostico(n, exc.ident, exc.motivo))
-    nuevos.update(copy.deepcopy(altas))
-    for n, linea in (x for x in lineas if x[1].tipo == 'cambio'):
-        nodo = nuevos.get(linea.ident)
-        if nodo is None or linea.ident in altas:
-            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} no está en la pantalla.'))
-            continue
-        ficha = tabla.get(nodo['component'])
-        try:
-            if ficha is None:
-                raise ErrorDeLinea(f'{nodo["component"]} no está en el catálogo.', linea.ident)
-            props = _props_con_posicional(linea, ficha)
-            if linea.eventos:
-                fuera = set(linea.eventos) - set(ficha.eventos)
-                if fuera:
-                    raise ErrorDeLinea(f'{ficha.componente} no tiene el evento ' + ', '.join(sorted(fuera)) + '.',
-                                       linea.ident)
-                nodo['events'] = {**nodo.get('events', {}), **linea.eventos}
-            if props:
-                nodo['props'] = {**nodo.get('props', {}), **props}
-            if linea.operador and not ficha.hijos:
-                raise ErrorDeLinea(f'{ficha.componente} no admite hijos.', linea.ident)
-            actuales = list(nodo.get('children', []))
-            if linea.operador == '+>':
-                for hijo in linea.hijos:
-                    if hijo in actuales:
-                        avisos.append(f'{hijo} ya era hijo de {linea.ident}.')
-                    else:
-                        actuales.append(hijo)
-                nodo['children'] = actuales
-            elif linea.operador == '>':
-                faltan = [h for h in actuales if h not in linea.hijos]
-                sobran = [h for h in linea.hijos if h not in actuales and h not in altas]
-                if faltan:
-                    raise ErrorDeLinea('> exige todos los hijos actuales; falta ' + ', '.join(faltan)
-                                       + ' (para añadir usa +>, para quitar -id).', linea.ident)
-                if sobran:
-                    raise ErrorDeLinea('> nombra hijos que no existen: ' + ', '.join(sobran) + '.', linea.ident)
-                nodo['children'] = list(linea.hijos)
-            _validar(nodo, catalogo, linea.ident)
-        except ErrorDeLinea as exc:
-            diagnosticos.append(Diagnostico(n, exc.ident, exc.motivo))
-            continue
-        tocados.add(linea.ident)
-    # Referencias, alcanzables y piezas, sobre la pantalla resultante.
-    for ident in sorted(tocados | set(altas)):
-        nodo = nuevos.get(ident)
-        for hijo in (nodo or {}).get('children', []):
+    for ident in sorted(tocados):
+        for hijo in nuevos.get(ident, {}).get('children', []):
             if hijo not in nuevos:
                 diagnosticos.append(Diagnostico(None, ident, f'{hijo} no existe (hijo de {ident}).'))
     alcanzables: set[str] = set()
@@ -576,21 +542,22 @@ def aplicar_cambio(nodos: dict[str, dict], texto: str, catalogo: Catalogo,
     for ident in list(nuevos):
         if ident in alcanzables:
             continue
-        if ident in altas:
-            diagnosticos.append(Diagnostico(None, ident, f'{ident} no cuelga de ningún nodo: añádelo con +>.'))
-        elif ident in nodos and ident not in alcanzables and _alcanzable(nodos, ident):
-            del nuevos[ident]                      # colgaba sólo de algo que se borró
+        if ident in escritos and ident not in nodos:
+            diagnosticos.append(Diagnostico(None, ident, f'{ident} no cuelga de ningún nodo: ponlo en los hijos de '
+                                            'su padre (reescribe la línea del padre).'))
+        else:
+            del nuevos[ident]                      # dejó de colgar de la pantalla
             borrados.append(ident)
     if catalogo.piezas:
         for ident, motivo in piezas.errores_del_arbol(nuevos, catalogo.consultas):
-            if ident in tocados or ident in altas:
+            if ident in tocados:
                 diagnosticos.append(Diagnostico(None, ident, motivo))
     if len(nuevos) > catalogo.max_nodos:
         diagnosticos.append(Diagnostico(None, None, f'La pantalla pasaría de {catalogo.max_nodos} nodos.'))
     if diagnosticos:
         return None, diagnosticos
-    orden = [i for i in nuevos if i in tocados or i in altas]
-    return Cambio(nuevos, [nuevos[i] for i in orden if i not in borrados], borrados, avisos), []
+    actualizados = [nuevos[i] for i in nuevos if i in tocados and i not in borrados]
+    return Cambio(nuevos, actualizados, [i for i in borrados if i in nodos], []), []
 
 
 def _alcanzable(nodos: dict[str, dict], objetivo: str) -> bool:
@@ -616,7 +583,7 @@ def _escribir(valor: Any) -> str:
     return json.dumps(valor, ensure_ascii=False, separators=(',', ':'))
 
 
-def a_lang(nodos: list[dict], catalogo: Catalogo, tabla: dict[str, Ficha] | None = None) -> str:
+def a_lang(nodos: list[dict], catalogo: Catalogo | None, tabla: dict[str, Ficha] | None = None) -> str:
     """Los nodos escritos en PACAI UI Lang (en el orden dado), quitando lo que el motor hereda. Para medir y para
     las pruebas de ida y vuelta: `traducir(a_lang(n)) == n`."""
     tabla = tabla if tabla is not None else fichas(catalogo)
@@ -640,19 +607,9 @@ def a_lang(nodos: list[dict], catalogo: Catalogo, tabla: dict[str, Ficha] | None
 
 
 def resumen(nodos: dict[str, dict], rev: int, tabla: dict[str, Ficha]) -> str:
-    """Lo que el modelo necesita para escribir un cambio sin que se le reenvíe la pantalla: la revisión y, por nodo,
-    id, componente, posicional y la lista completa de hijos (nunca truncada). Sin queries ni el resto de props."""
-    lineas = [f'rev={rev}']
-    for ident, nodo in nodos.items():
-        ficha = tabla.get(nodo['component'])
-        partes = [ident, nodo['component']]
-        pos = (nodo.get('props') or {}).get(ficha.posicional) if ficha and ficha.posicional else None
-        if isinstance(pos, str):
-            partes.append(json.dumps(pos, ensure_ascii=False))
-        if nodo.get('children'):
-            partes.append('> ' + ','.join(nodo['children']))
-        lineas.append(' '.join(partes))
-    return '\n'.join(lineas)
+    """Lo que el modelo necesita para escribir un cambio: la revisión y la línea entera de cada nodo, en PACAI UI Lang
+    (sin lo que el motor hereda). En la versión 2 un cambio reescribe líneas enteras, así que las ve completas."""
+    return f'rev={rev}\n' + a_lang(list(nodos.values()), None, tabla)
 
 
 # -- prompt --------------------------------------------------------------------------------------------------------
@@ -683,9 +640,10 @@ def prompt(catalogo: Catalogo, tabla: dict[str, Ficha] | None = None, ancho: int
         piezas_lineas.append(texto)
     cola = [
         f'Cambio: bloque ```{VALLA_LANG} view=nombre rev=N, con la rev de la pantalla que ves (no la siguiente). '
-        '~id ["pos"] clave=valor … cambia props y conserva hijos; altas con líneas normales.',
-        '+> ids añade hijos al final; -id borra; > ids exige TODOS los hijos actuales (sólo para reordenar).',
-        'Ejemplo: ~panel "Nuevo título" +> nota  /  nota Text "Hecho" style=caption. Si se te piden líneas, '
+        'Escribe entera la línea de cada nodo que cambia, con todos sus hijos tras >, y las de los nodos nuevos.',
+        '-id borra un nodo y lo quita de su padre; un hijo que dejas fuera de la lista de su padre también se va. '
+        'Sin ~ ni +>.',
+        'Ejemplo: panel Card "Nuevo título" > nota,extra  /  extra Text "Hecho" style=caption. Si se te piden líneas, '
         'devuelve sólo esas.',
     ]
     # Los componentes se agrupan en líneas de `ancho` caracteres; si no caben en el máximo, las líneas se alargan.

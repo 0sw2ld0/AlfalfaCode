@@ -37,7 +37,7 @@ TABLERO_JSON = '''{"id":"root","component":"Stack","props":{"direction":"vertica
 {"id":"bajo_top","component":"PriceBars","props":{"period":{"$":"periodo"},"family":{"$":"familia"},"query":{"tipo":"productos","orden":"baja","limite":6}}}
 {"id":"fuente","component":"Text","props":{"style":"caption","text":"Fuente: MIDAGRI · Gran Mercado Mayorista de Lima."}}'''  # noqa: E501
 
-PATCH = '''~p_bajo "Bajas e historial" +> bajo_hist
+PATCH = '''p_bajo Panel "Bajas e historial" > bajo_top,bajo_hist
 bajo_hist PriceLines query={"tipo":"historial","productos":["palta","limon"]}'''
 
 
@@ -175,13 +175,21 @@ def test_un_hijo_que_falla_retiene_a_sus_hermanos_y_se_pide_una_vez():
     nodos, diagnosticos = flujo.cerrar()
     assert [d.ident for d in diagnosticos] == ['c_subieron']
     assert 'c_subieron' in flujo.peticion(diagnosticos)
-    nodos, diagnosticos = flujo.reintentar(
-        'c_subieron Stat "Subieron" icon=subio query={"tipo":"totales","campo":"subieron"}\n'
-        'root Stack > otra')                                   # no sustituye lo que ya valía
-    assert [n['id'] for n in nodos] == [n['id'] for n in ui_lang.traducir(TABLERO, catalogo())[0]]
-    assert any('ya está definido' in d.motivo for d in diagnosticos)
+    # El modelo suele reenviar el bloque entero: las líneas idénticas se ignoran y la corregida entra.
+    reenvio = TABLERO.replace('icon=bajo', 'icon=bajo')
+    nodos, diagnosticos = flujo.reintentar(reenvio)
+    assert diagnosticos == [] and nodos == ui_lang.traducir(TABLERO, catalogo())[0]
     with pytest.raises(RuntimeError):
         flujo.reintentar('x Text "y"')
+
+
+def test_en_el_reintento_un_id_que_ya_existe_se_sustituye_y_en_el_alta_no():
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('root Stack > a,b\na Text "A"\na Text "A"\na Text "otra"\n')   # repetida igual: se ignora
+    nodos, diagnosticos = flujo.cerrar()
+    assert [d.motivo for d in diagnosticos if d.ident == 'a'] == ['Ese id ya está definido con otro contenido.']
+    nodos, diagnosticos = flujo.reintentar('a Text "A2"\nb Text "B"')
+    assert diagnosticos == [] and [n['props']['text'] for n in nodos[1:]] == ['A2', 'B']
 
 
 def test_al_cerrar_se_piden_los_hijos_que_no_llegaron_y_los_sueltos():
@@ -210,35 +218,43 @@ def test_un_patch_con_un_fallo_no_cambia_nada():
 
 
 @pytest.mark.parametrize('texto, motivo', [
-    ('~root > filtros,cifras,fuente', 'falta p_bajo'),
-    ('~root > filtros,cifras,p_bajo,fuente,nada', 'no existen'),
+    ('root Stack > filtros,cifras,p_bajo,fuente,nada', 'nada no existe'),
     ('-root', 'no se borra'),
     ('-nada', 'no está en la pantalla'),
-    ('fuente Text "otra"', 'ya existe'),
     ('nuevo Text "suelto"', 'no cuelga de ningún nodo'),
-    ('~c_subieron "A"\n~c_subieron icon=bajo', 'sólo cambia una vez'),
-    ('~cifras +> fantasma', 'fantasma no existe'),
-    ('~fuente +> x\nx Text "x"', 'no admite hijos'),
+    ('fuente Text "A"\nfuente Text "B"', 'dos veces con contenido distinto'),
+    ('-fuente\nfuente Text "otra"', 'se borra y se escribe'),
+    ('~p_bajo "Otro"', 'sin ~ ni +>'),
+    ('fuente Text "x" > hijo', 'no admite hijos'),
 ])
 def test_cambios_que_se_rechazan(texto, motivo):
     cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), texto, catalogo())
     assert cambio is None and any(motivo in d.motivo for d in diagnosticos), [d.texto() for d in diagnosticos]
 
 
-def test_reordenar_borrar_y_anadir_dos_veces():
-    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), '~root > fuente,cifras,filtros\n-p_bajo', catalogo())
+def test_reescribir_la_linea_reordena_sustituye_y_borra():
+    texto = 'root Stack direction=vertical gap=medium > fuente,cifras,filtros,p_bajo\n-p_bajo'
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), texto, catalogo())
     assert diagnosticos == []
-    assert cambio.nodos['root']['children'] == ['fuente', 'cifras', 'filtros']
-    assert set(cambio.borrados) == {'p_bajo', 'bajo_top'}           # bajo_top sólo colgaba de p_bajo
-    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), '~cifras +> c_subieron', catalogo())
-    assert diagnosticos == [] and cambio.avisos and cambio.nodos['cifras']['children'] == ['c_subieron', 'c_bajaron']
+    assert cambio.nodos['root']['children'] == ['fuente', 'cifras', 'filtros']     # -id lo quita de su padre
+    assert set(cambio.borrados) == {'p_bajo', 'bajo_top'}                          # y lo que sólo colgaba de él
+    # Un hijo que el padre deja fuera se va; una línea idéntica a lo que hay no cuenta como cambio.
+    texto = 'cifras Grid columns=4 > c_subieron\nfiltros Filters'
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), texto, catalogo())
+    assert diagnosticos == [] and cambio.borrados == ['c_bajaron']
+    assert [n['id'] for n in cambio.actualizados] == ['cifras']
+    # Sustituir es entero: lo que no se escribe se pierde (salvo la herencia, que el motor vuelve a poner).
+    cambio, _ = ui_lang.aplicar_cambio(tablero(), 'c_subieron Stat "Suben" query={"tipo":"totales","campo":"subieron"}',
+                                       catalogo())
+    assert cambio.nodos['c_subieron']['props'] == {'label': 'Suben', 'query': {'tipo': 'totales', 'campo': 'subieron'},
+                                                   'period': {'$': 'periodo'}, 'family': {'$': 'familia'}}
 
 
-def test_no_se_borra_un_nodo_con_dos_padres():
+def test_borrar_un_nodo_con_dos_padres_lo_quita_de_los_dos():
     nodos = tablero()
     nodos['cifras']['children'].append('fuente')
-    _, diagnosticos = ui_lang.aplicar_cambio(nodos, '-fuente', catalogo())
-    assert 'más de un padre' in diagnosticos[0].motivo
+    cambio, diagnosticos = ui_lang.aplicar_cambio(nodos, '-fuente', catalogo())
+    assert diagnosticos == [] and 'fuente' not in cambio.nodos['cifras']['children'] + cambio.nodos['root']['children']
 
 
 def test_vistas_aplica_alta_y_cambio_contra_la_revision():
@@ -252,7 +268,8 @@ def test_vistas_aplica_alta_y_cambio_contra_la_revision():
     assert errores == [] and data['op'] == 'patch' and data['rev'] == 2 and errores_de('update', data) == []
     resumen = vistas.resumen_lang('tablero')
     assert resumen.splitlines()[0] == 'rev=2' and 'p_bajo Panel "Bajas e historial" > bajo_top,bajo_hist' in resumen
-    assert 'query' not in resumen
+    assert 'bajo_hist PriceLines query={"tipo":"historial","productos":["palta","limon"]}' in resumen
+    assert 'period' not in resumen                                   # lo heredado no se repite
     sin_flag = Vistas(Catalogo.de(DECLARACION, {}))
     assert sin_flag.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())[0] is None
 

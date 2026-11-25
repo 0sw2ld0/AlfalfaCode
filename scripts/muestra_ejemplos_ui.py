@@ -29,12 +29,18 @@ sys.path.insert(0, str(RAIZ))
 
 import httpx  # noqa: E402
 
+from alfalfa.pacai import ui_lang  # noqa: E402
 from alfalfa.pacai.ui import Catalogo, Vistas, ascii_de  # noqa: E402
 
 DECLARACION = json.loads((RAIZ / 'tests' / 'conformidad' / 'catalogo-cuymercado.json').read_text(encoding='utf-8'))
-CAT = Catalogo.de(DECLARACION)
+CAT = Catalogo.de(DECLARACION, {})
+# PACAI UI Lang 2 (rama claude/pacai-ui-lang): el mismo catálogo sin las piezas declarativas, para enseñarle al modelo
+# lo mismo que al JSON. `positional` e `inherit` sí, que son parte del formato.
+CAT_LANG = Catalogo.de({k: v for k, v in DECLARACION.items() if k not in ('pieces', 'queries')},
+                       {'ALFALFA_PACAI_UI_LANG': '1'})
 MODELOS = ('claude-haiku-5-5', 'gpt-6-luna')
-BRAZOS = ('json', 'json_ej', 'a2ui_ej')
+BRAZOS = ('json', 'json_ej', 'a2ui_ej', 'lang2')
+VALLAS = {'json': 'pacai-ui', 'json_ej': 'pacai-ui', 'a2ui_ej': 'a2ui', 'lang2': 'pacai-ui-lang'}
 MAX_SALIDA = 1500
 CIERRE = '\nResponde sólo con el bloque de la pantalla, sin texto antes ni después, sin herramientas ni comentarios.'
 B = {'period': {'$': 'periodo'}, 'family': {'$': 'familia'}}
@@ -129,7 +135,15 @@ def mapa_de_a2ui(lineas, base=None):
     return mapa
 
 
+def _vistas_lang():
+    vistas = Vistas(CAT_LANG)
+    vistas.aplicar({'view': 'tablero', 'lang': True}, ui_lang.a_lang(TABLERO, CAT_LANG).splitlines())
+    return vistas
+
+
 def sistema(brazo: str) -> str:
+    if brazo == 'lang2':
+        return CAT_LANG.manual() + CIERRE
     if brazo == 'json':
         return CAT.manual(ejemplos=False) + CIERRE
     if brazo == 'json_ej':
@@ -407,12 +421,15 @@ def mensaje_de_tarea(brazo, tarea) -> str:
     _, tipo, texto, _ = tarea
     if tipo == 'alta':
         return texto
+    if brazo == 'lang2':
+        return ('Pantalla actual (view=tablero), con su revisión:\n' + _vistas_lang().resumen_lang('tablero')
+                + '\n\nCambio que pide el usuario: ' + texto)
     pantalla = tablero_a2ui() if brazo == 'a2ui_ej' else '\n'.join(_compacto(n) for n in TABLERO)
     return 'Pantalla actual (view=tablero), lo que mandaste:\n' + pantalla + '\n\nCambio que pide el usuario: ' + texto
 
 
 # -- validación -------------------------------------------------------------------------------------------------
-_VALLA = re.compile(r'^\s*```(pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
+_VALLA = re.compile(r'^\s*```(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
 
 
 def bloque(texto):
@@ -448,9 +465,23 @@ def validar(brazo, tarea, texto):
     if attrs is None:
         return False, False, ['No hay bloque de pantalla.']
     errores = []
-    if attrs['valla'] != ('a2ui' if brazo == 'a2ui_ej' else 'pacai-ui'):
+    if attrs['valla'] != VALLAS[brazo]:
         errores.append('Valla equivocada.')
-    if brazo == 'a2ui_ej':
+    if brazo == 'lang2':
+        attrs_lang = {k: v for k, v in attrs.items() if k != 'valla'} | {'lang': True}
+        if tipo == 'cambio':
+            vistas = _vistas_lang()
+            if 'rev' not in attrs_lang:
+                errores.append('El cambio no lleva rev=N.')
+        else:
+            vistas = Vistas(CAT_LANG)
+        data, fallos = vistas.aplicar(attrs_lang, lineas)
+        errores += fallos
+        vista = vistas.vistas.get(attrs_lang.get('view', 'tablero' if tipo == 'cambio' else ''))
+        mapa = _vivos(dict(vista.nodos) if vista else {})
+        if data is None and not fallos:
+            errores.append('El bloque no cambió nada.')
+    elif brazo == 'a2ui_ej':
         try:
             base = mapa_de_a2ui(tablero_a2ui().splitlines()) if tipo == 'cambio' else None
             mapa = _vivos(mapa_de_a2ui(lineas, base))

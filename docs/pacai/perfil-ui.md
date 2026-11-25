@@ -343,16 +343,21 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   JSON compacto; una palabra suelta es un enum; `$clave` es `{"$": "clave"}`; `@evento={…}` lleva sus acciones.
 - **Herencia:** un componente propio declara `inherit` (`{"period": "periodo"}`) y el motor pone el enlace si la prop
   falta. Un valor explícito gana. Un default sólo se rellena si el esquema de la prop lo declara.
-- **Cambios:** la valla lleva `rev=N`, la revisión que el motor le enseña al modelo. `~id` cambia props y conserva
-  los hijos, `+>` añade al final, `-id` borra (no si tiene más de un padre) y `>` exige la lista completa de hijos
-  actuales. Todo el bloque se aplica o nada. El modelo ve la pantalla como un resumen (`Vistas.resumen_lang`: ids,
-  componentes, posicionales y listas de hijos completas, sin queries).
+- **Cambios (versión 2, sin operadores):** la valla lleva `rev=N`, la revisión que el motor le enseña al modelo.
+  Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye (con todos sus hijos tras
+  `>`). `-id` borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él; un hijo que la línea del
+  padre deja fuera también se va. Todo el bloque se aplica o nada. El modelo ve la pantalla con sus líneas enteras
+  (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`, `>` con la lista completa) se quitó: en el piloto, los cambios
+  eran donde más fallaba.
+- **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, y en el reintento de un alta la línea
+  de un id que ya existe lo sustituye. Nunca cambian lo que se pidió.
 - **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
   existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
   mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor
   entrega el texto del modelo por mensajes enteros (y el servicio Alfalfa tampoco lo trocea), así que en la práctica
   las publicaciones salen juntas al cerrar el mensaje.
-- **Prompt:** `ui_lang.prompt` lo genera del catálogo, con 15 líneas como mucho.
+- **Prompt:** `ui_lang.prompt` lo genera del catálogo, con 15 líneas como mucho, y detrás van los ejemplos de cada
+  componente (`Catalogo.ejemplos()`, los mismos que el prompt JSON) escritos en la sintaxis compacta.
 
 **Piezas declarativas** (`alfalfa/pacai/piezas.py`, y en la web la opción `piezas` de `Vista`). Sólo con el flag y si
 el cliente declara `"pieces": true` en `render.ui`:
