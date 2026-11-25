@@ -72,7 +72,263 @@ FORMATO_JR = '''Pantallas en el chat: escribe cada pantalla en un bloque ```json
   una por línea: {"op":"replace","path":"/elements/x/props/title","value":"…"}, {"op":"add","path":"/elements/x/children/-","value":"y"},
   {"op":"add","path":"/elements/y","value":{…}}, {"op":"remove","path":"/elements/y"}.
 - Input y Select guardan solos lo que escribe el usuario en la clave de su name.'''  # noqa: E501
-VALLAS = {'json': 'pacai-ui', 'lang': 'pacai-ui-lang', 'a2ui': 'a2ui', 'jsonrender': 'json-render'}
+VALLAS = {'json': 'pacai-ui', 'lang': 'pacai-ui-lang', 'a2ui': 'a2ui', 'jsonrender': 'json-render', 'openui': 'openui'}
+
+# -- OpenUI Lang (https://www.openui.com/docs/openui-lang): `id = Comp(args)` con argumentos posicionales ------------
+# El orden de los argumentos es el de las props del esquema; los hijos van detrás de las props, luego `si` y, en los
+# componentes con eventos, `events` al final (adaptación nuestra: un objeto {press: {send: "x", with: ["k"]}} con
+# las acciones de PACAI, en vez de @ToAssistant/@Set/@OpenUrl). `null` salta un opcional.
+FIRMAS_BASE = {
+    'Stack': ['direction', 'gap'], 'Card': ['title', 'subtitle', 'meta', 'tags', 'detail', 'image'],
+    'Text': ['text', 'style', 'value', 'rojo'], 'Table': ['columns', 'rows'], 'List': ['items'],
+    'Button': ['label', 'variant', 'disabled'], 'Form': ['submit_label'],
+    'Input': ['name', 'label', 'kind', 'placeholder', 'required', 'min', 'max', 'step'],
+    'Select': ['name', 'label', 'options', 'multiple', 'required'], 'Chart': ['kind', 'labels', 'series'],
+    'Image': ['src', 'alt'], 'Code': ['code', 'language'],
+    'Calc': ['name', 'preset', 'compra', 'venta', 'cantidad'], 'Data': ['name', 'query'],
+}
+
+
+def firmas():
+    """Componente → (props en orden, admite hijos, eventos)."""
+    from alfalfa.pacai.ui import CON_HIJOS, EVENTOS
+    salida = {c: (props, c in CON_HIJOS or c == 'Data', EVENTOS.get(c, [])) for c, props in FIRMAS_BASE.items()}
+    for nombre, spec in DECLARACION['components'].items():
+        salida[nombre] = (list(spec['props'].get('properties', {})), bool(spec.get('children')), spec.get('events', []))
+    return salida
+
+
+FIRMAS = firmas()
+
+
+def _firma_texto(comp):
+    props, hijos, eventos = FIRMAS[comp]
+    orden = props + (['children'] if hijos else []) + ['si'] + (['events'] if eventos else [])
+    return comp + '(' + ', '.join(orden) + ')'
+
+
+FORMATO_OPENUI = '''Pantallas en el chat: escribe cada pantalla en un bloque ```openui view=<view> en OpenUI Lang, una sentencia por línea:
+root = Stack("vertical", "medium", [titulo, enviar])
+titulo = Text("3 tickets", "title")
+enviar = Button("Crear", "primary", null, null, {press: {send: "crear_ticket"}})
+- id = Componente(argumentos): los argumentos son POSICIONALES, en el orden de la firma de abajo; null salta un
+  opcional y los opcionales del final se omiten. La raíz se llama root y puedes nombrar nodos que defines más abajo.
+- Valores: "texto", números, true/false, listas [..], objetos {clave: valor} (query va así), $clave lee el estado
+  ($m.pct una salida de Calc o Data). children es una lista de ids. si es {"$": "vista", "es": "detalle"}.
+- events (sólo donde la firma lo pone) es {press: {send: "nombre", with: ["clave"]}}; change sólo admite set.
+- Cambio de una pantalla que ya existe: reescribe enteras las sentencias de los nodos que cambian y las de los nuevos;
+  para quitar un nodo, sácalo de los children de su padre.
+- Input y Select guardan solos lo que escribe el usuario en la clave de su name.
+Firmas:
+'''  # noqa: E501
+
+
+def _piezas_openui():
+    return '''Piezas: name crea estado y $name lo lee; Data publica slots tipados que sólo se leen en su subárbol.
+m = Calc("m", "margen", $compra, $venta, $cantidad) publica m.pct (fracción), m.u y m.total (dinero) y m.perdida.
+Text("Margen:", null, $m.pct) escribe la etiqueta y el slot con su formato; Text("Total:", null, $m.total, $m.perdida) lo pinta en rojo; nulo es «—».
+Alterna con el argumento si = {"$": "vista", "es": "valor"}: valor repite una option; Select sin required empieza en la primera.
+Valida con required, kind, min, max y step (fecha: min $q.hoy); Form bloquea su submit hasta que todo vale.
+q = Data("q", {tipo: "formPedido"}, [hijos]) espera sus argumentos y gana la última respuesta: formPedido da hoy/lista; comparar da frase/series.'''  # noqa: E501
+
+
+class _LectorOpenUI:
+    """Expresiones de OpenUI Lang. Los componentes en línea reciben un id `_n1`, `_n2`…"""
+    _NUM = re.compile(r'-?\d+(?:\.\d+)?')
+    _ID = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+    _CLAVE = re.compile(r'[A-Za-z_$][A-Za-z0-9_]*')
+    _ENLACE = re.compile(r'\$([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)')
+
+    def __init__(self, mapa):
+        self.mapa, self.n = mapa, 0
+
+    def sentencia(self, texto):
+        m = re.match(r'\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*', texto)      # OpenUI admite camelCase
+        if not m:
+            raise ValueError('Una sentencia es id = Componente(...): ' + texto[:40])
+        self.t, self.i = texto, m.end()
+        valor = self.valor()
+        self._esp()
+        if self.i != len(self.t):
+            raise ValueError('Sobra texto: ' + self.t[self.i:self.i + 30])
+        if not (isinstance(valor, tuple) and valor[0] == 'comp'):
+            raise ValueError(m.group(1) + ' no es un componente.')
+        self.mapa[m.group(1)] = self._nodo(m.group(1), valor[1], valor[2])
+
+    def _esp(self):
+        while self.i < len(self.t) and self.t[self.i].isspace():
+            self.i += 1
+
+    def _ve(self, c):
+        self._esp()
+        if not self.t.startswith(c, self.i):
+            raise ValueError(f'Esperaba {c} en «{self.t[self.i:self.i + 30]}»')
+        self.i += len(c)
+
+    def _lista(self, cierre):
+        salida = []
+        self._esp()
+        if self.t.startswith(cierre, self.i):
+            self.i += 1
+            return salida
+        while True:
+            salida.append(self.valor())
+            self._esp()
+            if self.t.startswith(',', self.i):
+                self.i += 1
+                self._esp()
+                if self.t.startswith(cierre, self.i):
+                    self.i += 1
+                    return salida
+                continue
+            self._ve(cierre)
+            return salida
+
+    def valor(self):
+        self._esp()
+        c = self.t[self.i:self.i + 1]
+        if c in ('"', "'"):
+            fin = self.i + 1
+            while fin < len(self.t) and self.t[fin] != c:
+                fin += 2 if self.t[fin] == '\\' else 1
+            crudo = self.t[self.i:fin + 1]
+            self.i = fin + 1
+            return json.loads('"' + crudo[1:-1].replace('\\\'', "'").replace('"', '\\"') + '"') if c == "'" \
+                else json.loads(crudo)
+        if c == '[':
+            self.i += 1
+            return ['lista', self._lista(']')]
+        if c == '{':
+            self.i += 1
+            obj = {}
+            self._esp()
+            if self.t.startswith('}', self.i):
+                self.i += 1
+                return obj
+            while True:
+                self._esp()
+                if self.t[self.i] in '"\'':
+                    clave = self.valor()
+                else:
+                    m = self._CLAVE.match(self.t, self.i)
+                    if not m:
+                        raise ValueError('Clave de objeto inválida.')
+                    clave, self.i = m.group(0), m.end()
+                self._ve(':')
+                obj[clave] = self._dato(self.valor())
+                self._esp()
+                if self.t.startswith(',', self.i):
+                    self.i += 1
+                    self._esp()
+                    if self.t.startswith('}', self.i):
+                        self.i += 1
+                        return obj
+                    continue
+                self._ve('}')
+                return obj
+        if c == '$':
+            m = self._ENLACE.match(self.t, self.i)
+            self.i = m.end()
+            return {'$': m.group(1)}
+        m = self._NUM.match(self.t, self.i)
+        if m:
+            self.i = m.end()
+            return json.loads(m.group(0))
+        m = self._ID.match(self.t, self.i)
+        if not m:
+            raise ValueError('No entiendo «' + self.t[self.i:self.i + 30] + '»')
+        self.i = m.end()
+        palabra = m.group(0)
+        if palabra in ('true', 'false', 'null'):
+            return {'true': True, 'false': False, 'null': None}[palabra]
+        self._esp()
+        if palabra[0].isupper() and self.t.startswith('(', self.i):
+            self.i += 1
+            return ('comp', palabra, self._lista(')'))
+        return ('ref', palabra)
+
+    def _dato(self, v):
+        """Un valor de prop: sin referencias a nodos."""
+        if isinstance(v, tuple):
+            raise ValueError('Un nodo sólo va en children: ' + str(v[1]))
+        if isinstance(v, list) and v and v[0] == 'lista':
+            return [self._dato(x) for x in v[1]]
+        return v
+
+    def _nodo(self, ident, comp, args):
+        if comp not in FIRMAS:
+            raise ValueError(f'{comp} no está en el catálogo.')
+        props_orden, hijos_ok, eventos = FIRMAS[comp]
+        orden = props_orden + (['children'] if hijos_ok else []) + ['si'] + (['events'] if eventos else [])
+        if len(args) > len(orden):
+            raise ValueError(f'{comp} recibe {len(args)} argumentos y su firma tiene {len(orden)}.')
+        props, hijos, evs = {}, None, None
+        for nombre, v in zip(orden, args):
+            if v is None:
+                continue
+            if nombre == 'children':
+                if not (isinstance(v, list) and v and v[0] == 'lista'):
+                    raise ValueError(f'children de {ident} no es una lista.')
+                hijos = []
+                for h in v[1]:
+                    if isinstance(h, tuple) and h[0] == 'ref':
+                        hijos.append(h[1])
+                    elif isinstance(h, tuple) and h[0] == 'comp':
+                        self.n += 1
+                        nuevo = f'_n{self.n}'
+                        self.mapa[nuevo] = self._nodo(nuevo, h[1], h[2])
+                        hijos.append(nuevo)
+                    else:
+                        raise ValueError(f'children de {ident} lleva algo que no es un nodo.')
+            elif nombre == 'events':
+                evs = self._dato(v)
+            else:
+                props[nombre] = self._dato(v)
+        return _nodo(ident, comp, props, hijos, evs)
+
+
+def mapa_de_openui(lineas, base=None):
+    """Los nodos de un bloque OpenUI Lang (sobre `base` si es un cambio). Une líneas hasta cerrar paréntesis."""
+    mapa = dict(base or {})
+    lector = _LectorOpenUI(mapa)
+    actual, nivel = '', 0
+    for linea in lineas:
+        if linea.startswith('//'):
+            continue
+        actual += (' ' if actual else '') + linea
+        nivel = sum(actual.count(a) for a in '([{') - sum(actual.count(c) for c in ')]}')
+        if nivel <= 0:
+            lector.sentencia(actual)
+            actual = ''
+    if actual:
+        raise ValueError('Sentencia sin cerrar: ' + actual[:40])
+    return mapa
+
+
+def _openui_valor(v):
+    if isinstance(v, dict):
+        if set(v) == {'$'}:
+            return '$' + v['$']
+        return '{' + ', '.join((k if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k) else json.dumps(k)) + ': '
+                               + _openui_valor(x) for k, x in v.items()) + '}'
+    if isinstance(v, list):
+        return '[' + ', '.join(_openui_valor(x) for x in v) + ']'
+    return json.dumps(v, ensure_ascii=False)
+
+
+def a_openui(nodos):
+    lineas = []
+    for n in nodos:
+        props_orden, hijos_ok, eventos = FIRMAS[n['component']]
+        orden = props_orden + (['children'] if hijos_ok else []) + ['si'] + (['events'] if eventos else [])
+        valores = {**(n.get('props') or {}), 'children': n.get('children'), 'events': n.get('events')}
+        args = [valores.get(k) for k in orden]
+        while args and args[-1] is None:
+            args.pop()
+        texto = ', '.join('null' if a is None else ('[' + ', '.join(a) + ']') if k == 'children' else _openui_valor(a)
+                          for k, a in zip(orden, args))
+        lineas.append(f'{n["id"]} = {n["component"]}({texto})')
+    return '\n'.join(lineas)
 
 
 def _piezas_en(enlace: str) -> str:
@@ -84,6 +340,12 @@ def _piezas_en(enlace: str) -> str:
 def sistema(formato: str) -> str:
     if formato == 'lang':
         return CAT.manual() + CIERRE
+    if formato == 'openui':
+        descripciones = {n: s.get('description', '').replace('{"$":"periodo"}', '$periodo')
+                         .replace('{"$":"familia"}', '$familia') for n, s in DECLARACION['components'].items()}
+        return (FORMATO_OPENUI + '\n'.join('- ' + _firma_texto(c) + (' · ' + descripciones[c] if descripciones.get(c)
+                                                                     else '') for c in FIRMAS)
+                + '\n' + _piezas_openui() + '\n' + CIERRE)
     if formato in ('a2ui', 'jsonrender'):
         componentes = 'Componentes:' + CAT_JSON.manual().split('Componentes:', 1)[1]
         cabeza, enlace = (FORMATO_A2UI, '@path') if formato == 'a2ui' else (FORMATO_JR, '$state')
@@ -118,6 +380,8 @@ def _de_enlace(valor, clave):
 
 def tablero_en(formato: str) -> str:
     nodos = [json.loads(x) for x in MUESTRAS['tablero']['json'].splitlines()]
+    if formato == 'openui':
+        return a_openui(nodos)
     if formato == 'a2ui':
         componentes = []
         for n in nodos:
@@ -428,7 +692,7 @@ def mensaje_de_tarea(formato: str, tarea) -> str:
     nombre, tipo, texto, _ = tarea
     if tipo == 'alta':
         return texto
-    if formato in ('a2ui', 'jsonrender'):
+    if formato in ('a2ui', 'jsonrender', 'openui'):
         return ('Pantalla actual (view=tablero), lo que mandaste:\n' + tablero_en(formato)
                 + '\n\nCambio que pide el usuario: ' + texto)
     if formato == 'lang':
@@ -439,7 +703,7 @@ def mensaje_de_tarea(formato: str, tarea) -> str:
 
 
 # -- lectura de la respuesta en streaming ---------------------------------------------------------------------
-_VALLA = re.compile(r'^\s*```(pacai-ui(?:-lang)?|a2ui|json-render)((?:\s+[a-z_]+=\S+)*)\s*$')
+_VALLA = re.compile(r'^\s*```(pacai-ui(?:-lang)?|a2ui|json-render|openui)((?:\s+[a-z_]+=\S+)*)\s*$')
 
 
 class Lector:
@@ -500,9 +764,12 @@ def validar(formato: str, tarea, lector: Lector, previo=None):
     if lector.attrs is None:
         return False, False, ['No hay bloque de pantalla.'], previo
     valla_ok = lector.attrs['valla'] == VALLAS[formato]
-    if formato in ('a2ui', 'jsonrender'):
+    if formato in ('a2ui', 'jsonrender', 'openui'):
         try:
-            if formato == 'a2ui':
+            if formato == 'openui':
+                base = mapa_de_openui(tablero_en('openui').splitlines()) if tipo == 'cambio' else None
+                mapa = mapa_de_openui(lector.lineas, base)
+            elif formato == 'a2ui':
                 base = mapa_de_a2ui(tablero_en('a2ui').splitlines()) if tipo == 'cambio' else None
                 mapa = mapa_de_a2ui(lector.lineas, base)
             else:
@@ -510,7 +777,7 @@ def validar(formato: str, tarea, lector: Lector, previo=None):
                 mapa = mapa_de_jsonrender(lector.lineas, base)
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             return False, False, ['No se puede leer: ' + str(exc)[:200]], None
-        mapa, errores = validar_mapa(mapa, formato == 'a2ui')
+        mapa, errores = validar_mapa(mapa, formato in ('a2ui', 'openui'))
         if not valla_ok:
             errores = ['Valla equivocada.'] + errores
         return not errores, bool(mapa) and not errores and _seguro(comprobar, mapa), errores, None
