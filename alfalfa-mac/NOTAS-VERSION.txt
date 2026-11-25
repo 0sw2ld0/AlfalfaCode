@@ -1,1 +1,1 @@
-En la lluvia de ideas, cada participante recibe tu pregunta completa y lo que dijeron los demás, y si el límite de turnos alcanza hay una segunda ronda de críticas antes de la síntesis.
+Si abres una lluvia de ideas con un archivo de referencia, ya no te pide permiso para cada participante; cualquier otro contenido de fuera lo sigue pidiendo.
