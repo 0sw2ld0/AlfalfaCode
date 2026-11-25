@@ -1,1 +1,1 @@
-Con un código de Alfalfa, el coste estimado de cada turno se calcula con los tokens de caché y el precio del modelo que hay detrás.
+En la lluvia de ideas, cada participante recibe tu pregunta completa y lo que dijeron los demás, y si el límite de turnos alcanza hay una segunda ronda de críticas antes de la síntesis.
