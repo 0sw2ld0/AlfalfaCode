@@ -343,6 +343,20 @@ public struct Timeline: Equatable, Sendable {
         return id
     }
 
+    /// Un mensaje que se acaba de mandar al motor con `queueID`. Sólo sale «en cola» si hay un turno en
+    /// marcha o otro mensaje enviado que el motor aún no ha recogido; sin nada corriendo, el motor lo
+    /// toma enseguida y se pinta ya como entregado (antes salía «en cola» hasta su eco).
+    @discardableResult
+    public mutating func addSent(_ text: String, queueID: String) -> Int {
+        let waiting = items.contains { item in
+            guard case let .user(id, _, _) = item else { return false }
+            return queueIDs[id] != nil
+        }
+        let id = addUser(text, queued: status.isRunning || waiting, queueID: queueID)
+        queueIDs[id] = queueID // También entregado: su eco lo reconoce por el id y no lo repite.
+        return id
+    }
+
     /// Se pidió quitar o editar este mensaje y el motor aún no ha respondido.
     public func isUnqueuing(item id: Int) -> Bool {
         queueIDs[id].map { unqueuing[$0] != nil } ?? false
@@ -605,6 +619,10 @@ public struct Timeline: Equatable, Sendable {
                     if case let .user(id, _, false) = item, userTurns[id] == nil { userTurns[id] = turn }
                 }
             }
+            // Lo entregado cuyo eco no llegó ya no lo espera: no deja «en cola» a lo que se envíe después.
+            for item in items {
+                if case let .user(id, _, false) = item { queueIDs[id] = nil }
+            }
             // El turno acabó pero el proceso sigue vivo: la caja sigue activa salvo que lo interrumpan.
             totalTokens = outcome.tokens
             if let cost = outcome.cost { totalCost = cost }
@@ -731,9 +749,10 @@ public struct Timeline: Equatable, Sendable {
             closeOpenCalls()
             let id: Int
             let queued = items.firstIndex { item in
-                guard case let .user(id, text, true) = item else { return false }
+                guard case let .user(id, text, queued) = item else { return false }
                 if let queueID = event.queueID { return queueIDs[id] == queueID }
-                return text == event.text // Motores anteriores sin id.
+                // Motores anteriores sin id: por el texto, entre lo que aún espera su eco.
+                return (queued || queueIDs[id] != nil) && text == event.text
             }
             if let index = queued,
                case let .user(existing, text, _) = items[index] {

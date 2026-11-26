@@ -307,7 +307,7 @@ final class LiveSession: ObservableObject, Identifiable {
             return
         }
         let queueID = Self.newQueueID()
-        timeline.addUser(ImageTags.join(clean, images: images), queued: true, queueID: queueID)
+        timeline.addSent(ImageTags.join(clean, images: images), queueID: queueID)
         process.send(.message(clean, images: images, id: queueID))
         draftImages = []
     }
@@ -345,7 +345,7 @@ final class LiveSession: ObservableObject, Identifiable {
     func act(_ request: ScreenActionRequest) {
         guard let process, process.acceptsInput else { return }
         let queueID = Self.newQueueID()
-        timeline.addUser(request.summary, queued: true, queueID: queueID)
+        timeline.addSent(request.summary, queueID: queueID)
         process.send(.screenAction(request, id: queueID))
     }
 
@@ -663,7 +663,7 @@ extension LiveSession {
         }
         guard process != nil else { return }
         let queueID = Self.newQueueID()
-        timeline.addUser(note, queued: true, queueID: queueID)
+        timeline.addSent(note, queueID: queueID)
         process?.send(.message(note, id: queueID))
     }
 }

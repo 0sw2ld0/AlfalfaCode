@@ -77,6 +77,43 @@ final class QueueTests: XCTestCase {
         XCTAssertNil(AlfalfaMessage.decode(line: #"{"version":2,"tipo":"quitado_de_cola","id":"q1"}"#))
     }
 
+    /// Sin turno en marcha, lo enviado no sale «en cola»: el motor lo toma enseguida.
+    func testSentWithNothingRunningIsNotQueued() throws {
+        var timeline = Timeline(history: [], wrapUp: nil)
+        XCTAssertFalse(timeline.status.isRunning)
+        let first = timeline.addSent("Arregla el test", queueID: "q1")
+        XCTAssertEqual(timeline.items.last, .user(id: first, text: "Arregla el test", queued: false))
+        // Otro antes de que el motor recoja el primero sí espera su turno.
+        let second = timeline.addSent("Y luego el README", queueID: "q2")
+        XCTAssertEqual(timeline.items.last, .user(id: second, text: "Y luego el README", queued: true))
+        // El eco del primero lo reconoce por su id: no se repite en la conversación.
+        timeline.apply(try XCTUnwrap(AlfalfaMessage.decode(line:
+            #"{"version":2,"tipo":"evento","rol":"user","texto":"Arregla el test","hora":2,"id_cola":"q1"}"#)))
+        XCTAssertEqual(users(timeline), ["Arregla el test", "Y luego el README"])
+        XCTAssertNil(timeline.queueIDs[first])
+        XCTAssertEqual(timeline.queueIDs[second], "q2")
+        XCTAssertTrue(timeline.status.isRunning)
+        XCTAssertEqual(timeline.requestUnqueue(item: second, action: .remove), "q2")
+    }
+
+    /// Si el motor no repite un mensaje entregado, al cerrar el turno deja de esperarlo.
+    func testAMissingEchoDoesNotQueueEverythingAfter() throws {
+        var timeline = Timeline(history: [], wrapUp: nil)
+        let sent = timeline.addSent("Pulsé el botón", queueID: "q1")
+        timeline.apply(.event(AgentEvent(role: "agent", text: "Hecho", time: 2)))
+        timeline.apply(try XCTUnwrap(AlfalfaMessage.decode(line:
+            #"{"version":2,"tipo":"turno_terminado","estado":"completed","resumen":"","codigo_salida":0,"tokens":10}"#)))
+        XCTAssertNil(timeline.queueIDs[sent])
+        let next = timeline.addSent("Otra cosa", queueID: "q2")
+        XCTAssertEqual(timeline.items.last, .user(id: next, text: "Otra cosa", queued: false))
+    }
+
+    func testSentDuringATurnIsQueued() {
+        var timeline = running()
+        let id = timeline.addSent("Para", queueID: "q1")
+        XCTAssertEqual(timeline.items.last, .user(id: id, text: "Para", queued: true))
+    }
+
     private func running() -> Timeline {
         var timeline = Timeline()
         timeline.apply(.event(AgentEvent(role: "user", text: "primero", time: 1)))
