@@ -56,6 +56,12 @@ body { margin: 0; height: 100vh; display: grid; grid-template-rows: auto 1fr aut
 /* -- pantallas (ui.js) -------------------------------------------------------------------------------- */
 .ui-vista { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 16px; box-shadow: var(--sombra); }
 .ui-foto { opacity: .55; filter: grayscale(.4); }
+.ui-barra { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.ui-modos { display: inline-flex; border: 1px solid var(--borde); border-radius: 7px; overflow: hidden; }
+.ui-modo, .ui-copiar { font: inherit; padding: 3px 10px; border: 0; background: transparent; color: var(--suave); cursor: pointer; }
+.ui-modo[aria-pressed="true"] { background: var(--borde); color: inherit; }
+.ui-copiar { border: 1px solid var(--borde); border-radius: 7px; }
+.ui-texto { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--fondo); border: 1px solid var(--borde); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; user-select: text; }
 .ui-stack { display: flex; }
 .ui-columna { flex-direction: column; }
 .ui-fila { flex-direction: row; flex-wrap: wrap; align-items: center; }

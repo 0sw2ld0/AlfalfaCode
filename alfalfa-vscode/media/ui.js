@@ -39,6 +39,7 @@ export class Vista {
         this.derivados = {};           // salidas de los Calc: nombre → {valores, tipos}
         this.datos = new Map();        // por nodo Data: {clave, seq, valores}
         this.tocados = new Set();      // campos que el usuario ya tocó (sólo entonces se ve su error)
+        this.modo = 'pantalla';        // cómo se ve: 'pantalla', 'texto' (markdown) o 'json' (pacai.ui/1)
         this.elemento = document.createElement('div');
         this.elemento.className = 'ui-vista';
         this.elemento.setAttribute('role', 'group');
@@ -74,6 +75,7 @@ export class Vista {
     foto() {
         const copia = this.elemento.cloneNode(true);
         copia.classList.add('ui-foto');
+        copia.querySelector(':scope > .ui-barra')?.remove();
         for (const control of copia.querySelectorAll('button, input, select, textarea')) control.disabled = true;
         return copia;
     }
@@ -85,6 +87,11 @@ export class Vista {
         this.elemento.replaceChildren();
         if (this.alt) this.elemento.setAttribute('aria-label', this.alt);
         if (this.piezas) this._calcular();
+        this.elemento.append(this._barra());
+        if (this.modo !== 'pantalla') {
+            this.elemento.append(crear('pre', 'ui-texto', this._comoTexto(this.modo) || '(vacía)'));
+            return;
+        }
         const raiz = this.nodos.get('root');
         if (raiz) this.elemento.append(this._nodo(raiz, 0, new Set(), {}));
         if (conFoco) {
@@ -95,6 +102,41 @@ export class Vista {
                 try { control.setSelectionRange(cursor, cursor); } catch { /* un control sin cursor */ }
             }
         }
+    }
+
+    /** La pantalla como markdown legible ('texto') o como el bloque `pacai.ui/1` que la rehace ('json'). */
+    _comoTexto(modo) {
+        return modo === 'json' ? jsonDePantalla(this.nombre, this.rev, this.nodos, this.estado, this.alt, this.placement)
+            : textoDePantalla(this.nodos, this.estado, this.alt);
+    }
+
+    /** Arriba a la derecha: «Pantalla / Texto / JSON» y copiar (el texto, o el JSON si es lo que se ve). */
+    _barra() {
+        const barra = crear('div', 'ui-barra');
+        const modos = crear('div', 'ui-modos');
+        modos.setAttribute('role', 'group');
+        modos.setAttribute('aria-label', 'Ver como');
+        for (const [modo, nombre] of [['pantalla', 'Pantalla'], ['texto', 'Texto'], ['json', 'JSON']]) {
+            const boton = crear('button', 'ui-modo', nombre);
+            boton.type = 'button';
+            boton.setAttribute('aria-pressed', String(this.modo === modo));
+            boton.addEventListener('click', () => { this.modo = modo; this.dibujar(); });
+            modos.append(boton);
+        }
+        const copiar = crear('button', 'ui-copiar', 'Copiar');
+        copiar.type = 'button';
+        copiar.title = this.modo === 'json' ? 'Copiar el JSON (pacai.ui/1)' : 'Copiar como texto';
+        copiar.addEventListener('click', () => {
+            const texto = this._comoTexto(this.modo === 'json' ? 'json' : 'texto');
+            const aviso = ok => {
+                copiar.textContent = ok ? 'Copiado' : 'No se pudo copiar';
+                setTimeout(() => { copiar.textContent = 'Copiar'; }, 1500);
+            };
+            Promise.resolve(navigator.clipboard?.writeText(texto) ?? Promise.reject())
+                .then(() => aviso(true), () => aviso(copiarConSeleccion(texto)));
+        });
+        barra.append(modos, copiar);
+        return barra;
     }
 
     // -- nodos --------------------------------------------------------------------------------------
@@ -343,6 +385,182 @@ function describir(item) {
     if (!item || typeof item !== 'object') return `«${item}»`;
     const partes = Object.keys(item).sort().slice(0, 3).map(k => item[k]).filter(v => v !== null && v !== '');
     return '«' + partes.join(' · ') + '»';
+}
+
+// -- la pantalla como texto ----------------------------------------------------------------------------
+// Lo mismo que `Screen.markdown` y `Screen.rawJSON` en la app de Mac (alfalfa-mac/…/ScreenText.swift).
+
+/** Un valor como se ve en una celda: los booleanos «Sí»/«No», las listas separadas por comas, null vacío. */
+function comoCelda(valor) {
+    if (valor === null || valor === undefined) return '';
+    if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
+    if (Array.isArray(valor)) return valor.map(comoCelda).join(', ');
+    if (typeof valor === 'object') return '';
+    return String(valor);
+}
+
+const enLinea = texto => String(texto).split(/\r?\n/).filter(Boolean).join(' ');
+
+function tablaMarkdown(cabecera, filas) {
+    const fila = celdas => '| ' + celdas.map(c => enLinea(c).replaceAll('|', '\\|')).join(' | ') + ' |';
+    return [fila(cabecera), '|' + ' --- |'.repeat(cabecera.length), ...filas.map(fila)].join('\n');
+}
+
+/**
+ * Una pantalla como markdown para copiarla: títulos y textos tal cual, una tabla como tabla, las tarjetas como lista,
+ * los campos con su etiqueta y su valor actual y los gráficos como sus datos. Los botones no salen.
+ */
+export function textoDePantalla(nodos, estado = {}, alt = '') {
+    const mapa = nodos instanceof Map ? nodos : new Map(Object.entries(nodos ?? {}));
+    const raiz = mapa.get('root');
+    if (!raiz) return alt ?? '';
+    const leer = (nodo, clave) => {
+        const valor = nodo.props?.[clave];
+        return valor && typeof valor === 'object' && !Array.isArray(valor) && '$' in valor ? estado[valor.$] : valor;
+    };
+    const texto = (nodo, clave) => comoCelda(leer(nodo, clave));
+    const hijosDe = nodo => [...new Set(nodo.children ?? [])].map(id => mapa.get(id)).filter(Boolean);
+    const etiquetas = nodo => {
+        const tags = (Array.isArray(leer(nodo, 'tags')) ? leer(nodo, 'tags') : []).map(comoCelda).filter(Boolean);
+        return tags.map(t => '`' + t + '`').join(' ');
+    };
+    const hijos = (nodo, prof) => {
+        const lista = hijosDe(nodo);
+        if (lista.length > 1 && lista.every(h => h.component === 'Card')) {
+            return [lista.map(h => tarjeta(h, prof + 1)).join('\n')];
+        }
+        return lista.flatMap(h => bloques(h, prof + 1));
+    };
+    const tarjeta = (nodo, prof) => {
+        const titulo = [texto(nodo, 'title'), texto(nodo, 'subtitle')].filter(Boolean);
+        let primera = titulo.length ? '- **' + enLinea(titulo[0]) + '**' : '-';
+        if (titulo.length > 1) primera += ' · ' + enLinea(titulo[1]);
+        const dentro = [texto(nodo, 'meta'), etiquetas(nodo), texto(nodo, 'detail')].filter(Boolean)
+            .concat(hijos(nodo, prof));
+        return [primera, ...dentro.map(b => b.split('\n').map(l => '  ' + l).join('\n'))].join('\n');
+    };
+    const bloques = (nodo, prof) => {
+        if (prof >= MAX_PROFUNDIDAD) return [];
+        switch (nodo.component) {
+        case 'Text': {
+            const t = texto(nodo, 'text');
+            if (!t) return [];
+            const estilo = texto(nodo, 'style');
+            if (estilo === 'title') return ['## ' + enLinea(t)];
+            if (estilo === 'subtitle') return ['### ' + enLinea(t)];
+            if (estilo === 'caption' || estilo === 'muted') return ['*' + enLinea(t) + '*'];
+            return [t];
+        }
+        case 'Card': {
+            if (prof > 0) return [tarjeta(nodo, prof)];
+            const cabeza = [];
+            if (texto(nodo, 'title')) cabeza.push('## ' + enLinea(texto(nodo, 'title')));
+            cabeza.push(...[texto(nodo, 'subtitle'), texto(nodo, 'meta'), etiquetas(nodo)].filter(Boolean));
+            return [cabeza.join('\n'), texto(nodo, 'detail')].filter(Boolean).concat(hijos(nodo, prof));
+        }
+        case 'Table': {
+            const columnas = (Array.isArray(leer(nodo, 'columns')) ? leer(nodo, 'columns') : [])
+                .filter(c => c && typeof c === 'object');
+            if (!columnas.length) return [];
+            const filas = Array.isArray(leer(nodo, 'rows')) ? leer(nodo, 'rows') : [];
+            return [tablaMarkdown(columnas.map(c => comoCelda(c.label ?? c.key)),
+                filas.map(f => columnas.map(c => comoCelda(f?.[comoCelda(c.key)]))))];
+        }
+        case 'List': {
+            const items = (Array.isArray(leer(nodo, 'items')) ? leer(nodo, 'items') : [])
+                .filter(i => i && typeof i === 'object');
+            if (!items.length) return [];
+            return [items.map(i => '- ' + enLinea(comoCelda(i.title))
+                + (comoCelda(i.subtitle) ? ' — ' + enLinea(comoCelda(i.subtitle)) : '')).join('\n')];
+        }
+        case 'Input': case 'Select': {
+            const nombre = typeof nodo.props?.name === 'string' ? nodo.props.name : nodo.id;
+            const etiqueta = texto(nodo, 'label') || nombre;
+            const actual = estado[nombre];
+            let vistos = Array.isArray(actual) ? actual : actual === null || actual === undefined || actual === '' ? [] : [actual];
+            vistos = vistos.map(comoCelda);
+            if (nodo.component === 'Select') {
+                const opciones = Array.isArray(leer(nodo, 'options')) ? leer(nodo, 'options') : [];
+                vistos = vistos.map(v => comoCelda(opciones.find(o => comoCelda(o?.value) === v)?.label) || v);
+            }
+            const valor = vistos.join(', ');
+            const cabeza = '**' + enLinea(etiqueta) + ':**';
+            if (nodo.props?.kind === 'multiline' && valor.includes('\n')) return [cabeza + '\n' + valor];
+            return [cabeza + ' ' + (valor ? enLinea(valor) : '—')];
+        }
+        case 'Chart': {
+            const series = (Array.isArray(leer(nodo, 'series')) ? leer(nodo, 'series') : [])
+                .filter(s => s && Array.isArray(s.values));
+            if (!series.length) return [];
+            const etiquetasEje = (Array.isArray(leer(nodo, 'labels')) ? leer(nodo, 'labels') : []).map(comoCelda);
+            const cuantas = Math.max(etiquetasEje.length, ...series.map(s => s.values.length));
+            const cabecera = ['Etiqueta', ...series.map((s, i) => comoCelda(s.name) || 'Serie ' + (i + 1))];
+            const filas = Array.from({ length: cuantas }, (_, i) =>
+                [i < etiquetasEje.length ? etiquetasEje[i] : String(i + 1), ...series.map(s => comoCelda(s.values[i]))]);
+            return [tablaMarkdown(cabecera, filas)];
+        }
+        case 'Image': {
+            const src = texto(nodo, 'src');
+            const altImagen = texto(nodo, 'alt');
+            if (src.startsWith('https:')) return ['![' + enLinea(altImagen) + '](' + src + ')'];
+            return altImagen ? ['*Imagen:* ' + enLinea(altImagen)] : [];
+        }
+        case 'Code': {
+            const codigo = texto(nodo, 'code');
+            const valla = codigo.includes('```') ? '~~~~' : '```';
+            return [valla + texto(nodo, 'language') + '\n' + codigo + '\n' + valla];
+        }
+        case 'Button': return [];
+        default: return hijos(nodo, prof);              // Stack, Form y los componentes propios
+        }
+    };
+    return bloques(raiz, 0).join('\n\n');
+}
+
+/** Si el navegador no deja usar el portapapeles (un webview, una página sin permiso), copia seleccionando el texto. */
+function copiarConSeleccion(texto) {
+    const area = crear('textarea', null, texto);
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* sin portapapeles */ }
+    area.remove();
+    return ok;
+}
+
+function ordenado(valor) {
+    if (Array.isArray(valor)) return valor.map(ordenado);
+    if (valor && typeof valor === 'object') {
+        return Object.fromEntries(Object.keys(valor).sort().map(k => [k, ordenado(valor[k])]));
+    }
+    return valor;
+}
+
+/**
+ * El bloque `pacai.ui/1` que deja la pantalla como se ve: un `replace` con sus nodos en el orden del árbol (los
+ * sueltos al final) y el estado de ahora. Lo que tiene el cliente es siempre JSON: con PACAI UI Lang, el motor ya lo
+ * tradujo antes de mandarlo.
+ */
+export function jsonDePantalla(nombre, rev, nodos, estado = {}, alt = '', placement = null) {
+    const mapa = nodos instanceof Map ? nodos : new Map(Object.entries(nodos ?? {}));
+    const vistos = new Set();
+    const lista = [];
+    const visitar = id => {
+        const nodo = mapa.get(id);
+        if (!nodo || vistos.has(id)) return;
+        vistos.add(id);
+        lista.push(nodo);
+        (nodo.children ?? []).forEach(visitar);
+    };
+    visitar('root');
+    for (const id of [...mapa.keys()].sort()) if (!vistos.has(id)) lista.push(mapa.get(id));
+    const data = { view: nombre, op: 'replace', rev, nodes: lista };
+    if (Object.keys(estado ?? {}).length) data.state = estado;
+    if (alt) data.alt = alt;
+    if (placement && placement !== 'inline') data.placement = placement;
+    return JSON.stringify(ordenado(data), null, 2);
 }
 
 function abrirConConfirmacion(url) {

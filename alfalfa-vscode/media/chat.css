@@ -285,6 +285,12 @@ code, pre { font-family: var(--vscode-editor-font-family); font-size: var(--vsco
 }
 .asistente > .ui-vista { grid-column: 2; min-width: 0; }      /* bajo el texto, en la columna del cuerpo */
 .ui-foto { opacity: .5; filter: grayscale(.4); }
+.ui-barra { display: flex; justify-content: flex-end; gap: 6px; font-size: .9em; }
+.ui-modos { display: inline-flex; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+.ui-modo, .ui-copiar { font: inherit; padding: 2px 8px; border: 0; background: transparent; color: var(--suave); cursor: pointer; }
+.ui-modo[aria-pressed="true"] { background: var(--codigo); color: inherit; }
+.ui-copiar { border: 1px solid var(--borde); border-radius: var(--radio); }
+.ui-texto { margin: 0; padding: 8px; border-radius: 4px; background: var(--codigo); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .ui-stack { display: flex; }
 .ui-columna { flex-direction: column; }
 .ui-fila { flex-direction: row; flex-wrap: wrap; align-items: center; }

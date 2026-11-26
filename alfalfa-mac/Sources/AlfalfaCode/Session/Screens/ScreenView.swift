@@ -1,9 +1,19 @@
 import AlfalfaKit
+import AppKit
 import SwiftUI
 
 /// Una pantalla que dibujó el agente (perfil `ui` de PACAI): la tarjeta, el estado de sus campos y lo que pasa al
 /// pulsar. El árbol de componentes lo pinta `ScreenNodeView`; la lógica de los eventos está en `Screen.handle`.
 struct ScreenView: View {
+
+    // MARK: - Tipos
+
+    /// Cómo se ve la pantalla: dibujada, como texto legible o como el bloque `pacai.ui/1`.
+    enum Mode: String, CaseIterable {
+        case screen = "Pantalla"
+        case text = "Texto"
+        case json = "JSON"
+    }
 
     // MARK: - Propiedades
 
@@ -13,35 +23,40 @@ struct ScreenView: View {
     @ObservedObject var session: LiveSession
 
     var body: some View {
-        content
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.cardBorder))
-            .overlay(alignment: .topTrailing) {
-                if waiting { ProgressView().controlSize(.small).padding(10).accessibilityLabel("Enviando") }
+        VStack(alignment: .leading, spacing: 10) {
+            toolbar
+            switch mode {
+            case .screen: content.opacity(live ? 1 : 0.5).disabled(!interactive)
+            case .text: source(screen.markdown(state: values))
+            case .json: source(screen.rawJSON(state: values))
             }
-            .opacity(live ? 1 : 0.5)
-            .disabled(!interactive)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(screen.alt.isEmpty ? "Pantalla del agente" : screen.alt)
-            .onChange(of: screen.rev) {
-                // La pantalla cambió: manda lo que dice el agente, y lo que se envió ya tiene respuesta.
-                values = screen.state
-                waiting = false
-            }
-            .onChange(of: session.timeline.status.isRunning) { _, running in
-                if !running { waiting = false }
-            }
-            .confirmationDialog("¿Abrir este enlace?", isPresented: opening, presenting: pendingURL) { url in
-                Button("Abrir " + (url.host() ?? "el enlace")) { openURL(url) }
-            } message: { url in
-                Text(url.absoluteString)
-            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.cardBorder))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(screen.alt.isEmpty ? "Pantalla del agente" : screen.alt)
+        .onChange(of: screen.rev) {
+            // La pantalla cambió: manda lo que dice el agente, y lo que se envió ya tiene respuesta.
+            values = screen.state
+            waiting = false
+        }
+        .onChange(of: session.timeline.status.isRunning) { _, running in
+            if !running { waiting = false }
+        }
+        .confirmationDialog("¿Abrir este enlace?", isPresented: opening, presenting: pendingURL) { url in
+            Button("Abrir " + (url.host() ?? "el enlace")) { openURL(url) }
+        } message: { url in
+            Text(url.absoluteString)
+        }
     }
 
     // MARK: - Propiedades privadas
 
+    @State private var mode = Mode.screen
+    /// Se acaba de copiar: el botón enseña una marca un momento.
+    @State private var copied = false
     @Environment(\.openURL) private var openURL
     @State private var values: [String: ScreenValue]
     /// Se mandó una acción y aún no hay respuesta: los controles esperan (evita el doble envío).
@@ -63,6 +78,36 @@ struct ScreenView: View {
         }
     }
 
+    /// Arriba a la derecha: el conmutador «Pantalla / Texto / JSON» y el botón de copiar. Siguen activos en una copia
+    /// apagada, que también se puede leer y copiar.
+    private var toolbar: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            if waiting { ProgressView().controlSize(.small).accessibilityLabel("Enviando") }
+            Picker("Ver como", selection: $mode) {
+                ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Ver la pantalla dibujada, como texto para copiar o como el bloque pacai.ui/1")
+            Menu {
+                Button("Copiar texto") { copy(screen.markdown(state: values)) }
+                Button("Copiar JSON (pacai.ui/1)") { copy(screen.rawJSON(state: values)) }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+            } primaryAction: {
+                copy(mode == .json ? screen.rawJSON(state: values) : screen.markdown(state: values))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.visible)
+            .fixedSize()
+            .help(mode == .json ? "Copiar el JSON" : "Copiar como texto")
+            .accessibilityLabel("Copiar")
+        }
+        .controlSize(.small)
+    }
+
     private var context: ScreenContext {
         ScreenContext(screen: screen, values: $values) { event, node, item in
             fire(event, on: node, item: item)
@@ -79,6 +124,28 @@ struct ScreenView: View {
     }
 
     // MARK: - Métodos privados
+
+    /// El texto o el JSON, en monoespaciada y seleccionable.
+    private func source(_ text: String) -> some View {
+        Text(text.isEmpty ? "(vacía)" : text)
+            .font(Theme.mono)
+            .foregroundStyle(Theme.text)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.field))
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
+    }
 
     private func fire(_ event: String, on node: ScreenNode, item: ScreenValue?) {
         guard interactive else { return }

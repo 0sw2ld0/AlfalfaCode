@@ -542,7 +542,11 @@ public struct Timeline: Equatable, Sendable {
             case let .undo(_, step, _): parts.append("> " + step.text)
             case let .learning(_, proposal, _): parts.append("> **Aprendizaje propuesto:** " + proposal.title)
             case let .importNotice(_, notice, _): parts.append("> " + notice.text)
-            case let .screen(_, screen, true): parts.append("> *Pantalla:* " + screen.alt)
+            case let .screen(_, screen, true):
+                // El resumen del agente y, debajo, lo que se veía, para que no se pierda al exportar.
+                let shown = screen.nodes[Screen.root] == nil ? "" : screen.markdown()
+                parts.append("> *Pantalla:*" + (screen.alt.isEmpty ? "" : " " + screen.alt)
+                             + (shown.isEmpty ? "" : "\n\n" + shown))
             default: break
             }
         }
