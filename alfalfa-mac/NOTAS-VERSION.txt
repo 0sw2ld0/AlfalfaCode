@@ -1,3 +1,1 @@
-Puedes seleccionar arrastrando toda una respuesta del agente, de un párrafo o una lista al siguiente, y copiarla de una vez.
-Un texto largo pegado en el cuadro se adjunta como archivo también desde Edición → Pegar, el clic derecho o arrastrándolo: la app ya no se cuelga.
-Un mensaje que envías sin nada en marcha ya no aparece «en cola».
+Al reanudar una sesión, las pantallas que el agente dibujó en el chat siguen donde estaban: las acciones sobre ellas llegan bien y no vuelven a empezar.
