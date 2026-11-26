@@ -430,13 +430,22 @@ def mensaje_de_tarea(brazo, tarea) -> str:
 
 # -- validación -------------------------------------------------------------------------------------------------
 _VALLA = re.compile(r'^\s*```(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
+_VALLA_A_MEDIA_LINEA = re.compile(r'```(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
 
 
-def bloque(texto):
-    attrs, lineas = None, []
+def bloque(texto, media_linea=True):
+    """La valla y las líneas del bloque. Con `media_linea`, como `ui.partir`: la valla también vale al final de una
+    línea con texto delante, si ese texto no lleva comillas invertidas y no estamos dentro de otro bloque de código."""
+    attrs, lineas, en_codigo = None, [], False
     for linea in texto.splitlines():
         if attrs is None:
             m = _VALLA.match(linea)
+            if not m and media_linea and not en_codigo:
+                media = _VALLA_A_MEDIA_LINEA.search(linea)
+                if media and linea[:media.start()].strip() and '`' not in linea[:media.start()]:
+                    m = media
+            if not m and linea.lstrip().startswith('```'):
+                en_codigo = not en_codigo
             if m:
                 attrs = dict(a.split('=', 1) for a in m.group(2).split())
                 attrs['valla'] = m.group(1)
