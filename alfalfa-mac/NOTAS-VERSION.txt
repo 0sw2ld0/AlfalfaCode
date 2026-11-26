@@ -1,2 +1,3 @@
-Un desplegable de una pantalla puede ser obligatorio: el formulario no se envía hasta que eliges una opción.
-Las pantallas del chat ya no se pierden cuando el modelo escribe una frase justo antes de dibujarlas.
+Puedes seleccionar arrastrando toda una respuesta del agente, de un párrafo o una lista al siguiente, y copiarla de una vez.
+Un texto largo pegado en el cuadro se adjunta como archivo también desde Edición → Pegar, el clic derecho o arrastrándolo: la app ya no se cuelga.
+Un mensaje que envías sin nada en marcha ya no aparece «en cola».
