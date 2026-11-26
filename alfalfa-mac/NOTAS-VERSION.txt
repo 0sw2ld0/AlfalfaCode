@@ -1,1 +1,2 @@
-Las pantallas que AlfalfaCode dibuja en el chat salen bien a la primera más a menudo, sobre todo con modelos pequeños.
+Un desplegable de una pantalla puede ser obligatorio: el formulario no se envía hasta que eliges una opción.
+Las pantallas del chat ya no se pierden cuando el modelo escribe una frase justo antes de dibujarlas.
