@@ -1,3 +1,1 @@
-Las pantallas que el agente dibuja en el chat se pueden ver como texto o como JSON y copiar con un botón.
-Una pantalla a la que le falta su parte principal se dibuja igual en vez de perderse.
-Con GPT-6 Luna y Claude Haiku 5.5, las pantallas del chat salen más baratas y aparecen antes.
+Nuevo interruptor «Vista enriquecida» en el panel de cada sesión (Entorno): decide si el agente puede dibujar pantallas en el chat o contesta solo con texto. El valor para las sesiones nuevas está en Ajustes ▸ General.
