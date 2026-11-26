@@ -1,1 +1,3 @@
-Al reanudar una sesión, las pantallas que el agente dibujó en el chat siguen donde estaban: las acciones sobre ellas llegan bien y no vuelven a empezar.
+Las pantallas que el agente dibuja en el chat se pueden ver como texto o como JSON y copiar con un botón.
+Una pantalla a la que le falta su parte principal se dibuja igual en vez de perderse.
+Con GPT-6 Luna y Claude Haiku 5.5, las pantallas del chat salen más baratas y aparecen antes.
