@@ -365,6 +365,12 @@ pruebas en `tests/test_pacai_ui.py`.
     3 da más: ahorra más que diferir el manual y no pierde ninguna. Si se quiere seguir con la carga bajo demanda, lo
     siguiente sería dejar en el prompt la parte de *cuándo* dibujar (unos 250 tokens) y diferir sólo el formato, el
     catálogo y los ejemplos, y medirlo también con Haiku.
+17. **Vista enriquecida.** El cliente puede apagar las pantallas sin renegociar la sesión con
+    `alfalfa.set_rich_view` (`active`). Apagada, el modelo no recibe el manual de pantallas y contesta en texto; las
+    que ya dibujó se siguen viendo y sus acciones siguen valiendo. Con `ui` negociado, `alfalfa.session` lleva
+    `rich_view` con el estado actual, así el cliente sabe que el motor admite el interruptor. La app de Mac lo enseña
+    en el panel derecho (Entorno), con su valor por defecto en Ajustes ▸ General, y la extensión de VS Code en el
+    ajuste `alfalfa.vistaEnriquecida`.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 

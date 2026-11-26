@@ -497,6 +497,7 @@ v2, como `ediciones`) recibe `error` `invalid_message` con los valores que valen
 | `alfalfa.jobs_command` (`action`: `prepare`, `start`, `pause`, `stop`, `cancel` o `clean`; `jobs`; `mode`: `serial` o `parallel`; `parallel`) | `encargos` (`accion`, `encargos`, `modo`, `paralelos`) |
 | `alfalfa.dequeue`, `alfalfa.send_now` (`id`) | `quitar_de_cola`, `enviar_ahora` de una entrada que aún espera |
 | `alfalfa.redirect` | `redirigir`: el modelo lee ya lo que se le mandó con `steer` |
+| `alfalfa.set_rich_view` (`active`) | `vista_enriquecida`: con el perfil `ui`, si el modelo recibe el manual de pantallas (apagada, contesta en texto). La sesión lo anuncia en `alfalfa.session` (`rich_view`); v2 no tiene pantallas y lo ignora |
 
 Lo que puede pedir permisos fuera de un turno (guardar una prueba del navegador, iniciar una cola de encargos) va
 como un `input` con un solo bloque `structured` cuyo `schema` es la orden (`alfalfa.export_browser_test` o

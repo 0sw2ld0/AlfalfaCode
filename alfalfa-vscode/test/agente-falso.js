@@ -46,6 +46,8 @@ lector.on('line', linea => {
         terminar('interrupted');
     } else if (m.type === 'alfalfa.set_settings') {
         enviar('alfalfa.session', { id: 'falsa', model: m.payload.model ?? 'falso', mode: m.payload.mode ?? 'manual' });
+    } else if (m.type === 'alfalfa.set_rich_view') {
+        enviar('alfalfa.session', { id: 'falsa', rich_view: m.payload.active });
     } else if (m.type === 'close') {
         enviar('close', {});
         process.exit(0);

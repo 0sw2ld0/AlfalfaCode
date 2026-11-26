@@ -16,6 +16,9 @@ public struct SessionInfo: Equatable, Sendable {
     /// los enseña ya, sin esperar a que acabe el primer turno. nil en motores anteriores.
     public var tokens: Int? = nil
     public var cost: Double? = nil
+    /// «Vista enriquecida» (`vista_enriquecida`): si el modelo recibe el manual de pantallas. Sólo la anuncia un motor
+    /// que habla PACAI con el perfil `ui` y admite el interruptor; nil en los demás.
+    public var richView: Bool? = nil
 }
 
 public struct AgentEvent: Equatable, Sendable {
@@ -1026,7 +1029,8 @@ public enum AlfalfaMessage: Equatable, Sendable {
         return SessionInfo(id: id, cwd: cwd, model: object["modelo"] as? String ?? "",
                            effort: object["esfuerzo"] as? String ?? "", mode: object["modo"] as? String ?? "",
                            contextMode: (object["contexto"] as? String).flatMap(ContextMode.init(rawValue:)),
-                           tokens: integer(object["tokens"]), cost: amount(object["coste"]))
+                           tokens: integer(object["tokens"]), cost: amount(object["coste"]),
+                           richView: bool(object["vista_enriquecida"]))
     }
 
     /// Un `evento` en vivo o una fila de `historial`, con su compactación, su aviso de tarifa o lo importado sin

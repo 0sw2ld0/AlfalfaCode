@@ -129,6 +129,7 @@ final class PacaiClientTests: XCTestCase {
             (.diagnostics(false), "alfalfa.set_diagnostics"),
             (.swiftDiagnostics(true), "alfalfa.set_swift_diagnostics"),
             (.commitSignature(false), "alfalfa.set_signing"),
+            (.richView(false), "alfalfa.set_rich_view"),
             (.learning(id: "ap1", apply: true), "alfalfa.resolve_learning"),
             (.reviewCode(turn: "t1", model: "m"), "alfalfa.review_code"),
             (.cancelCodeReview, "alfalfa.cancel_code_review"),

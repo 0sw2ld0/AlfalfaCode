@@ -159,6 +159,7 @@ extension PacaiClient {
             payload["mode"] = mode.map { PacaiNames.values["mode"]?[$0] ?? $0 }
             return order("set_settings", payload)
         case let .keepAwake(on): return order("set_keep_awake", ["active": on])
+        case let .richView(on): return order("set_rich_view", ["active": on])
         case let .diagnostics(on): return order("set_diagnostics", ["active": on])
         case let .swiftDiagnostics(on): return order("set_swift_diagnostics", ["active": on])
         case let .commitSignature(on): return order("set_signing", ["active": on])

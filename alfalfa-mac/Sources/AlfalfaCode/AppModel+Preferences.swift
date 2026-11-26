@@ -55,6 +55,16 @@ extension AppModel {
         }
     }
 
+    /// «Vista enriquecida» de las sesiones nuevas (Ajustes ▸ General). Las abiertas siguen con la suya, que se cambia
+    /// desde su panel.
+    var richView: Bool {
+        get { preferences.richView }
+        set {
+            objectWillChange.send()
+            preferences.richView = newValue
+        }
+    }
+
     /// Topes en dólares de Ajustes ▸ General ▸ Presupuesto. Las sesiones abiertas los aplican ya;
     /// las nuevas los reciben al arrancar (`--presupuesto`, `--presupuesto-mes`).
     var sessionBudget: Double? {

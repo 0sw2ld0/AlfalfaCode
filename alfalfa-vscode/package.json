@@ -145,6 +145,11 @@
             "max"
           ],
           "description": "Esfuerzo de razonamiento. Vacío: el configurado."
+        },
+        "alfalfa.vistaEnriquecida": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Vista enriquecida**: el agente puede dibujar pantallas en el chat (tarjetas, tablas, formularios) cuando ayudan a responder. Apagada, contesta sólo con texto; las pantallas que ya dibujó se siguen viendo. Vale ya, también a mitad de sesión."
         }
       }
     }

@@ -23,6 +23,9 @@ struct SidePanel: View {
     /// El tope propio de la sesión (nil: sigue el de Ajustes) y cómo cambiarlo desde el panel.
     var sessionCap: SessionCap?
     var onSessionCap: ((SessionCap?) -> Void)?
+    /// «Vista enriquecida» de la sesión: nil si el motor no admite el interruptor (o aún no lo dijo).
+    var richView: Bool?
+    var onRichView: ((Bool) -> Void)?
     var appControlPreviewStore: AppControlPreviewStore?
 
     @AppStorage("panel.contexto.abierto") private var contextOpen = true
@@ -366,6 +369,16 @@ struct SidePanel: View {
                 Text(branchText)
             } icon: {
                 Image(systemName: "arrow.triangle.branch")
+            }
+            if let richView, let onRichView {
+                // Como «Remote Control» en el panel de Claude: el agente dibuja pantallas en el chat o sólo escribe.
+                Toggle(isOn: Binding(get: { richView }, set: onRichView)) {
+                    Label("Vista enriquecida", systemImage: "rectangle.on.rectangle")
+                }
+                .toggleStyle(.switch).controlSize(.mini)
+                .help(richView ? "El agente puede dibujar pantallas en el chat: tarjetas, tablas, formularios."
+                      : "El agente contesta sólo con texto. Las pantallas que ya dibujó se siguen viendo.")
+                .accessibilityLabel("Vista enriquecida: pantallas del agente en el chat")
             }
             if providerID == "ollama" {
                 HStack(spacing: 6) {

@@ -58,6 +58,14 @@ struct GeneralSettings: View {
                     Text("Este mes: " + spent.text).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 }
             }
+            SettingsBlock(title: "Vista enriquecida",
+                          detail: "El agente puede dibujar pantallas en el chat cuando ayudan a responder: tarjetas, "
+                          + "tablas, formularios y gráficos. Apagada, contesta sólo con texto. Vale para las sesiones "
+                          + "nuevas; cada sesión la cambia en su panel, en Entorno.") {
+                Toggle("Pantallas del agente en el chat", isOn: $model.richView)
+                    .toggleStyle(.switch)
+                    .accessibilityLabel("Vista enriquecida en las sesiones nuevas")
+            }
             SettingsBlock(title: "Mantener el Mac despierto",
                           detail: "Mientras trabaja un agente (con sus subagentes, sus órdenes y la espera de un "
                           + "permiso), el Mac no se duerme por inactividad. La pantalla se apaga igual. Con la tapa "

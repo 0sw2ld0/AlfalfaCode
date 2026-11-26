@@ -25,6 +25,9 @@ public enum AlfalfaCommand: Equatable, Sendable {
     case settings(model: String?, effort: String?, mode: String? = nil)
     /// El interruptor de Ajustes ▸ General: mantener el Mac despierto mientras trabaja. Vale ya.
     case keepAwake(Bool)
+    /// El interruptor «Vista enriquecida» del panel: si el agente puede dibujar pantallas. Vale desde la siguiente
+    /// petición al modelo. `--stdio` v2 no tiene pantallas y lo ignora.
+    case richView(Bool)
     /// El interruptor de Ajustes ▸ General: ver los errores al editar. Vale desde la siguiente edición.
     case diagnostics(Bool)
     /// Ajustes ▸ General ▸ Diagnósticos de Swift (sourcekit-lsp, fuera del sandbox): desde la siguiente edición.
@@ -70,6 +73,7 @@ public enum AlfalfaCommand: Equatable, Sendable {
         case .continueInNewSession: object = ["tipo": "continuar_en_nueva"]
         case let .stopProcess(id): object = ["tipo": "detener_proceso", "id": id]
         case let .keepAwake(on): object = ["tipo": "mantener_despierto", "activo": on]
+        case let .richView(on): object = ["tipo": "vista_enriquecida", "activo": on]
         case let .diagnostics(on): object = ["tipo": "diagnosticos", "activo": on]
         case let .swiftDiagnostics(on): object = ["tipo": "diagnosticos_swift", "activo": on]
         case let .commitSignature(on): object = ["tipo": "firma", "activo": on]

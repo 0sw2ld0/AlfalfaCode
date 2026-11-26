@@ -18,6 +18,10 @@ public struct Preferences {
         public static let monthlyBudget = "ajustes.presupuestoMes"
         /// Topes propios de algunas sesiones, puestos desde su panel: id → dólares (0, sin tope).
         public static let sessionBudgets = "ajustes.presupuestoPorSesion"
+        /// «Vista enriquecida» (pantallas del agente en el chat): el valor de las sesiones nuevas y el de cada sesión
+        /// que se cambió desde su panel (id → sí o no).
+        public static let richView = "ajustes.vistaEnriquecida"
+        public static let richViews = "ajustes.vistaEnriquecidaPorSesion"
         /// Ancho de la barra lateral izquierda, arrastrando su borde.
         public static let sidebarWidth = "barra.ancho"
         public static let diagnostics = "ajustes.diagnosticos"
@@ -149,6 +153,26 @@ public struct Preferences {
         case .amount: all[id] = 0.0
         }
         if all.isEmpty { defaults.removeObject(forKey: Key.sessionBudgets) } else { defaults.set(all, forKey: Key.sessionBudgets) }
+    }
+
+    /// «Vista enriquecida» de las sesiones nuevas: que el agente pueda dibujar pantallas en el chat. Encendida si
+    /// nunca se tocó.
+    public var richView: Bool {
+        get { defaults.object(forKey: Key.richView) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Key.richView) }
+    }
+
+    /// La «Vista enriquecida» de una sesión: la suya si se cambió desde su panel; si no, la de Ajustes.
+    public func richView(for id: String?) -> Bool {
+        guard let id, let value = defaults.dictionary(forKey: Key.richViews)?[id] as? Bool else { return richView }
+        return value
+    }
+
+    /// Guarda la «Vista enriquecida» de una sesión. No toca la de Ajustes.
+    public func setRichView(_ on: Bool, for id: String) {
+        var all = defaults.dictionary(forKey: Key.richViews) ?? [:]
+        all[id] = on
+        defaults.set(all, forKey: Key.richViews)
     }
 
     /// El tope que vale para una sesión: el suyo si lo tiene; si no, el de Ajustes.

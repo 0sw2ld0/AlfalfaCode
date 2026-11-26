@@ -174,6 +174,10 @@ final class LiveSession: ObservableObject, Identifiable {
 
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
+        // El motor anuncia la «Vista enriquecida» al abrir la sesión: si no es la que eligió el usuario, se la manda.
+        if case let .session(info) = message, let reported = info.richView, reported != richView {
+            process?.send(.richView(richView))
+        }
         if case let .taskQueue(queue) = message,
            pendingQueueAction.map({ queue.acknowledges($0, previousID: previousQueueID) }) ?? true {
             pendingQueueAction = nil
@@ -696,6 +700,21 @@ extension LiveSession {
     /// Ajustes ▸ General ▸ Firmar los commits: vale desde el siguiente `git commit`.
     func setCommitSignature(_ on: Bool) {
         process?.send(.commitSignature(on))
+    }
+
+    /// «Vista enriquecida» de esta sesión: la suya si se cambió desde el panel; si no, la de Ajustes.
+    var richView: Bool { Preferences().richView(for: sessionID) }
+
+    /// El motor admite el interruptor: habla PACAI con el perfil `ui` y lo anunció en su sesión.
+    var richViewAvailable: Bool { timeline.session?.richView != nil }
+
+    /// Desde el panel derecho: pantallas sí o no en esta sesión. Vale desde la siguiente petición al modelo y se
+    /// guarda con su id, así que sigue al reanudarla; la de Ajustes no cambia.
+    func setRichView(_ on: Bool) {
+        guard let id = sessionID else { return }
+        Preferences().setRichView(on, for: id)
+        objectWillChange.send()
+        process?.send(.richView(on))
     }
 
     /// El tope propio de esta sesión (nil: sigue el de Ajustes).

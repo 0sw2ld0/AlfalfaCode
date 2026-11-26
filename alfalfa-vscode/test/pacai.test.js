@@ -91,6 +91,17 @@ test('set_settings pasa cualquier modo con forma de id (los valida el motor)', a
     await once(c, 'salida');
 });
 
+test('la vista enriquecida se manda con alfalfa.set_rich_view', async () => {
+    const { c } = cliente();
+    const sesion = esperar(c, 'alfalfa.session', m => m.payload.rich_view === false);
+    c.iniciar();
+    c.vistaEnriquecida(false);
+    assert.equal((await sesion).payload.rich_view, false);
+    c.cerrar();
+    await once(c, 'salida');
+    assert.equal(c.vistaEnriquecida(true), null);   // ya cerrado: no se manda nada
+});
+
 test('una secuencia rota se avisa como fallo', async () => {
     const c = new ClientePacai({ ejecutable: FALSO, cwd: __dirname });
     const fallo = once(c, 'fallo');

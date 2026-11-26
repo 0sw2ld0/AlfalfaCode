@@ -508,3 +508,29 @@ def test_las_vistas_guardadas_se_recuperan_sin_lo_que_el_catalogo_no_admite():
         nada = Vistas(base)
         nada.cargar(malo)
         assert nada.vistas == {}
+
+
+def test_la_vista_enriquecida_apagada_quita_el_manual_y_la_sesion_lo_anuncia():
+    c = Cliente(perfiles=('work', 'ui'))
+    c.saludar(render={'ui': {'version': '1'}})
+    c.t.emit('sesion', id='s1', cwd='/x', modelo='m', esfuerzo='low', modo='auto')
+    sesion, = [m for m in c.drenar() if m['type'] == 'alfalfa.session']
+    assert sesion['payload']['rich_view'] is True
+    assert 'pacai-ui' in c.t.manual_ui()
+    assert c.enviar('alfalfa.set_rich_view', {'active': False}) == []
+    assert c.t.manual_ui() == '' and c.t.manual_ui(web=True) == ''
+    c.t.emit('sesion', id='s1', cwd='/x', modelo='m', esfuerzo='low', modo='auto')
+    assert [m for m in c.drenar() if m['type'] == 'alfalfa.session'][0]['payload']['rich_view'] is False
+    c.enviar('alfalfa.set_rich_view', {'active': True})
+    assert 'pacai-ui' in c.t.manual_ui()
+    error, = c.enviar('alfalfa.set_rich_view', {'active': 'si'})
+    assert error['type'] == 'error' and error['payload']['code'] == 'invalid_message'
+    c.comprobar()
+
+
+def test_sin_ui_la_sesion_no_anuncia_la_vista_enriquecida():
+    c = Cliente()
+    c.saludar()
+    c.t.emit('sesion', id='s1', cwd='/x', modelo='m', esfuerzo='low', modo='auto')
+    sesion, = [m for m in c.drenar() if m['type'] == 'alfalfa.session']
+    assert 'rich_view' not in sesion['payload']

@@ -536,6 +536,8 @@ class Transport:
                 if self.encargos is None:
                     raise ValueError()
                 self.encargos(value)
+            elif value.get('tipo') == 'vista_enriquecida':
+                pass                     # --stdio v2 no tiene pantallas: la app manda el interruptor igual
             elif value.get('tipo') == 'detener_proceso':
                 ident = value.get('id')
                 if not isinstance(ident, str) or self.stop_process is None:

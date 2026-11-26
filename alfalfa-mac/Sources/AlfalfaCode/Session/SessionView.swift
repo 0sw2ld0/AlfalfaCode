@@ -35,6 +35,8 @@ struct SessionView: View {
                               onContextMode: { session.setContextMode($0) },
                               sessionCap: session.sessionCap,
                               onSessionCap: session.sessionID == nil ? nil : { session.setSessionCap($0) },
+                              richView: session.richViewAvailable && session.sessionID != nil ? session.richView : nil,
+                              onRichView: { session.setRichView($0) },
                               appControlPreviewStore: appControlPreviewStore)
                 }
             }

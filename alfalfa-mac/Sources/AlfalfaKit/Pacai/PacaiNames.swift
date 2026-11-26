@@ -68,7 +68,7 @@ enum PacaiNames {
         "tokens_turno": "turn_tokens", "tope": "cap", "transporte": "transport", "turno": "turn", "turnos": "turns",
         "ultima": "latest", "ultimas": "tail", "umbral": "threshold", "usado_pct": "used_pct", "usados": "used",
         "ventana": "window", "version_disponible": "available_version", "visita": "visit", "visita_id": "visit_id",
-        "visita_sitio": "visit_site", "vista": "view", "vivo": "alive"
+        "visita_sitio": "visit_site", "vista": "view", "vista_enriquecida": "rich_view", "vivo": "alive"
     ]
 
     /// Por campo inglés, valor de v2 → valor en inglés (`VALORES`).

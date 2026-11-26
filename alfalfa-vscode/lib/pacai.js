@@ -136,6 +136,13 @@ class ClientePacai extends EventEmitter {
         return this._enviar('alfalfa.set_settings', payload);
     }
 
+    /** `alfalfa.set_rich_view`: si el agente puede dibujar pantallas en el chat (perfil `ui`). Vale desde la siguiente
+     * petición al modelo; las pantallas que ya dibujó se siguen viendo. */
+    vistaEnriquecida(activa) {
+        if (!this.proceso || this.cerrado) return null;
+        return this._enviar('alfalfa.set_rich_view', { active: Boolean(activa) });
+    }
+
     cerrar() {
         if (!this.proceso || this.cerrado) return;
         try {

@@ -111,6 +111,9 @@ class TransportePacai(Transport):
         self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
         self._trabajo: asyncio.Future | None = None      # el trabajo (`TRABAJOS`) cuya ejecución está abierta
         self._siguiente: str | None = None               # la entrada del turno que espera a que se cierre el anterior
+        # Perfil ui: «Vista enriquecida» del cliente (`alfalfa.set_rich_view`). Apagada, el modelo no recibe el manual
+        # de pantallas y contesta en texto; las pantallas que ya dibujó se siguen viendo.
+        self.vista_enriquecida = True
         self._archivo_vistas = None                      # Path de las pantallas guardadas de la sesión (perfil ui)
         self._vistas_guardadas = 0                       # Vistas.revisiones() de lo último que se guardó
 
@@ -215,6 +218,9 @@ class TransportePacai(Transport):
         else:
             if tipo == 'sesion':
                 self._abrir_vistas(campos.get('id'))
+                if self.t.vistas is not None:
+                    # Con `ui` negociado: el cliente sabe así que este motor admite `alfalfa.set_rich_view`.
+                    campos = dict(campos, vista_enriquecida=self.vista_enriquecida)
             self._enviar_todo(self.t.evento(tipo, campos))
         self._guardar_vistas()
         self._olvidar_resueltas()
@@ -666,7 +672,7 @@ class TransportePacai(Transport):
         el modelo decide que no tiene internet antes de cargar el manual. `completo` da el manual que devuelve la
         herramienta ui_manual, ya sin esa parte, que está en el prompt."""
         vistas = self.t.vistas if self.t is not None else None
-        if vistas is None:
+        if vistas is None or not self.vista_enriquecida:
             return ''
         if modelo is not None:
             vistas.catalogo.con_modelo(modelo)
@@ -678,7 +684,7 @@ class TransportePacai(Transport):
     def ui_bajo_demanda(self) -> bool:
         """Si esta sesión ofrece la herramienta ui_manual: perfil `ui` negociado y el prototipo encendido."""
         vistas = self.t.vistas if self.t is not None else None
-        return vistas is not None and vistas.catalogo.bajo_demanda
+        return vistas is not None and self.vista_enriquecida and vistas.catalogo.bajo_demanda
 
     def _accion_de_pantalla(self, m: dict) -> dict | None:
         """Un `input` con `pacai.ui.action/1`: el mismo `input` con un solo bloque de texto para el modelo (None y un
@@ -833,6 +839,11 @@ class TransportePacai(Transport):
             return self._quitar_de_cola(p.get('id'))
         if nombre == 'send_now':
             return self._enviar_ahora(p.get('id'))
+        if nombre == 'set_rich_view':
+            if not isinstance(p.get('active'), bool):
+                return self._error('invalid_message', 'alfalfa.set_rich_view necesita active (true o false).', m['id'])
+            self.vista_enriquecida = p['active']
+            return None
         v2 = COMANDOS.get(nombre)
         if v2 is None:
             return self._error('invalid_message', 'Orden desconocida: ' + m['type'], m['id'])
