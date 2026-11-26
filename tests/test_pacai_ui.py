@@ -33,6 +33,45 @@ def test_partir_separa_texto_y_vallas():
     assert partir('```python\nprint(1)\n```') == [('text', '```python\nprint(1)\n```')]
 
 
+NODO = '{"id":"root","component":"Text","props":{"text":"Hola"}}'
+
+
+def test_la_valla_vale_aunque_no_empiece_la_linea():
+    # GPT-6 Luna escribe a veces una frase (o su razonamiento) y abre el bloque en la misma línea.
+    texto = 'Se actualiza la rejilla.```pacai-ui view=tablero placement=latest\n' + NODO + '\n```\nListo.'
+    assert partir(texto) == [('text', 'Se actualiza la rejilla.\n'),
+                             ('ui', {'view': 'tablero', 'placement': 'latest'}, [NODO]),
+                             ('text', 'Listo.')]
+    # Sólo se encuentra el bloque: su contenido es el mismo que con la valla al principio de la línea.
+    assert partir(texto)[1] == partir('```pacai-ui view=tablero placement=latest\n' + NODO + '\n```')[0]
+
+
+def test_una_valla_citada_o_dentro_de_otro_codigo_sigue_siendo_texto():
+    citas = [
+        'Usa ````pacai-ui view=x` para dibujar.\n' + NODO + '\n',            # citada entre comillas invertidas
+        'Escribe ```pacai-ui view=x y después los nodos.\n' + NODO + '\n',   # la frase sigue tras la valla
+        '```markdown\nEjemplo:```pacai-ui view=x\n' + NODO + '\n```\n',      # dentro de otro bloque de código
+    ]
+    for texto in citas:
+        assert [t[0] for t in partir(texto)] == ['text'], texto
+        assert ''.join(t[1] for t in partir(texto)) == texto
+
+
+async def test_el_motor_dibuja_una_pantalla_abierta_a_media_linea():
+    c = Cliente(perfiles=('work', 'ui'))
+    c.hello['render'] = {'ui': {'version': '1'}}
+    await abrir(c, 'Enséñame un saludo')
+    c.t.emit('evento', rol='agent', hora=1.0, texto='Aquí está:```pacai-ui view=saludo\n' + NODO + '\n```\n')
+    mensajes = c.drenar()
+    datos = [b['data'] for m in mensajes for b in m['payload'].get('blocks', []) if b.get('type') == 'structured']
+    textos = [b['text'] for m in mensajes if m['type'] == 'message_delta' for b in m['payload']['blocks']
+              if b['type'] == 'text']
+    assert datos and datos[0]['nodes'][0]['id'] == 'root'
+    assert ''.join(textos).strip() == 'Aquí está:' and not any('pacai-ui' in t for t in textos)
+    await cerrar(c)
+    c.comprobar()
+
+
 def test_vistas_aplica_patch_rechaza_lo_invalido_y_hace_la_foto():
     vistas = Vistas(Catalogo())
     data, errores = vistas.aplicar({'view': 'v'}, [

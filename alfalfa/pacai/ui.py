@@ -85,7 +85,13 @@ EJEMPLOS_BASE = {
 CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
 _APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
+# La misma valla al final de una línea con texto delante («Aquí está:```pacai-ui view=x»): algunos modelos escriben
+# una frase o su razonamiento y abren el bloque sin saltar de línea. Sólo cuenta si tras la valla no queda más que
+# sus atributos, si el texto de delante no lleva comillas invertidas (una valla citada en `código`) y si no estamos
+# dentro de otro bloque de código.
+_APERTURA_A_MEDIA_LINEA = re.compile(r'```' + VALLA + r'(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 _CIERRE = re.compile(r'^\s*```\s*$')
+_OTRA_VALLA = re.compile(r'^\s*```')
 
 
 def ascii_de(texto: str, minusculas: bool = False) -> str:
@@ -311,20 +317,34 @@ Componentes:
 
 
 def partir(texto: str) -> list[tuple]:
-    """Trozos del texto del modelo: ('text', str) o ('ui', atributos, líneas). Una valla sin cerrar llega al final."""
+    """Trozos del texto del modelo: ('text', str) o ('ui', atributos, líneas). Una valla sin cerrar llega al final.
+
+    La valla de apertura también vale al final de una línea con texto delante (ese texto queda como texto normal),
+    salvo dentro de otro bloque de código o citada entre comillas invertidas. Sólo se encuentra el bloque: su
+    contenido no cambia."""
     trozos: list[tuple] = []
     texto_actual: list[str] = []
     ui: tuple[dict, list[str]] | None = None
+    en_codigo = False                          # dentro de otro bloque ``` (que no es pacai-ui)
     for linea in texto.splitlines(keepends=True):
         if ui is None:
             abre = _APERTURA.match(linea)
+            delante = ''
+            if not abre and not en_codigo:
+                media = _APERTURA_A_MEDIA_LINEA.search(linea)
+                if media and linea[:media.start()].strip() and '`' not in linea[:media.start()]:
+                    abre, delante = media, linea[:media.start()].rstrip() + '\n'
             if abre:
+                if delante:
+                    texto_actual.append(delante)
                 if texto_actual:
                     trozos.append(('text', ''.join(texto_actual)))
                     texto_actual = []
                 attrs = dict(a.split('=', 1) for a in abre.group('attrs').split())
                 ui = (attrs, [])
             else:
+                if _OTRA_VALLA.match(linea):
+                    en_codigo = not en_codigo
                 texto_actual.append(linea)
         elif _CIERRE.match(linea):
             trozos.append(('ui', *ui))

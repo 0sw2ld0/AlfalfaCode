@@ -280,6 +280,11 @@ pruebas en `tests/test_pacai_ui.py`.
     Un ejemplo de la app que no pasa su propio esquema no entra. Son unos 600 tokens más de entrada; en el piloto
     con GPT-6 Luna y Claude Haiku 5.5 (52 tareas, 624 peticiones), las pantallas válidas a la primera pasaron del
     86–89 % al 97 %. `scripts/muestra_ejemplos_ui.py` repite la medida.
+13. **La valla vale aunque no empiece la línea.** Algunos modelos (GPT-6 Luna) escriben una frase o su razonamiento
+    y abren el bloque sin saltar de línea: `Aquí está:```pacai-ui view=x`. `partir` lo reconoce y deja el texto de
+    delante como texto normal; el contenido del bloque no cambia. No cuenta si tras la valla sigue la frase, si el
+    texto de delante lleva comillas invertidas (una valla citada en `código`) o si está dentro de otro bloque de
+    código.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
