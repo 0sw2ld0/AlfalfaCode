@@ -37,7 +37,8 @@ RESUMEN = {
     'Button': 'label, variant (primary|secondary|danger), disabled',
     'Form': 'submit_label',
     'Input': 'name, label, kind (text|number|multiline|email|date), placeholder, required',
-    'Select': 'name, label, options [{value, label}], multiple',
+    'Select': 'name, label, options [{value, label}], multiple, required (empieza vacío y el Form no se envía sin '
+              'elegir)',
     'Chart': 'kind (bar|line|pie), labels [texto], series [{name, values [números]}]',
     'Image': 'src (https: o data:image/…), alt',
     'Code': 'code, language',
@@ -73,7 +74,8 @@ EJEMPLOS_BASE = {
               {'id': 'cantidad', 'component': 'Input', 'props': {'name': 'cantidad', 'label': 'Cantidad',
                                                                   'kind': 'number', 'placeholder': 'p. ej. 20'}},
               {'id': 'fecha', 'component': 'Input', 'props': {'name': 'fecha', 'label': 'Fecha', 'kind': 'date'}}],
-    'Select': [{'id': 'moneda', 'component': 'Select', 'props': {'name': 'moneda', 'label': 'Moneda', 'options': [
+    'Select': [{'id': 'moneda', 'component': 'Select', 'props': {'name': 'moneda', 'label': 'Moneda', 'required': True,
+                                                               'options': [
         {'value': 'pen', 'label': 'Soles'}, {'value': 'usd', 'label': 'Dólares'}]}}],
     'Chart': [{'id': 'ventas', 'component': 'Chart', 'props': {'kind': 'line', 'labels': ['ene', 'feb'],
                                                                'series': [{'name': 'Palta', 'values': [6.2, 6.4]}]}}],

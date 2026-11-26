@@ -96,11 +96,12 @@ struct ScreenForm: View {
 
     // MARK: - Propiedades privadas
 
-    /// Los campos obligatorios del formulario (directos) tienen algo escrito.
+    /// Los campos obligatorios del formulario (directos) tienen algo escrito o elegido.
     private var complete: Bool {
         context.screen.children(of: node).allSatisfy { child in
-            guard child.component == "Input", child.props["required"]?.bool == true,
+            guard child.component == "Input" || child.component == "Select", child.props["required"]?.bool == true,
                   let name = child.props["name"]?.string else { return true }
+            if let values = context.state[name]?.array { return !values.isEmpty }
             return !(context.state[name]?.text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
         }
     }
@@ -147,8 +148,9 @@ struct ScreenSelect: View {
     var body: some View {
         let name = node.props["name"]?.string ?? node.id
         let options = node.prop("options", in: context.state)?.array?.compactMap(\.object) ?? []
+        let required = node.props["required"]?.bool == true
         VStack(alignment: .leading, spacing: 4) {
-            ScreenLabel(text: context.text("label", of: node) ?? name, required: false)
+            ScreenLabel(text: context.text("label", of: node) ?? name, required: required)
             if node.props["multiple"]?.bool == true {
                 ForEach(options.indices, id: \.self) { index in
                     Toggle(options[index]["label"]?.text ?? options[index]["value"]?.text ?? "",
@@ -156,6 +158,8 @@ struct ScreenSelect: View {
                 }
             } else {
                 Picker("", selection: context.binding(name)) {
+                    // Con `required` empieza sin opción elegida; el Form no se envía hasta elegir una.
+                    if required { Text("—").tag("") }
                     ForEach(options.indices, id: \.self) { index in
                         let value = options[index]["value"]?.text ?? ""
                         Text(options[index]["label"]?.text ?? value).tag(value)

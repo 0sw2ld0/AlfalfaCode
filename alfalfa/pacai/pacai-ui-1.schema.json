@@ -1169,6 +1169,9 @@
      },
      "multiple": {
       "type": "boolean"
+     },
+     "required": {
+      "type": "boolean"
      }
     },
     "required": [

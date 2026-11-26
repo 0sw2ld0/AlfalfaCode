@@ -281,6 +281,17 @@ def test_cada_componente_base_trae_un_ejemplo_que_pasa_el_catalogo():
     assert any(n['props'].get('text') == {'$': 'moneda'} for n in ejemplos if n['component'] == 'Text')
 
 
+def test_un_select_puede_ser_obligatorio():
+    cat = Catalogo()
+    opciones = [{'value': 'a'}, {'value': 'b'}]
+    assert cat.errores_del_nodo({'id': 's', 'component': 'Select', 'props': {'name': 'x', 'options': opciones,
+                                                                           'required': True}}) == []
+    assert cat.errores_del_nodo({'id': 's', 'component': 'Select', 'props': {'name': 'x', 'options': opciones,
+                                                                           'required': 'sí'}})
+    assert 'required' in cat.manual().split('- Select:')[1].splitlines()[0]
+    assert any(n['component'] == 'Select' and n['props'].get('required') is True for n in cat.ejemplos())
+
+
 def test_el_manual_lleva_los_ejemplos_del_catalogo_y_los_de_la_app():
     declaracion = _cuymercado()
     assert errores_de('declaration', declaracion) == []

@@ -323,6 +323,14 @@ const COMPONENTES = {
         control.multiple = Boolean(p.multiple);
         control.dataset.nodo = nodo.id;
         const actual = this.estado[p.name];
+        // Con `required` empieza sin opción elegida, y el Form no se envía hasta elegir una (validación del navegador).
+        control.required = Boolean(p.required);
+        if (control.required && !control.multiple) {
+            const nada = crear('option', null, '—');
+            nada.value = '';
+            nada.selected = actual === undefined || actual === null || actual === '';
+            control.append(nada);
+        }
         for (const opcion of Array.isArray(p.options) ? p.options : []) {
             const el = crear('option', null, opcion.label ?? opcion.value);
             el.value = opcion.value;
@@ -333,7 +341,7 @@ const COMPONENTES = {
             this.estado[p.name] = control.multiple ? [...control.selectedOptions].map(o => o.value) : control.value;
             if (nodo.events?.change) this._evento(nodo, 'change');
         });
-        return campo(p.label ?? p.name, control, false);
+        return campo(p.label ?? p.name, control, control.required);
     },
     Chart(nodo, p) {
         return grafico(p);

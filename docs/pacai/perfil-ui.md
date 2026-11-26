@@ -143,7 +143,7 @@ propiedades está en `pacai-ui-1.schema.json` (`$defs/base_props`).
 | `Button` | `label`, `variant` (`primary`/`secondary`/`danger`), `disabled` | no | `press` |
 | `Form` | `submit_label` | sí | `submit` |
 | `Input` | `name`, `label`, `kind` (`text`/`number`/`multiline`/`email`/`date`), `placeholder`, `required` | no | `change` |
-| `Select` | `name`, `label`, `options` (`[{value, label}]`), `multiple` | no | `change` |
+| `Select` | `name`, `label`, `options` (`[{value, label}]`), `multiple`, `required` (empieza sin opción elegida y el `Form` no se envía hasta elegir una) | no | `change` |
 | `Chart` | `kind` (`bar`/`line`/`pie`), `labels`, `series` (`[{name, values}]`) | no | — |
 | `Image` | `src` (`https:` o `data:image/…`), `alt` (obligatorio) | no | — |
 | `Code` | `code`, `language` | no | — |
