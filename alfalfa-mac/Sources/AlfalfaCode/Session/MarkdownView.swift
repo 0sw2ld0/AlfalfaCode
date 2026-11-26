@@ -15,8 +15,13 @@ struct MarkdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(MarkdownText.blocks(text, folder: folder).enumerated()), id: \.offset) { _, block in
-                view(for: block)
+            // Párrafos, títulos, listas y citas seguidos van en un solo texto: se seleccionan de una vez.
+            ForEach(Array(MarkdownProse.segments(MarkdownText.blocks(text, folder: folder)).enumerated()),
+                    id: \.offset) { _, segment in
+                switch segment {
+                case let .prose(blocks): ProseView(blocks: blocks)
+                case let .block(block): view(for: block)
+                }
             }
         }
         .font(Theme.body).lineSpacing(Theme.bodyLineSpacing).tint(Theme.link)
@@ -25,29 +30,9 @@ struct MarkdownView: View {
 
     // MARK: - Métodos privados
 
+    /// Lo que no es texto corrido: código con sus botones, tablas, separadores e imágenes.
     @ViewBuilder private func view(for block: MarkdownBlock) -> some View {
         switch block {
-        case let .paragraph(value):
-            Text(MarkdownText.inline(value)).textSelection(.enabled)
-        case let .heading(level, value):
-            Text(MarkdownText.inline(value))
-                .font(.system(size: [22, 18, 16, 15, 15, 15][min(level, 6) - 1],
-                              weight: level <= 2 ? .bold : .semibold))
-                .padding(.top, level <= 2 ? 10 : 4)
-                .textSelection(.enabled)
-        case let .bullet(value, level):
-            item(marker: Text(level == 0 ? "•" : "◦").foregroundStyle(Theme.text), value, level)
-        case let .numbered(number, value, level):
-            item(marker: Text("\(number).").foregroundStyle(Theme.secondary).monospacedDigit(), value, level)
-        case let .task(done, value, level):
-            item(marker: Image(systemName: done ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(done ? Theme.alfalfa : Theme.muted), value, level)
-        case let .quote(value):
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 1.5).fill(Theme.alfalfa.opacity(0.7)).frame(width: 3)
-                Text(MarkdownText.inline(value)).foregroundStyle(Theme.secondary).textSelection(.enabled)
-            }
-            .fixedSize(horizontal: false, vertical: true)
         case let .code(value, language):
             CodeBlockView(code: value, language: language, folder: folder)
         case let .table(header, rows):
@@ -56,18 +41,9 @@ struct MarkdownView: View {
             Divider().overlay(Theme.border).padding(.vertical, 4)
         case let .media(items):
             MediaGallery(items: items)
+        case .paragraph, .heading, .bullet, .numbered, .task, .quote:
+            ProseView(blocks: [block])
         }
-    }
-
-    /// Viñeta en una columna propia, como en Codex: el texto de varias líneas queda alineado.
-    private func item(marker: some View, _ value: String, _ level: Int) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            marker.frame(width: 26, alignment: .center)
-            Text(MarkdownText.inline(value)).textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.leading, 4 + CGFloat(level) * 24)
     }
 }
 
