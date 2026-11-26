@@ -201,6 +201,30 @@ BUSCAR_ANTES = '''- Si la respuesta necesita información actual o de fuera (not
   una tarjeta si citas su url. Si algo queda sin verificar, dilo en la tarjeta en vez de dejar al usuario sin nada.
 '''
 
+# Prototipo, sólo con ALFALFA_PACAI_UI_MANUAL=1: el manual de pantallas se carga bajo demanda, como una habilidad.
+# El prompt de sistema lleva sólo AVISO_MANUAL y el modelo pide el manual entero con la herramienta `ui_manual`.
+FLAG_MANUAL = 'ALFALFA_PACAI_UI_MANUAL'
+HERRAMIENTA_MANUAL = 'ui_manual'
+AVISO_MANUAL = '''
+Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conversación. Cuando la respuesta se
+entienda mejor como pantalla (una lista o tabla de cosas, tarjetas, una comparativa, un gráfico, resultados de una
+búsqueda, algo que el usuario tenga que elegir, rellenar o confirmar, o algo que te pidan enseñar o dibujar aquí),
+primero carga el manual con ui_manual y dibújala como dice; no la escribas en markdown. Para una respuesta corta o
+una explicación de código escribe texto normal.
+'''
+UI_MANUAL_TOOL = {'type': 'function', 'function': {
+    'name': HERRAMIENTA_MANUAL,
+    'description': 'Load the manual for drawing screens in this chat (the components this client can draw and the '
+                   'block format). Call it once before your first screen; the manual stays in the conversation.',
+    'parameters': {'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False}}}
+
+
+def manual_bajo_demanda(entorno: dict | None = None) -> bool:
+    import os
+
+    return (os.environ if entorno is None else entorno).get(FLAG_MANUAL, '').strip().lower() in ('1', 'true', 'si',
+                                                                                                  'sí')
+
 
 @dataclass
 class Catalogo:
@@ -217,6 +241,8 @@ class Catalogo:
     piezas: bool = False
     consultas: dict[str, dict] = field(default_factory=dict)
     forzado: bool | None = None
+    # Prototipo (ALFALFA_PACAI_UI_MANUAL=1): el manual entra con la herramienta ui_manual, no en el prompt.
+    bajo_demanda: bool = False
 
     @classmethod
     def de(cls, declaracion: dict | None, entorno: dict | None = None, modelo: str | None = None) -> Catalogo:
@@ -234,7 +260,7 @@ class Catalogo:
                    max_nodos=limites.get('max_nodes', MAX_NODOS),
                    max_profundidad=limites.get('max_depth', MAX_PROFUNDIDAD), lang=lang, piezas=piezas,
                    consultas=dict(d.get('queries') or {}) if piezas and isinstance(d.get('queries'), dict) else {},
-                   forzado=forzado(entorno))
+                   forzado=forzado(entorno), bajo_demanda=manual_bajo_demanda(entorno))
 
     def con_modelo(self, modelo: str | None) -> Catalogo:
         """Ajusta el formato al modelo de esta inferencia: PACAI UI Lang con un modelo medido, el JSON con el resto.

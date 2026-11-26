@@ -1026,6 +1026,20 @@ class WorkspaceTools:
             identity = json.dumps(function, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
         return digest(identity.encode())
 
+    def _manual_ui(self):
+        """El manual de pantallas del perfil `ui` (prototipo bajo demanda). Queda en el historial: si ya está ahí
+        se contesta con un aviso corto; tras compactar ya no está y se devuelve entero otra vez."""
+        manual = getattr(self.runtime.manager, 'manual_ui_completo', None)
+        texto = manual() if callable(manual) else ''
+        if not texto:
+            raise ValueError('Esta sesión no dibuja pantallas: el cliente no negoció el perfil ui.')
+        for mensaje in self.runtime.state.get('messages') or []:
+            if (isinstance(mensaje, dict) and mensaje.get('role') == 'tool' and mensaje.get('tool_name') == 'ui_manual'
+                    and '"manual"' in str(mensaje.get('content'))):
+                return {'ya_cargado': True, 'nota': 'El manual de pantallas ya está más arriba en esta conversación: '
+                                                    'síguelo y dibuja la pantalla.'}
+        return {'manual': texto.strip()}
+
     async def call(self, name, args):
         if not isinstance(name, str) or not name:
             # Un nombre que no es texto (una lista, un número) hacía saltar un TypeError fuera del turno.
@@ -1215,6 +1229,8 @@ class WorkspaceTools:
             if name == 'abrir_habilidad':
                 return cargador.abrir_habilidad(args['habilidad'])
             return cargador.invocar_comando(args['comando'], args.get('argumentos', ''))
+        if name == 'ui_manual':
+            return self._manual_ui()
         if name in ('memoria', 'habilidad'):
             # Sólo AlfalfaCode (alfalfa/aprendizaje): escribe en su hogar o en .alfalfa/skills.
             aprendizaje = getattr(self.runtime.manager, 'aprendizaje', None)

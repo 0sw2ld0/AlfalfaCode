@@ -385,6 +385,13 @@ siempre. `ALFALFA_PACAI_UI_LANG=1` lo fuerza con cualquier modelo y, si el clien
 `render.ui`, enciende también las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos), que
 siguen siendo un prototipo; `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
 
+`ALFALFA_PACAI_UI_MANUAL=1` enciende otro prototipo, también apagado por defecto: el manual de pantallas se carga
+bajo demanda, como una habilidad. El prompt de sistema lleva sólo un aviso de unas líneas (y, con buscador, que
+busque antes de dibujar), y el modelo pide el manual entero con la herramienta `ui_manual`, sin argumentos, antes de
+su primera pantalla. Devuelve el manual de la sesión: el catálogo del cliente y el formato que toque (JSON o PACAI
+UI Lang). Si lo pide otra vez y el manual sigue en la conversación, recibe un aviso corto. La herramienta sólo existe
+cuando el cliente negoció el perfil `ui`. Está en [pacai/perfil-ui.md §8](pacai/perfil-ui.md#8-cómo-lo-hace-alfalfacode-informativo).
+
 ### Cómo se usa
 
 ```bash

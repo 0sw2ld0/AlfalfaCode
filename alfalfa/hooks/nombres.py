@@ -44,6 +44,8 @@ SIN_EQUIVALENTE = {
     'web_search': 'WebSearch de Claude recibe query y allowed_domains; aquí query y domains.',
     'read_web': 'WebFetch de Claude recibe url y prompt y resume la página; read_web devuelve su texto.',
     'buscar_herramientas': 'Buscar o cargar un esquema MCP no ejecuta ninguna herramienta MCP.',
+    'ui_manual': 'Claude Code no dibuja pantallas en el chat; es como abrir una habilidad: carga el manual del perfil '
+                 'ui de PACAI.',
     'abrir_habilidad': 'Skill de Claude carga una habilidad por nombre; aquí se abre por referencia autorizada.',
     'invocar_comando': 'Los comandos de Claude son prompts del usuario; aquí sólo se compone su plantilla.',
     'apply_patch': 'Edita varios archivos con un parche; como en Codex, los filtros Edit y Write también lo eligen.',

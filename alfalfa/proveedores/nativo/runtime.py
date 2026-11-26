@@ -284,6 +284,8 @@ ARCHIVOS_PROPIOS_NOTA = ('Lo que cambiaste con órdenes (run_command) puede falt
 SIN_EFECTOS = {'read_file', 'search', 'list_files', 'inspect_image', 'web_search', 'read_web',
                # Abrir una habilidad o componer un comando sólo lee su archivo.
                'abrir_habilidad', 'invocar_comando',
+               # Leer el manual de pantallas del perfil ui (prototipo bajo demanda).
+               'ui_manual',
                # wrap_up y propose_session sólo guardan lo que enseña la app.
                'wrap_up', 'propose_session',
                # Mirar un proceso en segundo plano; detenerlo dos veces no cambia nada.

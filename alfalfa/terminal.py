@@ -618,6 +618,13 @@ class TerminalManager:
             argumentos = self.mcp.limpiar(argumentos)
         self.transport.argumentos_herramienta(str(nombre), argumentos)
 
+    def manual_ui_completo(self):
+        """El manual de pantallas de esta sesión para la herramienta ui_manual: el catálogo del cliente y el formato
+        que toque (JSON o PACAI UI Lang). Cómo buscar antes de dibujar ya va en el prompt (`manual_ui`)."""
+        if not getattr(self.transport, 'ui_bajo_demanda', lambda: False)():
+            return ''
+        return self.transport.manual_ui(web='web_search' not in excluidas(), completo=True)
+
     def plan(self, task, pasos, explicacion=None):
         """`plan`: la lista de tareas del agente, como la de Codex; la app la enseña."""
         if self.transport:
@@ -857,6 +864,10 @@ class TerminalManager:
             from .navegador import TOOLS as HERRAMIENTAS_DEL_NAVEGADOR
             rt.tool_specs = list(rt.tool_specs) + getattr(self.navegador, 'tools', HERRAMIENTAS_DEL_NAVEGADOR)
         rt.tool_specs = list(rt.tool_specs) + self.aprendizaje.herramientas()
+        if getattr(self.transport, 'ui_bajo_demanda', lambda: False)():
+            # Prototipo del perfil `ui`: el manual de pantallas entra cuando el modelo lo pide.
+            from .pacai.ui import UI_MANUAL_TOOL
+            rt.tool_specs = list(rt.tool_specs) + [UI_MANUAL_TOOL]
         self.aprendizaje.vincular(rt)
         if self.mcp is not None:
             self.mcp.vincular(rt)

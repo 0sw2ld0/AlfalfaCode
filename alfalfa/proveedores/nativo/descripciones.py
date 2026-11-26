@@ -119,6 +119,8 @@ def descripcion(nombre, args):
         accion = {'crear': 'Crear', 'parchear': 'Cambiar', 'escribir_archivo': 'Ampliar',
                   'borrar': 'Borrar'}.get(args.get('accion'), 'Cambiar')
         return accion + ' la habilidad ' + _texto(args.get('nombre'), 64)
+    if nombre == 'ui_manual':
+        return 'Leer el manual de pantallas'
     if nombre == 'buscar_herramientas':
         return 'Cargar herramientas'
     if nombre == 'buscar_sesiones':

@@ -299,6 +299,50 @@ pruebas en `tests/test_pacai_ui.py`.
     aunque no se pueda leer (una línea con `"id":"root"` que no es JSON): ahí el modelo quiso otra raíz y se le pide.
     Los hijos de un nodo rechazado (los campos de un `Form` que no valió) no suben a la raíz nueva. Si la pantalla ya
     tiene el máximo de nodos, no cabe el `root` y el error lo dice.
+16. **Prototipo: el manual bajo demanda (`ALFALFA_PACAI_UI_MANUAL=1`, apagado por defecto).** El manual de este
+    apartado va entero en el prompt de sistema de cada petición, aunque no se dibuje nada: unos 1.620 tokens con
+    buscador. Con el flag, el prompt lleva sólo `AVISO_MANUAL` (cuándo conviene una pantalla y que primero cargue el
+    manual) y, si hay buscador, `BUSCAR_ANTES`. El modelo pide el manual con la herramienta `ui_manual`, sin
+    argumentos, que sólo existe con el perfil `ui` negociado.
+    - Devuelve el manual de la sesión: catálogo del cliente y formato (JSON o PACAI UI Lang). Si se repite y el manual
+      sigue en el historial, contesta un aviso corto; tras compactar ya no está y lo devuelve entero.
+    - `BUSCAR_ANTES` se queda en el prompt porque, en la prueba corta, GPT-6 Luna dijo «no puedo consultar noticias
+      en tiempo real» antes de cargar el manual: decide si busca antes de saber que va a dibujar.
+    - Con el prompt real del motor (capturado de `TerminalManager`, catálogo base), el sistema pasa de 6.589 a 5.123 (−1.466)
+      tokens por petición; la herramienta añade 80 y el manual que devuelve pesa 1.580.
+
+    **Medición (26-11-2026, `scripts/piloto_manual_ui.py`).** GPT-6 Luna por el plan de ChatGPT, esfuerzo medium, el
+    prompt y las herramientas de verdad, 20 preguntas × 2 brazos × 2 repeticiones = 80 turnos y 140 peticiones. 12
+    preguntas donde conviene una pantalla sin pedirla (3 con búsqueda, con resultados fijos) y 8 de código. Claude
+    Haiku 5.5 no se midió: no está en el plan de ChatGPT. Datos brutos fuera del repositorio
+    (`piloto-manual-ui-luna.jsonl`).
+
+    | GPT-6 Luna | Manual completo | `ui_manual` |
+    |---|---:|---:|
+    | Dibuja sin que se pida, donde conviene | 11/24 (46 %, IC95 % 28–65 %) | 8/24 (33 %, 18–53 %) |
+    | … sin las 3 preguntas de búsqueda | 10/18 (56 %) | 6/18 (33 %) |
+    | Pantallas válidas a la primera | 11/11 | 8/8 |
+    | Pantallas fuera de lugar en preguntas de código | 0/16 | 0/16 |
+    | Carga el manual (donde conviene · código) | — | 11/24 · 0/16 |
+    | Entrada media por turno de código (sin pantalla) | 13.805 tokens | 12.385 (−10 %) |
+    | Entrada media por turno con pantalla | 22.690 tokens | 37.925 (+67 %) |
+    | Coste medio por turno, todas las preguntas | 2,48 $/1000 | 2,55 $/1000 (+3 %) |
+    | Tiempo hasta la primera pantalla (mediana) | 13,6 s | 14,8 s |
+
+    - La línea corta **dibuja menos**: el formulario de vacaciones (2/2 → 0/2) y las opciones de alojamiento (2/2 →
+      0/2) pasan a texto o a una tabla en markdown (3 → 5 turnos con tabla markdown). Con n = 24 las diferencias no
+      son significativas, pero ninguna pregunta mejora salvo la de elegir curso (1/2 → 2/2) y la del precio de la papa.
+    - Tres turnos cargaron el manual y no dibujaron: dos desconfiaron de los resultados fijos (dominios de ejemplo,
+      igual que en el brazo completo) y uno agotó los 6 pasos buscando. Es un límite del montaje, igual en los dos
+      brazos.
+    - Ahorra en los turnos sin pantalla y cuesta una petición más en los que sí la llevan, que además arrastran el
+      manual en el historial. En una sesión de agente con muchas herramientas por turno, el ahorro de ~1.450 tokens
+      se cobra en cada petición, así que pesaría más que en este piloto de turnos cortos.
+
+    **Recomendación: no encenderlo por defecto.** Ahorra un 10 % de entrada cuando no se dibuja, pero baja de 46 % a
+    33 % las pantallas que el modelo decide dibujar solo, que es justo lo que el perfil busca. Lo siguiente que
+    probaría es dejar en el prompt la parte de *cuándo* dibujar del manual (unos 250 tokens) y diferir sólo el
+    formato, el catálogo y los ejemplos, y medirlo también con Haiku.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
