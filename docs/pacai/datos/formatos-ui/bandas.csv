@@ -1,0 +1,31 @@
+modelo,formato,banda,validas,n,pct_validas
+claude-haiku-5-5,PACAI JSON con ejemplos,b1,19,20,95.0
+claude-haiku-5-5,PACAI JSON con ejemplos,b2,20,20,100.0
+claude-haiku-5-5,PACAI JSON con ejemplos,b3,15,20,75.0
+claude-haiku-5-5,PACAI JSON con ejemplos,b4,9,16,56.2
+claude-haiku-5-5,PACAI JSON con ejemplos,b5,12,16,75.0
+claude-haiku-5-5,PACAI UI Lang 3,b1,20,20,100.0
+claude-haiku-5-5,PACAI UI Lang 3,b2,19,20,95.0
+claude-haiku-5-5,PACAI UI Lang 3,b3,14,20,70.0
+claude-haiku-5-5,PACAI UI Lang 3,b4,10,16,62.5
+claude-haiku-5-5,PACAI UI Lang 3,b5,8,16,50.0
+claude-haiku-5-5,OpenUI Lang 1.0,b1,18,20,90.0
+claude-haiku-5-5,OpenUI Lang 1.0,b2,15,20,75.0
+claude-haiku-5-5,OpenUI Lang 1.0,b3,11,20,55.0
+claude-haiku-5-5,OpenUI Lang 1.0,b4,6,16,37.5
+claude-haiku-5-5,OpenUI Lang 1.0,b5,9,16,56.2
+gpt-6-luna,PACAI JSON con ejemplos,b1,18,20,90.0
+gpt-6-luna,PACAI JSON con ejemplos,b2,19,20,95.0
+gpt-6-luna,PACAI JSON con ejemplos,b3,17,20,85.0
+gpt-6-luna,PACAI JSON con ejemplos,b4,8,16,50.0
+gpt-6-luna,PACAI JSON con ejemplos,b5,9,16,56.2
+gpt-6-luna,PACAI UI Lang 3,b1,17,20,85.0
+gpt-6-luna,PACAI UI Lang 3,b2,18,20,90.0
+gpt-6-luna,PACAI UI Lang 3,b3,16,20,80.0
+gpt-6-luna,PACAI UI Lang 3,b4,13,16,81.2
+gpt-6-luna,PACAI UI Lang 3,b5,9,16,56.2
+gpt-6-luna,OpenUI Lang 1.0,b1,20,20,100.0
+gpt-6-luna,OpenUI Lang 1.0,b2,20,20,100.0
+gpt-6-luna,OpenUI Lang 1.0,b3,20,20,100.0
+gpt-6-luna,OpenUI Lang 1.0,b4,13,14,92.9
+gpt-6-luna,OpenUI Lang 1.0,b5,12,16,75.0

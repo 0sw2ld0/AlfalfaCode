@@ -1,0 +1,48 @@
+conjunto,modelo,formato,clase,pantallas
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,enum,6
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,firma-o-tipo,4
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,acciones,4
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,obligatoria,3
+openui,claude-haiku-5-5,PACAI UI Lang 3,referencias,7
+openui,claude-haiku-5-5,PACAI UI Lang 3,firma-o-tipo,6
+openui,claude-haiku-5-5,PACAI UI Lang 3,sintaxis,4
+openui,claude-haiku-5-5,PACAI UI Lang 3,acciones,3
+openui,claude-haiku-5-5,PACAI UI Lang 3,otros,1
+openui,claude-haiku-5-5,OpenUI Lang 1.0,referencias,18
+openui,claude-haiku-5-5,OpenUI Lang 1.0,acciones,12
+openui,claude-haiku-5-5,OpenUI Lang 1.0,sintaxis,1
+openui,claude-haiku-5-5,OpenUI Lang 1.0,enum,1
+openui,claude-haiku-5-5,OpenUI Lang 1.0,firma-o-tipo,1
+openui,gpt-6-luna,PACAI JSON con ejemplos,firma-o-tipo,8
+openui,gpt-6-luna,PACAI JSON con ejemplos,obligatoria,5
+openui,gpt-6-luna,PACAI JSON con ejemplos,referencias,3
+openui,gpt-6-luna,PACAI JSON con ejemplos,enum,2
+openui,gpt-6-luna,PACAI JSON con ejemplos,sintaxis,2
+openui,gpt-6-luna,PACAI JSON con ejemplos,cobertura,1
+openui,gpt-6-luna,PACAI UI Lang 3,referencias,5
+openui,gpt-6-luna,PACAI UI Lang 3,sintaxis,4
+openui,gpt-6-luna,PACAI UI Lang 3,obligatoria,2
+openui,gpt-6-luna,PACAI UI Lang 3,enum,2
+openui,gpt-6-luna,PACAI UI Lang 3,sin-bloque,2
+openui,gpt-6-luna,PACAI UI Lang 3,acciones,1
+openui,gpt-6-luna,PACAI UI Lang 3,firma-o-tipo,1
+openui,gpt-6-luna,PACAI UI Lang 3,otros,1
+openui,gpt-6-luna,PACAI UI Lang 3,raiz,1
+openui,gpt-6-luna,OpenUI Lang 1.0,referencias,4
+openui,gpt-6-luna,OpenUI Lang 1.0,firma-o-tipo,1
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,sin-bloque,4
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,firma-o-tipo,3
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,referencias,1
+pacai,claude-haiku-5-5,PACAI UI Lang 3,cambio,4
+pacai,claude-haiku-5-5,PACAI UI Lang 3,referencias,3
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,sin-bloque,2
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,obligatoria,1
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,referencias,1
+pacai,glm-5.3-flash,PACAI UI Lang 3,sin-bloque,4
+pacai,glm-5.3-flash,PACAI UI Lang 3,sintaxis,2
+pacai,glm-5.3-flash,PACAI UI Lang 3,referencias,1
+pacai,gpt-6-luna,PACAI JSON con ejemplos,referencias,1
+pacai,gpt-6-luna,PACAI UI Lang 3,referencias,2
+pacai,gpt-6-luna,PACAI UI Lang 3,sintaxis,1
+pacai,gpt-6-luna,PACAI UI Lang 3,cambio,1
+pacai,gpt-6-luna,PACAI UI Lang 3,sin-bloque,1

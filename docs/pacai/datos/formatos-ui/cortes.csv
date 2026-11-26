@@ -1,0 +1,64 @@
+conjunto,modelo,formato,texto_llegado_pct,nodos_visibles_pct
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,25,25.0
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,50,50.0
+openui,claude-haiku-5-5,PACAI JSON con ejemplos,75,71.9
+openui,claude-haiku-5-5,PACAI UI Lang 3,25,25.0
+openui,claude-haiku-5-5,PACAI UI Lang 3,50,50.0
+openui,claude-haiku-5-5,PACAI UI Lang 3,75,70.6
+openui,claude-haiku-5-5,OpenUI Lang 1.0,25,32.1
+openui,claude-haiku-5-5,OpenUI Lang 1.0,50,55.0
+openui,claude-haiku-5-5,OpenUI Lang 1.0,75,75.0
+openui,gpt-6-luna,PACAI JSON con ejemplos,25,26.9
+openui,gpt-6-luna,PACAI JSON con ejemplos,50,52.9
+openui,gpt-6-luna,PACAI JSON con ejemplos,75,76.9
+openui,gpt-6-luna,PACAI UI Lang 3,25,25.0
+openui,gpt-6-luna,PACAI UI Lang 3,50,50.0
+openui,gpt-6-luna,PACAI UI Lang 3,75,70.0
+openui,gpt-6-luna,OpenUI Lang 1.0,25,35.0
+openui,gpt-6-luna,OpenUI Lang 1.0,50,57.9
+openui,gpt-6-luna,OpenUI Lang 1.0,75,75.6
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,25,20.0
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,50,40.0
+pacai,claude-haiku-5-5,PACAI JSON con ejemplos,75,66.7
+pacai,claude-haiku-5-5,PACAI UI Lang 3,25,0.0
+pacai,claude-haiku-5-5,PACAI UI Lang 3,50,33.3
+pacai,claude-haiku-5-5,PACAI UI Lang 3,75,66.7
+pacai,claude-haiku-5-5,OpenUI Lang 1.0,25,33.3
+pacai,claude-haiku-5-5,OpenUI Lang 1.0,50,60.0
+pacai,claude-haiku-5-5,OpenUI Lang 1.0,75,80.0
+pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,25,0.0
+pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,50,33.3
+pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,75,66.7
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,25,0.0
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,50,40.0
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,75,60.0
+pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,25,33.3
+pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,50,60.0
+pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,75,75.0
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,25,0.0
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,50,33.3
+pacai,glm-5.3-flash,PACAI JSON con ejemplos,75,66.7
+pacai,glm-5.3-flash,PACAI UI Lang 3,25,0.0
+pacai,glm-5.3-flash,PACAI UI Lang 3,50,33.3
+pacai,glm-5.3-flash,PACAI UI Lang 3,75,60.0
+pacai,glm-5.3-flash,OpenUI Lang 1.0,25,33.3
+pacai,glm-5.3-flash,OpenUI Lang 1.0,50,58.6
+pacai,glm-5.3-flash,OpenUI Lang 1.0,75,80.0
+pacai,gpt-6-luna,PACAI JSON con ejemplos,25,0.0
+pacai,gpt-6-luna,PACAI JSON con ejemplos,50,33.3
+pacai,gpt-6-luna,PACAI JSON con ejemplos,75,66.7
+pacai,gpt-6-luna,PACAI UI Lang 3,25,0.0
+pacai,gpt-6-luna,PACAI UI Lang 3,50,33.3
+pacai,gpt-6-luna,PACAI UI Lang 3,75,66.7
+pacai,gpt-6-luna,OpenUI Lang 1.0,25,37.5
+pacai,gpt-6-luna,OpenUI Lang 1.0,50,62.5
+pacai,gpt-6-luna,OpenUI Lang 1.0,75,80.0
+pacai,gpt-6.2-sol,PACAI JSON con ejemplos,25,0.0
+pacai,gpt-6.2-sol,PACAI JSON con ejemplos,50,38.8
+pacai,gpt-6.2-sol,PACAI JSON con ejemplos,75,66.7
+pacai,gpt-6.2-sol,PACAI UI Lang 3,25,0.0
+pacai,gpt-6.2-sol,PACAI UI Lang 3,50,33.3
+pacai,gpt-6.2-sol,PACAI UI Lang 3,75,66.7
+pacai,gpt-6.2-sol,OpenUI Lang 1.0,25,33.3
+pacai,gpt-6.2-sol,OpenUI Lang 1.0,50,66.7
+pacai,gpt-6.2-sol,OpenUI Lang 1.0,75,75.0
