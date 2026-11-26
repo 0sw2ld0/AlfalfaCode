@@ -39,9 +39,13 @@ from pathlib import PurePosixPath
 from .busqueda_sesiones.redaccion import PATRONES, REDACTADO
 
 # Una opción larga cuyo valor es una clave: --password, --api-key, --client-secret, --auth-token…
-# No las que llevan a dónde está la clave (--password-file, --token-env, --secret-id).
+# La palabra tiene que ser una parte entera del nombre: --author, --tokenizer o --passthrough no lo
+# son, y --no-auth o --with-token no llevan valor. No las que llevan a dónde está la clave
+# (--password-file, --token-env, --secret-id).
 _OPCION_SECRETA = re.compile(
-    r'^--[\w-]*(?:pass(?:word|wd|phrase)?|secret|token|api-?key|apikey|access-?key|credentials?|auth)[\w-]*$',
+    r'^--(?!no-|with-)(?:[a-z0-9_]+-)*'
+    r'(?:pass(?:word|wd|phrase)?|secret|token|api-?key|apikey|access-?key|credentials?|auth)'
+    r'(?:-(?:key|token|value|string))?$',
     re.IGNORECASE)
 _OPCION_A_OTRO_SITIO = re.compile(r'-(?:file|path|dir|env|var|stdin|fd|cmd|command|helper|id|name|type|url)s?$',
                                   re.IGNORECASE)

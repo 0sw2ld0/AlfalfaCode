@@ -41,9 +41,27 @@ def test_tacha_las_claves_de_una_orden(argv, esperado):
     ['git', 'push', '-u', 'origin', 'main'],
     ['tool', '--password-file', '/tmp/clave', '--max-tokens', '100'],
     ['git', 'diff', '--no-ext-diff', '--stat'],
+    ['git', 'log', '--author', 'ana'],
+    ['git', 'commit', '--author=Ana <ana@x.test>', '-m', 'x'],
+    ['python', 'train.py', '--tokenizer', 'gpt2'],
+    ['rsync', '--passthrough', 'x'],
+    ['curl', '--no-auth', 'https://x.test'],
 ])
 def test_no_toca_lo_que_no_es_una_clave(argv):
     assert tachar_argv(argv) is argv
+
+
+@pytest.mark.parametrize('opcion', ['--client-secret', '--auth-token', '--github-token', '--secret-key',
+                                    '--db-password', '--passphrase', '--access-key'])
+def test_opciones_con_la_clave_en_otra_parte_del_nombre(opcion):
+    assert tachar_argv(['tool', opcion, CLAVE]) == ['tool', opcion, REDACTADO]
+    assert tachar_texto('tool ' + opcion + '=' + CLAVE) == 'tool ' + opcion + '=' + REDACTADO
+
+
+def test_en_texto_no_tacha_autor_ni_tokenizador():
+    for orden in ('git commit --author "Ana <ana@x.test>" -m x', 'git log --author=ana',
+                  'python train.py --tokenizer gpt2', 'rsync --passthrough x'):
+        assert tachar_texto(orden) == orden
 
 
 def test_una_orden_de_shell_en_texto():

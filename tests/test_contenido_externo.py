@@ -779,7 +779,8 @@ async def test_red_tras_la_web_lleva_los_dos_motivos_y_su_propia_clave(rt):
     # Aprobada para la sesión tras la web: la siguiente vez no pregunta.
     await rt.command_policy.execute(rt.tools, orden, ['true'], lanzar, unsandboxed_timeout=1)
     assert len(permisos) == 2
-    assert any(c.startswith('externo:') for c in rt.task[sesion.CAMPO])
+    externa = seguridad.clave_de_orden(sesion.clave_de_orden(['true'], None, sin_sandbox=False, red=True))
+    assert sesion.huella(externa) in rt.task[sesion.CAMPO]
 
 
 async def test_manual_ensena_el_diff_de_la_edicion(rt):
