@@ -423,6 +423,34 @@ class Vistas:
         vista = self.vistas.get(nombre)
         return vista.rev if vista else None
 
+    def revisiones(self) -> int:
+        """La suma de las revisiones: sólo crece, así que cambia cada vez que alguna vista cambia."""
+        return sum(v.rev for v in self.vistas.values())
+
+    def a_datos(self) -> dict:
+        """Las vistas para guardarlas con la sesión: al reanudarla siguen su revisión, no vuelven a la 1."""
+        return {'version': 1, 'vistas': {n: {'rev': v.rev, 'nodos': list(v.nodos.values()), 'estado': v.estado,
+                                             'alt': v.alt, 'placement': v.placement}
+                                         for n, v in self.vistas.items()}}
+
+    def cargar(self, datos: Any) -> None:
+        """Recupera las vistas guardadas. Lo que no es válido se descarta, y también los nodos que el catálogo de
+        este cliente no admite: la vista conserva su revisión y el resto de su contenido."""
+        if not isinstance(datos, dict) or datos.get('version') != 1 or not isinstance(datos.get('vistas'), dict):
+            return
+        for nombre, d in datos['vistas'].items():
+            if not isinstance(nombre, str) or not _NOMBRE.match(nombre) or not isinstance(d, dict):
+                continue
+            rev = d.get('rev')
+            if type(rev) is not int or rev < 0:
+                continue
+            nodos = [n for n in d.get('nodos') or [] if not self.catalogo.errores_del_nodo(n)]
+            estado = d.get('estado') if isinstance(d.get('estado'), dict) else {}
+            self.vistas[nombre] = Vista(rev=rev, nodos={n['id']: n for n in nodos}, estado=estado,
+                                        alt=d['alt'] if isinstance(d.get('alt'), str) else None,
+                                        placement=d['placement'] if d.get('placement') in ('inline', 'latest')
+                                        else None)
+
     def aplicar(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
         """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores."""
         if attrs.get('lang') is True:

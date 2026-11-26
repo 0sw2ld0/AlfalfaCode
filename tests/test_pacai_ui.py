@@ -346,3 +346,66 @@ def test_el_manual_lleva_los_ejemplos_del_catalogo_y_los_de_la_app():
     assert '"id":"mal"' not in Catalogo.de(declaracion).manual()
     declaracion['components']['Stat']['example'] = []
     assert errores_de('declaration', declaracion)               # minItems: 1
+
+
+async def test_al_reanudar_la_sesion_las_pantallas_siguen_su_revision(tmp_path, monkeypatch):
+    # Antes, las vistas vivían sólo en memoria: el agente reanudado volvía a mandar la misma vista con rev 1 y el
+    # cliente, que ya iba por la 2, la daba por vieja.
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path))
+    (tmp_path / 'sesiones' / 's1').mkdir(parents=True)
+
+    def sesion_ui():
+        c = Cliente(perfiles=('work', 'ui'))
+        c.hello['render'] = {'ui': {'version': '1'}}
+        c.t.emit('sesion', id='s1', cwd=str(tmp_path), modelo='m', esfuerzo='low', modo='auto')
+        return c
+
+    c = sesion_ui()
+    await abrir(c, 'Enséñame los tickets')
+    c.t.emit('evento', rol='agent', texto=PANTALLA, hora=1.0)
+    (_, primera), = estructurados(c.drenar(), 'message_end')
+    await cerrar(c)
+    guardadas = tmp_path / 'sesiones' / 's1' / 'pacai-vistas.json'
+    assert guardadas.exists() and oct(guardadas.stat().st_mode & 0o777) == '0o600'
+
+    # Otro proceso reanuda la sesión: una acción sobre la pantalla de antes no está desfasada...
+    c = sesion_ui()
+    c.saludar()
+    c.enviar('input', {'blocks': [
+        {'type': 'text', 'text': 'Crear ticket'},
+        {'type': 'structured', 'schema': 'pacai.ui.action/1', 'data': {
+            'view': 'tickets', 'rev': primera['rev'], 'node': 'nuevo', 'event': 'press', 'name': 'crear_ticket',
+            'values': {}}}]})
+    entregado = await asyncio.wait_for(c.t.next_message(), 1)
+    texto = getattr(entregado, 'texto', None) or getattr(entregado, 'text', None) or str(entregado)
+    assert '[Acción en la pantalla]' in texto and 'desfasada' not in texto
+    c.t.turno_empieza(entregado)
+    c.drenar()
+    # ... y la misma vista sigue por la revisión siguiente, con los nodos que ya tenía.
+    c.t.emit('evento', rol='agent', texto='```pacai-ui view=tickets\n'
+             '{"id":"titulo","component":"Text","props":{"text":"3 tickets abiertos","style":"title"}}\n```', hora=2.0)
+    mensajes = c.drenar()
+    (_, patch), = estructurados(mensajes, 'message_delta')
+    (_, foto), = estructurados(mensajes, 'message_end')
+    assert patch['rev'] == primera['rev'] + 1 and foto['rev'] == primera['rev'] + 2
+    assert {n['id'] for n in foto['nodes']} == {n['id'] for n in primera['nodes']}
+    await cerrar(c)
+    c.comprobar()
+
+
+def test_las_vistas_guardadas_se_recuperan_sin_lo_que_el_catalogo_no_admite():
+    base = Catalogo.de({'version': '1'})
+    vistas = Vistas(base)
+    vistas.aplicar({'view': 'tickets'}, PANTALLA.split('```')[1].splitlines()[1:])
+    vistas.foto('tickets')
+    datos = vistas.a_datos()
+    solo_texto = Catalogo.de({'version': '1', 'catalog': 'none', 'components': {
+        'Stack': {'props': {'type': 'object'}, 'children': True}, 'Text': {'props': {'type': 'object'}}}})
+    otra = Vistas(solo_texto)
+    otra.cargar(datos)
+    assert otra.rev('tickets') == vistas.rev('tickets')
+    assert set(otra.vistas['tickets'].nodos) == {'root', 'titulo'}          # el Button no está en este catálogo
+    for malo in (None, {'version': 2}, {'version': 1, 'vistas': {'../x': {'rev': 3}, 'y': {'rev': -1}}}):
+        nada = Vistas(base)
+        nada.cargar(malo)
+        assert nada.vistas == {}

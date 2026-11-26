@@ -40,6 +40,8 @@ from .tipos import MESSAGE_TYPES, PROFILE_OF, SENDER_OF, VERSION
 from .traductor import CADUCIDAD_APROBACION, Traductor
 from .ui import ESQUEMA_ACCION, Catalogo, accion_para_el_modelo, errores_de
 
+ARCHIVO_VISTAS = 'pacai-vistas.json'   # en la carpeta de la sesión
+
 __all__ = ['TransportePacai', 'PERFILES', 'EXTENSIONES', 'COMANDOS', 'caducidad_de', 'ENTORNO_CADUCIDAD']
 
 NOMBRE = 'alfalfa'
@@ -109,6 +111,8 @@ class TransportePacai(Transport):
         self._partida = None                             # diff_git.PuntoDePartida de la ejecución en curso
         self._trabajo: asyncio.Future | None = None      # el trabajo (`TRABAJOS`) cuya ejecución está abierta
         self._siguiente: str | None = None               # la entrada del turno que espera a que se cierre el anterior
+        self._archivo_vistas = None                      # Path de las pantallas guardadas de la sesión (perfil ui)
+        self._vistas_guardadas = 0                       # Vistas.revisiones() de lo último que se guardó
 
     # -- conexión con el motor ---------------------------------------------
     def conectar(self, manager) -> None:
@@ -209,8 +213,47 @@ class TransportePacai(Transport):
             self._enviar_todo(self.t.evento(tipo, campos))
             self._cerrar_sesion()
         else:
+            if tipo == 'sesion':
+                self._abrir_vistas(campos.get('id'))
             self._enviar_todo(self.t.evento(tipo, campos))
+        self._guardar_vistas()
         self._olvidar_resueltas()
+
+    # -- perfil ui: las pantallas se guardan con la sesión -----------------
+    def _abrir_vistas(self, ident: Any) -> None:
+        """Al saber qué sesión es: recupera sus pantallas, para que al reanudarla sigan su revisión. Si la sesión
+        cambia de id (continuada en otra), las que ya hay pasan a guardarse en la nueva."""
+        if self.t is None or self.t.vistas is None or not isinstance(ident, str) or not ident \
+                or '/' in ident or ident.startswith('.'):
+            return
+        from ..terminal import home_dir
+        carpeta = home_dir() / 'sesiones' / ident
+        if not carpeta.is_dir() or carpeta.is_symlink():
+            return
+        archivo = carpeta / ARCHIVO_VISTAS
+        if archivo == self._archivo_vistas:
+            return
+        self._archivo_vistas = archivo
+        if not self.t.vistas.vistas:
+            try:
+                self.t.vistas.cargar(json.loads(archivo.read_text(encoding='utf-8')))
+            except (OSError, ValueError):
+                pass                                     # sin pantallas guardadas (o ilegibles): se empieza de cero
+        self._vistas_guardadas = self.t.vistas.revisiones()
+
+    def _guardar_vistas(self) -> None:
+        vistas = self.t.vistas if self.t is not None else None
+        if vistas is None or self._archivo_vistas is None or vistas.revisiones() == self._vistas_guardadas:
+            return
+        temporal = self._archivo_vistas.with_suffix('.tmp')
+        try:
+            fd = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(vistas.a_datos(), f, ensure_ascii=False)
+            os.replace(temporal, self._archivo_vistas)
+            self._vistas_guardadas = vistas.revisiones()
+        except OSError:
+            pass                                         # sin disco sigue la sesión; sólo se pierde al reanudar
 
     def _enviar_todo(self, mensajes: list[dict]) -> None:
         for m in mensajes:
