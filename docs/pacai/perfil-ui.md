@@ -290,6 +290,12 @@ pruebas en `tests/test_pacai_ui.py`.
     `--pacai --reanudar` las recupera: la vista sigue por la revisión siguiente y no vuelve a la 1, y una acción
     sobre una pantalla de antes de reanudar llega al modelo como cualquier otra. Al recuperarlas se descartan los
     nodos que el catálogo del cliente nuevo no admite.
+15. **Una vista nueva sin `root` se repara.** Si el primer bloque de una vista no trae nodo `root` (el modelo empieza
+    por `{"id":"formulario","component":"Form",…}` y no escribe la raíz), el motor añade un `root` `Stack` con
+    `direction: vertical` cuyos hijos son los nodos que no cuelgan de ningún otro, en el orden en que llegaron, y lo
+    anota en `Vistas.reparaciones`; no cuenta como error. Ningún id cambia, así que los cambios siguientes valen igual,
+    y un nodo existente nunca se convierte en `root`. No se repara un bloque sobre una vista que ya existe ni uno cuyo
+    `root` se rechazó: ahí el modelo quiso otra raíz y se le pide.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
@@ -357,7 +363,18 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   sus líneas enteras (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`) y el `rev` escrito por el modelo (versión
   2) se quitaron: eran donde más fallaba.
 - **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, en el reintento de un alta la línea de
-  un id que ya existe lo sustituye, y un `rev` del modelo se ignora. Nunca cambian lo que se pidió.
+  un id que ya existe lo sustituye, y un `rev` del modelo se ignora. Nunca cambian lo que se pidió. Además, sólo en
+  un alta (y anotadas en `Vistas.reparaciones`, sin contar como error):
+  - **Sin `root`** (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` `Stack direction=vertical`
+    nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron. Los ids no cambian, así
+    que un cambio posterior a `formulario` funciona; ningún nodo existente se convierte en `root`. Si el modelo
+    escribió un `root` y se rechazó, o no hay nodos de primer nivel, sigue siendo «Falta root.».
+  - **Posicional y nombrada a la vez** (`f Form "Mandar" submit_label="Enviar"`): se queda la nombrada.
+
+  Un cambio sobre una vista que ya existe no se repara. Sobre las respuestas guardadas de las muestras
+  (`scripts/muestra_ejemplos_ui.py`, sin pedir nada nuevo) pasan de no válidas a válidas: GPT-6 Luna 0 de 208 (valla)
+  y 0 de 104 (grande); Claude Haiku 5.5 1 de 104 (grande) y 8 de 208 (valla). Ninguna válida deja de serlo y el
+  JSON no cambia (sus fallos de raíz eran `root` rechazados).
 - **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
   existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
   mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor

@@ -417,7 +417,7 @@ class Vistas:
     def __init__(self, catalogo: Catalogo):
         self.catalogo = catalogo
         self.vistas: dict[str, Vista] = {}
-        self.reparaciones: list[str] = []      # lo que el motor arregló sin cambiar lo pedido (PACAI UI Lang)
+        self.reparaciones: list[str] = []      # lo que el motor arregló en el último bloque sin cambiar lo pedido
 
     def rev(self, nombre: str) -> int | None:
         vista = self.vistas.get(nombre)
@@ -452,12 +452,16 @@ class Vistas:
                                         else None)
 
     def aplicar(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
-        """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores."""
+        """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores. En una vista
+        nueva sin `root`, un `root` Stack vertical envuelve los nodos de primer nivel (queda en `reparaciones`)."""
         if attrs.get('lang') is True:
             return self.aplicar_lang(attrs, lineas)
+        self.reparaciones = []
         nombre = ascii_de(attrs.get('view', ''), minusculas=True)
         if not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui necesita view=nombre ([a-z][a-z0-9_]*).']
+        nueva = nombre not in self.vistas
+        root_rechazado = False       # el modelo escribió un root que no vale: no se inventa otro, se le pide
         placement = attrs.get('placement')
         errores: list[str] = []
         if placement not in (None, 'inline', 'latest'):
@@ -491,11 +495,21 @@ class Vistas:
             if fallos:
                 ident = dato.get('id') if isinstance(dato, dict) else None
                 errores.append(f'Línea {n}' + (f' ({ident})' if ident else '') + ': ' + '; '.join(fallos))
+                root_rechazado = root_rechazado or ident == 'root'
                 continue
             vista.nodos[dato['id']] = dato
             nodos.append(dato)
         for ident in quitar:
             vista.nodos.pop(ident, None)
+        if nueva and nodos and 'root' not in vista.nodos and not root_rechazado:
+            from .ui_lang import root_que_envuelve
+
+            root = root_que_envuelve(vista.nodos, self.catalogo)
+            if root is not None:
+                vista.nodos['root'] = root
+                nodos.append(root)
+                self.reparaciones.append('Faltaba root: un Stack vertical envuelve ' + ', '.join(root['children'])
+                                         + '.')
         vista.estado.update(estado)
         if placement:
             vista.placement = placement
@@ -540,6 +554,7 @@ class Vistas:
         flujo = Flujo(self.catalogo)
         flujo.alimentar(texto + '\n')
         nodos, diagnosticos = flujo.cerrar()
+        self.reparaciones += flujo.reparaciones
         if not nodos:
             return None, [d.texto() for d in diagnosticos]
         vista = self.vistas.setdefault(nombre, Vista())

@@ -251,12 +251,15 @@ def leer_linea(linea: str) -> Linea:
     return salida
 
 
-def nodo_de(linea: Linea, catalogo: Catalogo, tabla: dict[str, Ficha], ficha: Ficha | None = None) -> dict:
-    """El nodo `pacai.ui/1` de una línea de alta, ya validado contra el catálogo. `ErrorDeLinea` si no vale."""
+def nodo_de(linea: Linea, catalogo: Catalogo, tabla: dict[str, Ficha], ficha: Ficha | None = None,
+            reparaciones: list[str] | None = None) -> dict:
+    """El nodo `pacai.ui/1` de una línea de alta, ya validado contra el catálogo. `ErrorDeLinea` si no vale.
+    Con `reparaciones` (sólo en un alta) el texto posicional y la misma prop nombrada no son un error: se queda la
+    nombrada y se anota ahí."""
     ficha = ficha or tabla.get(linea.componente or '')
     if ficha is None:
         raise ErrorDeLinea(f'{linea.componente} no está en el catálogo.', linea.ident)
-    props = _props_con_posicional(linea, ficha)
+    props = _props_con_posicional(linea, ficha, reparaciones)
     for prop, clave in ficha.hereda.items():
         props.setdefault(prop, {'$': clave})
     spec = catalogo.propios.get(ficha.componente) or {}
@@ -285,13 +288,16 @@ def nodo_de(linea: Linea, catalogo: Catalogo, tabla: dict[str, Ficha], ficha: Fi
     return nodo
 
 
-def _props_con_posicional(linea: Linea, ficha: Ficha) -> dict:
+def _props_con_posicional(linea: Linea, ficha: Ficha, reparaciones: list[str] | None = None) -> dict:
     props = dict(linea.props)
     if linea.hay_posicional:
         if ficha.posicional is None:
             raise ErrorDeLinea(f'{ficha.componente} no tiene texto posicional; nombra la prop.', linea.ident)
         if ficha.posicional in props:
-            raise ErrorDeLinea(f'{ficha.posicional} va posicional o nombrada, no las dos.', linea.ident)
+            if reparaciones is None:
+                raise ErrorDeLinea(f'{ficha.posicional} va posicional o nombrada, no las dos.', linea.ident)
+            reparaciones.append(f'{linea.ident}: {ficha.posicional} iba posicional y nombrada; se queda la nombrada.')
+            return props
         props = {ficha.posicional: linea.posicional, **props}
     return props
 
@@ -328,6 +334,7 @@ class Flujo:
         self.n = 0
         self.cerrado = False
         self.reintentado = False
+        self.reparaciones: list[str] = []          # lo que el motor arregló sin cambiar lo pedido
 
     def alimentar(self, trozo: str) -> list[list[dict]]:
         self.pendiente += trozo
@@ -349,7 +356,7 @@ class Flujo:
                 raise ErrorDeLinea('En una pantalla nueva sólo van líneas de nodo (para borrar, la vista tiene que '
                                    'existir).',
                                    leida.ident)
-            nodo = nodo_de(leida, self.catalogo, self.tabla)
+            nodo = nodo_de(leida, self.catalogo, self.tabla, reparaciones=self.reparaciones)
             if leida.ident in self.nodos:
                 if self.nodos[leida.ident] == nodo:
                     return []                      # la misma línea otra vez: no cambia nada
@@ -407,7 +414,8 @@ class Flujo:
                 descartados.add(ident)
             for ident in descartados:
                 nodos.pop(ident, None)
-        if 'root' not in nodos:
+        intento_de_root = 'root' in self.nodos or any(d.ident == 'root' for d in diagnosticos)
+        if 'root' not in nodos and (intento_de_root or not self._envolver_en_root(nodos)):
             diagnosticos.append(Diagnostico(None, 'root', 'Falta root.'))
             return [], diagnosticos
         orden: list[str] = []
@@ -436,6 +444,20 @@ class Flujo:
                 diagnosticos.append(Diagnostico(None, ident, f'{ident} no cuelga de root.'))
         return [salida[i] for i in orden], diagnosticos
 
+    def _envolver_en_root(self, nodos: dict[str, dict]) -> bool:
+        """Un alta sin `root` (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` Stack vertical
+        nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron. Ningún id cambia, así
+        los cambios posteriores siguen valiendo. False si no hay nodos de primer nivel o el `root` no cabe. Si el
+        modelo sí escribió un `root` y se rechazó, no se llama: lo que quería es otra cosa y se le pide."""
+        root = root_que_envuelve(nodos, self.catalogo)
+        if root is None:
+            return False
+        nodos['root'] = root
+        aviso = 'Faltaba root: un Stack vertical envuelve ' + ', '.join(root['children']) + '.'
+        if aviso not in self.reparaciones:
+            self.reparaciones.append(aviso)
+        return True
+
     def peticion(self, diagnosticos: list[Diagnostico]) -> str:
         """Lo que se le pide al modelo: sólo esas líneas, una vez."""
         return ('Rehaz sólo estas líneas de PACAI UI Lang, sin repetir las que ya valen:\n'
@@ -451,6 +473,17 @@ class Flujo:
         for linea in texto.splitlines():
             self._linea(linea)
         return self._final()
+
+
+def root_que_envuelve(nodos: dict[str, dict], catalogo: Catalogo) -> dict | None:
+    """El `root` Stack vertical que envuelve los nodos de primer nivel de `nodos` (los que no son hijos de ningún
+    otro), en su orden. None si no hay ninguno (sólo ciclos), la pantalla ya está llena o el nodo no vale."""
+    hijos = {h for nodo in nodos.values() for h in nodo.get('children', [])}
+    primeros = [i for i in nodos if i not in hijos and i != 'root']
+    if not primeros or len(nodos) >= catalogo.max_nodos:
+        return None
+    root = {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'}, 'children': primeros}
+    return None if catalogo.errores_del_nodo(root) else root
 
 
 def traducir(texto: str, catalogo: Catalogo) -> tuple[list[dict], list[Diagnostico]]:

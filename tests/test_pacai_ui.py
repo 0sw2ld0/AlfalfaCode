@@ -92,6 +92,55 @@ def test_vistas_aplica_patch_rechaza_lo_invalido_y_hace_la_foto():
     assert errores_de('update', foto) == []
 
 
+FORMULARIO_SIN_ROOT = [
+    '{"id":"formulario","component":"Form","props":{"submit_label":"Preparar solicitud"},'
+    '"children":["inicio","motivo"]}',
+    '{"id":"inicio","component":"Input","props":{"label":"Inicio","name":"inicio"}}',
+    '{"id":"motivo","component":"Input","props":{"label":"Motivo","name":"motivo"}}',
+]
+
+
+def test_una_vista_nueva_sin_root_se_envuelve_en_un_stack_y_luego_se_puede_cambiar():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'vacaciones'}, FORMULARIO_SIN_ROOT)
+    assert errores == [] and errores_de('update', data) == []
+    assert data['nodes'][-1] == {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'},
+                                 'children': ['formulario']}
+    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve formulario.']
+    foto = vistas.foto('vacaciones')
+    assert [n['id'] for n in foto['nodes']].count('root') == 1
+    data, errores = vistas.aplicar({'view': 'vacaciones'}, [
+        '{"id":"formulario","component":"Form","props":{"submit_label":"Enviar"},"children":["inicio"]}'])
+    assert errores == [] and [n['id'] for n in data['nodes']] == ['formulario'] and vistas.reparaciones == []
+    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['formulario']
+
+
+def test_varios_nodos_sueltos_de_una_vista_nueva_acaban_en_root_en_orden():
+    vistas = Vistas(Catalogo())
+    vistas.aplicar({'view': 'v'}, ['{"id":"b","component":"Text","props":{"text":"B"}}',
+                                   '{"id":"c","component":"Card","props":{"title":"C"},"children":["d"]}',
+                                   '{"id":"a","component":"Text","props":{"text":"A"}}',
+                                   '{"id":"d","component":"Text","props":{"text":"D"}}'])
+    assert vistas.vistas['v'].nodos['root']['children'] == ['b', 'c', 'a']
+
+
+def test_un_root_rechazado_en_una_vista_nueva_no_se_sustituye_por_otro():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'v'}, [
+        '{"id":"root","component":"Stack","props":{"children":["t"]}}',
+        '{"id":"t","component":"Text","props":{"text":"hola"}}'])
+    assert len(errores) == 1 and 'root' not in vistas.vistas['v'].nodos and vistas.reparaciones == []
+
+
+def test_un_cambio_sin_root_sobre_una_vista_que_existe_no_se_repara():
+    vistas = Vistas(Catalogo())
+    vistas.aplicar({'view': 'v'}, ['{"id":"root","component":"Stack","children":["t"]}',
+                                   '{"id":"t","component":"Text","props":{"text":"hola"}}'])
+    data, errores = vistas.aplicar({'view': 'v'}, ['{"id":"suelto","component":"Text","props":{"text":"S"}}'])
+    assert errores == [] and [n['id'] for n in data['nodes']] == ['suelto'] and vistas.reparaciones == []
+    assert vistas.vistas['v'].nodos['root']['children'] == ['t']
+
+
 def test_el_catalogo_del_cliente_manda():
     propio = {'props': {'type': 'object', 'properties': {'title': {'type': 'string'}}, 'required': ['title'],
                         'additionalProperties': False}, 'events': ['press']}

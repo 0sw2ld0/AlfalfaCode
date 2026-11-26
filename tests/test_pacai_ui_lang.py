@@ -98,7 +98,6 @@ def test_un_valor_explicito_gana_a_la_herencia():
 
 
 @pytest.mark.parametrize('linea, motivo', [
-    ('t Text "a" text="b"', 'posicional o nombrada'),
     ('g Grid "x" columns=2', 'no tiene texto posicional'),
     ('t Text style=caption "tarde"', 'justo después del componente'),
     ('t Texto "a"', 'no está en el catálogo'),
@@ -204,7 +203,74 @@ def test_al_cerrar_se_piden_los_hijos_que_no_llegaron_y_los_sueltos():
     assert nodos[0]['children'] == ['a']
     motivos = ' '.join(d.motivo for d in diagnosticos)
     assert 'Falta la línea de b' in motivos and 'suelto no cuelga de root' in motivos
-    assert ui_lang.traducir('a Text "A"', catalogo())[0] == []
+
+
+# -- reparaciones deterministas del alta --------------------------------------------------------------------------
+FORMULARIO_SIN_ROOT = '''formulario Form "Preparar solicitud" > inicio,fin,motivo,cobertura
+inicio Input "Inicio" name=inicio kind=date
+fin Input "Fin" name=fin kind=date
+motivo Input "Motivo" name=motivo
+cobertura Input "Quién te cubre" name=cobertura'''
+
+
+def test_un_alta_sin_root_se_envuelve_en_un_stack_y_luego_se_puede_cambiar():
+    vistas = Vistas(catalogo())
+    data, errores = vistas.aplicar({'view': 'vacaciones', 'lang': True}, FORMULARIO_SIN_ROOT.splitlines())
+    assert errores == [] and data['op'] == 'replace'
+    assert data['nodes'][0] == {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'},
+                                'children': ['formulario']}
+    assert [n['id'] for n in data['nodes']] == ['root', 'formulario', 'inicio', 'fin', 'motivo', 'cobertura']
+    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve formulario.']
+    # Los ids no cambian: un cambio a `formulario` vale como con cualquier otra vista.
+    data, errores = vistas.aplicar({'view': 'vacaciones', 'lang': True},
+                                   ['formulario Form "Enviar solicitud" > inicio,fin'])
+    assert errores == [] and data['op'] == 'patch' and vistas.reparaciones == []
+    assert data['nodes'][0]['props']['submit_label'] == 'Enviar solicitud'
+    assert sorted(data['remove']) == ['cobertura', 'motivo']
+    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['formulario']
+
+
+def test_varios_nodos_sueltos_acaban_en_root_en_el_orden_en_que_llegaron():
+    nodos, diagnosticos = ui_lang.traducir('b Text "B"\nc Card "C" > d\na Text "A"\nd Text "D"', catalogo())
+    assert diagnosticos == []
+    assert nodos[0]['id'] == 'root' and nodos[0]['children'] == ['b', 'c', 'a']
+    assert [n['id'] for n in nodos] == ['root', 'b', 'c', 'd', 'a']
+
+
+def test_sin_nodos_de_primer_nivel_sigue_faltando_root():
+    nodos, diagnosticos = ui_lang.traducir('a Card "A" > b\nb Card "B" > a', catalogo())
+    assert nodos == [] and [d.motivo for d in diagnosticos] == ['Falta root.']
+
+
+def test_un_root_que_se_rechaza_no_se_sustituye_por_otro():
+    nodos, diagnosticos = ui_lang.traducir('root Grid columns=2 gap=medium > a,b\na Text "A"\nb Text "B"',
+                                           catalogo())
+    assert nodos == [] and 'Falta root.' in [d.motivo for d in diagnosticos]
+
+
+def test_un_cambio_sin_root_no_se_repara():
+    vistas = Vistas(catalogo())
+    vistas.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())
+    antes = dict(vistas.vistas['tablero'].nodos)
+    # Un nodo suelto en un cambio no se cuelga de root: el cambio entero se rechaza como siempre.
+    data, errores = vistas.aplicar({'view': 'tablero', 'lang': True}, ['suelto Text "S"'])
+    assert data is None and any('suelto no cuelga de ningún nodo' in e for e in errores)
+    assert vistas.reparaciones == [] and vistas.vistas['tablero'].nodos == antes
+
+
+def test_posicional_y_nombrada_a_la_vez_se_queda_la_nombrada():
+    vistas = Vistas(catalogo())
+    data, errores = vistas.aplicar({'view': 'v', 'lang': True},
+                                   ['root Stack > t,f', 't Text "a" text="b"',
+                                    'f Form "Mandar" submit_label="Enviar" > n', 'n Input "Nombre" name=nombre'])
+    assert errores == []
+    props = {n['id']: n.get('props', {}) for n in data['nodes']}
+    assert props['t']['text'] == 'b' and props['f']['submit_label'] == 'Enviar'
+    assert vistas.reparaciones == ['t: text iba posicional y nombrada; se queda la nombrada.',
+                                   'f: submit_label iba posicional y nombrada; se queda la nombrada.']
+    # En un cambio sobre la vista que ya existe sigue siendo un error.
+    data, errores = vistas.aplicar({'view': 'v', 'lang': True}, ['t Text "a" text="c"'])
+    assert data is None and any('posicional o nombrada' in e for e in errores)
 
 
 # -- cambios ----------------------------------------------------------------------------------------------
