@@ -209,28 +209,42 @@ class Catalogo:
     acciones: frozenset[str] = frozenset({'send', 'set', 'open_url'})
     max_nodos: int = MAX_NODOS
     max_profundidad: int = MAX_PROFUNDIDAD
-    # Prototipo de la 3.ª y 4.ª lluvia, sólo con ALFALFA_PACAI_UI_LANG=1 (ui_lang.py): `lang` enseña y lee PACAI UI
-    # Lang; `piezas` (si además el cliente declara `pieces: true`) admite Calc, Data, si, rojo, min/max/step…
+    # 3.ª y 4.ª lluvia (ui_lang.py): `lang` enseña y lee PACAI UI Lang, según el modelo de la sesión (`con_modelo`) o
+    # lo que fuerce ALFALFA_PACAI_UI_LANG (`forzado`: True, False o None); `piezas` (sólo con el flag a 1 y si además el
+    # cliente declara `pieces: true`) admite Calc, Data, si, rojo, min/max/step…
     # `consultas`: las que declara la app en `queries` ({tipo: {"args": …, "out": {slot: tipo}}}).
     lang: bool = False
     piezas: bool = False
     consultas: dict[str, dict] = field(default_factory=dict)
+    forzado: bool | None = None
 
     @classmethod
-    def de(cls, declaracion: dict | None, entorno: dict | None = None) -> Catalogo:
+    def de(cls, declaracion: dict | None, entorno: dict | None = None, modelo: str | None = None) -> Catalogo:
         """El catálogo de una declaración ya validada (`errores_de('declaration', …)`); None vale la de por defecto.
-        `entorno`: dónde mirar el flag del prototipo (por defecto, las variables de entorno)."""
-        from .ui_lang import activo
+        `entorno`: dónde mirar ALFALFA_PACAI_UI_LANG (por defecto, las variables de entorno). `modelo`: el de la
+        sesión, si ya se sabe (si no, `con_modelo` antes de cada inferencia)."""
+        from .ui_lang import forzado, para_modelo
 
         d = declaracion or {}
         limites = d.get('limits') or {}
-        lang = activo(entorno)
-        piezas = lang and d.get('pieces') is True
+        lang = para_modelo(modelo, entorno)
+        piezas = forzado(entorno) is True and d.get('pieces') is True
         return cls(base=d.get('catalog', 'base') == 'base', propios=dict(d.get('components') or {}),
                    acciones=frozenset(d.get('actions', ('send', 'set', 'open_url'))),
                    max_nodos=limites.get('max_nodes', MAX_NODOS),
                    max_profundidad=limites.get('max_depth', MAX_PROFUNDIDAD), lang=lang, piezas=piezas,
-                   consultas=dict(d.get('queries') or {}) if piezas and isinstance(d.get('queries'), dict) else {})
+                   consultas=dict(d.get('queries') or {}) if piezas and isinstance(d.get('queries'), dict) else {},
+                   forzado=forzado(entorno))
+
+    def con_modelo(self, modelo: str | None) -> Catalogo:
+        """Ajusta el formato al modelo de esta inferencia: PACAI UI Lang con un modelo medido, el JSON con el resto.
+        Con el flag forzado no cambia. El modelo puede cambiar a mitad de sesión: lo que lea el motor después sigue
+        al último prompt que vio el modelo."""
+        from .ui_lang import medido
+
+        if self.forzado is None:
+            self.lang = medido(modelo)
+        return self
 
     def componentes(self) -> list[str]:
         from .piezas import COMPONENTES
@@ -454,7 +468,8 @@ class Vistas:
 
     def aplicar(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
         """Un bloque ```pacai-ui: el `data` de su `patch` (None si no quedó nada válido) y los errores. En una vista
-        nueva sin `root`, un `root` Stack vertical envuelve los nodos de primer nivel (queda en `reparaciones`)."""
+        nueva sin `root`, la primera línea, si es un contenedor que no cuelga de nadie, pasa a llamarse `root`; si no,
+        un `root` Stack vertical envuelve los nodos de primer nivel (las dos quedan en `reparaciones`)."""
         if attrs.get('lang') is True:
             return self.aplicar_lang(attrs, lineas)
         self.reparaciones = []
@@ -465,6 +480,7 @@ class Vistas:
         nueva = nombre not in self.vistas or not self.vistas[nombre].nodos
         root_rechazado = False       # el modelo escribió un root que no vale (aunque sea ilegible): se le pide
         hijos_rechazados: set[str] = set()     # hijos de un nodo rechazado: no suben a la raíz nueva
+        primero: str | None = None             # el id de la primera línea de nodo si valió; '' si no valió
         placement = attrs.get('placement')
         errores: list[str] = []
         if placement not in (None, 'inline', 'latest'):
@@ -477,6 +493,7 @@ class Vistas:
                 dato = json.loads(linea)
             except ValueError:
                 errores.append(f'Línea {n}: no es JSON.')
+                primero = '' if primero is None else primero
                 root_rechazado = root_rechazado or bool(_ID_ROOT.search(linea))
                 continue
             if isinstance(dato, dict) and dato and set(dato) <= {'remove', 'state', 'alt'}:
@@ -499,19 +516,28 @@ class Vistas:
             if fallos:
                 ident = dato.get('id') if isinstance(dato, dict) else None
                 errores.append(f'Línea {n}' + (f' ({ident})' if ident else '') + ': ' + '; '.join(fallos))
+                primero = '' if primero is None else primero
                 root_rechazado = root_rechazado or ident == 'root' or bool(_ID_ROOT.search(linea))
                 if isinstance(dato, dict) and isinstance(dato.get('children'), list) and ident not in vista.nodos:
                     hijos_rechazados.update(h for h in dato['children'] if isinstance(h, str))
                 continue
             vista.nodos[dato['id']] = dato
             nodos.append(dato)
+            primero = dato['id'] if primero is None else primero
         for ident in quitar:
             vista.nodos.pop(ident, None)
         if nueva and nodos and 'root' not in vista.nodos and not root_rechazado:
-            from .ui_lang import root_que_envuelve
+            from .ui_lang import root_que_envuelve, root_renombrado
 
-            root, motivo = root_que_envuelve(vista.nodos, self.catalogo, hijos_rechazados)
-            if root is None:
+            viejo = root_renombrado(vista.nodos, self.catalogo, primero or '', hijos_rechazados)
+            root, motivo = (None, '') if viejo else root_que_envuelve(vista.nodos, self.catalogo, hijos_rechazados)
+            if viejo:
+                root = dict(vista.nodos.pop(viejo), id='root')
+                vista.nodos = {'root': root, **vista.nodos}
+                nodos = [root if n['id'] == viejo else n for n in nodos]
+                self.reparaciones.append(f'Faltaba root: {viejo} va primero, no cuelga de nadie y es un contenedor; '
+                                         'pasa a llamarse root.')
+            elif root is None:
                 errores.append(motivo)
             else:
                 vista.nodos['root'] = root
@@ -541,7 +567,7 @@ class Vistas:
 
         self.reparaciones = []
         if not self.catalogo.lang:
-            return None, ['Este motor no tiene PACAI UI Lang activado: usa el bloque pacai-ui con JSON.']
+            return None, ['PACAI UI Lang no está activado con este modelo: usa el bloque pacai-ui con JSON.']
         nombre = attrs.get('view', '')
         if not isinstance(nombre, str) or not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui-lang necesita view=nombre ([a-z][a-z0-9_]*).']

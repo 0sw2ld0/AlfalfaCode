@@ -829,7 +829,7 @@ class TerminalManager:
                                 and 'browser_navigate' not in excluidas() else '')
                              + self.aprendizaje.manual()
                              # Perfil `ui` de PACAI: el catálogo de pantallas que el cliente sabe dibujar.
-                             + (self.transport.manual_ui(web='web_search' not in excluidas())
+                             + (self.transport.manual_ui(web='web_search' not in excluidas(), modelo=model)
                                 if hasattr(self.transport, 'manual_ui') else ''),
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
                              excluded_tools=excluidas() + (ESCRITURA

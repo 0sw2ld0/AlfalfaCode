@@ -1,5 +1,6 @@
-"""PACAI UI Lang y las piezas declarativas (prototipo, detrás de ALFALFA_PACAI_UI_LANG): traducción exacta,
-cambios atómicos, streaming, prompt, flag apagado y los vectores de conformidad compartidos con la web."""
+"""PACAI UI Lang (encendido por modelo o con ALFALFA_PACAI_UI_LANG) y las piezas declarativas (sólo con el flag):
+traducción exacta, cambios atómicos, streaming, prompt, encendido por modelo, flag apagado y los vectores de
+conformidad compartidos con la web."""
 import asyncio
 import dataclasses
 import json
@@ -215,20 +216,23 @@ cobertura Input "Quién te cubre" name=cobertura'''
 
 
 def test_un_alta_sin_root_se_envuelve_en_un_stack_y_luego_se_puede_cambiar():
+    # La primera línea no es un contenedor: no es la raíz con otro nombre, así que un Stack nuevo envuelve.
     vistas = Vistas(catalogo())
-    data, errores = vistas.aplicar({'view': 'vacaciones', 'lang': True}, FORMULARIO_SIN_ROOT.splitlines())
+    lineas = ['titulo Text "Vacaciones" style=title'] + FORMULARIO_SIN_ROOT.splitlines()
+    data, errores = vistas.aplicar({'view': 'vacaciones', 'lang': True}, lineas)
     assert errores == [] and data['op'] == 'replace'
     assert data['nodes'][0] == {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'},
-                                'children': ['formulario']}
-    assert [n['id'] for n in data['nodes']] == ['root', 'formulario', 'inicio', 'fin', 'motivo', 'cobertura']
-    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve formulario.']
+                                'children': ['titulo', 'formulario']}
+    assert [n['id'] for n in data['nodes']] == ['root', 'titulo', 'formulario', 'inicio', 'fin', 'motivo',
+                                                'cobertura']
+    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve titulo, formulario.']
     # Los ids no cambian: un cambio a `formulario` vale como con cualquier otra vista.
     data, errores = vistas.aplicar({'view': 'vacaciones', 'lang': True},
                                    ['formulario Form "Enviar solicitud" > inicio,fin'])
     assert errores == [] and data['op'] == 'patch' and vistas.reparaciones == []
     assert data['nodes'][0]['props']['submit_label'] == 'Enviar solicitud'
     assert sorted(data['remove']) == ['cobertura', 'motivo']
-    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['formulario']
+    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['titulo', 'formulario']
 
 
 def test_varios_nodos_sueltos_acaban_en_root_en_el_orden_en_que_llegaron():
@@ -379,6 +383,52 @@ def test_la_revision_la_pone_el_motor_y_un_rev_del_modelo_se_ignora():
     assert sin_flag.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())[0] is None
 
 
+RENOMBRADO = 'Faltaba root: {} va primero, no cuelga de nadie y es un contenedor; pasa a llamarse root.'
+
+
+def test_una_raiz_con_otro_nombre_se_llama_root():
+    # Haiku escribe a veces «raiz» o «fila» en la primera línea: es un contenedor, va primero y no cuelga de nadie,
+    # así que es la raíz con otro nombre. Pasa a llamarse root, sin un Stack de más.
+    vistas = Vistas(catalogo())
+    lineas = ['raiz Stack direction=vertical gap=small > foto,nota', 'foto Image src="https://ejemplo.pe/p.png" alt=P',
+              'nota Text "Foto de referencia" style=caption']
+    data, errores = vistas.aplicar({'view': 'foto', 'lang': True}, lineas)
+    assert errores == [] and [n['id'] for n in data['nodes']] == ['root', 'foto', 'nota']
+    assert data['nodes'][0]['children'] == ['foto', 'nota'] and errores_de('update', data) == []
+    assert vistas.reparaciones == [RENOMBRADO.format('raiz')]
+    # En un cambio la raíz ya existe y no se toca.
+    vistas.aplicar({'view': 'foto', 'lang': True}, ['nota Text "Otra" style=caption'])
+    assert vistas.reparaciones == [] and vistas.vistas['foto'].nodos['nota']['props']['text'] == 'Otra'
+    # Un Form o un componente propio con hijos también son contenedores.
+    nodos, _ = ui_lang.traducir(FORMULARIO_SIN_ROOT, catalogo())
+    assert [n['id'] for n in nodos[:2]] == ['root', 'inicio'] and nodos[0]['component'] == 'Form'
+    nodos, _ = ui_lang.traducir('cifras Grid columns=2 > a\na Text "A"', catalogo())
+    assert nodos[0] == {'id': 'root', 'component': 'Grid', 'props': {'columns': 2}, 'children': ['a']}
+
+
+def test_la_raiz_sólo_se_renombra_si_la_primera_línea_es_un_contenedor_que_valió_y_no_cuelga_de_nadie():
+    envuelve = 'Faltaba root: un Stack vertical envuelve {}.'
+    # La primera línea no es un contenedor: se envuelve.
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('nota Text "x"\ncaja Stack > nota\n')
+    nodos, diagnosticos = flujo.cerrar()
+    assert diagnosticos == [] and nodos[0]['children'] == ['caja'] and flujo.reparaciones == [envuelve.format('caja')]
+    # La primera línea es un contenedor que cuelga de otro: se envuelve el de arriba.
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('caja Stack > nota\nnota Text "x"\narriba Card "A" > caja\n')
+    nodos, _ = flujo.cerrar()
+    assert nodos[0]['component'] == 'Stack' and nodos[0]['children'] == ['arriba']
+    # La primera línea no valió: el primer nodo válido no se adivina como raíz, se envuelve.
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('fila Stack inventada=1 > a\ncaja Stack > b\nb Text "B"\n')
+    nodos, _ = flujo.cerrar()
+    assert nodos[0]['component'] == 'Stack' and nodos[0]['children'] == ['caja'] and 'caja' in [n['id'] for n in nodos]
+    # Un root escrito y rechazado no se sustituye ni por renombrado.
+    nodos, diagnosticos = ui_lang.traducir('raiz Stack > a\na Text "A"\nroot Grid columns=2 gap=medium > raiz',
+                                           catalogo())
+    assert nodos == [] and 'Falta root.' in [d.motivo for d in diagnosticos]
+
+
 async def test_el_motor_traduce_la_valla_compacta_con_el_flag(monkeypatch):
     monkeypatch.setenv(ui_lang.FLAG, '1')
     c = Cliente(perfiles=('work', 'ui'))
@@ -402,6 +452,50 @@ async def test_el_motor_traduce_la_valla_compacta_con_el_flag(monkeypatch):
     entregado = await asyncio.wait_for(c.t.next_message(), 1)
     texto = getattr(entregado, 'texto', None) or getattr(entregado, 'text', None) or str(entregado)
     assert 'crear Button "Crear" variant=primary @press={"send":"crear_ticket"}' in texto and 'rev=' not in texto
+    c.comprobar()
+
+
+# -- encendido por modelo -----------------------------------------------------------------------------------
+def test_el_modelo_decide_el_formato_y_el_flag_lo_fuerza():
+    for modelo in ('gpt-6-luna', 'chatgpt/gpt-6-luna', 'alfalfa/claude-haiku-5-5', 'claude-haiku-5-5-20261001',
+                   'openrouter/anthropic/claude-haiku-5.5'):
+        assert ui_lang.medido(modelo) and ui_lang.para_modelo(modelo, {}), modelo
+    for modelo in ('claude-sonnet-5-5', 'gpt-6', 'glm-5.3-flash', 'luna', '', None):
+        assert not ui_lang.medido(modelo) and not ui_lang.para_modelo(modelo, {}), modelo
+    assert ui_lang.para_modelo('glm-5.3-flash', CON_FLAG)                      # forzado: con cualquier modelo
+    assert not ui_lang.para_modelo('gpt-6-luna', {ui_lang.FLAG: '0'})          # apagado: con todos
+    assert ui_lang.forzado({}) is None and ui_lang.forzado({ui_lang.FLAG: 'quizá'}) is None
+    assert not ui_lang.activo({ui_lang.FLAG: '0'})
+
+
+def test_el_catalogo_sigue_al_modelo_de_cada_inferencia():
+    cat = Catalogo.de(DECLARACION, {}, modelo='gpt-6-luna')
+    # Por modelo sólo cambia el formato: las piezas declarativas siguen pidiendo el flag, aunque el cliente las declare.
+    assert cat.lang and not cat.piezas and 'Calc' not in cat.componentes()
+    assert ui_lang.VALLA_LANG in cat.manual()
+    assert not cat.con_modelo('claude-sonnet-5-5').lang and '```pacai-ui view=' in cat.manual()
+    assert cat.con_modelo('claude-haiku-5-5').lang
+    assert not Catalogo.de(DECLARACION, {}).lang                               # sin modelo todavía: el JSON
+    apagado = Catalogo.de(DECLARACION, {ui_lang.FLAG: '0'}, modelo='gpt-6-luna')
+    assert not apagado.lang and not apagado.con_modelo('claude-haiku-5-5').lang
+    encendido = Catalogo.de(DECLARACION, CON_FLAG)
+    assert encendido.lang and encendido.piezas and encendido.con_modelo('claude-sonnet-5-5').lang
+
+
+async def test_el_motor_usa_ui_lang_con_un_modelo_medido_sin_flag(monkeypatch):
+    monkeypatch.delenv(ui_lang.FLAG, raising=False)
+    c = Cliente(perfiles=('work', 'ui'))
+    c.hello['render'] = {'ui': {'version': '1'}}
+    await abrir(c, 'Enséñame un resumen')
+    assert '```pacai-ui-lang' not in c.t.manual_ui()                           # sin modelo, el JSON de siempre
+    assert '```pacai-ui-lang' not in c.t.manual_ui(modelo='claude-sonnet-5-5')
+    assert '```pacai-ui-lang' in c.t.manual_ui(modelo='claude-haiku-5-5')
+    c.t.emit('evento', rol='agent', hora=1.0, texto='```pacai-ui-lang view=resumen\n'
+             'root Stack direction=vertical > titulo\ntitulo Text "2 tickets" style=title\n```\n')
+    mensajes = c.drenar()
+    datos = [b['data'] for m in mensajes for b in m['payload'].get('blocks', []) if b.get('type') == 'structured']
+    assert [n['id'] for n in datos[0]['nodes']] == ['root', 'titulo']
+    await cerrar(c)
     c.comprobar()
 
 

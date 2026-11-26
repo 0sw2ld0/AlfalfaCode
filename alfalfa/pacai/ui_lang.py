@@ -1,8 +1,10 @@
 """PACAI UI Lang (3.ª lluvia de ideas): una forma compacta, sólo datos, de escribir nodos `pacai.ui/1`.
 
-Prototipo, **apagado por defecto**: sólo se usa con `ALFALFA_PACAI_UI_LANG=1`. Sin el flag el motor ni lo enseña ni
-lo lee, y el JSON de siempre sigue siendo el camino normal. Los clientes no cambian: el motor lo traduce exacto a
-`pacai.ui/1`.
+Encendido por modelo: sólo con los modelos con los que se midió y cumple el criterio de adopción
+(`MODELOS_MEDIDOS`, perfil-ui.md §10); con el resto el motor ni lo enseña ni lo lee, y el JSON con ejemplos sigue
+siendo el camino normal. `ALFALFA_PACAI_UI_LANG=1` lo fuerza con cualquier modelo (y enciende las piezas
+declarativas si el cliente las declara); `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos. Los clientes no cambian: el
+motor lo traduce exacto a `pacai.ui/1`.
 
 Una línea por nodo, en DFS desde `root`:
 
@@ -23,7 +25,9 @@ operadores, como el JSON de hoy: cada línea es el nodo entero.
     -id                          borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él
 
 Un hijo que la línea del padre deja fuera también se va. Una línea idéntica a lo que ya hay se ignora, y en el
-reintento de un alta la línea de un id que ya existe lo sustituye: reparaciones que nunca cambian lo pedido.
+reintento de un alta la línea de un id que ya existe lo sustituye. En un alta sin `root`, la primera línea, si es un
+contenedor que no cuelga de nadie, es la raíz con otro nombre (`raiz`, `fila`) y pasa a llamarse `root`; si no, un
+Stack vertical nuevo envuelve los nodos de primer nivel. Son reparaciones que nunca cambian lo pedido.
 
 Streaming (`Flujo`): se parsea sólo la línea completa; cada una se valida al llegar y se publica en cuanto ella y
 sus ancestros hasta `root` existen. Por contenedor se publica sólo el prefijo contiguo de hijos llegados, así que
@@ -42,7 +46,8 @@ from typing import Any
 from . import piezas
 from .ui import BASE, CON_HIJOS, EVENTOS, Catalogo
 
-__all__ = ['FLAG', 'VALLA_LANG', 'activo', 'Ficha', 'fichas', 'ErrorDeLinea', 'Linea', 'leer_linea', 'nodo_de',
+__all__ = ['FLAG', 'VALLA_LANG', 'MODELOS_MEDIDOS', 'activo', 'forzado', 'medido', 'para_modelo', 'Ficha', 'fichas',
+           'ErrorDeLinea', 'Linea', 'leer_linea', 'nodo_de',
            'Flujo', 'traducir', 'aplicar_cambio', 'a_lang', 'resumen', 'prompt', 'prompt_piezas', 'MAX_LINEAS_PROMPT']
 
 FLAG = 'ALFALFA_PACAI_UI_LANG'
@@ -78,8 +83,39 @@ _PALABRA = re.compile(r'[^\s"{}\[\]>,=]+')
 _JSON = json.JSONDecoder()
 
 
+# Los modelos con los que PACAI UI Lang 3 cumple el criterio de adopción (perfil-ui.md §10: ≥95 % de pantallas
+# válidas a la primera, límite inferior de Wilson ≥90 % y al menos un 20 % menos de coste por pantalla exacta que el
+# JSON con ejemplos). Un modelo que no está aquí no se ha medido y sigue con el JSON.
+MODELOS_MEDIDOS = frozenset({'gpt-6-luna', 'claude-haiku-5-5'})
+_SI = ('1', 'true', 'si', 'sí')
+_NO = ('0', 'false', 'no')
+_INSTANTANEA = re.compile(r'-(?:\d{4}-\d{2}-\d{2}|\d{8})$')
+
+
+def forzado(entorno: dict | None = None) -> bool | None:
+    """Lo que dice `ALFALFA_PACAI_UI_LANG`: True (encendido con cualquier modelo), False (apagado con todos) o None
+    (sin la variable, o con otro valor: decide el modelo)."""
+    valor = (os.environ if entorno is None else entorno).get(FLAG, '').strip().lower()
+    return True if valor in _SI else False if valor in _NO else None
+
+
 def activo(entorno: dict | None = None) -> bool:
-    return (os.environ if entorno is None else entorno).get(FLAG, '').strip().lower() in ('1', 'true', 'si', 'sí')
+    """Si el flag fuerza el formato con cualquier modelo (y con él, las piezas declarativas)."""
+    return forzado(entorno) is True
+
+
+def medido(modelo: str | None) -> bool:
+    """Si `modelo` es uno de `MODELOS_MEDIDOS`, con o sin el prefijo del proveedor (`chatgpt/gpt-6-luna`,
+    `openrouter/anthropic/claude-haiku-5.5`) o una instantánea con fecha."""
+    nombre = str(modelo or '').strip().lower().rsplit('/', 1)[-1].split(':', 1)[0].replace('.', '-')
+    return _INSTANTANEA.sub('', nombre) in MODELOS_MEDIDOS
+
+
+def para_modelo(modelo: str | None, entorno: dict | None = None) -> bool:
+    """Si el modelo de la sesión escribe las pantallas en PACAI UI Lang: lo que fuerce el flag o, sin él, si el modelo
+    está medido."""
+    valor = forzado(entorno)
+    return medido(modelo) if valor is None else valor
 
 
 # -- catálogo ------------------------------------------------------------------------------------------------
@@ -337,6 +373,7 @@ class Flujo:
         self.reparaciones: list[str] = []          # lo que el motor arregló sin cambiar lo pedido
         self.root_rechazado = False                # una línea de root (aunque sea ilegible) no valió
         self.hijos_rechazados: set[str] = set()    # hijos de una línea de alta que no valió
+        self.primero: str | None = None            # el id de la primera línea si valió; '' si no valió
 
     def alimentar(self, trozo: str) -> list[list[dict]]:
         self.pendiente += trozo
@@ -368,12 +405,16 @@ class Flujo:
                 self.publicado.pop(leida.ident, None)   # en el reintento, un id que ya existe se sustituye
         except ErrorDeLinea as exc:
             self.diagnosticos.append(Diagnostico(self.n, exc.ident, exc.motivo))
+            if self.primero is None:
+                self.primero = ''
             if exc.ident == 'root' or re.match(r'root(\s|$)', linea.strip()):
                 self.root_rechazado = True
             if leida is not None and leida.tipo == 'alta' and leida.ident not in self.nodos:
                 self.hijos_rechazados.update(leida.hijos)
             return []
         self.nodos[nodo['id']] = nodo
+        if self.primero is None:
+            self.primero = nodo['id']
         return self._publicar()
 
     def _visible(self) -> tuple[list[str], dict[str, list[str]]]:
@@ -424,7 +465,7 @@ class Flujo:
         if 'root' not in nodos:
             intento_de_root = ('root' in self.nodos or self.root_rechazado
                                or any(d.ident == 'root' for d in diagnosticos))
-            motivo = 'Falta root.' if intento_de_root else self._envolver_en_root(nodos)
+            motivo = 'Falta root.' if intento_de_root else self._reparar_root(nodos)
             if motivo:
                 diagnosticos.append(Diagnostico(None, 'root', motivo))
                 return [], diagnosticos
@@ -453,6 +494,19 @@ class Flujo:
             if ident not in salida:
                 diagnosticos.append(Diagnostico(None, ident, f'{ident} no cuelga de root.'))
         return [salida[i] for i in orden], diagnosticos
+
+    def _reparar_root(self, nodos: dict[str, dict]) -> str:
+        """Un alta sin `root`: si la primera línea es un contenedor que no cuelga de nadie, es la raíz con otro nombre
+        («raiz», «fila») y pasa a llamarse `root`; si no, un Stack vertical nuevo envuelve los nodos de primer nivel.
+        Devuelve '' si lo hizo, o el diagnóstico si no se puede."""
+        viejo = root_renombrado(nodos, self.catalogo, self.primero or '', self.hijos_rechazados)
+        if viejo is None:
+            return self._envolver_en_root(nodos)
+        nodos['root'] = dict(nodos.pop(viejo), id='root')
+        aviso = f'Faltaba root: {viejo} va primero, no cuelga de nadie y es un contenedor; pasa a llamarse root.'
+        if aviso not in self.reparaciones:
+            self.reparaciones.append(aviso)
+        return ''
 
     def _envolver_en_root(self, nodos: dict[str, dict]) -> str:
         """Un alta sin `root` (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` Stack vertical
@@ -483,6 +537,21 @@ class Flujo:
         for linea in texto.splitlines():
             self._linea(linea)
         return self._final()
+
+
+def root_renombrado(nodos: dict[str, dict], catalogo: Catalogo, primero: str,
+                    excluir: set[str] | frozenset[str] = frozenset()) -> str | None:
+    """El id de la raíz con otro nombre en un alta sin `root`, o None. Lo es `primero` (el id de la primera línea, que
+    tiene que haber valido) si es un contenedor (Stack, Card, Form o un componente propio con hijos) que no cuelga de
+    nadie ni es hijo de una línea rechazada: el prompt dice que la raíz va primero, y Haiku la llama a veces «raiz» o
+    «fila». Un nodo que no es contenedor no se renombra: lo envuelve un Stack (`root_que_envuelve`)."""
+    if not primero or primero == 'root' or primero not in nodos or primero in excluir:
+        return None
+    if any(primero in n.get('children', []) for n in nodos.values()):
+        return None
+    componente = nodos[primero].get('component')
+    contenedor = componente in CON_HIJOS or bool((catalogo.propios.get(componente) or {}).get('children'))
+    return primero if contenedor else None
 
 
 def root_que_envuelve(nodos: dict[str, dict], catalogo: Catalogo,

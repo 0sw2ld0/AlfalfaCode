@@ -102,18 +102,35 @@ FORMULARIO_SIN_ROOT = [
 
 
 def test_una_vista_nueva_sin_root_se_envuelve_en_un_stack_y_luego_se_puede_cambiar():
+    # La primera línea no es un contenedor: un Stack nuevo envuelve los nodos de primer nivel.
     vistas = Vistas(Catalogo())
-    data, errores = vistas.aplicar({'view': 'vacaciones'}, FORMULARIO_SIN_ROOT)
+    titulo = '{"id":"titulo","component":"Text","props":{"text":"Vacaciones","style":"title"}}'
+    data, errores = vistas.aplicar({'view': 'vacaciones'}, [titulo] + FORMULARIO_SIN_ROOT)
     assert errores == [] and errores_de('update', data) == []
     assert data['nodes'][-1] == {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'},
-                                 'children': ['formulario']}
-    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve formulario.']
+                                 'children': ['titulo', 'formulario']}
+    assert vistas.reparaciones == ['Faltaba root: un Stack vertical envuelve titulo, formulario.']
     foto = vistas.foto('vacaciones')
     assert [n['id'] for n in foto['nodes']].count('root') == 1
     data, errores = vistas.aplicar({'view': 'vacaciones'}, [
         '{"id":"formulario","component":"Form","props":{"submit_label":"Enviar"},"children":["inicio"]}'])
     assert errores == [] and [n['id'] for n in data['nodes']] == ['formulario'] and vistas.reparaciones == []
-    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['formulario']
+    assert vistas.vistas['vacaciones'].nodos['root']['children'] == ['titulo', 'formulario']
+
+
+def test_una_vista_nueva_cuya_primera_linea_es_un_contenedor_suelto_lo_usa_de_root():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'vacaciones'}, FORMULARIO_SIN_ROOT)
+    assert errores == [] and errores_de('update', data) == []
+    assert [n['id'] for n in data['nodes']] == ['root', 'inicio', 'motivo'] and data['nodes'][0]['component'] == 'Form'
+    assert vistas.reparaciones == ['Faltaba root: formulario va primero, no cuelga de nadie y es un contenedor; '
+                                   'pasa a llamarse root.']
+    assert list(vistas.vistas['vacaciones'].nodos) == ['root', 'inicio', 'motivo']
+    # Si la primera línea no valió, no se adivina: un Stack envuelve lo que sí valió.
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'v'}, ['{"id":"fila","component":"Stack","props":{"x":1}}',
+                                                   FORMULARIO_SIN_ROOT[0], *FORMULARIO_SIN_ROOT[1:]])
+    assert errores and data['nodes'][-1]['component'] == 'Stack' and data['nodes'][-1]['children'] == ['formulario']
 
 
 def test_varios_nodos_sueltos_de_una_vista_nueva_acaban_en_root_en_orden():

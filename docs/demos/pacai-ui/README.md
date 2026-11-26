@@ -46,7 +46,7 @@ node docs/demos/pacai-ui/servidor.mjs --ui-lang --carpeta ~/mi-proyecto
 ejemplo (`formPedido` y `comparar`) que resuelve el propio servidor. <http://127.0.0.1:4173/piezas> enseña las
 cuatro pantallas de la 4.ª lluvia (margen, vista que cambia, pedido con validación y comparar) sin agente ni gasto.
 `node docs/demos/pacai-ui/conformidad.mjs` pasa los vectores compartidos con el motor. Está descrito en
-[perfil-ui.md §10](../../pacai/perfil-ui.md#10-prototipo-pacai-ui-lang-y-piezas-declarativas-detrás-de-un-flag).
+[perfil-ui.md §10](../../pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
 
 ## Cómo está hecha
 

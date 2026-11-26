@@ -379,10 +379,11 @@ extensión `alfalfa`**, sobre el transporte stdio. El perfil `ui` (borrador) dej
 chat; está descrito en [pacai/perfil-ui.md](pacai/perfil-ui.md). Quedan fuera por ahora la reanudación en red,
 WebSocket y SSE, y los perfiles `voice`, `shared_state` y `expression`.
 
-`ALFALFA_PACAI_UI_LANG=1` enciende un prototipo, apagado por defecto: el modelo escribe las pantallas en PACAI UI Lang,
-un formato compacto que el motor traduce exacto a `pacai.ui/1`, y si el cliente declara `"pieces": true` en
-`render.ui` también puede usar las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos). Sin la
-variable todo sigue igual. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-prototipo-pacai-ui-lang-y-piezas-declarativas-detrás-de-un-flag).
+Con GPT-6 Luna y Claude Haiku 5.5 el modelo escribe las pantallas en PACAI UI Lang, un formato compacto que el motor
+traduce exacto a `pacai.ui/1` y que sale un tercio más barato por pantalla; con el resto de modelos, en el JSON de
+siempre. `ALFALFA_PACAI_UI_LANG=1` lo fuerza con cualquier modelo y, si el cliente declara `"pieces": true` en
+`render.ui`, enciende también las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos), que
+siguen siendo un prototipo; `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
 
 ### Cómo se usa
 

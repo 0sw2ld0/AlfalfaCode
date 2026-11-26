@@ -336,11 +336,22 @@ Las preguntas abiertas del primer borrador, ya resueltas:
    JSON y en los datos. Los nodos usan `component`, `props`, `children` y `events`, que el modelo y las
    personas entienden mejor, y la declaración de un componente propio dice `children` en vez de `kids`.
 
-## 10. Prototipo: PACAI UI Lang y piezas declarativas (detrás de un flag)
+## 10. PACAI UI Lang (por modelo) y piezas declarativas (detrás de un flag)
 
-Sale de la 3.ª y la 4.ª lluvia de ideas. **Está apagado por defecto**: sin `ALFALFA_PACAI_UI_LANG=1` en el entorno
-del motor no cambia nada y el JSON de arriba sigue siendo el camino normal. Se revierte apagando el flag. La app de
-Mac no lo conoce y no hace falta: el motor sigue mandando `pacai.ui/1`.
+Sale de la 3.ª y la 4.ª lluvia de ideas. **PACAI UI Lang va encendido por modelo**: sólo con los modelos con los que
+se midió y cumple el criterio de adopción (hoy GPT-6 Luna y Claude Haiku 5.5, `ui_lang.MODELOS_MEDIDOS`; §10.1).
+Con cualquier otro modelo el JSON con ejemplos de arriba sigue siendo el camino normal. `ALFALFA_PACAI_UI_LANG=1`
+lo fuerza con cualquier modelo (y es lo único que enciende las piezas declarativas); `ALFALFA_PACAI_UI_LANG=0` lo
+apaga con todos, y así se revierte. La app de Mac no lo conoce y no hace falta: el motor sigue mandando
+`pacai.ui/1`.
+
+- **Dónde se decide:** `Catalogo.de(declaracion, entorno, modelo)` y, antes de cada inferencia,
+  `Catalogo.con_modelo(modelo)` desde `manual_ui(modelo=…)`, con el modelo sin el prefijo del proveedor (vale
+  `chatgpt/gpt-6-luna`, `alfalfa/claude-haiku-5-5`, `openrouter/anthropic/claude-haiku-5.5` o una instantánea con
+  fecha). El motor lee los bloques de la respuesta con el formato del último prompt que vio el modelo.
+- **Si el usuario cambia de modelo a mitad de sesión,** el prompt siguiente cambia de formato. Las pantallas ya
+  dibujadas no cambian (el motor guarda nodos `pacai.ui/1`), pero el historial conserva los bloques que escribió el
+  modelo anterior. No se ha medido cómo le sienta a un modelo ver en el historial el otro formato.
 
 **PACAI UI Lang** (`alfalfa/pacai/ui_lang.py`) es una forma compacta, sólo datos, de escribir los mismos nodos. El
 motor la traduce exacta a `pacai.ui/1` y los clientes no cambian:
@@ -368,9 +379,12 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
 - **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, en el reintento de un alta la línea de
   un id que ya existe lo sustituye, y un `rev` del modelo se ignora. Nunca cambian lo que se pidió. Además, sólo en
   un alta (y anotadas en `Vistas.reparaciones`, sin contar como error):
-  - **Sin `root`** (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` `Stack direction=vertical`
-    nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron. Los ids no cambian, así
-    que un cambio posterior a `formulario` funciona; ningún nodo existente se convierte en `root`. Si el modelo
+  - **Sin `root`, con la raíz con otro nombre:** si la primera línea valió, es un contenedor (Stack, Card, Form o un
+    componente propio con hijos) y no cuelga de nadie, es la raíz con otro nombre (`raiz`, `fila`: lo hace Haiku,
+    §10.1) y pasa a llamarse `root`, sin un nodo de más. El modelo ve después la pantalla con `root`.
+  - **Sin `root`, en cualquier otro caso** (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root`
+    `Stack direction=vertical` nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron.
+    Los ids no cambian, así que un cambio posterior a `formulario` funciona. Para las dos reglas: si el modelo
     escribió un `root` y se rechazó (aunque la línea no se pueda leer), o no hay nodos de primer nivel, sigue siendo
     «Falta root.»; si no cabe por el máximo de nodos, el diagnóstico lo dice. Los hijos de una línea rechazada no
     suben al `root` nuevo: quedan sin colgar, como con un `root` explícito.
@@ -379,7 +393,8 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   Un cambio sobre una vista que ya existe no se repara. Sobre las respuestas guardadas de las muestras
   (`scripts/muestra_ejemplos_ui.py`, sin pedir nada nuevo) pasan de no válidas a válidas: GPT-6 Luna 0 de 208 (valla)
   y 0 de 104 (grande); Claude Haiku 5.5 1 de 104 (grande) y 8 de 208 (valla). Ninguna válida deja de serlo y el
-  JSON no cambia (sus fallos de raíz eran `root` rechazados).
+  JSON no cambia (sus fallos de raíz eran `root` rechazados). Con las dos reglas juntas las cifras son las mismas:
+  en las 11 altas de Haiku sin `root` de §10.1 la primera línea era un contenedor suelto y se renombró.
 - **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
   existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
   mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor
@@ -405,3 +420,67 @@ decimales con coma, nulo «—». Los números van en coma fija (×10⁶, half-e
 expresiones, ni perfil `pacai.ui-logica/1`. Web y Python pasan los mismos vectores
 (`tests/conformidad/pacai-ui-piezas.json`; en la web, `node docs/demos/pacai-ui/conformidad.mjs`). Swift no los
 implementa todavía.
+
+### 10.1 Encendido por modelo: la medida (26 de noviembre de 2026)
+
+**Criterio de adopción** (el de la medición de UI Lang 3): ≥95 % de pantallas válidas a la primera, límite inferior
+de Wilson (IC 95 %) ≥90 % y al menos un 20 % menos de coste por pantalla exacta que el JSON con ejemplos, en la misma
+tanda.
+
+**Condiciones,** las de la última tanda de Luna: `scripts/muestra_ejemplos_ui.py`, las mismas 52 tareas (32 altas y
+20 cambios sobre el tablero de CuyMercado), esfuerzo bajo, temperatura 0, sin herramientas, una corrección, 4
+repeticiones, brazos «PACAI JSON con ejemplos» (`json_ej`) y UI Lang 3 (`lang`) en la misma tanda, los dos con
+`required` en Select y la valla a media línea. Por el servicio Alfalfa (suscripción CUY; Haiku no está en el plan de
+ChatGPT). 416 peticiones por tanda, 0 errores del servicio.
+
+| Modelo | Brazo | n | Válidas 1.er intento | IC95 % Wilson | ¿Umbral? | Exactas 1.º | Válidas tras corr. | Entrada (med.) | Salida (med.) | Coste por exacta (1.º) |
+|---|---|---:|---|---|---|---|---|---:|---:|---:|
+| Luna (tanda anterior) | PACAI JSON con ejemplos | 208 | 205 (98,6 %) | 95,8–99,5 % | sí | 199 (95,7 %) | 208 | 2088 | 105 | 0,30 $/1000 |
+| Luna (tanda anterior) | **PACAI UI Lang 3** | 208 | **205 (98,6 %)** | **95,8–99,5 %** | **sí** | 197 (94,7 %) | 208 | 1300 | 84 | **0,20 $/1000 (−33 %)** |
+| Haiku 5.5, tanda 1 | PACAI JSON con ejemplos | 208 | 203 (97,6 %) | 94,5–99,0 % | sí | 188 (90,4 %) | 208 | 3391 | 159 | 0,50 $/1000 |
+| Haiku 5.5, tanda 1 | PACAI UI Lang 3 | 208 | 191 (91,8 %) | 87,3–94,8 % | **no** | 177 (85,1 %) | 208 | 2110 | 117 | 0,34 $/1000 (−32 %) |
+| Haiku 5.5, tanda 1 repuntuada con la reparación de `root` | PACAI UI Lang 3 | 208 | 199 (95,7 %) | 92,0–97,7 % | sí | 184 (88,5 %) | — | 2110 | 117 | 0,33 $/1000 (−34 %) |
+| Haiku 5.5, tanda 2 (con la reparación) | PACAI JSON con ejemplos | 208 | 205 (98,6 %) | 95,8–99,5 % | sí | 189 (90,9 %) | 208 | 3391 | 161 | 0,50 $/1000 |
+| Haiku 5.5, tanda 2 (con la reparación) | **PACAI UI Lang 3** | 208 | **198 (95,2 %)** | **91,4–97,4 %** | **sí** | 183 (88,0 %) | 208 | 2110 | 118 | **0,33 $/1000 (−34 %)** |
+
+**Qué pasó con Haiku**
+
+- **Tanda 1 (0,16 US$), sin cambios en el motor: no cumple.** Haiku había cumplido en la medida anterior (97,1 %,
+  n = 104), pero con más muestra baja al 91,8 %. 8 de sus 17 fallos son altas en las que la raíz se llama `raiz` o
+  `fila` en vez de `root`, aunque el prompt dice «La raíz se llama root y va primero». Luna no lo hace. Los otros:
+  borrar y reescribir el mismo nodo en un cambio (`c_bajaron … / -c_bajaron`, 4, siempre en `p_iguales`), `root` dos
+  veces con contenido distinto (4) y un nodo suelto (1).
+- **El arreglo:** la reparación de un alta sin `root` (§10, «Reparaciones seguras»), combinada con la del PR #220. Si
+  la primera línea es un contenedor que valió y no cuelga de nadie, pasa a llamarse `root`; si no, un Stack vertical
+  nuevo envuelve los nodos de primer nivel. No cambia el árbol que pidió el modelo. La tanda 2 se midió con la primera
+  versión (renombrar la primera línea si no cuelga de nadie, fuera o no un contenedor). Todas las respuestas guardadas
+  se han vuelto a validar, sin gastar, con la regla combinada, y salen las mismas cifras: en la tanda 2 la reparación
+  entra 3 veces, siempre renombrando, y la tanda 1 repuntuada queda en 199/208 (95,7 %).
+- **Tanda 2 (0,16 US$), con el arreglo: cumple.** 95,2 % de válidas a la primera, con el límite inferior de Wilson en
+  91,4 %, y un 34 % menos de coste por pantalla exacta. La reparación entró 3 veces (`fila` 2, `raiz` 1). Como
+  referencia, las dos tandas de Haiku con el arreglo (la 1 repuntuada) suman 397/416 (95,4 %, Wilson ≥ 93,0 %). Luna y
+  los brazos JSON no cambian al repuntuar.
+- **Lo que queda en Haiku** (10 fallos): borrar y reescribir el mismo nodo (4, `p_iguales`), los de
+  `m_sin_filtros` (root dos veces, un panel nuevo que no cuelga de nadie, borrar y reescribir: 4), un nodo suelto (1)
+  y los hijos escritos en medio de la línea (1). Todos se arreglan con la corrección (208/208).
+- **Ojo: Haiku cumple justo** (198 de 208; con 197 serían 94,7 %). En validez el JSON con ejemplos sigue por encima
+  (98,6 %) y en exactas también (90,9 % frente a 88,0 %), dentro del ruido en las exactas. La ventaja de UI Lang 3 es
+  de coste.
+- **Luna no se ha vuelto a medir con la reparación,** pero sus respuestas guardadas (§14 de la medición) dan lo mismo
+  con la regla combinada: 205/208 en los dos brazos.
+
+**Complemento, otra medida (PR #218, §8.16):** con Luna por el plan de ChatGPT y el prompt real del motor (20
+preguntas × 2), UI Lang 3 dibuja sin que se lo pidan tanto como el JSON (11/24), con 10/11 pantallas válidas a la
+primera, un 17 % menos de coste medio por turno y la primera pantalla en 8,4 s frente a 13,6 s, sin pantallas fuera de
+lugar en las 16 preguntas de código.
+
+**Decisión:** UI Lang 3 encendido por defecto con GPT-6 Luna y Claude Haiku 5.5; el JSON con ejemplos con el resto
+de modelos. `ALFALFA_PACAI_UI_LANG=1` o `0` lo fuerza en un sentido u otro.
+
+**Lo que no se ha probado**
+
+- Ningún otro modelo (Sonnet, Opus, GPT-6 sin Luna, GLM, DeepSeek, Gemma…): por eso siguen con el JSON.
+- Una sesión de verdad en la app de Mac con Luna o Haiku: la medida es por tarea, sin herramientas ni historial.
+- Cambiar de modelo a mitad de sesión con pantallas en el historial.
+- El streaming por trozos sigue sin servirse (el servicio no trocea).
+- Datos: `muestra-haiku-lang3-valla.jsonl` y `muestra-haiku-lang3-raiz.jsonl`, en las notas de la sesión.

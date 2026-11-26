@@ -658,11 +658,16 @@ class TransportePacai(Transport):
             self._entregar(m['id'], texto, imagenes, archivos, eco=eco)
 
     # -- perfil `ui` ---------------------------------------------------------
-    def manual_ui(self, web: bool = False) -> str:
+    def manual_ui(self, web: bool = False, modelo: str | None = None) -> str:
         """La parte del prompt de sistema con el catálogo del cliente; vacía sin el perfil `ui`. `web`: el motor le
-        ofrece al modelo web_search y read_web."""
+        ofrece al modelo web_search y read_web. `modelo`: el de esta inferencia, que decide el formato (PACAI UI Lang
+        con un modelo medido, el JSON con el resto; perfil-ui.md §10)."""
         vistas = self.t.vistas if self.t is not None else None
-        return vistas.catalogo.manual(web=web) if vistas is not None else ''
+        if vistas is None:
+            return ''
+        if modelo is not None:
+            vistas.catalogo.con_modelo(modelo)
+        return vistas.catalogo.manual(web=web)
 
     def _accion_de_pantalla(self, m: dict) -> dict | None:
         """Un `input` con `pacai.ui.action/1`: el mismo `input` con un solo bloque de texto para el modelo (None y un
