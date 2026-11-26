@@ -62,7 +62,7 @@ PROMPT_BASE = {
     'Button': 'variant=primary|secondary|danger disabled=true',
     'Form': '',
     'Input': 'name=… kind=text|number|multiline|email|date placeholder="…" required=true',
-    'Select': 'name=… options=[{"value":…,"label":…}] multiple=true',
+    'Select': 'name=… options=[{"value":…,"label":…}] multiple=true required=true',
     'Chart': 'kind=bar|line|pie labels=[…] series=[{"name":…,"values":[…]}]',
     'Image': 'src="https://…" alt="…"',
     'Code': 'language=…',

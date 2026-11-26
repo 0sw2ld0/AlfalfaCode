@@ -511,10 +511,14 @@ def validar(brazo, tarea, texto, reparaciones=None):
 
 # -- peticiones -------------------------------------------------------------------------------------------------
 async def pedir(cliente, modelo, mensajes):
-    t0 = time.monotonic()
-    respuesta = await cliente.post('/api/chat', json={
-        'model': modelo, 'messages': mensajes, 'stream': False, 'think': False,
-        'options': {'temperature': 0, 'num_predict': MAX_SALIDA}})
+    for espera in (10, 20, 40, 60, None):
+        t0 = time.monotonic()
+        respuesta = await cliente.post('/api/chat', json={
+            'model': modelo, 'messages': mensajes, 'stream': False, 'think': False,
+            'options': {'temperature': 0, 'num_predict': MAX_SALIDA}})
+        if respuesta.status_code != 429 or espera is None:
+            break
+        await asyncio.sleep(espera)            # «demasiadas peticiones seguidas»: se espera y se repite
     if respuesta.status_code >= 400:
         raise RuntimeError(f'HTTP {respuesta.status_code}: {respuesta.text[:300]}')
     dato = respuesta.json()
@@ -564,6 +568,9 @@ async def main() -> None:
     args.add_argument('--tope', type=float, default=1.0, help='USD: no lanza más peticiones al alcanzarlo')
     args.add_argument('--brazos', default=','.join(BRAZOS))
     args.add_argument('--solo', help='tareas separadas por comas')
+    args.add_argument('--modelos', help='modelos separados por comas (por defecto, los dos)')
+    args.add_argument('--primera-repeticion', type=int, default=0,
+                      help='número de la primera repetición, para sumar tandas sin repetir números')
     opciones = args.parse_args()
     from alfalfa.proveedores.alfalfa import Alfalfa
 
@@ -571,8 +578,10 @@ async def main() -> None:
     if not proveedor.configurado():
         sys.exit('El proveedor Alfalfa (suscripción CUY) no está activado en este equipo.')
     tareas = [t for t in TAREAS if not opciones.solo or t[0] in opciones.solo.split(',')]
-    trabajos = [(m, b, t, r) for r in range(opciones.repeticiones) for t in tareas for m in MODELOS
-                for b in opciones.brazos.split(',')]
+    modelos = opciones.modelos.split(',') if opciones.modelos else MODELOS
+    trabajos = [(m, b, t, r) for r in range(opciones.primera_repeticion, opciones.primera_repeticion
+                                            + opciones.repeticiones)
+                for t in tareas for m in modelos for b in opciones.brazos.split(',')]
     semaforo = asyncio.Semaphore(opciones.simultaneas)
     gastado = {'usd': 0.0, 'parado': False}
     salida = Path(opciones.salida).open('a', encoding='utf-8')
