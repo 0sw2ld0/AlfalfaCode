@@ -1,1 +1,1 @@
-Si abres una lluvia de ideas con un archivo de referencia, ya no te pide permiso para cada participante; cualquier otro contenido de fuera lo sigue pidiendo.
+Las pantallas que AlfalfaCode dibuja en el chat salen bien a la primera más a menudo, sobre todo con modelos pequeños.
