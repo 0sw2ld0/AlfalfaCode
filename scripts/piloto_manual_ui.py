@@ -154,7 +154,18 @@ def capturar(brazo: str) -> dict:
     return {'sistema': sistema, 'tools': payload.get('tools', []), 'options': payload.get('options', {})}
 
 
-MANUAL = Catalogo().manual().strip()            # lo que devuelve ui_manual: buscar antes ya está en el prompt
+# Con --ui-lang los dos brazos llevan PACAI UI Lang 3 (ALFALFA_PACAI_UI_LANG=1): el manual compacto y su valla.
+CAT = Catalogo()
+MANUAL = CAT.manual().strip()                   # lo que devuelve ui_manual: buscar antes ya está en el prompt
+
+
+def usar_ui_lang():
+    global CAT, MANUAL
+    from alfalfa.pacai import ui_lang
+
+    os.environ[ui_lang.FLAG] = '1'
+    CAT = Catalogo.de(None, {ui_lang.FLAG: '1'})
+    MANUAL = CAT.manual().strip()
 
 
 def herramienta(nombre, args, pregunta, mensajes):
@@ -196,9 +207,9 @@ def _vivos(mapa):
 def pantallas(textos):
     """Cada bloque ```pacai-ui de las respuestas, en orden: (índice de la respuesta, errores de ese bloque). Se
     aplican sobre las mismas `Vistas`, como el motor: un bloque posterior puede ser un cambio del anterior."""
-    vistas, salida = Vistas(Catalogo()), []
+    vistas, salida = Vistas(CAT), []
     for i, texto in enumerate(textos):
-        for trozo in partir(texto or ''):
+        for trozo in partir(texto or '', lang=CAT.lang):
             if trozo[0] != 'ui':
                 continue
             attrs, lineas = trozo[1], trozo[2]
@@ -250,8 +261,8 @@ async def una(proveedor, prompts, modelo, brazo, pregunta, repeticion):
     precio = precio_de(modelo)
     prompt = prompts[brazo]
     mensajes = list(prompt['sistema']) + [{'role': 'user', 'content': pregunta[2]}]
-    fila = {'proveedor': proveedor.id, 'modelo': modelo, 'brazo': brazo, 'pregunta': pregunta[0],
-            'tipo': pregunta[1], 'repeticion': repeticion}
+    fila = {'proveedor': proveedor.id, 'formato': 'lang' if CAT.lang else 'json', 'modelo': modelo, 'brazo': brazo,
+            'pregunta': pregunta[0], 'tipo': pregunta[1], 'repeticion': repeticion}
     textos, llamadas, entrada, salida, tiempos = [], [], 0, 0, []
     cliente = proveedor.cliente(httpx.Timeout(240, connect=10), tarea={'effort': ESFUERZO})
     async with cliente:
@@ -376,6 +387,7 @@ async def main() -> None:
     args.add_argument('--modelos', help='modelos separados por comas (por defecto, los dos)')
     args.add_argument('--primera-repeticion', type=int, default=0)
     args.add_argument('--proveedor', choices=('chatgpt', 'alfalfa'), default='chatgpt')
+    args.add_argument('--ui-lang', action='store_true', help='los dos brazos con PACAI UI Lang 3')
     opciones = args.parse_args()
     if opciones.resumen:
         resumen(opciones.resumen)
@@ -391,7 +403,12 @@ async def main() -> None:
     if not proveedor.configurado():
         sys.exit('El proveedor ' + opciones.proveedor + ' no está conectado en este equipo.')
     brazos = opciones.brazos.split(',')
+    if opciones.ui_lang:
+        usar_ui_lang()
     prompts = {b: capturar(b) for b in brazos}
+    if opciones.ui_lang:
+        assert all('pacai-ui-lang' in (prompts[b]['sistema'][0]['content'] if b == 'completo' else MANUAL)
+                   for b in brazos)
     if 'bajo_demanda' in prompts:
         assert AVISO_MANUAL.strip() in prompts['bajo_demanda']['sistema'][0]['content']
         assert 'web_search' in prompts['bajo_demanda']['sistema'][0]['content'].split(AVISO_MANUAL.strip())[1]

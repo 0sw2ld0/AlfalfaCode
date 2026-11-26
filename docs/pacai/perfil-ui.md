@@ -339,10 +339,32 @@ pruebas en `tests/test_pacai_ui.py`.
       manual en el historial. En una sesión de agente con muchas herramientas por turno, el ahorro de ~1.450 tokens
       se cobra en cada petición, así que pesaría más que en este piloto de turnos cortos.
 
-    **Recomendación: no encenderlo por defecto.** Ahorra un 10 % de entrada cuando no se dibuja, pero baja de 46 % a
-    33 % las pantallas que el modelo decide dibujar solo, que es justo lo que el perfil busca. Lo siguiente que
-    probaría es dejar en el prompt la parte de *cuándo* dibujar del manual (unos 250 tokens) y diferir sólo el
-    formato, el catálogo y los ejemplos, y medirlo también con Haiku.
+    **Con PACAI UI Lang 3 (`--ui-lang`, los dos brazos con `ALFALFA_PACAI_UI_LANG=1`).** Mismas preguntas, modelo y
+    plan: 80 turnos, 127 peticiones. El manual compacto es más corto (el sistema pasa de 6.031 a 5.123 tokens, −908) y
+    el que devuelve `ui_manual` pesa 1.022. Datos brutos: `piloto-manual-ui-luna-lang.jsonl`.
+
+    | GPT-6 Luna | JSON completo | UI Lang 3 completo | UI Lang 3 con `ui_manual` |
+    |---|---:|---:|---:|
+    | Dibuja sin que se pida, donde conviene | 11/24 (46 %) | 11/24 (46 %) | 6/24 (25 %, IC95 % 12–45 %) |
+    | … sin las 3 preguntas de búsqueda | 10/18 | 10/18 | 5/18 |
+    | Pantallas válidas a la primera | 11/11 | 10/11 | 6/6 |
+    | Pantallas fuera de lugar en preguntas de código | 0/16 | 0/16 | 0/16 |
+    | Entrada por turno de código (mediana) | 13.805 | 13.252 | 12.397 |
+    | Coste medio por turno, todas las preguntas | 2,48 $/1000 | 2,07 $/1000 | 2,34 $/1000 |
+    | Tiempo hasta la primera pantalla (mediana) | 13,6 s | 8,4 s | 11,1 s |
+
+    - Con UI Lang, `ui_manual` pierde todavía más pantallas (46 % → 25 %): organizar la semana pasa de 2/2 a 0/2 y la
+      mudanza y el alojamiento de 1/2 a 0/2. Cuesta un 13 % más de media por turno y tarda 2,7 s más en la primera
+      pantalla, porque ahorra 908 tokens por petición y paga una petición entera más cuando dibuja.
+    - UI Lang 3 solo, con su manual siempre en el prompt, dibuja lo mismo que el JSON (46 %), cuesta un 17 % menos por
+      turno y saca la primera pantalla 5 s antes. La pantalla no válida fue un formulario sin `root`.
+
+    **Recomendación: no encender `ui_manual` por defecto, ni con JSON ni con UI Lang.** Ahorra un 6–10 % de entrada
+    cuando no se dibuja, pero baja las pantallas que el modelo decide dibujar solo (46 % → 33 % con JSON, 46 % → 25 %
+    con UI Lang), que es justo lo que el perfil busca. Para gastar menos prompt sin perder pantallas, encender UI Lang
+    3 da más: ahorra más que diferir el manual y no pierde ninguna. Si se quiere seguir con la carga bajo demanda, lo
+    siguiente sería dejar en el prompt la parte de *cuándo* dibujar (unos 250 tokens) y diferir sólo el formato, el
+    catálogo y los ejemplos, y medirlo también con Haiku.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
