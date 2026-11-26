@@ -15,7 +15,8 @@ Una línea por nodo, en DFS desde `root`:
 - Herencia: el catálogo declara `inherit` (`{"period": "periodo"}`) y el motor pone `{"$": "periodo"}` si la prop
   falta. Un valor explícito prevalece.
 
-Cambios (versión 2: bloque con `rev=N`, la revisión que el motor le dio al modelo), aplicados enteros o nada. Sin
+Cambios (versión 3: el mismo bloque `view=…`; si la vista ya existe es un cambio contra la última revisión que el
+motor le enseñó al modelo, y el modelo nunca escribe `rev`), aplicados enteros o nada. Sin
 operadores, como el JSON de hoy: cada línea es el nodo entero.
 
     id Comp …                    alta si el id es nuevo; si ya existe, lo sustituye (con todos sus hijos tras >)
@@ -224,10 +225,10 @@ def leer_linea(linea: str) -> Linea:
                     raise ErrorDeLinea('Un hijo repetido en la lista.')
                 salida.hijos = hijos
                 break
-            if texto[i] == '"':
+            if texto[i] == '"' or (texto[i] == '$' and primero and not _CLAVE.match(texto, i)):
                 if not primero:
-                    raise ErrorDeLinea('Un texto suelto sólo va justo después del componente (o de ~id).')
-                salida.posicional, i = _valor(texto, i)
+                    raise ErrorDeLinea('Un texto suelto sólo va justo después del componente.')
+                salida.posicional, i = _valor(texto, i)      # un texto o un enlace $clave: un valor por posición
                 salida.hay_posicional = True
                 primero = False
                 continue
@@ -345,7 +346,8 @@ class Flujo:
         try:
             leida = leer_linea(linea)
             if leida.tipo != 'alta':
-                raise ErrorDeLinea('En un alta completa sólo van líneas de nodo (los cambios llevan rev=N).',
+                raise ErrorDeLinea('En una pantalla nueva sólo van líneas de nodo (para borrar, la vista tiene que '
+                                   'existir).',
                                    leida.ident)
             nodo = nodo_de(leida, self.catalogo, self.tabla)
             if leida.ident in self.nodos:
@@ -606,10 +608,10 @@ def a_lang(nodos: list[dict], catalogo: Catalogo | None, tabla: dict[str, Ficha]
     return '\n'.join(lineas)
 
 
-def resumen(nodos: dict[str, dict], rev: int, tabla: dict[str, Ficha]) -> str:
-    """Lo que el modelo necesita para escribir un cambio: la revisión y la línea entera de cada nodo, en PACAI UI Lang
-    (sin lo que el motor hereda). En la versión 2 un cambio reescribe líneas enteras, así que las ve completas."""
-    return f'rev={rev}\n' + a_lang(list(nodos.values()), None, tabla)
+def resumen(nodos: dict[str, dict], tabla: dict[str, Ficha]) -> str:
+    """Lo que el modelo necesita para escribir un cambio: la línea entera de cada nodo, en PACAI UI Lang (sin lo que
+    el motor hereda). En la versión 3 no lleva revisión: la pone el motor."""
+    return a_lang(list(nodos.values()), None, tabla)
 
 
 # -- prompt --------------------------------------------------------------------------------------------------------
@@ -639,12 +641,12 @@ def prompt(catalogo: Catalogo, tabla: dict[str, Ficha] | None = None, ancho: int
             ' @' + e + '={…}' for e in ficha.eventos) + (' > hijos' if ficha.hijos else '')
         piezas_lineas.append(texto)
     cola = [
-        f'Cambio: bloque ```{VALLA_LANG} view=nombre rev=N, con la rev de la pantalla que ves (no la siguiente). '
-        'Escribe entera la línea de cada nodo que cambia, con todos sus hijos tras >, y las de los nodos nuevos.',
-        '-id borra un nodo y lo quita de su padre; un hijo que dejas fuera de la lista de su padre también se va. '
-        'Sin ~ ni +>.',
-        'Ejemplo: panel Card "Nuevo título" > nota,extra  /  extra Text "Hecho" style=caption. Si se te piden líneas, '
-        'devuelve sólo esas.',
+        f'Cambio de una pantalla que ya existe: el mismo bloque ```{VALLA_LANG} view=nombre (sin rev: la pone el '
+        'motor). Escribe entera la línea de cada nodo que cambia, con todos sus hijos tras >, y las de los nuevos.',
+        'Para borrar un nodo escribe su id con un guion delante, sola en su línea: -c_bajaron. Un hijo que dejas '
+        'fuera de la lista de su padre también se va.',
+        'Ejemplo: panel Card "Nuevo título" > nota,extra  /  extra Text "Hecho" style=caption  /  -vieja. Si se te '
+        'piden líneas, devuelve sólo esas.',
     ]
     # Los componentes se agrupan en líneas de `ancho` caracteres; si no caben en el máximo, las líneas se alargan.
     hueco = MAX_LINEAS_PROMPT - len(cabeza) - len(cola)

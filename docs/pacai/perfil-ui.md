@@ -339,18 +339,20 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
 
 - Una línea por nodo, `id Comp ["posicional"] clave=valor … > hijo,hijo`, en DFS desde `root`, en una valla
   ```` ```pacai-ui-lang view=nombre ````. El posicional es la prop que declara el catálogo (`positional` en un
-  componente propio; en los base, `Text.text`, `Card.title`, `Button.label`…). `query`, objetos y listas van en
-  JSON compacto; una palabra suelta es un enum; `$clave` es `{"$": "clave"}`; `@evento={…}` lleva sus acciones.
+  componente propio; en los base, `Text.text`, `Card.title`, `Button.label`…), un solo valor: un texto o un enlace
+  `$clave`. `query`, objetos y listas van en JSON compacto; una palabra suelta es un enum; `$clave` es
+  `{"$": "clave"}`; `@evento={…}` lleva sus acciones.
 - **Herencia:** un componente propio declara `inherit` (`{"period": "periodo"}`) y el motor pone el enlace si la prop
   falta. Un valor explícito gana. Un default sólo se rellena si el esquema de la prop lo declara.
-- **Cambios (versión 2, sin operadores):** la valla lleva `rev=N`, la revisión que el motor le enseña al modelo.
-  Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye (con todos sus hijos tras
-  `>`). `-id` borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él; un hijo que la línea del
-  padre deja fuera también se va. Todo el bloque se aplica o nada. El modelo ve la pantalla con sus líneas enteras
-  (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`, `>` con la lista completa) se quitó: en el piloto, los cambios
-  eran donde más fallaba.
-- **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, y en el reintento de un alta la línea
-  de un id que ya existe lo sustituye. Nunca cambian lo que se pidió.
+- **Cambios (versión 3):** el mismo bloque `view=…`. Si la vista ya existe es un cambio contra la última revisión
+  que el motor le enseñó al modelo; si no, un alta. **El modelo nunca escribe `rev`**: si lo pone, se ignora y queda
+  en `Vistas.reparaciones`. Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye
+  (con todos sus hijos tras `>`). `-id` borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él; un
+  hijo que la línea del padre deja fuera también se va. Todo el bloque se aplica o nada. El modelo ve la pantalla con
+  sus líneas enteras (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`) y el `rev` escrito por el modelo (versión
+  2) se quitaron: eran donde más fallaba.
+- **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, en el reintento de un alta la línea de
+  un id que ya existe lo sustituye, y un `rev` del modelo se ignora. Nunca cambian lo que se pidió.
 - **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
   existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
   mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor

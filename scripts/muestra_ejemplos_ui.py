@@ -39,8 +39,8 @@ CAT = Catalogo.de(DECLARACION, {})
 CAT_LANG = Catalogo.de({k: v for k, v in DECLARACION.items() if k not in ('pieces', 'queries')},
                        {'ALFALFA_PACAI_UI_LANG': '1'})
 MODELOS = ('claude-haiku-5-5', 'gpt-6-luna')
-BRAZOS = ('json', 'json_ej', 'a2ui_ej', 'lang2')
-VALLAS = {'json': 'pacai-ui', 'json_ej': 'pacai-ui', 'a2ui_ej': 'a2ui', 'lang2': 'pacai-ui-lang'}
+BRAZOS = ('json', 'json_ej', 'a2ui_ej', 'lang')
+VALLAS = {'json': 'pacai-ui', 'json_ej': 'pacai-ui', 'a2ui_ej': 'a2ui', 'lang': 'pacai-ui-lang'}
 MAX_SALIDA = 1500
 CIERRE = '\nResponde sólo con el bloque de la pantalla, sin texto antes ni después, sin herramientas ni comentarios.'
 B = {'period': {'$': 'periodo'}, 'family': {'$': 'familia'}}
@@ -142,7 +142,7 @@ def _vistas_lang():
 
 
 def sistema(brazo: str) -> str:
-    if brazo == 'lang2':
+    if brazo == 'lang':
         return CAT_LANG.manual() + CIERRE
     if brazo == 'json':
         return CAT.manual(ejemplos=False) + CIERRE
@@ -421,8 +421,8 @@ def mensaje_de_tarea(brazo, tarea) -> str:
     _, tipo, texto, _ = tarea
     if tipo == 'alta':
         return texto
-    if brazo == 'lang2':
-        return ('Pantalla actual (view=tablero), con su revisión:\n' + _vistas_lang().resumen_lang('tablero')
+    if brazo == 'lang':
+        return ('Pantalla actual (view=tablero), lo que mandaste:\n' + _vistas_lang().resumen_lang('tablero')
                 + '\n\nCambio que pide el usuario: ' + texto)
     pantalla = tablero_a2ui() if brazo == 'a2ui_ej' else '\n'.join(_compacto(n) for n in TABLERO)
     return 'Pantalla actual (view=tablero), lo que mandaste:\n' + pantalla + '\n\nCambio que pide el usuario: ' + texto
@@ -458,8 +458,10 @@ def _vivos(mapa):
     return {i: n for i, n in mapa.items() if i in vivos}
 
 
-def validar(brazo, tarea, texto):
-    """(válida, exacta, errores). Un nodo que no cuelga de root no se dibuja y no cuenta."""
+def validar(brazo, tarea, texto, reparaciones=None):
+    """(válida, exacta, errores). Un nodo que no cuelga de root no se dibuja y no cuenta. `reparaciones` recoge lo que
+    el motor arregló sin cambiar lo pedido (PACAI UI Lang: un rev del modelo)."""
+    reparaciones = [] if reparaciones is None else reparaciones
     _, tipo, _, comprobar = tarea
     attrs, lineas = bloque(texto)
     if attrs is None:
@@ -467,15 +469,12 @@ def validar(brazo, tarea, texto):
     errores = []
     if attrs['valla'] != VALLAS[brazo]:
         errores.append('Valla equivocada.')
-    if brazo == 'lang2':
+    if brazo == 'lang':
+        # Versión 3: la revisión la pone el motor; si la vista existe es un cambio. Un rev del modelo se ignora.
         attrs_lang = {k: v for k, v in attrs.items() if k != 'valla'} | {'lang': True}
-        if tipo == 'cambio':
-            vistas = _vistas_lang()
-            if 'rev' not in attrs_lang:
-                errores.append('El cambio no lleva rev=N.')
-        else:
-            vistas = Vistas(CAT_LANG)
+        vistas = _vistas_lang() if tipo == 'cambio' else Vistas(CAT_LANG)
         data, fallos = vistas.aplicar(attrs_lang, lineas)
+        reparaciones[:] = vistas.reparaciones
         errores += fallos
         vista = vistas.vistas.get(attrs_lang.get('view', 'tablero' if tipo == 'cambio' else ''))
         mapa = _vivos(dict(vista.nodos) if vista else {})
@@ -537,9 +536,11 @@ async def una(proveedor, modelo, brazo, tarea, repeticion):
             texto, entrada, salida, total = await pedir(cliente, modelo, mensajes)
         except Exception as exc:  # noqa: BLE001 - un fallo del servicio se anota
             return fila | {'error': str(exc)[:300], 'coste': 0}
-        valida, exacta, errores = validar(brazo, tarea, texto)
-        fila |= {'valida': valida, 'exacta': exacta, 'errores': errores[:6], 'entrada': entrada, 'salida': salida,
-                 'total': total, 'coste': coste(precio, entrada, salida), 'respuesta': texto[:4000]}
+        reparaciones = []
+        valida, exacta, errores = validar(brazo, tarea, texto, reparaciones)
+        fila |= {'valida': valida, 'exacta': exacta, 'errores': errores[:6], 'reparaciones': reparaciones,
+                 'entrada': entrada, 'salida': salida, 'total': total, 'coste': coste(precio, entrada, salida),
+                 'respuesta': texto[:4000]}
         if valida:
             return fila | {'valida_tras': True, 'exacta_tras': exacta}
         peticion = ('El motor rechazó el bloque: ' + '; '.join(errores[:8])

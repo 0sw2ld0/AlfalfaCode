@@ -130,6 +130,13 @@ def test_valores_json_enums_y_enlaces():
     assert ui_lang.leer_linea('d Input name=d kind=date min=2026-11-25').props['min'] == '2026-11-25'
 
 
+def test_el_posicional_puede_ser_un_enlace():
+    nodos, diagnosticos = ui_lang.traducir('root Stack > t\nt Text $moneda style=caption', catalogo())
+    assert diagnosticos == [] and nodos[1]['props'] == {'text': {'$': 'moneda'}, 'style': 'caption'}
+    _, diagnosticos = ui_lang.traducir('root Stack > t\nt Text $moneda "otro"', catalogo())
+    assert diagnosticos                                       # un solo valor por posición
+
+
 def test_un_default_solo_si_el_catalogo_lo_declara():
     declaracion = json.loads(json.dumps(DECLARACION))
     declaracion['components']['Grid']['props']['properties']['columns']['default'] = 4
@@ -257,17 +264,20 @@ def test_borrar_un_nodo_con_dos_padres_lo_quita_de_los_dos():
     assert diagnosticos == [] and 'fuente' not in cambio.nodos['cifras']['children'] + cambio.nodos['root']['children']
 
 
-def test_vistas_aplica_alta_y_cambio_contra_la_revision():
+def test_la_revision_la_pone_el_motor_y_un_rev_del_modelo_se_ignora():
     vistas = Vistas(catalogo())
     data, errores = vistas.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())
     assert errores == [] and data['op'] == 'replace' and data['rev'] == 1 and len(data['nodes']) == 8
-    assert errores_de('update', data) == []
-    data, errores = vistas.aplicar({'view': 'tablero', 'lang': True, 'rev': '0'}, PATCH.splitlines())
-    assert data is None and 'revisión 0' in errores[0]
-    data, errores = vistas.aplicar({'view': 'tablero', 'lang': True, 'rev': '1'}, PATCH.splitlines())
+    assert errores_de('update', data) == [] and vistas.reparaciones == []
+    # La vista ya existe: el mismo bloque es un cambio contra la última revisión, aunque el modelo ponga otro rev.
+    data, errores = vistas.aplicar({'view': 'tablero', 'lang': True, 'rev': '7'}, PATCH.splitlines())
     assert errores == [] and data['op'] == 'patch' and data['rev'] == 2 and errores_de('update', data) == []
+    assert vistas.reparaciones == ['rev=7 ignorado: la revisión la pone el motor.']
+    # Un rev en una vista que no existe tampoco la rechaza: es un alta.
+    data, errores = vistas.aplicar({'view': 'otra', 'lang': True, 'rev': '1'}, ['root Text "hola"'])
+    assert errores == [] and data['op'] == 'replace' and vistas.reparaciones
     resumen = vistas.resumen_lang('tablero')
-    assert resumen.splitlines()[0] == 'rev=2' and 'p_bajo Panel "Bajas e historial" > bajo_top,bajo_hist' in resumen
+    assert 'rev' not in resumen and 'p_bajo Panel "Bajas e historial" > bajo_top,bajo_hist' in resumen
     assert 'bajo_hist PriceLines query={"tipo":"historial","productos":["palta","limon"]}' in resumen
     assert 'period' not in resumen                                   # lo heredado no se repite
     sin_flag = Vistas(Catalogo.de(DECLARACION, {}))
@@ -296,7 +306,7 @@ async def test_el_motor_traduce_la_valla_compacta_con_el_flag(monkeypatch):
         'values': {}}}]})
     entregado = await asyncio.wait_for(c.t.next_message(), 1)
     texto = getattr(entregado, 'texto', None) or getattr(entregado, 'text', None) or str(entregado)
-    assert f'rev={datos[-1]["rev"]}' in texto and 'crear Button "Crear"' in texto
+    assert 'crear Button "Crear" variant=primary @press={"send":"crear_ticket"}' in texto and 'rev=' not in texto
     c.comprobar()
 
 
@@ -305,7 +315,8 @@ def test_el_prompt_sale_del_catalogo_y_cabe_en_15_lineas():
     texto = ui_lang.prompt(catalogo())
     assert len(texto.splitlines()) <= ui_lang.MAX_LINEAS_PROMPT
     assert 'Stat "label" icon=subio|bajo|igual' in texto and 'PriceLines query={"tipo":"historial"' in texto
-    assert 'family=$familia, period=$periodo' in texto and '+>' in texto
+    assert 'family=$familia, period=$periodo' in texto and '-c_bajaron' in texto
+    assert 'rev=N' not in texto and '+>' not in texto and '~id' not in texto
     piezas_texto = ui_lang.prompt_piezas(catalogo())
     assert len(piezas_texto.splitlines()) <= 6 and 'formPedido da hoy/lista' in piezas_texto
     # Con muchos componentes propios las líneas se alargan, pero el máximo se mantiene.

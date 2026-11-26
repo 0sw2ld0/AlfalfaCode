@@ -351,8 +351,9 @@ Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conve
 cuando la respuesta sea una lista, una tabla, algo que elegir o rellenar, un gráfico o algo que te pidan enseñar aquí;
 para una respuesta corta escribe texto normal. No crees archivos para enseñar algo en el chat.
 ''' + (BUSCAR_ANTES if web else '') + prompt(self) + '\n' + (piezas + '\n' if piezas else '') + bloque
-                + f'Acciones: {", ".join(sorted(self.acciones))}; como mucho un send por evento. Texto plano, sin '
-                f'HTML ni markdown en los nodos. Máximo {self.max_nodos} nodos.\n')
+                + f'Acciones: {", ".join(sorted(self.acciones))}; como mucho un send por evento. Input y Select '
+                'guardan solos su valor en name: no les pongas @change (sólo admite set). Texto plano, sin HTML ni '
+                f'markdown en los nodos. Máximo {self.max_nodos} nodos.\n')
 
 
 def partir(texto: str, lang: bool = False) -> list[tuple]:
@@ -416,6 +417,7 @@ class Vistas:
     def __init__(self, catalogo: Catalogo):
         self.catalogo = catalogo
         self.vistas: dict[str, Vista] = {}
+        self.reparaciones: list[str] = []      # lo que el motor arregló sin cambiar lo pedido (PACAI UI Lang)
 
     def rev(self, nombre: str) -> int | None:
         vista = self.vistas.get(nombre)
@@ -482,22 +484,22 @@ class Vistas:
         return data, errores
 
     def aplicar_lang(self, attrs: dict, lineas: list[str]) -> tuple[dict | None, list[str]]:
-        """Un bloque ```pacai-ui-lang (prototipo): sin `rev`, un alta completa que sustituye la vista; con `rev=N`,
-        un cambio atómico contra esa revisión. Sin el flag se rechaza y el modelo debe usar el JSON."""
+        """Un bloque ```pacai-ui-lang view=… (prototipo, versión 3). Si la vista ya existe es un cambio atómico contra
+        la última revisión que se le enseñó al modelo; si no, un alta completa. El modelo nunca escribe `rev`: si lo
+        pone, se ignora y queda anotado en `reparaciones`. Sin el flag se rechaza y el modelo debe usar el JSON."""
         from .ui_lang import Flujo, aplicar_cambio
 
+        self.reparaciones = []
         if not self.catalogo.lang:
             return None, ['Este motor no tiene PACAI UI Lang activado: usa el bloque pacai-ui con JSON.']
         nombre = attrs.get('view', '')
         if not isinstance(nombre, str) or not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui-lang necesita view=nombre ([a-z][a-z0-9_]*).']
-        texto = '\n'.join(lineas)
         if 'rev' in attrs:
-            vista = self.vistas.get(nombre)
-            if vista is None:
-                return None, [f'La vista {nombre} no existe: mándala entera, sin rev.']
-            if str(vista.rev) != str(attrs['rev']):
-                return None, [f'El cambio es contra la revisión {attrs["rev"]} y {nombre} va por la {vista.rev}.']
+            self.reparaciones.append(f'rev={attrs["rev"]} ignorado: la revisión la pone el motor.')
+        texto = '\n'.join(lineas)
+        vista = self.vistas.get(nombre)
+        if vista is not None:
             cambio, diagnosticos = aplicar_cambio(vista.nodos, texto, self.catalogo)
             if cambio is None:
                 return None, [d.texto() for d in diagnosticos]
@@ -519,11 +521,10 @@ class Vistas:
                 [d.texto() for d in diagnosticos])
 
     def resumen_lang(self, nombre: str) -> str:
-        """Lo que lee el modelo para cambiar la vista sin que se la reenvíen (revisión e ids, sin queries)."""
+        """Lo que lee el modelo para cambiar la vista: sus líneas enteras en PACAI UI Lang (sin revisión)."""
         from .ui_lang import fichas, resumen
 
-        vista = self.vistas[nombre]
-        return resumen(vista.nodos, vista.rev, fichas(self.catalogo))
+        return resumen(self.vistas[nombre].nodos, fichas(self.catalogo))
 
     def foto(self, nombre: str) -> dict:
         """El `replace` de la vista entera, con su resumen: la foto de referencia del `message_end`."""
@@ -553,7 +554,7 @@ class Vistas:
 
 def accion_para_el_modelo(textos: list[str], data: dict, rev_actual: int | None, pantalla: str = '') -> str:
     """El mensaje de usuario que lee el modelo por una acción `send` de una pantalla. `pantalla`: con PACAI UI Lang,
-    el resumen de la vista (revisión e ids) para que pueda cambiarla con un bloque `rev=N`."""
+    las líneas enteras de la vista, para que pueda cambiarla con el mismo bloque."""
     datos = {k: data[k] for k in ('view', 'node', 'event', 'name', 'values', 'item') if k in data}
     aviso = ''
     if rev_actual is not None and data['rev'] < rev_actual:
