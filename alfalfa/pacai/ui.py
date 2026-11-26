@@ -279,9 +279,9 @@ class Catalogo:
         """La parte del prompt de sistema que explica al modelo cómo dibujar en este cliente. Con `web` (el motor le
         ofrece web_search y read_web), también que busque lo que no sabe antes de dibujarlo. Con `ejemplos`, un
         ejemplo por componente (sin él, sólo la lista de props: así se mide la diferencia). Con el flag de PACAI UI
-        Lang, el formato compacto en vez del JSON."""
+        Lang, el formato compacto en vez del JSON, con sus ejemplos en esa sintaxis."""
         if self.lang:
-            return self._manual_lang(web)
+            return self._manual_lang(web, ejemplos)
         lineas = []
         if self.base:
             lineas += ['- ' + c + ': ' + RESUMEN[c] + ('; hijos' if c in CON_HIJOS else '')
@@ -339,16 +339,18 @@ Componentes:
         return ('\nEjemplos, un nodo por línea (copia la forma; los ids y los textos son tuyos):\n'
                 + '\n'.join(json.dumps(n, ensure_ascii=False, separators=(',', ':')) for n in nodos) + '\n')
 
-
-    def _manual_lang(self, web: bool) -> str:
-        from .ui_lang import prompt, prompt_piezas
+    def _manual_lang(self, web: bool, ejemplos: bool = True) -> str:
+        from .ui_lang import a_lang, prompt, prompt_piezas
 
         piezas = prompt_piezas(self)
+        nodos = self.ejemplos() if ejemplos else []
+        bloque = ('Ejemplos, una línea por nodo (copia la forma; los ids y los textos son tuyos):\n'
+                  + a_lang(nodos, self) + '\n') if nodos else ''
         return ('''
 Pantallas en el chat (perfil ui): el cliente dibuja pantallas dentro de la conversación. Responde con una pantalla
 cuando la respuesta sea una lista, una tabla, algo que elegir o rellenar, un gráfico o algo que te pidan enseñar aquí;
 para una respuesta corta escribe texto normal. No crees archivos para enseñar algo en el chat.
-''' + (BUSCAR_ANTES if web else '') + prompt(self) + '\n' + (piezas + '\n' if piezas else '')
+''' + (BUSCAR_ANTES if web else '') + prompt(self) + '\n' + (piezas + '\n' if piezas else '') + bloque
                 + f'Acciones: {", ".join(sorted(self.acciones))}; como mucho un send por evento. Texto plano, sin '
                 f'HTML ni markdown en los nodos. Máximo {self.max_nodos} nodos.\n')
 
