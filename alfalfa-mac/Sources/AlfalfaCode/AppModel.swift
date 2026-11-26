@@ -123,8 +123,15 @@ final class AppModel: ObservableObject {
     /// «Este modelo no ve imágenes» en el cuadro del encargo nuevo.
     let newImageNotice = ImageNotice()
     private var pasteMonitor: Any?
-    /// El cuadro de la sesión o el de Nuevo encargo tiene el foco: un texto largo pegado ahí se adjunta.
-    var composerFocused = false
+    /// El cuadro (de la sesión o de Nuevo encargo) que tiene el foco: un texto largo pegado ahí se adjunta.
+    /// Cada cuadro se apunta con su propia marca y sólo borra la suya: al cambiar de sesión, el cuadro que
+    /// se va no le quita el foco al que llega.
+    private var focusedComposer: UUID?
+    var composerFocused: Bool { focusedComposer != nil }
+
+    func composer(_ id: UUID, focused: Bool) {
+        if focused { focusedComposer = id } else if focusedComposer == id { focusedComposer = nil }
+    }
 
     let launcher: URL?
     let home = FileManager.default.homeDirectoryForCurrentUser
@@ -136,18 +143,32 @@ final class AppModel: ObservableObject {
         applyPreferences()
         if launcher == nil { loadError = AlfalfaError.launcherNotFound.localizedDescription }
         // ⌘V con una imagen (o un archivo copiado en Finder) la adjunta al compositor visible, como en Codex.
-        // Un texto largo, también, pero sólo con el foco en el cuadro: en Ajustes u otros campos se pega.
+        // También ⇧⌘V y ⌥⇧⌘V y con el bloqueo de mayúsculas puesto.
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-                  event.charactersIgnoringModifiers == "v", let self else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
+            guard flags.contains(.command), flags.isDisjoint(with: .control),
+                  event.charactersIgnoringModifiers?.lowercased() == "v", let self else { return event }
             let attached = MainActor.assumeIsolated { () -> Bool in
-                guard let url = ImagePicker.pastedImage()
-                        ?? (self.composerFocused ? ImagePicker.pastedLongText() : nil) else { return false }
+                guard let url = ImagePicker.pastedImage() else { return false }
                 self.attachPasted(url)
                 return true
             }
             return attached ? nil : event
         }
+        // Un texto largo, también, pero sólo con el foco en el cuadro (en Ajustes u otros campos se pega), y
+        // entre por donde entre: ⌘V, Edición → Pegar, clic derecho, arrastrar…
+        PasteGuard.install { [weak self] text in
+            guard let self, self.composerFocused else { return false }
+            return self.attachPasted(text: text)
+        }
+    }
+
+    /// Un texto largo pegado en el cuadro se guarda como «Texto pegado ….txt» y se adjunta.
+    /// Si no se puede guardar, false y se queda en el cuadro.
+    func attachPasted(text: String) -> Bool {
+        guard let url = try? Attachments.store(text: text, in: Attachments.directory()) else { return false }
+        attachPasted(url)
+        return true
     }
 
     private func attachPasted(_ url: URL) {

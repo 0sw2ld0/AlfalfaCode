@@ -297,15 +297,22 @@ private struct NewTaskTextField: View {
     @ObservedObject var draft: DraftText
     @EnvironmentObject private var model: AppModel
     var focused: FocusState<Bool>.Binding
+    @State private var focusID = UUID()
     let onSubmit: () -> Void
     let onChange: (String, String) -> Void
 
     var body: some View {
         TextField("Describe una tarea o haz una pregunta", text: $draft.text, axis: .vertical)
             .textFieldStyle(.plain).lineLimit(1...5).focused(focused)
-            // Con el foco aquí, ⌘V con un texto largo lo adjunta (AppModel) en vez de meterlo en el cuadro.
-            .onChange(of: focused.wrappedValue) { _, now in model.composerFocused = now }
-            .onDisappear { if focused.wrappedValue { model.composerFocused = false } }
+            // Con el foco aquí, un texto largo pegado se adjunta (PasteGuard) en vez de entrar en el cuadro.
+            .onChange(of: focused.wrappedValue) { _, now in model.composer(focusID, focused: now) }
+            .onDisappear { model.composer(focusID, focused: false) }
+            // Última red (PasteGuard ya lo para antes): un texto largo que aun así entró sale del cuadro.
+            .onChange(of: draft.text) { old, new in
+                guard let long = PastedText.extract(old: old, new: new), model.attachPasted(text: long.pasted)
+                else { return }
+                draft.text = long.text
+            }
             .accessibilityLabel("Encargo")
             .onChange(of: draft.text) { old, new in onChange(old, new) }
             .onSubmit(onSubmit)

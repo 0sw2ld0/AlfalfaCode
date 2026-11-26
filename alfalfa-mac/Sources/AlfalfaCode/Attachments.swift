@@ -175,10 +175,4 @@ enum ImagePicker {
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
         return try? Attachments.store(png: png, in: Attachments.directory())
     }
-
-    /// ⌘V con un texto largo (un registro, un log de CI…): se guarda y se adjunta como archivo.
-    static func pastedLongText(from pasteboard: NSPasteboard = .general) -> URL? {
-        guard let text = pasteboard.string(forType: .string), Attachments.isLongPaste(text) else { return nil }
-        return try? Attachments.store(text: text, in: Attachments.directory())
-    }
 }

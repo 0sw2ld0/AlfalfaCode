@@ -25,4 +25,23 @@ final class LongPasteTests: XCTestCase {
         let second = try Attachments.store(text: "otro", in: directory)
         XCTAssertNotEqual(url, second, "dos pegados no se pisan")
     }
+
+    /// Un texto largo que entra por el menú Edición, el clic derecho o arrastrado no pasa por ⌘V:
+    /// el cuadro lo saca de su texto al cambiar.
+    func testLongTextInsertedAnyWayLeavesTheBox() {
+        let log = String(repeating: "E   assert 1 == 2\n", count: 300)
+        let pasted = PastedText.extract(old: "Mira este log:  y arréglalo", new: "Mira este log: \(log) y arréglalo")
+        XCTAssertEqual(pasted?.pasted, log)
+        XCTAssertEqual(pasted?.text, "Mira este log:  y arréglalo")
+        let lines = String(repeating: "x\n", count: Attachments.longPasteLines)
+        XCTAssertEqual(PastedText.extract(old: "", new: lines)?.pasted, lines, "muchas líneas cortas también")
+    }
+
+    func testTypingAndShortPastesStayInTheBox() {
+        XCTAssertNil(PastedText.extract(old: "Arregla", new: "Arregla "))
+        XCTAssertNil(PastedText.extract(old: "", new: "una frase pegada corta"))
+        XCTAssertNil(PastedText.extract(old: "abc", new: "ab"), "borrar no es pegar")
+        let almost = String(repeating: "a", count: Attachments.longPasteCharacters - 1)
+        XCTAssertNil(PastedText.extract(old: "", new: almost))
+    }
 }

@@ -154,12 +154,9 @@ public enum ImageTags {
 
 /// Una imagen o un archivo soltado sobre el cuadro de texto: el campo de AppKit lo recibe antes
 /// que la app y escribe su ruta. Como en Codex, esa ruta se quita del texto y se adjunta.
-public enum DroppedImages {
-    /// Si lo que se acaba de insertar (`old` → `new`) son sólo rutas de imágenes o archivos
-    /// admitidos que existen, el texto sin ellas y los adjuntos; si no (se escribió o pegó otra cosa), nil.
-    public static func extract(old: String, new: String,
-                               exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) })
-        -> (text: String, images: [URL])? {
+/// Lo que se acaba de insertar en un cuadro de texto (`old` → `new`): lo de antes, lo nuevo y lo de después.
+public enum Insertion {
+    public static func split(old: String, new: String) -> (head: String, inserted: String, tail: String)? {
         let before = Array(old), after = Array(new)
         guard after.count > before.count else { return nil }
         var prefix = 0
@@ -168,9 +165,35 @@ public enum DroppedImages {
         while suffix < before.count - prefix, before[before.count - 1 - suffix] == after[after.count - 1 - suffix] {
             suffix += 1
         }
-        let inserted = String(after[prefix..<(after.count - suffix)])
-        guard let images = images(in: inserted, exists: exists) else { return nil }
-        var head = String(after[..<prefix]), tail = String(after[(after.count - suffix)...])
+        return (String(after[..<prefix]), String(after[prefix..<(after.count - suffix)]),
+                String(after[(after.count - suffix)...]))
+    }
+}
+
+/// Un texto largo que entró en el cuadro por donde sea (⌘V, menú Edición, clic derecho, arrastrar,
+/// pegar con formato…): se saca del cuadro para adjuntarlo como archivo.
+public enum PastedText {
+    /// El cuadro sin el texto largo recién insertado y ese texto; nil si lo insertado es corto.
+    public static func extract(old: String, new: String) -> (text: String, pasted: String)? {
+        // Lo barato primero: escribir letra a letra no paga el diff.
+        func lines(_ text: String) -> Int { text.utf8.reduce(0) { $0 + ($1 == 10 ? 1 : 0) } }
+        guard new.utf16.count - old.utf16.count >= Attachments.longPasteCharacters
+                || lines(new) - lines(old) >= Attachments.longPasteLines - 1,
+              let (head, inserted, tail) = Insertion.split(old: old, new: new),
+              Attachments.isLongPaste(inserted) else { return nil }
+        return (head + tail, inserted)
+    }
+}
+
+public enum DroppedImages {
+    /// Si lo que se acaba de insertar (`old` → `new`) son sólo rutas de imágenes o archivos
+    /// admitidos que existen, el texto sin ellas y los adjuntos; si no (se escribió o pegó otra cosa), nil.
+    public static func extract(old: String, new: String,
+                               exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) })
+        -> (text: String, images: [URL])? {
+        guard let (head0, inserted, tail0) = Insertion.split(old: old, new: new),
+              let images = images(in: inserted, exists: exists) else { return nil }
+        var head = head0, tail = tail0
         if head.hasSuffix(" ") && tail.hasPrefix(" ") { tail.removeFirst() }
         if tail.isEmpty { while head.hasSuffix(" ") { head.removeLast() } }
         return (head + tail, images)
