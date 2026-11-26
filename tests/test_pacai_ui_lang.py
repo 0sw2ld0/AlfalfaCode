@@ -1,6 +1,7 @@
 """PACAI UI Lang y las piezas declarativas (prototipo, detrás de ALFALFA_PACAI_UI_LANG): traducción exacta,
 cambios atómicos, streaming, prompt, flag apagado y los vectores de conformidad compartidos con la web."""
 import asyncio
+import dataclasses
 import json
 import shutil
 import subprocess
@@ -246,6 +247,34 @@ def test_un_root_que_se_rechaza_no_se_sustituye_por_otro():
     nodos, diagnosticos = ui_lang.traducir('root Grid columns=2 gap=medium > a,b\na Text "A"\nb Text "B"',
                                            catalogo())
     assert nodos == [] and 'Falta root.' in [d.motivo for d in diagnosticos]
+
+
+def test_un_root_ilegible_tampoco_se_sustituye():
+    nodos, diagnosticos = ui_lang.traducir('root Grid columns=2 query={"tipo": > a,b\na Text "A"\nb Text "B"',
+                                           catalogo())
+    assert nodos == [] and 'Falta root.' in [d.motivo for d in diagnosticos]
+
+
+def test_los_hijos_de_un_contenedor_rechazado_no_suben_al_root_nuevo():
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('titulo Text "Pedir"\nformulario Form "Mandar" inventada=1 > nombre\n'
+                    'nombre Input "Nombre" name=nombre\n')
+    nodos, diagnosticos = flujo.cerrar()
+    assert [n['id'] for n in nodos] == ['root', 'titulo'] and nodos[0]['children'] == ['titulo']
+    motivos = ' '.join(d.motivo for d in diagnosticos)
+    assert 'inventada' in motivos and 'nombre no cuelga de root' in motivos
+
+
+def test_si_no_cabe_el_root_nuevo_se_dice_por_que():
+    lleno = dataclasses.replace(catalogo(), max_nodos=2)
+    nodos, diagnosticos = ui_lang.traducir('a Text "A"\nb Text "B"', lleno)
+    assert nodos == [] and any('ya tiene 2 nodos' in d.motivo for d in diagnosticos)
+
+
+def test_un_alta_que_no_se_dibuja_no_deja_reparaciones():
+    vistas = Vistas(catalogo())
+    data, errores = vistas.aplicar({'view': 'v', 'lang': True}, ['root Stack inventada=1 > t', 't Text "a" text="b"'])
+    assert data is None and vistas.reparaciones == []
 
 
 def test_un_cambio_sin_root_no_se_repara():

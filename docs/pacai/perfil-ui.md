@@ -294,8 +294,11 @@ pruebas en `tests/test_pacai_ui.py`.
     por `{"id":"formulario","component":"Form",…}` y no escribe la raíz), el motor añade un `root` `Stack` con
     `direction: vertical` cuyos hijos son los nodos que no cuelgan de ningún otro, en el orden en que llegaron, y lo
     anota en `Vistas.reparaciones`; no cuenta como error. Ningún id cambia, así que los cambios siguientes valen igual,
-    y un nodo existente nunca se convierte en `root`. No se repara un bloque sobre una vista que ya existe ni uno cuyo
-    `root` se rechazó: ahí el modelo quiso otra raíz y se le pide.
+    y un nodo existente nunca se convierte en `root`. Cuenta como vista nueva también una que aún no tiene nodos (un
+    primer bloque sin ninguno válido). No se repara un bloque sobre una vista con nodos ni uno cuyo `root` se rechazó,
+    aunque no se pueda leer (una línea con `"id":"root"` que no es JSON): ahí el modelo quiso otra raíz y se le pide.
+    Los hijos de un nodo rechazado (los campos de un `Form` que no valió) no suben a la raíz nueva. Si la pantalla ya
+    tiene el máximo de nodos, no cabe el `root` y el error lo dice.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
@@ -368,7 +371,9 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   - **Sin `root`** (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` `Stack direction=vertical`
     nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron. Los ids no cambian, así
     que un cambio posterior a `formulario` funciona; ningún nodo existente se convierte en `root`. Si el modelo
-    escribió un `root` y se rechazó, o no hay nodos de primer nivel, sigue siendo «Falta root.».
+    escribió un `root` y se rechazó (aunque la línea no se pueda leer), o no hay nodos de primer nivel, sigue siendo
+    «Falta root.»; si no cabe por el máximo de nodos, el diagnóstico lo dice. Los hijos de una línea rechazada no
+    suben al `root` nuevo: quedan sin colgar, como con un `root` explícito.
   - **Posicional y nombrada a la vez** (`f Form "Mandar" submit_label="Enviar"`): se queda la nombrada.
 
   Un cambio sobre una vista que ya existe no se repara. Sobre las respuestas guardadas de las muestras

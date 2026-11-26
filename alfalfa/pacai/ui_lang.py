@@ -335,6 +335,8 @@ class Flujo:
         self.cerrado = False
         self.reintentado = False
         self.reparaciones: list[str] = []          # lo que el motor arregló sin cambiar lo pedido
+        self.root_rechazado = False                # una línea de root (aunque sea ilegible) no valió
+        self.hijos_rechazados: set[str] = set()    # hijos de una línea de alta que no valió
 
     def alimentar(self, trozo: str) -> list[list[dict]]:
         self.pendiente += trozo
@@ -350,6 +352,7 @@ class Flujo:
         if not linea.strip():
             return []
         self.n += 1
+        leida = None
         try:
             leida = leer_linea(linea)
             if leida.tipo != 'alta':
@@ -365,6 +368,10 @@ class Flujo:
                 self.publicado.pop(leida.ident, None)   # en el reintento, un id que ya existe se sustituye
         except ErrorDeLinea as exc:
             self.diagnosticos.append(Diagnostico(self.n, exc.ident, exc.motivo))
+            if exc.ident == 'root' or re.match(r'root(\s|$)', linea.strip()):
+                self.root_rechazado = True
+            if leida is not None and leida.tipo == 'alta' and leida.ident not in self.nodos:
+                self.hijos_rechazados.update(leida.hijos)
             return []
         self.nodos[nodo['id']] = nodo
         return self._publicar()
@@ -414,10 +421,13 @@ class Flujo:
                 descartados.add(ident)
             for ident in descartados:
                 nodos.pop(ident, None)
-        intento_de_root = 'root' in self.nodos or any(d.ident == 'root' for d in diagnosticos)
-        if 'root' not in nodos and (intento_de_root or not self._envolver_en_root(nodos)):
-            diagnosticos.append(Diagnostico(None, 'root', 'Falta root.'))
-            return [], diagnosticos
+        if 'root' not in nodos:
+            intento_de_root = ('root' in self.nodos or self.root_rechazado
+                               or any(d.ident == 'root' for d in diagnosticos))
+            motivo = 'Falta root.' if intento_de_root else self._envolver_en_root(nodos)
+            if motivo:
+                diagnosticos.append(Diagnostico(None, 'root', motivo))
+                return [], diagnosticos
         orden: list[str] = []
         salida: dict[str, dict] = {}
 
@@ -444,19 +454,19 @@ class Flujo:
                 diagnosticos.append(Diagnostico(None, ident, f'{ident} no cuelga de root.'))
         return [salida[i] for i in orden], diagnosticos
 
-    def _envolver_en_root(self, nodos: dict[str, dict]) -> bool:
+    def _envolver_en_root(self, nodos: dict[str, dict]) -> str:
         """Un alta sin `root` (como en OpenUI Lang, donde la primera sentencia es la raíz): un `root` Stack vertical
         nuevo envuelve los nodos que no son hijos de ningún otro, en el orden en que llegaron. Ningún id cambia, así
-        los cambios posteriores siguen valiendo. False si no hay nodos de primer nivel o el `root` no cabe. Si el
+        los cambios posteriores siguen valiendo. Devuelve '' si lo hizo, o el diagnóstico si no se puede. Si el
         modelo sí escribió un `root` y se rechazó, no se llama: lo que quería es otra cosa y se le pide."""
-        root = root_que_envuelve(nodos, self.catalogo)
+        root, motivo = root_que_envuelve(nodos, self.catalogo, self.hijos_rechazados)
         if root is None:
-            return False
+            return motivo
         nodos['root'] = root
         aviso = 'Faltaba root: un Stack vertical envuelve ' + ', '.join(root['children']) + '.'
         if aviso not in self.reparaciones:
             self.reparaciones.append(aviso)
-        return True
+        return ''
 
     def peticion(self, diagnosticos: list[Diagnostico]) -> str:
         """Lo que se le pide al modelo: sólo esas líneas, una vez."""
@@ -475,15 +485,20 @@ class Flujo:
         return self._final()
 
 
-def root_que_envuelve(nodos: dict[str, dict], catalogo: Catalogo) -> dict | None:
+def root_que_envuelve(nodos: dict[str, dict], catalogo: Catalogo,
+                      excluir: set[str] | frozenset[str] = frozenset()) -> tuple[dict | None, str]:
     """El `root` Stack vertical que envuelve los nodos de primer nivel de `nodos` (los que no son hijos de ningún
-    otro), en su orden. None si no hay ninguno (sólo ciclos), la pantalla ya está llena o el nodo no vale."""
+    otro), en su orden, y '' — o None y el diagnóstico para el modelo. `excluir`: los hijos de una línea rechazada
+    (los campos de un Form que no valió), que no suben a la raíz: se quedan sin colgar, como con un root explícito."""
     hijos = {h for nodo in nodos.values() for h in nodo.get('children', [])}
-    primeros = [i for i in nodos if i not in hijos and i != 'root']
-    if not primeros or len(nodos) >= catalogo.max_nodos:
-        return None
+    primeros = [i for i in nodos if i not in hijos and i not in excluir and i != 'root']
+    if not primeros:
+        return None, 'Falta root.'
+    if len(nodos) >= catalogo.max_nodos:
+        return None, (f'Falta root, y no cabe uno nuevo: la pantalla ya tiene {catalogo.max_nodos} nodos (el '
+                      'máximo).')
     root = {'id': 'root', 'component': 'Stack', 'props': {'direction': 'vertical'}, 'children': primeros}
-    return None if catalogo.errores_del_nodo(root) else root
+    return (None, 'Falta root.') if catalogo.errores_del_nodo(root) else (root, '')
 
 
 def traducir(texto: str, catalogo: Catalogo) -> tuple[list[dict], list[Diagnostico]]:

@@ -84,6 +84,7 @@ EJEMPLOS_BASE = {
 }
 CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
+_ID_ROOT = re.compile(r'"id"\s*:\s*"root"')     # una línea que quería ser root, aunque no se pueda leer
 _APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 # La misma valla al final de una línea con texto delante («Aquí está:```pacai-ui view=x»): algunos modelos escriben
 # una frase o su razonamiento y abren el bloque sin saltar de línea. Sólo cuenta si tras la valla no queda más que
@@ -460,8 +461,10 @@ class Vistas:
         nombre = ascii_de(attrs.get('view', ''), minusculas=True)
         if not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui necesita view=nombre ([a-z][a-z0-9_]*).']
-        nueva = nombre not in self.vistas
-        root_rechazado = False       # el modelo escribió un root que no vale: no se inventa otro, se le pide
+        # Un alta: la vista no existe o no tiene nodos (un primer bloque que no dejó ninguno válido no cuenta).
+        nueva = nombre not in self.vistas or not self.vistas[nombre].nodos
+        root_rechazado = False       # el modelo escribió un root que no vale (aunque sea ilegible): se le pide
+        hijos_rechazados: set[str] = set()     # hijos de un nodo rechazado: no suben a la raíz nueva
         placement = attrs.get('placement')
         errores: list[str] = []
         if placement not in (None, 'inline', 'latest'):
@@ -474,6 +477,7 @@ class Vistas:
                 dato = json.loads(linea)
             except ValueError:
                 errores.append(f'Línea {n}: no es JSON.')
+                root_rechazado = root_rechazado or bool(_ID_ROOT.search(linea))
                 continue
             if isinstance(dato, dict) and dato and set(dato) <= {'remove', 'state', 'alt'}:
                 quitar += [ascii_de(i) for i in dato.get('remove', []) if isinstance(i, str)]
@@ -495,7 +499,9 @@ class Vistas:
             if fallos:
                 ident = dato.get('id') if isinstance(dato, dict) else None
                 errores.append(f'Línea {n}' + (f' ({ident})' if ident else '') + ': ' + '; '.join(fallos))
-                root_rechazado = root_rechazado or ident == 'root'
+                root_rechazado = root_rechazado or ident == 'root' or bool(_ID_ROOT.search(linea))
+                if isinstance(dato, dict) and isinstance(dato.get('children'), list) and ident not in vista.nodos:
+                    hijos_rechazados.update(h for h in dato['children'] if isinstance(h, str))
                 continue
             vista.nodos[dato['id']] = dato
             nodos.append(dato)
@@ -504,8 +510,10 @@ class Vistas:
         if nueva and nodos and 'root' not in vista.nodos and not root_rechazado:
             from .ui_lang import root_que_envuelve
 
-            root = root_que_envuelve(vista.nodos, self.catalogo)
-            if root is not None:
+            root, motivo = root_que_envuelve(vista.nodos, self.catalogo, hijos_rechazados)
+            if root is None:
+                errores.append(motivo)
+            else:
                 vista.nodos['root'] = root
                 nodos.append(root)
                 self.reparaciones.append('Faltaba root: un Stack vertical envuelve ' + ', '.join(root['children'])
@@ -541,7 +549,7 @@ class Vistas:
             self.reparaciones.append(f'rev={attrs["rev"]} ignorado: la revisión la pone el motor.')
         texto = '\n'.join(lineas)
         vista = self.vistas.get(nombre)
-        if vista is not None:
+        if vista is not None and vista.nodos:
             cambio, diagnosticos = aplicar_cambio(vista.nodos, texto, self.catalogo)
             if cambio is None:
                 return None, [d.texto() for d in diagnosticos]
@@ -554,9 +562,9 @@ class Vistas:
         flujo = Flujo(self.catalogo)
         flujo.alimentar(texto + '\n')
         nodos, diagnosticos = flujo.cerrar()
-        self.reparaciones += flujo.reparaciones
         if not nodos:
             return None, [d.texto() for d in diagnosticos]
+        self.reparaciones += flujo.reparaciones
         vista = self.vistas.setdefault(nombre, Vista())
         vista.nodos = {n['id']: n for n in nodos}
         vista.rev += 1

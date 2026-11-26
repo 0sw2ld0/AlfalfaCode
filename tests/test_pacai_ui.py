@@ -1,5 +1,6 @@
 """Perfil `ui` de PACAI en AlfalfaCode: negociación, pantallas del modelo, acciones del cliente y el prompt."""
 import asyncio
+import dataclasses
 
 from alfalfa.pacai.ui import Catalogo, Vistas, accion_para_el_modelo, errores_de, partir
 from tests.pacai_comun import Cliente, abrir, cerrar
@@ -130,6 +131,38 @@ def test_un_root_rechazado_en_una_vista_nueva_no_se_sustituye_por_otro():
         '{"id":"root","component":"Stack","props":{"children":["t"]}}',
         '{"id":"t","component":"Text","props":{"text":"hola"}}'])
     assert len(errores) == 1 and 'root' not in vistas.vistas['v'].nodos and vistas.reparaciones == []
+
+
+def test_un_root_que_no_es_json_tampoco_se_sustituye():
+    vistas = Vistas(Catalogo())
+    data, errores = vistas.aplicar({'view': 'v'}, [
+        '{"id": "root","component":"Stack","props":{"direction":"grid"},"children":["t"]',
+        '{"id":"t","component":"Text","props":{"text":"hola"}}'])
+    assert errores == ['Línea 1: no es JSON.'] and 'root' not in vistas.vistas['v'].nodos
+    assert vistas.reparaciones == []
+
+
+def test_tras_un_primer_bloque_sin_nodos_validos_la_vista_sigue_siendo_nueva():
+    vistas = Vistas(Catalogo())
+    assert vistas.aplicar({'view': 'v'}, ['no es json', '{"state":{"x":1}}'])[0] is not None
+    data, errores = vistas.aplicar({'view': 'v'}, ['{"id":"t","component":"Text","props":{"text":"hola"}}'])
+    assert errores == [] and vistas.vistas['v'].nodos['root']['children'] == ['t']
+
+
+def test_los_hijos_de_un_nodo_rechazado_no_suben_al_root_nuevo():
+    vistas = Vistas(Catalogo())
+    vistas.aplicar({'view': 'v'}, [
+        '{"id":"titulo","component":"Text","props":{"text":"Pedir"}}',
+        '{"id":"formulario","component":"Form","props":{"inventada":1},"children":["nombre"]}',
+        '{"id":"nombre","component":"Input","props":{"label":"Nombre","name":"nombre"}}'])
+    assert vistas.vistas['v'].nodos['root']['children'] == ['titulo']
+
+
+def test_si_no_cabe_el_root_nuevo_se_dice_por_que():
+    vistas = Vistas(dataclasses.replace(Catalogo(), max_nodos=2))
+    data, errores = vistas.aplicar({'view': 'v'}, ['{"id":"a","component":"Text","props":{"text":"A"}}',
+                                                   '{"id":"b","component":"Text","props":{"text":"B"}}'])
+    assert any('ya tiene 2 nodos' in e for e in errores) and 'root' not in vistas.vistas['v'].nodos
 
 
 def test_un_cambio_sin_root_sobre_una_vista_que_existe_no_se_repara():
