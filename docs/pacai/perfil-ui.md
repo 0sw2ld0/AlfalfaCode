@@ -445,12 +445,21 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   que el motor le enseñó al modelo; si no, un alta. **El modelo nunca escribe `rev`**: si lo pone, se ignora y queda
   en `Vistas.reparaciones`. Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye
   (con todos sus hijos tras `>`). `-id` borra el nodo, lo quita de su padre y se lleva lo que sólo colgaba de él; un
-  hijo que la línea del padre deja fuera también se va. Todo el bloque se aplica o nada. El modelo ve la pantalla con
-  sus líneas enteras (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`) y el `rev` escrito por el modelo (versión
-  2) se quitaron: eran donde más fallaba.
-- **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora, en el reintento de un alta la línea de
-  un id que ya existe lo sustituye, y un `rev` del modelo se ignora. Nunca cambian lo que se pidió. Además, sólo en
-  un alta (y anotadas en `Vistas.reparaciones`, sin contar como error):
+  hijo que la línea del padre deja fuera también se va. **La última línea de un id gana** (§10.3): borrar y reescribir un nodo lo reescribe, escribirlo y borrarlo lo borra, y dos líneas
+  distintas del mismo id se quedan con la segunda; borrar un id que no está no hace nada, y `- id` vale como `-id`.
+  Una línea con sólo un id (una baja sin el guion) se ignora sólo si da la misma pantalla ignorarla que borrar ese
+  nodo; si no, se rechaza. Todo queda en `Vistas.reparaciones`. Todo el bloque se aplica o nada.
+  El modelo ve la pantalla con sus líneas enteras (`Vistas.resumen_lang`). La versión 1 (`~id`, `+>`) y el `rev`
+  escrito por el modelo (versión 2) se quitaron: eran donde más fallaba.
+- **Reparaciones seguras:** una línea idéntica a una que ya vale se ignora; en un alta, como en un cambio, la última
+  línea de un id gana (también en el reintento, donde el modelo reenvía el bloque); y un `rev` del modelo se ignora.
+  Nunca cambian lo que se pidió.
+  - **Sin valla:** si la respuesta entera son líneas del formato (nodos del catálogo o bajas, sin ninguna otra valla
+    ni frase), se lee como un bloque (`Vistas.sin_valla`). Es un cambio de la última vista si alguna línea nombra o
+    cuelga uno de sus nodos (aparte de root); si no, y trae root sin bajas, es un alta en una vista nueva `pantalla`
+    (`pantalla_2`…). Si no, es texto.
+
+  Además, sólo en un alta (y anotadas en `Vistas.reparaciones`, sin contar como error):
   - **Sin `root`, con la raíz con otro nombre:** si la primera línea valió, es un contenedor (Stack, Card, Form o un
     componente propio con hijos) y no cuelga de nadie, es la raíz con otro nombre (`raiz`, `fila`: lo hace Haiku,
     §10.1) y pasa a llamarse `root`, sin un nodo de más. El modelo ve después la pantalla con `root`.
@@ -468,7 +477,9 @@ bajo_top PriceBars query={"tipo":"productos","orden":"baja","limite":6}
   JSON no cambia (sus fallos de raíz eran `root` rechazados). Con las dos reglas juntas las cifras son las mismas:
   en las 11 altas de Haiku sin `root` de §10.1 la primera línea era un contenedor suelto y se renombró.
 - **Streaming:** `Flujo` valida cada línea completa al llegar y publica un nodo en cuanto él y sus ancestros
-  existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. Una línea
+  existen, con el prefijo contiguo de hijos llegados: cada publicación es un árbol válido que sólo crece. La línea
+  que todavía llega se lee cerrando su texto y sus corchetes (`cerrar_cola`) y, si ya vale y su id no existe, se publica de forma provisional: cuando llega entera la sustituye, a medias
+  de una palabra se queda la última lectura buena, y si la línea entera no vale desaparece. Una línea
   mala se descarta sin corregirla y, al cerrar, se piden todas de una vez con un solo reintento. Hoy el motor
   entrega el texto del modelo por mensajes enteros (y el servicio Alfalfa tampoco lo trocea), así que en la práctica
   las publicaciones salen juntas al cerrar el mensaje.
@@ -723,3 +734,263 @@ En los briefs, todos los formatos fallan sobre todo en referencias (huérfanos, 
 
 La página con gráficos de esta comparación es un artifact de Claude: https://claude.ai/artifact/Att5jCddwadVTmNRreMYTP
 (privado hasta que se comparta).
+
+### 10.3 Reglas para perder menos pantallas (26 de noviembre de 2026)
+
+La comparación con OpenUI Lang 1.0 y el JSON (§10.2) mostró dónde perdía pantallas UI Lang 3:
+
+- en los cambios que borran y reescriben el mismo nodo, o que borran un id que no existe;
+- en las respuestas sin valla;
+- en el streaming, que sólo publicaba líneas enteras.
+
+Estas reglas lo resuelven sin cambiar el resto del formato ni el prompt:
+
+1. **La última línea de un id gana** (`aplicar_cambio` y `Flujo`), en vez de rechazar el bloque.
+2. **Borrar un id que no está en la pantalla no hace nada**: queda en los avisos.
+   Además, `- id` con un espacio vale como `-id`.
+3. **Sin valla** (`Vistas.sin_valla`, en el traductor y en `scripts/muestra_ejemplos_ui.py`): una respuesta que son
+   sólo líneas del formato se lee como un bloque.
+4. **La línea pendiente se publica cerrada** (`Flujo`, `cerrar_cola`).
+
+**Medida, sin gastar:** las mismas respuestas guardadas de la comparación (`docs/pacai/datos/formatos-ui-*.jsonl`
+de §10.2), vueltas a validar con el motor nuevo.
+
+- Sólo cambia UI Lang 3.
+- Las reglas 1 a 3 cambian la validez. La 4 no, porque las respuestas ya están enteras y el servicio no trocea.
+
+| Modelo | Válidas 1.er intento antes | Ahora | IC95 % Wilson ahora | Exactas antes → ahora | Coste por exacta |
+|---|---|---|---|---|---:|
+| GPT-6 Luna | 203/208 (97,6 %) | **207/208 (99,5 %)** | 97,3–99,9 % | 197 → 201 | 0,193 $/1000 |
+| Claude Haiku 5.5 | 201/208 (96,6 %) | **205/208 (98,6 %)** | 95,8–99,5 % | 186 → 190 | 0,318 $/1000 |
+| GLM 5.3 Flash | 45/52 (86,5 %) | **49/52 (94,2 %)** | 84,4–98,0 % | 43 → 47 | 0,272 $/1000 |
+| DeepSeek v4.1 Flash, GPT-6.2 Sol | 52/52 | 52/52 | — | sin cambios | — |
+
+- **Luna y Haiku juntos:** UI Lang 3 pasa de 404/416 (97,1 %) a **412/416 (99,0 %)** de válidas, y de 383 a **391**
+  exactas.
+  - Frente a 415/415 y 377 exactas de OpenUI, y 407/416 y 380 exactas del JSON con ejemplos.
+  - Es el formato con más pantallas que hacen lo pedido.
+- **Coste por pantalla exacta:** 0,254 $/1000, un 25 % menos que OpenUI y un 37 % menos que el JSON.
+- **Los briefs de OpenUI no cambian** (78 %): allí UI Lang 3 falla por referencias, tipos y sintaxis, no por estas
+  reglas.
+- **Lo que queda** en las 52 tareas con Luna y Haiku (4 de 416):
+  - **3 de Haiku**, en la misma tarea: crea un panel nuevo y no lo cuelga de `root`. El benchmark de OpenUI también
+    lo cuenta como error (huérfano), y no se arregla sin adivinar dónde va.
+  - **1 de Luna:** escribe `***` y un carácter suelto en vez de la valla.
+
+  Para llegar al 100 % habría que tocar el prompt o la gramática, y medirlo con una tanda nueva.
+
+**Lo que no se ha probado:**
+
+- El streaming de verdad: el servicio entrega cada respuesta de una vez.
+- Una sesión real en la app.
+- Una tanda nueva con los modelos: la validez es la de las respuestas ya guardadas, que se escribieron con el prompt
+  de siempre.
+
+**Dos cambios de prompt, de una lluvia de ideas** (GPT-6.2 Sol, Claude Opus 5.5, GLM 5.3 y Kimi K3.1 Pro; 0,19 US$).
+Se midieron por separado, con el acuerdo de quedarse sólo con el primero si bastaba:
+
+1. **Regla de cambios** (`ui_lang.prompt`):
+   - **Antes:** «Escribe entera la línea de cada nodo que cambia, con todos sus hijos tras >, y las de los nuevos».
+   - **Ahora:** «Escribe entera la línea de cada nodo que cambia y las de los nuevos. Cada id nuevo va en el > de su
+     padre, en la posición pedida: reescribe la línea del padre con sus demás hijos, salvo los que se borran».
+   - Ocupa 7 tokens más.
+2. **El ejemplo de `Stack` enseña tarjetas en rejilla:** `tarjetas Stack direction=grid gap=small > palta`, en lugar
+   de una fila horizontal de botones.
+   - Sólo cambia el prompt compacto (`Catalogo._manual_lang`). El JSON ya lo dice en su línea «un Stack
+     direction=grid de Card», así que los modelos sin UI Lang no cambian.
+   - Con los dos cambios, el prompt queda en 1255 tokens, frente a los 1249 de antes.
+
+**Medida:**
+
+- `scripts/muestra_ejemplos_ui.py`, brazo `lang`, Luna y Haiku, las 52 tareas y 4 repeticiones, por el servicio
+  Alfalfa. Fueron 416 peticiones por tanda: 0,098 US$ la del cambio 1 y 0,100 US$ la de los dos juntos.
+- La base son las respuestas de la comparación, validadas con las reglas de arriba; es otra tanda, del mismo día.
+- Datos: `docs/pacai/datos/ui-lang-prompt-cambio1.jsonl` y `ui-lang-prompt-cambio1y2.jsonl`.
+
+| Luna y Haiku juntos | Base | Cambio 1 | Cambios 1 y 2 |
+|---|---|---|---|
+| Válidas a la primera | 412/416 (99,0 %) | 412/416 (99,0 %) | **413/416 (99,3 %)** |
+| Exactas | 391 | 386 | 389 |
+| Exactas en altas | 237 | 234 | **242** |
+| «Tres tarjetas en rejilla», exactas | 1/8 | 4/8 | **8/8** |
+| Historial de palta y limón, Haiku: válidas · exactas | 1/4 · 1/4 | 4/4 · 0/4 | 4/4 · 0/4 |
+| Coste por petición | 0,239 m$ | 0,234 m$ | 0,240 m$ |
+
+- **El cambio 1 quita los huérfanos de Haiku, pero no basta.** Haiku ya cuelga el panel nuevo de `root`, pero lo pone
+  delante de la nota de la fuente (`cifras,p_bajo,p_hist,fuente`), y la tarea pide «al final». Lo mismo le pasa a
+  veces en «añade al final un panel con el historial de papa».
+- **El cambio 2 cumple:** la tarea de las tarjetas pasa a 8/8 y las exactas de las altas suben de 237 a 242.
+- **Con los dos cambios:**
+  - las válidas suben de 412 a 413 y las exactas se quedan en lo mismo (391 → 389, dentro del ruido);
+  - el coste por petición no cambia.
+- **Los cambios de Haiku que no salen exactos** son sobre todo:
+  - el panel nuevo delante de la fuente;
+  - renombrar un id que la comprobación espera (`bajo_top` → `sube_top`).
+
+  Aparecieron 2 nodos que desaparecen sin pedirlo, siempre ese renombrado.
+- **Se quedan los dos cambios.** Lo siguiente, si se quiere, sería decir en la regla que «al final» va detrás de todos
+  los hijos, también de la nota de la fuente, y medirlo igual.
+
+**Un tercer cambio, probado y descartado.** Se añadió a la regla «(«al final» es detrás del último hijo que ya tiene,
+aunque sea una nota)», para que Haiku no pusiera el panel nuevo delante de la nota de la fuente. Se midió con los
+cambios 1 y 2: la misma tanda, 0,101 US$ y `docs/pacai/datos/ui-lang-prompt-cambio3-descartado.jsonl`.
+
+- **Lo que mejora:**
+  - las exactas suben a 394, las más altas de las tres tandas;
+  - «añade al final un panel con el historial de papa» pasa a 8/8.
+- **Lo que empeora:**
+  - Haiku vuelve a dejar el panel huérfano en la tarea del historial de palta y limón (3 de 4), lo que el cambio 1
+    había arreglado en sus dos tandas;
+  - las válidas a la primera bajan de 413 a 407/415. Una petición la rechazó el filtro de OpenAI.
+  - De esas válidas que se pierden, 5 son de Luna y tienen la valla mal escrita (`~~~`, `/`, `*** Begin Patch`).
+
+Entre tandas, las cifras se mueven unas 4 pantallas, así que la mejora en exactas no compensa volver a perder lo que
+arregló el cambio 1. La regla se queda como estaba con los cambios 1 y 2.
+
+**Vallas `~~~` y `:::`.** Luna, con esfuerzo bajo, a veces abre el bloque con `~~~pacai-ui-lang` (la otra valla de
+CommonMark) o `:::pacai-ui-lang` (la de las directivas).
+
+- **Qué hace ahora `partir`:** acepta las tres marcas y cierra cada bloque con la suya. Un bloque ``` se sigue
+  cerrando sólo con ``` sola en su línea. Uno ~~~ o ::: se cierra con una línea que empieza por su marca, aunque el
+  modelo escriba algo detrás.
+- **Dónde más se aplica:** el traductor (`tiene_valla`) y la regla sin valla, que no salta si hay cualquiera de las
+  tres marcas. El script de la muestra lee igual.
+- **Efecto sobre las respuestas guardadas,** sin gastar: sólo 3 de las 1663 de UI Lang de este apartado usan estas
+  vallas.
+  - Una pasa a válida: en la tanda descartada, de 407 a 408.
+  - Las otras dos ya valían por un bloque ``` que venía detrás.
+  - Las vallas rotas de verdad (`***` con un carácter suelto, `/ pacai-ui-lang`) siguen siendo texto.
+
+**Comprobaciones de «exacta», revisadas** (`scripts/muestra_ejemplos_ui.py`). Algunas comprobaban una forma concreta
+y no lo pedido. Ahora aceptan otra forma de dibujar exactamente lo mismo:
+
+- **«En rejilla»:** un `Stack direction=grid` o un `Grid`.
+- **«Lado a lado»:** un `Stack` horizontal o un `Grid` de 2 columnas o más que contenga los dos paneles.
+- **«Añade al final»** (historial de papa, historial de palta y limón, botón Actualizar):
+  - vale el nodo nuevo detrás de todos los hijos;
+  - también vale justo antes de la nota final en caption (la fuente). Las dos pantallas ponen lo nuevo al final de lo
+    que se ve.
+  - Cuando la tarea dice «debajo de la fuente» (`m_formulario`), sigue exigiendo que vaya detrás.
+- **«Una tarjeta "Resumen de hoy"»:** un `Card` o un `Panel` con ese título y la cifra dentro, aunque no sea su hijo
+  directo.
+- **«Un título "Mercado de hoy"»:** un `Text` en estilo title o un `Panel`/`Card` con ese título.
+- **«Envía alerta»:** un evento cuyo nombre contenga `alerta` (los modelos escriben `suscribir_alerta`).
+- **«Cambia las barras de p_bajo»:** las barras dentro de `p_bajo`, aunque el modelo les cambie el id.
+
+**Siguen siendo estrictas:**
+
+- las cifras que no leen `$periodo`/`$familia`, porque no seguirían los filtros;
+- un título suelto donde se pidió un panel;
+- «una rejilla de 3 columnas» hecha con un `Stack` sin columnas;
+- un `Stack direction=grid` para «lado a lado», que en una pantalla estrecha pone los paneles uno debajo de otro.
+
+**Las mismas respuestas guardadas, sin gastar** (las 52 tareas, Luna y Haiku juntos):
+
+| | Válidas | Exactas antes | Exactas con las comprobaciones revisadas | Coste por exacta |
+|---|---|---|---|---|
+| OpenUI Lang 1.0 (comparación) | 415/415 | 377 | 407 | 0,314 m$ |
+| PACAI JSON con ejemplos (comparación) | 407/416 | 380 | 400 | 0,383 m$ |
+| UI Lang 3 con las reglas, prompt anterior (comparación) | 412/416 | 391 | 410 | 0,242 m$ |
+| **UI Lang 3 con los cambios 1 y 2 de prompt** (su tanda) | **413/416** | 389 | **409** | **0,244 m$** |
+
+- **OpenUI es el que más sube** (+30), porque sufría las mismas formas que ahora se aceptan.
+- **Las diferencias entre formatos en exactas se acortan.** UI Lang 3 queda a la par de OpenUI y por delante del JSON.
+- **El coste por pantalla exacta no cambia de orden:** UI Lang 3 cuesta un 22–23 % menos que OpenUI y un 36 % menos
+  que el JSON.
+- **Con los cambios 1 y 2**, Haiku hace bien la tarea del historial de palta y limón en 4 de 4: ya no la deja huérfana,
+  y ponerla antes de la nota vale. Sólo quedan 4 no exactas:
+  - Luna, en «rejilla de 3 columnas» con un `Stack` (2);
+  - Haiku, en «lado a lado» con un `Stack direction=grid` (2). Esto puede ser un efecto del ejemplo de rejilla del
+    cambio 2.
+
+**Por qué OpenUI no dejaba huérfanos.**
+
+- **Su gramática no lo evita.** En OpenUI, el padre también nombra a sus hijos en una lista (`root = Stack([…, p_hist,
+  …])`), igual que el `>` de UI Lang, y un nodo sin colgar también es un error.
+- **Lo evita su prompt.** Tiene una regla propia: «toda variable, salvo root, tiene que estar referenciada; si no, no
+  se dibuja: pon siempre las variables que defines en la lista de children de su padre». Y la repite en la
+  verificación final.
+- **El cambio 1 lleva esa regla al prompt de UI Lang,** y los huérfanos de Haiku desaparecen en las dos tandas que lo llevan.
+- **Lo de poner el panel antes de la fuente también lo hacía Haiku en OpenUI** (4 de 4 en las dos tareas «al final»).
+  No era un fallo del formato.
+
+**Una línea con sólo el id** (`c_bajaron` en vez de `-c_bajaron`). Una segunda lluvia de ideas (los mismos cuatro
+modelos, 0,90 US$) descartó dos alternativas:
+
+- borrar sólo reescribiendo el padre, por el riesgo de perder hermanos y por los tokens de salida;
+- otra sintaxis de baja, que también se puede escribir a medias.
+
+Se quedó con una tolerancia que no adivina (`aplicar_cambio`):
+
+- La línea se ignora sólo si **las dos lecturas dan la misma pantalla**: ignorarla y tratarla como `-id`. Pasa
+  cuando el modelo también reescribió el padre sin ese nodo.
+- **Se rechaza el bloque, como antes:**
+  - si las dos lecturas dan pantallas distintas, por ejemplo si el padre no lo suelta o si otra línea lo cuelga de
+    otro sitio;
+  - si el id no estaba en la pantalla, porque puede ser una línea cortada;
+  - si es `root`;
+  - si hay más de un id suelto en el bloque.
+- Hay pruebas para cada caso.
+- El prompt no cambia.
+
+**Sobre las respuestas guardadas, sin gastar:** se compararon, una por una, las 1819 respuestas de UI Lang de este
+apartado con el motor anterior y con el nuevo.
+
+- Sólo cambian 2, y las dos pasan de no válida a válida y exacta: Haiku en «quita la cifra Bajaron» y Luna en «quita
+  los filtros».
+- Ninguna que ya valía cambia de resultado.
+- De las 167 bajas `-id` de los cambios válidos, 152 sobran: quitarlas da la misma pantalla, porque el padre ya se
+  reescribió sin ese nodo.
+
+| UI Lang 3 con los cambios 1 y 2 (Luna y Haiku, 52 tareas) | Válidas a la primera | Exactas | Coste por exacta |
+|---|---|---|---|
+| Antes de esta regla | 413/416 (99,3 %) | 409 | 0,244 m$ |
+| **Con esta regla** | **415/416 (99,8 %)** | **411** | **0,242 m$** |
+| OpenUI Lang 1.0, como referencia | 415/415 (100 %) | 407 | 0,314 m$ |
+
+La única que falla es la valla pegada de Luna (`-cifra?```pacai-ui-lang …`): es otro problema y se deja aparte.
+
+**Un bloque que se vuelve a abrir sin cerrarse.** A veces Luna empieza un bloque, se equivoca a mitad de una línea y
+abre otro igual sin haber cerrado el primero:
+
+~~~
+```pacai-ui-lang view=tablero
+root Stack direction=vertical gap=medium > cifras,p_bajo,fuente,p_historial
+-cifra?```pacai-ui-lang view=tablero
+root Stack direction=vertical gap=medium > cifras,p_bajo,fuente,p_historial
+-filtros
+…
+~~~
+
+Hasta ahora `partir` juntaba los dos en uno y el bloque se rechazaba. Ahora, una valla del perfil que aparece dentro
+de un bloque todavía abierto, al principio de la línea o detrás de lo que sea, funciona así:
+
+- **Misma vista** (o el primer bloque no la decía): **gana el bloque nuevo**, porque el modelo empezó de nuevo. Es la
+  misma idea que «gana la última línea de un id». Queda en `Vistas.reparaciones`.
+- **Otra vista:** el primer bloque se cierra y cada uno vale por separado.
+
+El script de la muestra lee igual, y hay una prueba.
+
+**Sobre las respuestas guardadas, sin gastar:** se compararon, una por una, las 2391 respuestas de UI Lang y del JSON
+de este apartado.
+
+- Sólo cambian 2, las dos de Luna, de no válida a válida y exacta: «quita los filtros», en la tanda que se queda, y
+  «borra el panel», en la del cambio 1.
+- Ninguna que ya valía cambia de resultado.
+
+| UI Lang 3 con los cambios 1 y 2 (Luna y Haiku, 52 tareas) | Válidas a la primera | IC95 % Wilson | Exactas | Coste por exacta |
+|---|---|---|---|---|
+| Antes de las dos últimas reglas | 413/416 (99,3 %) | 97,9–99,8 % | 409 | 0,244 m$ |
+| Con la baja sin guion | 415/416 (99,8 %) | 98,7–100 % | 411 | 0,242 m$ |
+| **Con el bloque reabierto** | **416/416 (100 %)** | **99,1–100 %** | **412** | **0,242 m$** |
+| OpenUI Lang 1.0, como referencia | 415/415 (100 %) | 99,1–100 % | 407 | 0,314 m$ |
+
+Con Luna y Haiku, UI Lang 3 queda con todas las pantallas válidas a la primera en las 52 tareas. Hace lo pedido en 412
+de 416 y cuesta un 23 % menos por pantalla exacta que OpenUI.
+
+Las 4 que no son exactas son modelos que eligen otra forma de lo pedido:
+
+- Luna, en «una rejilla de 3 columnas», usa un `Stack` sin columnas (2);
+- Haiku, en «lado a lado», usa un `Stack direction=grid`, que en una pantalla estrecha los apila (2).
+
+Es una sola tanda, así que no demuestra que el fallo sea imposible.

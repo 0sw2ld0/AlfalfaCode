@@ -252,6 +252,48 @@ def _titulo_panel(n, ident, titulo):
     return _p(n.get(ident, {})).get('title') == titulo
 
 
+# -- comprobaciones revisadas (26-11-2026): aceptan otra forma de dibujar exactamente lo pedido ---------------------
+def _rejilla(n):
+    """«En rejilla»: un Stack direction=grid o un Grid."""
+    return _direccion(n, 'grid') or bool(_todos(n, 'Grid'))
+
+
+def _lado_a_lado(n, ids):
+    """«Lado a lado»: un Stack horizontal o un Grid de 2 columnas o más que tenga dentro esos nodos."""
+    return any(set(ids) <= set(_descendientes(n, x['id'])) for x in n.values()
+               if (x['component'] == 'Stack' and _p(x).get('direction') == 'horizontal')
+               or (x['component'] == 'Grid' and (_p(x).get('columns') or 0) >= 2))
+
+
+def _descendientes(n, ident):
+    salida, pila = [], list(_hijos(n, ident))
+    while pila:
+        h = pila.pop()
+        if h in n and h not in salida:
+            salida.append(h)
+            pila += _hijos(n, h)
+    return salida
+
+
+def _al_final(n, padre, previos):
+    """«Añade al final»: los hijos de `padre` son `previos` y un nodo nuevo detrás, o el nuevo justo antes de una nota
+    final en caption (la fuente): las dos pantallas ponen lo nuevo al final de lo que se ve."""
+    hijos = _hijos(n, padre)
+    if len(hijos) != len(previos) + 1:
+        return None
+    if hijos[:-1] == previos:
+        return hijos[-1]
+    nota = previos[-1] if previos else None
+    if nota and hijos[-1] == nota and hijos[:-2] == previos[:-1] and _p(n.get(nota, {})).get('style') == 'caption':
+        return hijos[-2]
+    return None
+
+
+def _barras_de(n, padre, orden):
+    return [n[h] for h in _hijos(n, padre) if n.get(h, {}).get('component') == 'PriceBars'
+            and _q(n[h]).get('orden') == orden]
+
+
 A = [  # altas
     ('a_tickets', 'Una tabla de tickets (view=tickets) con columnas id, título y prioridad y tres filas: T-1 «Login '
      'falla» Alta, T-2 «Botón roto» Media, T-3 «Texto mal» Baja. Al pulsar una fila manda abrir_ticket.',
@@ -270,7 +312,7 @@ A = [  # altas
                    for x in _todos(n, 'List'))),
     ('a_tarjetas', 'Tres tarjetas en rejilla (view=frutas): Palta, Limón y Papa, cada una con una etiqueta y un botón '
      '«Abrir fuente» que abre https://ejemplo.pe/<producto>.',
-     lambda n: len(_todos(n, 'Card')) == 3 and _direccion(n, 'grid')
+     lambda n: len(_todos(n, 'Card')) == 3 and _rejilla(n)
      and sum('open_url' in _envio(b, 'press') for b in _todos(n, 'Button')) == 3),
     ('a_barras', 'Un gráfico de barras (view=ventas) con las ventas de enero, febrero y marzo: 120, 150 y 90.',
      lambda n: bool(_grafico(n, 'bar', labels=lambda p: len(p.get('labels') or []) == 3,
@@ -337,7 +379,8 @@ A = [  # altas
      lambda n: len(_todos(n, 'Filters')) == 1 and bool(_barras(n, 'sube', 10))),
     ('c_lado', 'Dos paneles lado a lado: «Bajan» con las barras de los 5 que más bajan y «Suben» con las de los 5 que '
      'más suben.',
-     lambda n: bool(_barras(n, 'baja', 5)) and bool(_barras(n, 'sube', 5)) and _direccion(n, 'horizontal')),
+     lambda n: bool(_barras(n, 'baja', 5)) and bool(_barras(n, 'sube', 5))
+     and _lado_a_lado(n, [_barras(n, 'baja', 5)[0]['id'], _barras(n, 'sube', 5)[0]['id']])),
     ('c_completo', 'Un tablero (view=semana): filtros, una rejilla de 2 columnas con subieron y bajaron, un panel '
      '«Historial» con papa, cebolla y ajo, y la nota «Datos de MIDAGRI» en caption.',
      lambda n: _stats(n) == ['bajaron', 'subieron'] and bool(_lineas(n, ['ajo', 'cebolla', 'papa']))
@@ -345,13 +388,16 @@ A = [  # altas
     ('c_tarjeta_cifra', 'Una tarjeta «Resumen de hoy» con dentro la cifra de iguales (icono igual).',
      lambda n: _stats(n) == ['iguales'] and any(
          _p(c).get('title') == 'Resumen de hoy' and any(n.get(h, {}).get('component') == 'Stat'
-                                                        for h in c.get('children', []))
-         for c in _todos(n, 'Card'))),
+                                                        for h in _descendientes(n, c['id']))
+         for c in _todos(n, 'Card') + _todos(n, 'Panel'))),
     ('c_titulo_barras', 'Un título «Mercado de hoy» y las barras de los 6 productos que más bajaron.',
-     lambda n: bool(_barras(n, 'baja', 6)) and _estilo(n, 'mercado', 'title')),
+     lambda n: bool(_barras(n, 'baja', 6)) and (_estilo(n, 'mercado', 'title') or any(
+         'mercado' in str(_p(x).get('title', '')).lower() for x in _todos(n, 'Panel') + _todos(n, 'Card')))),
     ('c_alerta', 'Los filtros y un formulario para suscribirse a alertas de un producto (Select con palta, limón y '
      'papa) que envía alerta con el producto.',
-     lambda n: len(_todos(n, 'Filters')) == 1 and _form(n, 'alerta', 1)
+     lambda n: len(_todos(n, 'Filters')) == 1 and any(
+         'alerta' in _envio(f, 'submit').get('send', '') and len(_envio(f, 'submit').get('with') or []) == 1
+         for f in _todos(n, 'Form'))
      and any(_opciones(s) == ['limon', 'palta', 'papa'] for s in _todos(n, 'Select'))),
     ('c_citricos', 'Un panel «Historial de cítricos» con el historial de limón y naranja, y un botón «Descargar CSV» '
      'que manda descargar_csv.',
@@ -377,7 +423,7 @@ C = [  # cambios sobre el tablero
     ('p_titulo_limite', 'Cambia el título del panel p_bajo a «Bajas de hoy» y deja sus barras en 3 productos.',
      lambda n: _titulo_panel(n, 'p_bajo', 'Bajas de hoy') and _q(n.get('bajo_top', {})).get('limite') == 3),
     ('p_historial_papa', 'Añade al final de la pantalla un panel «Historial» con el historial de papa.',
-     lambda n: _hijos(n, 'root')[:4] == ['filtros', 'cifras', 'p_bajo', 'fuente'] and len(_hijos(n, 'root')) == 5
+     lambda n: _al_final(n, 'root', ['filtros', 'cifras', 'p_bajo', 'fuente']) is not None
      and bool(_lineas(n, ['papa']))),
     ('p_borrar_panel', 'Borra el panel p_bajo con lo que tiene dentro.',
      lambda n: 'p_bajo' not in n and 'bajo_top' not in n and _hijos(n, 'root') == ['filtros', 'cifras', 'fuente']),
@@ -389,9 +435,11 @@ C = [  # cambios sobre el tablero
      lambda n: _p(n.get('fuente', {})).get('text') == 'Fuente: MIDAGRI.'),
     ('m_suben', 'Cambia las barras de p_bajo para que muestren lo que más subió y el título del panel a «Lo que más '
      'subió».',
-     lambda n: _q(n.get('bajo_top', {})).get('orden') == 'sube' and _titulo_panel(n, 'p_bajo', 'Lo que más subió')),
+     lambda n: bool(_barras_de(n, 'p_bajo', 'sube')) and not _barras_de(n, 'p_bajo', 'baja')
+     and _titulo_panel(n, 'p_bajo', 'Lo que más subió')),
     ('m_boton', 'Añade al final un botón «Actualizar» que mande actualizar.',
-     lambda n: _ultimo(n).get('component') == 'Button' and len(_botones(n, 'actualizar')) == 1),
+     lambda n: len(_botones(n, 'actualizar')) == 1
+     and _al_final(n, 'root', ['filtros', 'cifras', 'p_bajo', 'fuente']) == _botones(n, 'actualizar')[0]['id']),
     ('m_quitar_fuente', 'Quita la nota de la fuente.',
      lambda n: 'fuente' not in n and _hijos(n, 'root') == ['filtros', 'cifras', 'p_bajo']),
     ('m_nota_panel', 'Añade dentro de p_bajo, antes de las barras, un texto «Precios en S/ por kg» en estilo caption.',
@@ -401,7 +449,7 @@ C = [  # cambios sobre el tablero
      lambda n: _p(n.get('c_subieron', {})).get('icon') == 'igual'),
     ('m_sin_filtros', 'Quita los filtros y añade al final un panel «Historial» con el historial de palta y limón.',
      lambda n: 'filtros' not in n and bool(_lineas(n, ['limon', 'palta']))
-     and _hijos(n, 'root')[:3] == ['cifras', 'p_bajo', 'fuente']),
+     and _al_final(n, 'root', ['cifras', 'p_bajo', 'fuente']) is not None),
     ('m_intercambiar', 'Intercambia el orden de las dos cifras de la rejilla.',
      lambda n: _hijos(n, 'cifras') == ['c_bajaron', 'c_subieron']),
     ('m_panel_antes', 'Pon el panel p_bajo antes de la rejilla de cifras.',
@@ -429,8 +477,9 @@ def mensaje_de_tarea(brazo, tarea) -> str:
 
 
 # -- validación -------------------------------------------------------------------------------------------------
-_VALLA = re.compile(r'^\s*```(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
-_VALLA_A_MEDIA_LINEA = re.compile(r'```(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
+# Como `ui.partir`: la valla puede ser ```, ~~~ o :::, y el bloque se cierra con su misma marca.
+_VALLA = re.compile(r'^\s*(```|~~~|:::)(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
+_VALLA_A_MEDIA_LINEA = re.compile(r'(```|~~~|:::)(pacai-ui-lang|pacai-ui|a2ui)((?:\s+[a-z_]+=\S+)*)\s*$')
 
 
 def bloque(texto, media_linea=True):
@@ -447,10 +496,18 @@ def bloque(texto, media_linea=True):
             if not m and linea.lstrip().startswith('```'):
                 en_codigo = not en_codigo
             if m:
-                attrs = dict(a.split('=', 1) for a in m.group(2).split())
-                attrs['valla'] = m.group(1)
+                attrs = dict(a.split('=', 1) for a in m.group(3).split())
+                attrs['valla'] = m.group(2)
+                marca = m.group(1)
             continue
-        if linea.strip().startswith('```'):
+        reabre = _VALLA.match(linea) or _VALLA_A_MEDIA_LINEA.search(linea)
+        if reabre:                              # como ui.partir: la misma vista reabierta empieza de nuevo
+            nuevos = dict(a.split('=', 1) for a in reabre.group(3).split())
+            if nuevos.get('view') != attrs.get('view') and 'view' in attrs:
+                break
+            attrs, lineas, marca = nuevos | {'valla': reabre.group(2)}, [], reabre.group(1)
+            continue
+        if linea.strip().startswith(marca):
             break
         if linea.strip():
             lineas.append(linea.strip())
@@ -473,6 +530,12 @@ def validar(brazo, tarea, texto, reparaciones=None):
     reparaciones = [] if reparaciones is None else reparaciones
     _, tipo, _, comprobar = tarea
     attrs, lineas = bloque(texto)
+    if attrs is None and brazo == 'lang':
+        # Como el motor (`Vistas.sin_valla`): una respuesta que son sólo líneas de PACAI UI Lang vale sin valla.
+        sin_valla = (_vistas_lang() if tipo == 'cambio' else Vistas(CAT_LANG)).sin_valla(texto)
+        if sin_valla:
+            attrs = {'view': sin_valla['view'], 'sin_valla': True, 'valla': 'pacai-ui-lang'}
+            lineas = [x.strip() for x in texto.splitlines() if x.strip()]
     if attrs is None:
         return False, False, ['No hay bloque de pantalla.']
     errores = []

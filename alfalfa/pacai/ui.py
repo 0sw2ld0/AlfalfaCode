@@ -82,16 +82,45 @@ EJEMPLOS_BASE = {
     'Image': [{'id': 'foto', 'component': 'Image', 'props': {'src': 'https://ejemplo.pe/palta.png', 'alt': 'Palta'}}],
     'Code': [{'id': 'codigo', 'component': 'Code', 'props': {'code': 'print("hola")', 'language': 'python'}}],
 }
+EJEMPLO_REJILLA = {'id': 'tarjetas', 'component': 'Stack', 'props': {'direction': 'grid', 'gap': 'small'},
+                   'children': ['palta']}
 CLAVES_DE_NODO = ('id', 'component', 'props', 'children', 'events')
 _NOMBRE = re.compile(r'^[a-z][a-z0-9_]*$')
 _ID_ROOT = re.compile(r'"id"\s*:\s*"root"')     # una línea que quería ser root, aunque no se pueda leer
-_APERTURA = re.compile(r'^\s*```' + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
+# La valla de un bloque: ``` como siempre y, como también hacen los modelos, ~~~ (la otra valla de CommonMark) o
+# ::: (la de las directivas de markdown). Cada bloque se cierra con su misma marca.
+MARCAS = ('```', '~~~', ':::')
+_MARCA = r'(?P<marca>```|~~~|:::)'
+_APERTURA = re.compile(r'^\s*' + _MARCA + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
 # La misma valla al final de una línea con texto delante («Aquí está:```pacai-ui view=x»): algunos modelos escriben
 # una frase o su razonamiento y abren el bloque sin saltar de línea. Sólo cuenta si tras la valla no queda más que
 # sus atributos, si el texto de delante no lleva comillas invertidas (una valla citada en `código`) y si no estamos
 # dentro de otro bloque de código.
-_APERTURA_A_MEDIA_LINEA = re.compile(r'```' + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
-_CIERRE = re.compile(r'^\s*```\s*$')
+_APERTURA_A_MEDIA_LINEA = re.compile(_MARCA + VALLA + r'(?P<lang>-lang)?(?P<attrs>(?:\s+[a-z_]+=\S+)*)\s*$')
+
+
+def tiene_valla(texto: str) -> bool:
+    """Si el texto abre algún bloque del perfil `ui`, con cualquiera de sus marcas."""
+    return any(marca + VALLA in texto for marca in MARCAS)
+
+
+def _reapertura(linea: str, lang: bool) -> tuple[dict, str] | None:
+    """Los atributos y la marca de una valla del perfil que aparece dentro de un bloque todavía abierto, al principio
+    de la línea o detrás de lo que sea, o None."""
+    abre = _APERTURA.match(linea) or _APERTURA_A_MEDIA_LINEA.search(linea)
+    if abre is None or (abre.group('lang') and not lang):
+        return None
+    attrs: dict[str, Any] = dict(a.split('=', 1) for a in abre.group('attrs').split())
+    if abre.group('lang'):
+        attrs['lang'] = True
+    return attrs, abre.group('marca')
+
+
+def _cierra(linea: str, marca: str) -> bool:
+    """La línea que cierra un bloque abierto con `marca`: ``` sola en su línea, como siempre; ~~~ o ::: al principio
+    de la línea, aunque el modelo escriba algo detrás (se descarta)."""
+    texto = linea.strip()
+    return texto == marca if marca == '```' else texto.startswith(marca)
 _OTRA_VALLA = re.compile(r'^\s*```')
 
 
@@ -384,7 +413,9 @@ Componentes:
         from .ui_lang import a_lang, prompt, prompt_piezas
 
         piezas = prompt_piezas(self)
-        nodos = self.ejemplos() if ejemplos else []
+        # El ejemplo de Stack, en el formato compacto, enseña tarjetas en rejilla (el JSON lo dice en una línea propia
+        # que este prompt no lleva): sin él, los modelos usan Grid para «tarjetas en rejilla».
+        nodos = [EJEMPLO_REJILLA if n['id'] == 'fila' else n for n in self.ejemplos()] if ejemplos else []
         bloque = ('Ejemplos, una línea por nodo (copia la forma; los ids y los textos son tuyos):\n'
                   + a_lang(nodos, self) + '\n') if nodos else ''
         return ('''
@@ -429,11 +460,21 @@ def partir(texto: str, lang: bool = False) -> list[tuple]:
                 if abre.group('lang'):
                     attrs['lang'] = True
                 ui = (attrs, [])
+                marca = abre.group('marca')
             else:
                 if _OTRA_VALLA.match(linea):
                     en_codigo = not en_codigo
                 texto_actual.append(linea)
-        elif _CIERRE.match(linea):
+        elif (reabre := _reapertura(linea, lang)) is not None:
+            # Otra valla del perfil antes de cerrar ésta: el modelo empezó de nuevo («```.```pacai-ui-lang view=x»).
+            # Si es la misma vista, gana el bloque nuevo (lo anterior quedó a medias); si es otra, éste se cierra.
+            nuevos, marca = reabre
+            if nuevos.get('view') == ui[0].get('view') or 'view' not in ui[0]:
+                nuevos['reabierto'] = True
+            else:
+                trozos.append(('ui', *ui))
+            ui = (nuevos, [])
+        elif _cierra(linea, marca):
             trozos.append(('ui', *ui))
             ui = None
         elif linea.strip():
@@ -458,6 +499,45 @@ class Vistas:
     def __init__(self, catalogo: Catalogo):
         self.catalogo = catalogo
         self.vistas: dict[str, Vista] = {}
+        self.ultima: str | None = None          # la última vista que cambió: la que el modelo acaba de ver
+
+    def sin_valla(self, texto: str) -> dict | None:
+        """Los atributos de un bloque de PACAI UI Lang escrito sin valla, o None: la respuesta entera se lee como
+        un bloque, pero sólo con el formato compacto activo, sin ninguna valla ``` en el texto y si
+        cada línea no vacía es una línea del formato (nodos del catálogo o bajas `-id`). Es un cambio de la última
+        vista si alguna línea nombra (o cuelga) uno de sus nodos, aparte de root; si no, y trae root sin bajas, es un
+        alta en una vista nueva llamada `pantalla` (o `pantalla_2`…). En otro caso es texto."""
+        if not self.catalogo.lang or any(marca in texto for marca in MARCAS):
+            return None
+        from .ui_lang import ErrorDeLinea, fichas, leer_linea
+
+        lineas = [x.strip() for x in texto.splitlines() if x.strip()]
+        if not lineas or len(lineas) > self.catalogo.max_nodos:
+            return None
+        tabla = fichas(self.catalogo)
+        ids: list[str] = []
+        nombrados: set[str] = set()
+        bajas = False
+        for linea in lineas:
+            try:
+                leida = leer_linea(linea)
+            except ErrorDeLinea:
+                return None
+            if leida.tipo == 'cambio' or (leida.tipo == 'alta' and leida.componente not in tabla):
+                return None
+            bajas = bajas or leida.tipo == 'baja'
+            ids.append(leida.ident)
+            nombrados.update([leida.ident, *leida.hijos])
+        ultima = self.vistas.get(self.ultima or '')
+        if ultima is not None and (nombrados - {'root'}) & set(ultima.nodos):
+            return {'view': self.ultima, 'lang': True, 'sin_valla': True}
+        if 'root' in ids and not bajas:
+            nombre, n = 'pantalla', 1
+            while nombre in self.vistas and self.vistas[nombre].nodos:
+                n += 1
+                nombre = f'pantalla_{n}'
+            return {'view': nombre, 'lang': True, 'sin_valla': True}
+        return None
         self.reparaciones: list[str] = []      # lo que el motor arregló en el último bloque sin cambiar lo pedido
 
     def rev(self, nombre: str) -> int | None:
@@ -500,6 +580,8 @@ class Vistas:
             return self.aplicar_lang(attrs, lineas)
         self.reparaciones = []
         nombre = ascii_de(attrs.get('view', ''), minusculas=True)
+        if attrs.get('reabierto'):
+            self.reparaciones.append(f'El bloque de {nombre} se volvió a abrir sin cerrarse: vale el último.')
         if not _NOMBRE.match(nombre):
             return None, ['El bloque pacai-ui necesita view=nombre ([a-z][a-z0-9_]*).']
         # Un alta: la vista no existe o no tiene nodos (un primer bloque que no dejó ninguno válido no cuenta).
@@ -576,6 +658,7 @@ class Vistas:
         if not (nodos or quitar or estado):
             return None, errores
         vista.rev += 1
+        self.ultima = nombre
         data: dict[str, Any] = {'view': nombre, 'op': 'patch', 'rev': vista.rev, 'nodes': nodos}
         if quitar:
             data['remove'] = quitar
@@ -599,6 +682,10 @@ class Vistas:
             return None, ['El bloque pacai-ui-lang necesita view=nombre ([a-z][a-z0-9_]*).']
         if 'rev' in attrs:
             self.reparaciones.append(f'rev={attrs["rev"]} ignorado: la revisión la pone el motor.')
+        if attrs.get('sin_valla'):
+            self.reparaciones.append(f'Pantalla sin valla: se lee como PACAI UI Lang (view={nombre}).')
+        if attrs.get('reabierto'):
+            self.reparaciones.append(f'El bloque de {nombre} se volvió a abrir sin cerrarse: vale el último.')
         texto = '\n'.join(lineas)
         vista = self.vistas.get(nombre)
         if vista is not None and vista.nodos:
@@ -610,7 +697,9 @@ class Vistas:
             data: dict[str, Any] = {'view': nombre, 'op': 'patch', 'rev': vista.rev, 'nodes': cambio.actualizados}
             if cambio.borrados:
                 data['remove'] = cambio.borrados
-            return data, cambio.avisos
+            self.reparaciones += cambio.avisos      # la última línea de un id ganó: no es un error
+            self.ultima = nombre
+            return data, []
         flujo = Flujo(self.catalogo)
         flujo.alimentar(texto + '\n')
         nodos, diagnosticos = flujo.cerrar()
@@ -620,6 +709,7 @@ class Vistas:
         vista = self.vistas.setdefault(nombre, Vista())
         vista.nodos = {n['id']: n for n in nodos}
         vista.rev += 1
+        self.ultima = nombre
         return ({'view': nombre, 'op': 'replace', 'rev': vista.rev, 'nodes': nodos, 'alt': self._resumen(vista)},
                 [d.texto() for d in diagnosticos])
 

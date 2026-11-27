@@ -158,8 +158,9 @@ def test_cada_nodo_se_publica_en_cuanto_llega_y_solo_crece():
     nodos, diagnosticos = flujo.cerrar()
     assert diagnosticos == []
     primeras = [[n['id'] for n in p] for p in publicaciones]
-    assert primeras[0] == ['root'] and primeras[1] == ['root', 'filtros']
-    assert len(publicaciones) == 8                       # una por línea: nada espera al final del bloque
+    assert primeras[0] == ['root'] and ['root', 'filtros'] in primeras
+    # Nada espera al final del bloque: cada línea sale en cuanto se puede leer, aunque no haya llegado entera.
+    assert len(publicaciones) >= 8
     # Cada publicación es un árbol válido: sus hijos son el prefijo de los que ya llegaron.
     hijos_publicados = {}
     for publicacion in publicaciones:
@@ -191,11 +192,12 @@ def test_un_hijo_que_falla_retiene_a_sus_hermanos_y_se_pide_una_vez():
         flujo.reintentar('x Text "y"')
 
 
-def test_en_el_reintento_un_id_que_ya_existe_se_sustituye_y_en_el_alta_no():
+def test_en_el_alta_y_en_el_reintento_gana_la_ultima_linea_de_un_id():
     flujo = ui_lang.Flujo(catalogo())
     flujo.alimentar('root Stack > a,b\na Text "A"\na Text "A"\na Text "otra"\n')   # repetida igual: se ignora
     nodos, diagnosticos = flujo.cerrar()
-    assert [d.motivo for d in diagnosticos if d.ident == 'a'] == ['Ese id ya está definido con otro contenido.']
+    assert [d.ident for d in diagnosticos] == ['b'] and nodos[1]['props']['text'] == 'otra'
+    assert flujo.reparaciones == ['a va dos veces: vale la línea 4.']
     nodos, diagnosticos = flujo.reintentar('a Text "A2"\nb Text "B"')
     assert diagnosticos == [] and [n['props']['text'] for n in nodos[1:]] == ['A2', 'B']
 
@@ -326,10 +328,7 @@ def test_un_patch_con_un_fallo_no_cambia_nada():
 @pytest.mark.parametrize('texto, motivo', [
     ('root Stack > filtros,cifras,p_bajo,fuente,nada', 'nada no existe'),
     ('-root', 'no se borra'),
-    ('-nada', 'no está en la pantalla'),
     ('nuevo Text "suelto"', 'no cuelga de ningún nodo'),
-    ('fuente Text "A"\nfuente Text "B"', 'dos veces con contenido distinto'),
-    ('-fuente\nfuente Text "otra"', 'se borra y se escribe'),
     ('~p_bajo "Otro"', 'sin ~ ni +>'),
     ('fuente Text "x" > hijo', 'no admite hijos'),
 ])
@@ -585,3 +584,171 @@ def test_las_muestras_de_medicion_dicen_lo_mismo_en_los_dos_formatos():
         assert diagnosticos == [], (nombre, [d.texto() for d in diagnosticos])
         assert nodos == [json.loads(x) for x in muestra['json'].splitlines()], nombre
         assert piezas.errores_del_arbol({n['id']: n for n in nodos}, DECLARACION['queries']) == []
+
+
+# -- reglas para perder menos pantallas (docs/pacai/perfil-ui.md §10.3) -----------------------------------------
+@pytest.mark.parametrize('texto, queda, aviso', [
+    ('fuente Text "A"\nfuente Text "B"', 'B', 'fuente: va dos veces; vale la línea 2.'),
+    ('-fuente\nfuente Text "otra"', 'otra', 'fuente: se borra y se vuelve a escribir; vale la línea 2.'),
+    ('fuente Text "A"\n-fuente', None, 'fuente: se escribe y se borra; vale la baja de la línea 2.'),
+])
+def test_en_un_cambio_gana_la_ultima_linea_de_un_id(texto, queda, aviso):
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), texto, catalogo())
+    assert diagnosticos == [] and cambio.avisos == [aviso]
+    if queda is None:
+        assert 'fuente' not in cambio.nodos and 'fuente' not in cambio.nodos['root']['children']
+    else:
+        assert cambio.nodos['fuente']['props'] == {'text': queda}
+
+
+def test_un_cambio_que_gana_la_ultima_linea_no_es_un_rechazo_en_las_vistas():
+    vistas = Vistas(catalogo())
+    vistas.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())
+    data, errores = vistas.aplicar({'view': 'tablero', 'lang': True},
+                                   ['c_bajaron Stat "Bajaron" icon=bajo query={"tipo":"totales","campo":"bajaron"}',
+                                    '-c_bajaron'])
+    assert errores == [] and data['remove'] == ['c_bajaron']
+    assert vistas.reparaciones == ['c_bajaron: se escribe y se borra; vale la baja de la línea 2.']
+
+
+def test_la_linea_que_aun_llega_se_publica_cerrada_y_luego_se_sustituye():
+    flujo = ui_lang.Flujo(catalogo())
+    assert flujo.alimentar('root Stack > a\n') == [[{'id': 'root', 'component': 'Stack', 'children': []}]]
+    publicado = flujo.alimentar('a Text "Hol')
+    assert publicado[-1][-1] == {'id': 'a', 'component': 'Text', 'props': {'text': 'Hol'}}
+    assert publicado[-1][0]['children'] == ['a']
+    assert flujo.alimentar('a"')[-1][-1]['props'] == {'text': 'Hola'}
+    assert flujo.alimentar(' style=capt') == []            # a medias no vale: no se publica y queda lo anterior
+    assert flujo.alimentar('ion\n')[-1][-1]['props'] == {'text': 'Hola', 'style': 'caption'}
+    nodos, diagnosticos = flujo.cerrar()
+    assert diagnosticos == [] and nodos[1]['props'] == {'text': 'Hola', 'style': 'caption'}
+
+
+def test_la_linea_que_aun_llega_no_pisa_una_entera():
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('root Stack > a\na Text "Uno"\n')
+    assert flujo.alimentar('a Text "Do') == []
+    assert flujo.publicado['a']['props'] == {'text': 'Uno'}
+
+
+def test_cerrar_cola_cierra_texto_y_corchetes():
+    tabla = 't Table columns=[{"key":"id","label":"I'
+    assert ui_lang.cerrar_cola(tabla) == tabla + '"}]'
+    assert ui_lang.cerrar_cola('t Text "a \\"b') == 't Text "a \\"b"'
+    assert ui_lang.cerrar_cola('t Text "x" style=body') == 't Text "x" style=body'
+
+
+def test_una_pantalla_sin_valla_se_lee_si_todo_son_lineas_del_formato():
+    vistas = Vistas(catalogo())
+    attrs = vistas.sin_valla(TABLERO)
+    assert attrs == {'view': 'pantalla', 'lang': True, 'sin_valla': True}
+    data, errores = vistas.aplicar(attrs, TABLERO.splitlines())
+    assert errores == [] and data['view'] == 'pantalla' and len(data['nodes']) == 8
+    assert vistas.reparaciones == ['Pantalla sin valla: se lee como PACAI UI Lang (view=pantalla).']
+    # Un cambio sin valla va a la última vista si nombra o cuelga uno de sus nodos.
+    cambio = 'cifras Grid columns=4 > c_subieron,c_iguales\nc_iguales Stat "Iguales" icon=igual query={"tipo":"totales","campo":"iguales"}'  # noqa: E501
+    assert vistas.sin_valla(cambio) == {'view': 'pantalla', 'lang': True, 'sin_valla': True}
+    assert vistas.sin_valla('root Stack > hola\nhola Text "Otra"')['view'] == 'pantalla_2'
+
+
+@pytest.mark.parametrize('texto', [
+    'Aquí tienes la tabla con los precios de hoy.',
+    'nota Texto "no es un componente"',
+    '```text\nroot Stack > a\n```',
+    'root Stack > a\nY esto es una frase.',
+    '-nada',
+])
+def test_lo_que_no_es_una_pantalla_sin_valla_sigue_siendo_texto(texto):
+    assert Vistas(catalogo()).sin_valla(texto) is None
+
+
+def test_sin_el_formato_compacto_no_hay_pantallas_sin_valla():
+    assert Vistas(Catalogo.de(DECLARACION, {})).sin_valla(TABLERO) is None
+
+
+async def test_el_motor_dibuja_una_respuesta_sin_valla_y_deja_la_prosa_como_texto(monkeypatch):
+    monkeypatch.setenv(ui_lang.FLAG, '1')
+    c = Cliente(perfiles=('work', 'ui'))
+    c.hello['render'] = {'ui': {'version': '1'}}
+    await abrir(c, 'Enséñame un resumen')
+    c.t.emit('evento', rol='agent', hora=1.0, texto='root Stack direction=vertical > titulo\n'
+             'titulo Text "2 tickets" style=title\n')
+    c.t.emit('evento', rol='agent', hora=2.0, texto='Hay 2 tickets abiertos.')
+    mensajes = c.drenar()
+    datos = [b['data'] for m in mensajes for b in m['payload'].get('blocks', []) if b.get('type') == 'structured']
+    assert datos[0]['view'] == 'pantalla' and [n['id'] for n in datos[0]['nodes']] == ['root', 'titulo']
+    textos = [b['text'] for m in mensajes for b in m['payload'].get('blocks', []) if b.get('type') == 'text']
+    assert textos == ['Hay 2 tickets abiertos.']
+    await cerrar(c)
+    c.comprobar()
+
+
+def test_una_baja_con_espacio_vale_y_la_de_un_id_que_no_existe_no_hace_nada():
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), 'root Stack > filtros,cifras,p_bajo\n- fuente', catalogo())
+    assert diagnosticos == [] and 'fuente' not in cambio.nodos and cambio.avisos == []
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), 'root Stack > cifras,p_bajo,fuente\n-c_filtros',
+                                                  catalogo())
+    assert diagnosticos == [] and 'filtros' not in cambio.nodos
+    assert cambio.avisos == ['c_filtros: no está en la pantalla; la baja de la línea 2 no hace nada.']
+    assert ui_lang.leer_linea('-  fuente ').ident == 'fuente'
+    with pytest.raises(ui_lang.ErrorDeLinea):
+        ui_lang.leer_linea('- fuente extra')
+
+
+def test_el_prompt_compacto_pide_colgar_cada_nodo_nuevo_y_ensena_la_rejilla():
+    manual = catalogo().manual()
+    assert 'Cada id nuevo va en el > de su padre, en la posición pedida' in manual
+    assert 'tarjetas Stack direction=grid gap=small > palta' in manual and 'fila Stack' not in manual
+    # El JSON (modelos sin UI Lang) conserva su ejemplo de Stack.
+    assert '"id":"fila","component":"Stack"' in Catalogo.de(DECLARACION, {}).manual()
+
+
+
+@pytest.mark.parametrize('marca', ['~~~', ':::'])
+def test_un_bloque_con_valla_de_tildes_o_de_dos_puntos_tambien_vale(marca):
+    texto = f'Aquí está:\n{marca}pacai-ui-lang view=resumen\nroot Stack > t\nt Text "Hola"\n{marca} y algo más\nFin.'
+    trozos = partir(texto, lang=True)
+    assert [t[0] for t in trozos] == ['text', 'ui', 'text']
+    assert trozos[1][1] == {'view': 'resumen', 'lang': True} and trozos[1][2] == ['root Stack > t', 't Text "Hola"']
+    # Un bloque ``` sigue cerrándose sólo con ``` sola en su línea.
+    assert partir('```pacai-ui-lang view=a\nroot Stack > t\n~~~\nt Text "x"\n```', lang=True)[0][2] == [
+        'root Stack > t', '~~~', 't Text "x"']
+    assert Vistas(catalogo()).sin_valla(f'{marca}pacai-ui-lang view=a\nroot Stack > t') is None
+
+
+# -- una línea con sólo el id (baja sin guion): se tolera sólo si da igual ignorarla que borrar ------------------------
+def test_un_id_suelto_que_da_igual_ignorar_o_borrar_se_ignora():
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), 'c_bajaron\ncifras Grid columns=4 > c_subieron',
+                                                  catalogo())
+    assert diagnosticos == [] and 'c_bajaron' not in cambio.nodos
+    assert cambio.avisos[0].startswith('c_bajaron: una línea con sólo el id')
+
+
+@pytest.mark.parametrize('texto', [
+    'c_bajaron\nfuente Text "Otra" style=caption',                                         # el padre no lo suelta
+    'c_bajaron\ncifras Grid columns=4 > c_subieron\np_bajo Panel "Lo que más bajó" > bajo_top,c_bajaron',  # se mueve
+    'nada\ncifras Grid columns=4 > c_subieron',                                            # no estaba en la pantalla
+    'cifras Grid columns=4 > c_subieron\nc_igu',                                           # bloque cortado
+    'root',                                                                                # root no se borra
+    'c_bajaron\nc_subieron\ncifras Grid columns=4 > p_x\np_x Text "x"',                     # dos sueltos
+])
+def test_un_id_suelto_que_cambiaria_la_pantalla_sigue_rechazando_el_bloque(texto):
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), texto, catalogo())
+    assert cambio is None and diagnosticos
+
+
+
+def test_un_bloque_que_se_vuelve_a_abrir_sin_cerrarse_empieza_de_nuevo():
+    texto = ('```pacai-ui-lang view=tablero\nroot Stack > cifras\n-cifra?```pacai-ui-lang view=tablero\n'
+             'root Stack > p_bajo\n```')
+    trozos = partir(texto, lang=True)
+    assert [t[0] for t in trozos] == ['ui']
+    assert trozos[0][1] == {'view': 'tablero', 'lang': True, 'reabierto': True}
+    assert trozos[0][2] == ['root Stack > p_bajo']
+    # Otra vista: el primer bloque se cierra y cada uno vale por separado.
+    otro = partir('```pacai-ui-lang view=a\nroot Stack > t\n```pacai-ui-lang view=b\nroot Stack > u\n```', lang=True)
+    assert [(t[1]['view'], t[2]) for t in otro] == [('a', ['root Stack > t']), ('b', ['root Stack > u'])]
+    vistas = Vistas(catalogo())
+    vistas.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())
+    data, errores = vistas.aplicar(trozos[0][1] | {}, ['fuente Text "Otra" style=caption'])
+    assert errores == [] and 'se volvió a abrir' in vistas.reparaciones[0]

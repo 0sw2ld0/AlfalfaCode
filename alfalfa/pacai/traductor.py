@@ -18,7 +18,7 @@ from typing import Any, Callable
 from .jcs import digest
 from .nombres import TIPOS, en_ingles, peticion_del_navegador, razon
 from .sobre import MAX_BYTES, Emisor, ahora, bytes_de_linea, codificar, en_segundos, prefijo_que_cabe
-from .ui import ESQUEMA_UI, VALLA, Catalogo, Vistas, partir
+from .ui import ESQUEMA_UI, Catalogo, Vistas, partir, tiene_valla
 
 __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR']
 
@@ -418,13 +418,17 @@ class Traductor:
         inicio = self._msg('message_start', {'run_id': run_id, 'role': rol,
                                              **self._alfalfa({k: v for k, v in (extra or {}).items() if v})})
         salida = [inicio]
-        if self.vistas is None or '```' + VALLA not in texto:
+        # PACAI UI Lang sin valla (la respuesta entera son líneas del formato): se lee como un solo bloque.
+        sin_valla = self.vistas.sin_valla(texto) if self.vistas is not None and not tiene_valla(texto) else None
+        if self.vistas is None or (not tiene_valla(texto) and sin_valla is None):
             return salida + self._deltas(inicio['id'], texto) + [self._msg('message_end',
                                                                            {'message_id': inicio['id']})]
         # Perfil `ui`: el texto sale como texto; cada bloque ```pacai-ui, como un `patch` de su vista; al cerrar,
         # la foto (`replace`) de cada vista que tocó el mensaje.
         tocadas: list[str] = []
-        for trozo in partir(texto, lang=self.vistas.catalogo.lang):
+        trozos = ([('ui', sin_valla, [x.strip() for x in texto.splitlines() if x.strip()])] if sin_valla
+                  else partir(texto, lang=self.vistas.catalogo.lang))
+        for trozo in trozos:
             if trozo[0] == 'text':
                 salida += self._deltas(inicio['id'], trozo[1]) if trozo[1].strip() else []
                 continue

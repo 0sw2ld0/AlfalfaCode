@@ -224,10 +224,10 @@ def leer_linea(linea: str) -> Linea:
     """Una línea de PACAI UI Lang, sin mirar el catálogo. `ErrorDeLinea` si no sigue la gramática."""
     texto = linea.strip()
     if texto.startswith('-'):
-        m = _ID.fullmatch(texto[1:])
-        if not m:
+        ident = texto[1:].strip()                  # `- fuente` también: el espacio no cambia lo que pide
+        if not _ID.fullmatch(ident):
             raise ErrorDeLinea('Una baja es -id, sin nada más.')
-        return Linea('baja', texto[1:])
+        return Linea('baja', ident)
     if texto.startswith('~'):
         m = _ID.match(texto, 1)
         if not m:
@@ -365,7 +365,7 @@ class Flujo:
         self.tabla = tabla if tabla is not None else fichas(catalogo)
         self.pendiente = ''
         self.nodos: dict[str, dict] = {}            # válidos, en orden de llegada
-        self.publicado: dict[str, list[str]] = {}   # id → hijos publicados
+        self.publicado: dict[str, dict] = {}        # id → el nodo tal como se publicó (con sus hijos visibles)
         self.diagnosticos: list[Diagnostico] = []
         self.n = 0
         self.cerrado = False
@@ -374,16 +374,39 @@ class Flujo:
         self.root_rechazado = False                # una línea de root (aunque sea ilegible) no valió
         self.hijos_rechazados: set[str] = set()    # hijos de una línea de alta que no valió
         self.primero: str | None = None            # el id de la primera línea si valió; '' si no valió
+        self.provisional: dict[str, dict] = {}     # el nodo de la línea que aún no llegó entera, si ya se lee
 
     def alimentar(self, trozo: str) -> list[list[dict]]:
+        """Las publicaciones que deja este trozo. Una línea entera se valida y se queda; la que todavía llega se lee
+        cerrando su texto y sus corchetes y, si ya vale y su id no existe,
+        se publica de forma provisional: cuando llegue entera la sustituye, o desaparece si no vale."""
         self.pendiente += trozo
         publicaciones = []
         while '\n' in self.pendiente:
             linea, self.pendiente = self.pendiente.split('\n', 1)
+            self.provisional = {}
             publicacion = self._linea(linea)
             if publicacion:
                 publicaciones.append(publicacion)
+        self.provisional = self._leer_pendiente()
+        publicacion = self._publicar()
+        if publicacion:
+            publicaciones.append(publicacion)
         return publicaciones
+
+    def _leer_pendiente(self) -> dict[str, dict]:
+        texto = self.pendiente.strip()
+        if self.cerrado or not texto:
+            return {}
+        try:
+            leida = leer_linea(cerrar_cola(texto))
+            if leida.tipo != 'alta' or leida.ident in self.nodos:
+                return {}                          # nunca pisa una línea entera
+            return {leida.ident: nodo_de(leida, self.catalogo, self.tabla, reparaciones=[])}
+        except ErrorDeLinea:
+            # A medias de una palabra (`style=capt`) no se lee: se queda la última lectura buena de esta línea, para
+            # que la pantalla no retroceda. Se va si la línea entera no vale.
+            return {i: n for i, n in self.provisional.items() if re.match(re.escape(i) + r'(\s|$)', texto)}
 
     def _linea(self, linea: str, solo_nuevos: bool = False) -> list[dict]:
         if not linea.strip():
@@ -400,9 +423,10 @@ class Flujo:
             if leida.ident in self.nodos:
                 if self.nodos[leida.ident] == nodo:
                     return []                      # la misma línea otra vez: no cambia nada
+                # La última línea de un id gana (también en el reintento, donde el modelo reenvía el bloque).
                 if not self.reintentado:
-                    raise ErrorDeLinea('Ese id ya está definido con otro contenido.', leida.ident)
-                self.publicado.pop(leida.ident, None)   # en el reintento, un id que ya existe se sustituye
+                    self.reparaciones.append(f'{leida.ident} va dos veces: vale la línea {self.n}.')
+                del self.nodos[leida.ident]        # vuelve a entrar al final, en el orden de llegada
         except ErrorDeLinea as exc:
             self.diagnosticos.append(Diagnostico(self.n, exc.ident, exc.motivo))
             if self.primero is None:
@@ -417,35 +441,39 @@ class Flujo:
             self.primero = nodo['id']
         return self._publicar()
 
-    def _visible(self) -> tuple[list[str], dict[str, list[str]]]:
+    def _visible(self) -> tuple[list[str], dict[str, list[str]], dict[str, dict]]:
         orden: list[str] = []
         hijos: dict[str, list[str]] = {}
+        nodos = {**self.provisional, **self.nodos}
 
         def recorrer(ident: str, profundidad: int) -> None:
             orden.append(ident)
             hijos[ident] = []
-            for hijo in self.nodos[ident].get('children', []):
-                if hijo not in self.nodos or hijo in hijos or profundidad >= self.catalogo.max_profundidad:
+            for hijo in nodos[ident].get('children', []):
+                if hijo not in nodos or hijo in hijos or profundidad >= self.catalogo.max_profundidad:
                     break
                 hijos[ident].append(hijo)
                 recorrer(hijo, profundidad + 1)
 
-        if 'root' in self.nodos:
+        if 'root' in nodos:
             recorrer('root', 0)
-        return orden, hijos
+        return orden, hijos, nodos
 
     def _publicar(self) -> list[dict]:
-        orden, hijos = self._visible()
+        """Los nodos visibles que cambiaron desde la última publicación (sus hijos o su contenido)."""
+        orden, hijos, nodos = self._visible()
         salida = []
         for ident in orden:
-            if self.publicado.get(ident) != hijos[ident]:
-                nodo = self.nodos[ident]
-                salida.append(dict(nodo, children=list(hijos[ident])) if 'children' in nodo else nodo)
-                self.publicado[ident] = list(hijos[ident])
+            nodo = nodos[ident]
+            nodo = dict(nodo, children=list(hijos[ident])) if 'children' in nodo else nodo
+            if self.publicado.get(ident) != nodo:
+                salida.append(nodo)
+                self.publicado[ident] = nodo
         return salida
 
     def cerrar(self) -> tuple[list[dict], list[Diagnostico]]:
         """El árbol final (hijos que no llegaron, fuera) y los diagnósticos que quedan."""
+        self.provisional = {}
         if self.pendiente.strip():
             self._linea(self.pendiente)
         self.pendiente = ''
@@ -539,6 +567,30 @@ class Flujo:
         return self._final()
 
 
+def cerrar_cola(texto: str) -> str:
+    """Cierre implícito de una línea a medias, para leerla mientras llega: cierra el texto
+    entre comillas que siga abierto y después los corchetes y llaves, del último al primero."""
+    pila: list[str] = []
+    comillas, i = False, 0
+    while i < len(texto):
+        c = texto[i]
+        if comillas:
+            if c == '\\':
+                i += 1
+            elif c == '"':
+                comillas = False
+        elif c == '"':
+            comillas = True
+        elif c in '[{':
+            pila.append(']' if c == '[' else '}')
+        elif c in ']}' and pila and pila[-1] == c:
+            pila.pop()
+        i += 1
+    if comillas:
+        texto += ('\\' if texto.endswith('\\') and not texto.endswith('\\\\') else '') + '"'
+    return texto + ''.join(reversed(pila))
+
+
 def root_renombrado(nodos: dict[str, dict], catalogo: Catalogo, primero: str,
                     excluir: set[str] | frozenset[str] = frozenset()) -> str | None:
     """El id de la raíz con otro nombre en un alta sin `root`, o None. Lo es `primero` (el id de la primera línea, que
@@ -596,35 +648,59 @@ def _padres(nodos: dict[str, dict]) -> dict[str, list[str]]:
 
 def aplicar_cambio(nodos: dict[str, dict], texto: str, catalogo: Catalogo,
                    tabla: dict[str, Ficha] | None = None) -> tuple[Cambio | None, list[Diagnostico]]:
-    """Un bloque de cambios contra la pantalla `nodos` (versión 2, sin operadores). Entero o nada: con un solo
+    """Un bloque de cambios. Una línea con sólo un id (una baja a la que el modelo le quitó el guion) se tolera sólo si
+    da igual leerla como nada o como `-id`: las dos lecturas tienen que dar la misma pantalla. Si no, o si hay más de
+    una, o si ese id no estaba en la pantalla, el bloque se rechaza como siempre. El motor no adivina qué quería."""
+    lineas = texto.splitlines()
+    sueltos = [i for i, x in enumerate(lineas) if _ID.fullmatch(x.strip())]
+    if len(sueltos) == 1 and lineas[sueltos[0]].strip() in nodos:
+        i = sueltos[0]
+        ident = lineas[i].strip()
+        sin = _aplicar_cambio('\n'.join(lineas[:i] + lineas[i + 1:]), nodos, catalogo, tabla)
+        como_baja = _aplicar_cambio('\n'.join(lineas[:i] + ['-' + ident] + lineas[i + 1:]), nodos, catalogo, tabla)
+        if sin[0] is not None and como_baja[0] is not None and sin[0].nodos == como_baja[0].nodos:
+            sin[0].avisos.insert(0, f'{ident}: una línea con sólo el id; da lo mismo ignorarla que borrarlo, y se '
+                                    'ignora.')
+            return sin
+    return _aplicar_cambio(texto, nodos, catalogo, tabla)
+
+
+def _aplicar_cambio(texto: str, nodos: dict[str, dict], catalogo: Catalogo,
+                    tabla: dict[str, Ficha] | None = None) -> tuple[Cambio | None, list[Diagnostico]]:
+    """Un bloque de cambios contra la pantalla `nodos` (versión 3, sin operadores). Entero o nada: con un solo
     diagnóstico, None y la pantalla se queda como estaba. La revisión la compara quien llama (`Vistas`).
 
     - Cada línea es el nodo entero: un id nuevo es un alta y uno que ya existe se sustituye (con su herencia).
     - `-id` borra el nodo y lo quita de los hijos de sus padres; lo que sólo colgaba de él también se va.
     - Un hijo que el padre reescrito deja fuera de su lista deja de dibujarse y se borra.
-    - Reparaciones que no cambian lo pedido: una línea idéntica a lo que ya hay (o repetida igual en el bloque) se
-      ignora. Dos líneas distintas del mismo id sí son un error: no se adivina cuál quería."""
+    - **La última línea de un id gana**: dos líneas distintas del mismo id se
+      quedan con la segunda, y una baja y una línea del mismo id, con la que va después (borrar y reescribir un nodo
+      lo reescribe; escribirlo y borrarlo lo borra). Cada vez queda anotado en `Cambio.avisos`.
+    - Borrar un id que no está en la pantalla no hace nada: va a los avisos."""
     tabla = tabla if tabla is not None else fichas(catalogo)
     diagnosticos: list[Diagnostico] = []
-    escritos: dict[str, dict] = {}
-    bajas: list[tuple[int, str]] = []
+    avisos: list[str] = []
+    ultimo: dict[str, tuple[int, dict | None]] = {}     # id → (línea, nodo; None si la última fue una baja)
     for n, texto_linea in enumerate((x for x in texto.splitlines() if x.strip()), 1):
         try:
             linea = leer_linea(texto_linea)
             if linea.tipo == 'cambio':
                 raise ErrorDeLinea('Un cambio es la línea entera del nodo («id Comp …», con todos sus hijos tras >), '
                                    'sin ~ ni +>.', linea.ident)
-            if linea.tipo == 'baja':
-                bajas.append((n, linea.ident))
-                continue
-            nodo = nodo_de(linea, catalogo, tabla)
+            nodo = None if linea.tipo == 'baja' else nodo_de(linea, catalogo, tabla)
         except ErrorDeLinea as exc:
             diagnosticos.append(Diagnostico(n, exc.ident, exc.motivo))
             continue
-        if linea.ident in escritos and escritos[linea.ident] != nodo:
-            diagnosticos.append(Diagnostico(n, linea.ident, f'{linea.ident} va dos veces con contenido distinto.'))
-            continue
-        escritos[linea.ident] = nodo
+        if linea.ident in ultimo and ultimo[linea.ident][1] != nodo:
+            antes = ultimo[linea.ident][1]
+            avisos.append(f'{linea.ident}: ' + ('se borra y se vuelve a escribir; vale la línea {n}.' if antes is None
+                                                 else 'se escribe y se borra; vale la baja de la línea {n}.'
+                                                 if nodo is None else 'va dos veces; vale la línea {n}.')
+                          .format(n=n))
+        ultimo.pop(linea.ident, None)
+        ultimo[linea.ident] = (n, nodo)
+    escritos = {i: nodo for i, (_, nodo) in ultimo.items() if nodo is not None}
+    bajas = [(n, i) for i, (n, nodo) in ultimo.items() if nodo is None]
     nuevos = copy.deepcopy(nodos)
     tocados: set[str] = set()
     borrados: list[str] = []
@@ -635,10 +711,10 @@ def aplicar_cambio(nodos: dict[str, dict], texto: str, catalogo: Catalogo,
     for n, ident in bajas:
         if ident == 'root':
             diagnosticos.append(Diagnostico(n, 'root', 'root no se borra.'))
-        elif ident in escritos:
-            diagnosticos.append(Diagnostico(n, ident, f'{ident} se borra y se escribe en el mismo bloque.'))
         elif ident not in nodos:
-            diagnosticos.append(Diagnostico(n, ident, f'{ident} no está en la pantalla.'))
+            # Borrar lo que no existe no hace nada (queda en los avisos).
+            if ident not in escritos:
+                avisos.append(f'{ident}: no está en la pantalla; la baja de la línea {n} no hace nada.')
         else:
             nuevos.pop(ident, None)
             borrados.append(ident)
@@ -676,7 +752,7 @@ def aplicar_cambio(nodos: dict[str, dict], texto: str, catalogo: Catalogo,
     if diagnosticos:
         return None, diagnosticos
     actualizados = [nuevos[i] for i in nuevos if i in tocados and i not in borrados]
-    return Cambio(nuevos, actualizados, [i for i in borrados if i in nodos], []), []
+    return Cambio(nuevos, actualizados, [i for i in borrados if i in nodos], avisos), []
 
 
 def _alcanzable(nodos: dict[str, dict], objetivo: str) -> bool:
@@ -759,7 +835,8 @@ def prompt(catalogo: Catalogo, tabla: dict[str, Ficha] | None = None, ancho: int
         piezas_lineas.append(texto)
     cola = [
         f'Cambio de una pantalla que ya existe: el mismo bloque ```{VALLA_LANG} view=nombre (sin rev: la pone el '
-        'motor). Escribe entera la línea de cada nodo que cambia, con todos sus hijos tras >, y las de los nuevos.',
+        'motor). Escribe entera la línea de cada nodo que cambia y las de los nuevos. Cada id nuevo va en el > de su '
+        'padre, en la posición pedida: reescribe la línea del padre con sus demás hijos, salvo los que se borran.',
         'Para borrar un nodo escribe su id con un guion delante, sola en su línea: -c_bajaron. Un hijo que dejas '
         'fuera de la lista de su padre también se va.',
         'Ejemplo: panel Card "Nuevo título" > nota,extra  /  extra Text "Hecho" style=caption  /  -vieja. Si se te '
