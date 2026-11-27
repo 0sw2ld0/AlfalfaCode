@@ -801,6 +801,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
 
     /// `--buscar-sesiones CONSULTA --json`: fragmentos de las conversaciones guardadas.
     case sessionSearch(SessionSearch)
+    /// `--espacio-sesiones --json`: lo que ocupa cada sesión guardada y los totales del hogar.
+    case sessionStorage(SessionStorage)
+    /// `--liberar-sesiones … --si --json`: las sesiones que se movieron a la Papelera y las que no.
+    case sessionsFreed(SessionsFreed)
 
     /// Interpreta una línea. Devuelve nil si no es JSON, no es versión 2,
     /// el tipo se desconoce o faltan campos obligatorios.
@@ -990,6 +994,10 @@ public enum AlfalfaMessage: Equatable, Sendable {
             return UndoStep.parse(object, text: object["texto"] as? String ?? "").map(Self.undone)
         case "busqueda_sesiones":
             return SessionSearch(object: object).map(Self.sessionSearch)
+        case "espacio_sesiones":
+            return SessionStorage(object).map(Self.sessionStorage)
+        case "sesiones_liberadas":
+            return SessionsFreed(object).map(Self.sessionsFreed)
         case "sesion_cambiada":
             guard let id = text(object["id"]) else { return nil }
             if let from = text(object["continuada_de"]) { return .continued(id: id, from: from) }

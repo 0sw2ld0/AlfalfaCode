@@ -34,6 +34,7 @@ TIPOS = {
     'busqueda_sesiones': 'session_search', 'sesiones_alrededor': 'sessions_around', 'navegador_sitios': 'browser_sites',
     'chats_ollama': 'ollama_chats', 'deshacer_vista': 'undo_preview', 'deshecho': 'undone', 'aprendido': 'learned',
     'habilidad': 'skill', 'memoria': 'memory', 'pendiente': 'pending_learning', 'volver': 'reverted',
+    'espacio_sesiones': 'session_storage', 'sesiones_liberadas': 'sessions_freed',
 }
 
 # Campo v2 → campo de la extensión. Los que ya están en inglés (`argv`, `cwd`, `diff`, `id`…) no hacen falta.
@@ -42,6 +43,10 @@ CAMPOS = {
     'vista_enriquecida': 'rich_view',
     'lluvia_limite': 'brainstorm_limit', 'lluvia_participantes': 'brainstorm_participants',
     'modelo_codex_imagen': 'image_codex_model', 'esfuerzo_codex_imagen': 'image_codex_effort',
+    # sesiones/espacio.py (--espacio-sesiones y --liberar-sesiones)
+    'movidas': 'moved', 'saltadas': 'skipped_sessions', 'liberado': 'freed', 'totales': 'totals',
+    'imagenes': 'images', 'en_uso': 'in_use', 'ultimo_uso': 'last_used', 'dias_sin_usar': 'days_unused',
+    'vista_previa': 'preview', 'instantaneas': 'snapshots', 'indice': 'index',
     'accion': 'action', 'actividad': 'activity', 'activo': 'active', 'actualizada': 'updated',
     'actualizado': 'updated', 'agente': 'agent', 'agotado': 'exhausted', 'ajustes': 'settings', 'alcance': 'scope',
     'almacen': 'store', 'almacenes': 'stores', 'ambito': 'area', 'ancla': 'anchor', 'antes': 'before',
@@ -132,7 +137,7 @@ _MOTIVOS = {'peligroso': 'dangerous', 'red': 'network', 'salir_sandbox': 'outsid
             'sin_vision': 'no_vision', 'desconocido': 'unknown', 'entregado': 'delivered',
             'continuacion': 'continuation', 'detenida': 'stopped', 'ajeno': 'not_by_agent',
             'editado_despues': 'edited_later', 'umbral': 'threshold', 'auto': 'auto', 'manual': 'manual',
-            'solo_lectura': 'read_only'}
+            'solo_lectura': 'read_only', 'en_uso': 'in_use', 'no_existe': 'not_found'}
 _ALCANCES = {'usuario': 'user', 'proyecto': 'project', 'carpeta': 'folder', 'todas': 'all', 'codigo': 'code',
              'sesion': 'session', 'entorno': 'environment'}
 VALORES: dict[str, dict[str, str]] = {

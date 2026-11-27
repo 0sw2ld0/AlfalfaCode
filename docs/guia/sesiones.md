@@ -20,6 +20,48 @@ abre un turno nuevo con `--reanudar ID "mensaje"`, también si la sesión ya est
 completada. Las interrumpidas o bloqueadas tienen además «Reanudar» para seguir
 sin mensaje.
 
+## Liberar disco: sesiones guardadas
+
+Cada sesión vive entera en `$ALFALFA_HOME/sesiones/<id>/`: `task.json`, la
+transcripción `<id>.jsonl` y `native/<id>/` (la conversación del modelo, las fotos del
+espacio de trabajo y `imagenes/`, que es lo que más pesa en las sesiones de imágenes; sus
+subagentes, en `native/<id>-aN/`). Aparte hay dos sitios que guardan cosas de ella: el
+índice de búsqueda (`indice/sesiones.sqlite3`) y las instantáneas de deshacer de su
+carpeta (`instantaneas/<huella>/`, refs `refs/alfalfa/<id>/…`).
+
+```bash
+alfalfa --espacio-sesiones                      # tamaño, último uso, carpeta y título; de mayor a menor
+alfalfa --espacio-sesiones --ordenar uso        # de la menos usada a la más
+alfalfa --liberar-sesiones ID1 ID2              # pregunta y las mueve a la Papelera
+alfalfa --liberar-sesiones --sin-usar-dias 30   # las que llevan más de 30 días sin usarse
+```
+
+`--liberar-sesiones` enseña lo que va a mover y pregunta; `--si` no pregunta (sin
+terminal y sin `--si` no mueve nada). Con `--sin-usar-dias` no entran las fijadas salvo
+con `--incluir-fijadas`. Nunca toca una sesión en uso: la mueve con su cerrojo tomado, y
+si lo tiene otro proceso (está trabajando, o abierta en la app entre turnos) la salta.
+Cambiar el título no cuenta como usarla.
+
+Lo que hace con cada una:
+
+1. La carpeta entera va a la Papelera de macOS (`~/.Trash/alfalfa-<id>`). Desaparece de
+   AlfalfaCode y ya no se puede retomar ni bifurcar; se recupera de la Papelera mientras
+   no se vacíe (devolviéndola a `$ALFALFA_HOME/sesiones/<id>`). Su espacio vuelve al vaciarla.
+2. Sale del índice de búsqueda en una sola transacción y el archivo encoge en el acto
+   (`PRAGMA incremental_vacuum`, FTS5 optimizado y WAL vaciado). No hace falta `VACUUM`:
+   el índice se creó con `auto_vacuum = INCREMENTAL`, así que se devuelven las páginas
+   libres sin reescribir el archivo entero ni bloquear las búsquedas de otras sesiones.
+3. Se borran sus refs e índice en el almacén de instantáneas y se pasa `git gc
+   --prune=now`, una vez por carpeta: se van los objetos que sólo usaba ella (los de otras
+   sesiones de la misma carpeta se quedan). Esto no pasa por la Papelera: si se recupera la
+   sesión, se lee, pero ya no se pueden deshacer sus turnos.
+
+`--eliminar-sesion ID` (el menú de la barra lateral) hace lo mismo con una. En la app,
+Ajustes ▸ Almacenamiento enseña la lista, ordenable por tamaño o por último uso, elige
+las de «Sin usar hace más de N días» y las mueve tras confirmarlo; las abiertas en la app
+no se pueden elegir. Con `--json`, las respuestas son `espacio_sesiones` (sin `--si`,
+con `vista_previa`) y `sesiones_liberadas`.
+
 ## Buscar en sesiones anteriores
 
 El agente tiene `buscar_sesiones`: busca en las conversaciones guardadas de otras

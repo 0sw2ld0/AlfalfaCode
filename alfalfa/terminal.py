@@ -1583,6 +1583,8 @@ def main(argv=None):
 
     from .busqueda_sesiones import orden as orden_de_busqueda
     orden_de_busqueda.argumentos(parser, listing)
+    from .sesiones import espacio as orden_de_espacio
+    orden_de_espacio.argumentos(parser, listing)
     args = parser.parse_args(argv)
     if args.delegacion_mcp is not None:
         if not args.delegacion_mcp.strip() or len(args.delegacion_mcp) > 256 or args.encargo:
@@ -1643,6 +1645,10 @@ def main(argv=None):
 
     if orden_de_busqueda.pedida(args):
         return orden_de_busqueda.orden(args)
+    if (args.sin_usar_dias is not None or args.incluir_fijadas or args.si) and args.liberar_sesiones is None:
+        parser.error('--sin-usar-dias, --incluir-fijadas y --si sólo valen con --liberar-sesiones')
+    if orden_de_espacio.pedida(args):
+        return orden_de_espacio.orden(args, home_dir())
     if args.descartar_no_relevantes and not args.aligerar_sesiones:
         parser.error('--descartar-no-relevantes sólo vale con --aligerar-sesiones')
     if args.aligerar_sesiones:

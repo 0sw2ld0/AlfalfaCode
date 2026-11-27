@@ -1299,27 +1299,8 @@ def marcar(ident, campo, valor):
 
 def eliminar(ident):
     """`--eliminar-sesion ID`: la mueve a la Papelera de macOS, de donde se puede recuperar."""
-    import fcntl
-    path = _carpeta_de_sesion(ident)
-    # Con el cerrojo de la sesión tomado hasta moverla: antes se miraba si estaba en ejecución y después
-    # se movía, y una sesión que arrancara entre medias acababa en la Papelera mientras trabajaba.
-    cerrojo = os.open(path / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-    try:
-        try:
-            fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            raise ValueError('La sesión está en ejecución; detenla antes de eliminarla.') from None
-        papelera = Path.home() / '.Trash'
-        papelera.mkdir(exist_ok=True)
-        destino = papelera / ('alfalfa-' + ident)
-        n = 1
-        while destino.exists():
-            n += 1
-            destino = papelera / f'alfalfa-{ident}-{n}'
-        path.rename(destino)
-        return destino
-    finally:
-        os.close(cerrojo)
+    from .sesiones.espacio import a_la_papelera
+    return a_la_papelera(_carpeta_de_sesion(ident), ident)
 
 
 def gestionar(args):
@@ -1330,12 +1311,18 @@ def gestionar(args):
             ident, campo, valor = args.marcar
             transport.emit('sesion_cambiada', id=ident, **{'marcas': marcar(ident, campo, valor)})
         elif args.eliminar_sesion:
+            from .sesiones.espacio import fila
+            datos = fila(_carpeta_de_sesion(args.eliminar_sesion))
             destino = eliminar(args.eliminar_sesion)
             try:
                 from .busqueda_sesiones import quitar
                 quitar(args.eliminar_sesion)
             except (OSError, ValueError, sqlite3.Error):
                 pass  # la próxima actualización del índice la quita igual: ya no está en disco
+            if datos.get('cwd'):
+                from .sesiones.espacio import _olvidar_instantaneas
+                from .terminal import home_dir
+                _olvidar_instantaneas(home_dir(), {datos['cwd']: [args.eliminar_sesion]})
             transport.emit('sesion_cambiada', id=args.eliminar_sesion, eliminada=True, papelera=str(destino))
         else:
             from . import sesiones as registro

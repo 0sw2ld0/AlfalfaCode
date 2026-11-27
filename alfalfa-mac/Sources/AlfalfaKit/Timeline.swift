@@ -684,7 +684,7 @@ public struct Timeline: Equatable, Sendable {
         case .unqueued: break
         case .sessions, .models, .providers, .webSearch, .imageProvider, .activated, .reported, .update, .sessionChanged, .history,
              .ollamaChats, .browser, .firstRun, .connecting, .connected, .imported, .undoPreview, .sessionSearch,
-             .cuyBrowserPreparation:
+             .sessionStorage, .sessionsFreed, .cuyBrowserPreparation:
             break
         case let .undone(step): addUndo(step)
         case let .learningProposal(proposal):

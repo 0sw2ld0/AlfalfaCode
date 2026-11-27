@@ -258,6 +258,12 @@ Las sesiones se ordenan por fecha descendente; una sesión ilegible se identific
 con `estado: "corrupta"` y campos desconocidos nulos. Ollama inaccesible produce
 error JSON y código 1. Estas consultas no emiten `fin` (no ejecutan sesiones).
 
+`alfalfa --espacio-sesiones --json` responde `espacio_sesiones` (lo que ocupa cada sesión
+guardada y los totales) y `alfalfa --liberar-sesiones ID… --si --json`, `sesiones_liberadas`
+(`movidas`, `saltadas` con su `motivo`, como `en_uso` o `no_existe`, y `liberado`). Sin `--si`, la
+respuesta es `espacio_sesiones` con `vista_previa`. Por PACAI son `alfalfa.session_storage` y
+`alfalfa.sessions_freed`. Detalle en [Sesiones](guia/sesiones.md#liberar-disco-sesiones-guardadas).
+
 `tests/test_alfalfa_stdio.py` cubre mensajes, permisos, las cuatro rutas de
 interrupción (orden/espera × cancelar/EOF) y, en v2, mensajes durante una orden
 en curso, tras terminar un turno, vacíos y de más de 20 000 caracteres.

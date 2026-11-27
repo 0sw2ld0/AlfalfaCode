@@ -7,7 +7,7 @@ enum ProviderSettingsAnchor: Hashable {
 
 /// Las partes de la ventana de Ajustes, en el orden de la lista lateral.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, proveedores, modelo, navegador, memoria, importar, actualizaciones
+    case general, proveedores, modelo, navegador, memoria, almacenamiento, importar, actualizaciones
 
     // MARK: - Propiedades
 
@@ -20,6 +20,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelo: return "Modelo"
         case .navegador: return "Navegador"
         case .memoria: return "Memoria"
+        case .almacenamiento: return "Almacenamiento"
         case .importar: return "Importar"
         case .actualizaciones: return "Actualizaciones"
         }
@@ -32,6 +33,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelo: return "cpu"
         case .navegador: return "globe"
         case .memoria: return "brain"
+        case .almacenamiento: return "internaldrive"
         case .importar: return "square.and.arrow.down.on.square"
         case .actualizaciones: return "arrow.down.circle"
         }
@@ -114,6 +116,7 @@ struct SettingsView: View {
         case .modelo: ModelSettings()
         case .navegador: BrowserSettings()
         case .memoria: MemorySettings()
+        case .almacenamiento: StorageSettings()
         case .importar: ImportSettings()
         case .actualizaciones: UpdateSettings()
         }
