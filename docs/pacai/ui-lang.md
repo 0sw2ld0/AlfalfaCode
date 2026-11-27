@@ -143,6 +143,13 @@ reparaciones:
 | **Sin valla.** Una respuesta que son sólo líneas del formato se lee como un bloque (`view=pantalla`). La prosa sigue siendo texto. | el tablero sin ```` ``` ```` | `test_una_pantalla_sin_valla_se_lee_si_todo_son_lineas_del_formato` |
 | **Vallas de tildes o de dos puntos** (`~~~`, `:::`). | `~~~pacai-ui-lang view=resumen` | `test_un_bloque_con_valla_de_tildes_o_de_dos_puntos_tambien_vale` |
 | **Un `rev` del modelo** se ignora. | `view=v rev=…` | `test_la_revision_la_pone_el_motor_y_un_rev_del_modelo_se_ignora` |
+| **Un `>` sin nada detrás** es un nodo sin hijos. Una lista empezada (`> a,`) sigue siendo un error. | `ahora Card "Ahora" >` | `test_un_mayor_que_sin_hijos_es_como_no_ponerlo` |
+| **Ids con tildes, eñes o mayúsculas** se leen sin tildes y en minúsculas, en la línea, en los hijos y en las bajas. Dos ids que sólo cambian en eso (también contra los de la pantalla en un cambio) son un error. | `previsión_panel` → `prevision_panel` | `test_ids_con_tildes_o_mayusculas_se_leen_en_ascii_si_son_coherentes` y `test_dos_ids_que_solo_cambian_en_tildes_no_se_juntan` |
+
+Las dos últimas reglas llegaron después del benchmark (véase [perfil-ui.md §10.4](perfil-ui.md)). Al revalidar las
+1868 respuestas guardadas de UI Lang 3 recuperan 5 pantallas, todas exactas (Luna pasa de 73 a 77 de 92 en los
+briefs y GLM 5.3 Flash de 49 a 50 de 52 en las tareas), y no cambian ninguna de las que ya valían. Las tablas de §6
+son las del motor 0.99.55, sin ellas.
 
 Lo que **se rechaza**, entre otras cosas (`test_una_linea_mala_se_descarta_sin_corregirla` y
 `test_cambios_que_se_rechazan`):
