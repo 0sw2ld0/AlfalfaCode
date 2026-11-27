@@ -438,7 +438,7 @@ Las preguntas abiertas del primer borrador, ya resueltas:
 > apunta «2 lomo s/ceb» en su libreta, y a la cocina le llega la comanda impresa con todo escrito. Deja de valer
 > en un punto: el motor no adivina. Una línea que no cumple el catálogo se rechaza y se le pide al modelo que la
 > corrija; sólo se hacen unos pocos arreglos que no cambian lo pedido (§10, «Reparaciones seguras»).
-> Explicación larga, con diagrama: https://claude.ai/artifact/SYvtFn3ZKZxULGKKk3WRPM (privada hasta que se comparta).
+> Explicación larga, con diagrama: https://docs.pacai.dev/ui-lang.html.
 
 Sale de la 3.ª y la 4.ª lluvia de ideas. **PACAI UI Lang va encendido con todos los modelos.** `ui_lang.MODELOS_MEDIDOS`
 sólo dice con cuáles se midió y cumple el criterio de adopción (hoy GPT-6 Luna y Claude Haiku 5.5; §10.1); con el
