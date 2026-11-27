@@ -1,2 +1,1 @@
-Las pantallas que dibuja el agente se pierden menos: se aceptan más variantes de su formato y una línea que aún está llegando se muestra en vez de esperar.
-En la lluvia de ideas puedes soltar un archivo .md o .txt arrastrándolo sobre la hoja o sobre la pregunta.
+Las pantallas que dibuja el agente se pierden menos: si las escribe en un formato con la marca del otro, se dibujan igual, y se aceptan también ids con tildes o mayúsculas y un «>» sin nada detrás.
