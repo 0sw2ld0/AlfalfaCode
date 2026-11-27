@@ -202,6 +202,12 @@ def nodos_finales(brazo, tarea, texto):
     if brazo == 'openui_ej':
         return validar_openui(tarea, texto)[4]
     attrs, lineas = m.bloque(texto)
+    if attrs is None and brazo == 'lang':
+        # Como `m.validar` y el motor (`Vistas.sin_valla`): sólo líneas de UI Lang valen sin valla.
+        sin_valla = (m._vistas_lang() if tarea[1] == 'cambio' else m.Vistas(m.CAT_LANG)).sin_valla(texto)
+        if sin_valla:
+            attrs = {'view': sin_valla['view'], 'valla': 'pacai-ui-lang'}
+            lineas = [x.strip() for x in texto.splitlines() if x.strip()]
     if attrs is None:
         return {}
     if brazo == 'lang':
@@ -315,7 +321,7 @@ def primera_pantalla(brazo, tarea, texto):
 
 
 # -- peticiones --------------------------------------------------------------------------------------------------
-async def pedir(cliente, modelo, mensajes, max_salida):
+async def pedir_http(cliente, modelo, mensajes, max_salida):
     """(texto, entrada, salida, segundos, trozos[(segundos, caracteres acumulados)])."""
     for espera in (10, 20, 40, 60, None):
         t0 = time.monotonic()
@@ -346,11 +352,117 @@ async def pedir(cliente, modelo, mensajes, max_salida):
     raise RuntimeError('HTTP 429 tras cinco intentos')
 
 
+# -- otros proveedores: Ollama (local o su nube) y Gemini por el CLI de Antigravity --------------------------------
+# USD por millón de tokens (entrada, salida), sólo para situar en la clasificación a los modelos que se pagan con un
+# plan y no por token. Salen del catálogo (`alfalfa/catalogo/minimo.json`, entrada de opencode); Qwen 3.5 usa el de
+# qwen3.5-plus. Los modelos locales de Ollama cuestan 0.
+PRECIOS_REFERENCIA = {'gemini-4-argon': (2.0, 10.0), 'gemini-3.8-flash': (1.5, 7.5), 'qwen3.5': (0.2, 1.2)}
+
+
+def precio_de(proveedor, modelo):
+    """{'entrada', 'salida', 'referencia'} o None. Primero el del proveedor; luego el de Ollama Cloud del catálogo;
+    luego PRECIOS_REFERENCIA. Un modelo local de Ollama (sin «cloud» en el nombre) cuesta 0."""
+    precio = proveedor.precio(modelo) if hasattr(proveedor, 'precio') else None
+    if precio:
+        return precio
+    from alfalfa import catalogo
+    if getattr(proveedor, 'id', '') == 'ollama':
+        if 'cloud' not in modelo:
+            return {'entrada': 0, 'salida': 0, 'referencia': 'local'}
+        ficha = catalogo.ficha('ollama-cloud', modelo) or {}
+        if ficha.get('precio'):
+            return ficha['precio'] | {'referencia': 'catálogo de Ollama Cloud'}
+    base = re.sub(r'-(low|medium|high|xhigh)$', '', modelo.split(':')[0])
+    if base in PRECIOS_REFERENCIA:
+        entrada, salida = PRECIOS_REFERENCIA[base]
+        return {'entrada': entrada, 'salida': salida, 'referencia': 'catálogo (opencode)'}
+    return None
+
+
+class Agy:
+    """Gemini con el plan del dueño, por el CLI de Antigravity (`agy -p`): sin claves en el código, con la sesión que
+    ya tiene iniciada el CLI. Es un agente con su propio prompt de sistema: el nuestro va al principio del mensaje y
+    se le pide que no use herramientas. Corre en una carpeta vacía y con `--sandbox`."""
+    id = 'agy'
+
+    def __init__(self, ejecutable=None):
+        import shutil
+        self.ejecutable = ejecutable or shutil.which('agy') or str(Path.home() / '.local' / 'bin' / 'agy')
+
+    def configurado(self):
+        return Path(self.ejecutable).exists()
+
+    def precio(self, modelo):
+        return None
+
+    def cliente(self, timeout, tarea=None):
+        return _ClienteAgy(self.ejecutable, timeout)
+
+
+class _ClienteAgy:
+    def __init__(self, ejecutable, timeout):
+        self.ejecutable, self.segundos = ejecutable, int(getattr(timeout, 'read', None) or 240)
+
+    async def __aenter__(self):
+        import tempfile
+        self._carpeta = tempfile.TemporaryDirectory(prefix='agy-ui-')
+        return self
+
+    async def __aexit__(self, *exc):
+        self._carpeta.cleanup()
+
+
+def prompt_agy(mensajes) -> str:
+    partes = ['Eres el modelo de un banco de pruebas. NO uses herramientas, archivos ni la terminal: contesta sólo con '
+              'texto, siguiendo estas instrucciones como si fueran tu prompt de sistema.\n\n# Instrucciones\n'
+              + mensajes[0]['content']]
+    for x in mensajes[1:]:
+        titulo = '# Mensaje del usuario\n' if x['role'] == 'user' else '# Tu respuesta anterior\n'
+        partes.append(titulo + x['content'])
+    return '\n\n'.join(partes)
+
+
+def _texto_agy(salida: str):
+    """(texto, entrada, salida) de `agy -p --output-format json`. Si no trae tokens, se estiman con o200k_base."""
+    try:
+        dato = json.loads(salida)
+    except ValueError:
+        return salida.strip(), 0, 0
+    texto = next((dato[k] for k in ('result', 'response', 'text', 'content', 'output') if isinstance(dato.get(k), str)),
+                 salida)
+    uso = dato.get('usage') or {}
+    entrada = uso.get('input_tokens') or uso.get('prompt_tokens') or 0
+    salida_t = uso.get('output_tokens') or uso.get('completion_tokens') or 0
+    return texto, entrada, salida_t
+
+
+async def pedir_agy(cliente, modelo, mensajes, max_salida):
+    t0 = time.monotonic()
+    prompt = prompt_agy(mensajes)
+    proc = await asyncio.create_subprocess_exec(
+        cliente.ejecutable, '-p', prompt, '--model', modelo, '--output-format', 'json', '--sandbox',
+        '--disable-slash-commands', '--print-timeout', f'{cliente.segundos}s', cwd=cliente._carpeta.name,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    salida, error = await proc.communicate()
+    if proc.returncode:
+        raise RuntimeError(f'agy salió con {proc.returncode}: {error.decode(errors="replace")[:300]}')
+    texto, entrada, salida_t = _texto_agy(salida.decode(errors='replace'))
+    total = time.monotonic() - t0
+    return (texto, entrada or tokens(prompt), salida_t or tokens(texto), total, [(round(total, 3), len(texto))])
+
+
+def _coste(precio, entrada, salida):
+    return m.coste(precio, entrada, salida) if precio else 0
+
+
 async def una(proveedor, modelo, brazo, tarea, repeticion, max_salida):
-    precio = proveedor.precio(modelo)
+    precio = precio_de(proveedor, modelo)
+    pedir = pedir_agy if getattr(proveedor, 'id', '') == 'agy' else pedir_http
     mensajes = [{'role': 'system', 'content': sistema(brazo)}, {'role': 'user', 'content': mensaje(brazo, tarea)}]
     fila = {'modelo': modelo, 'brazo': brazo, 'tarea': tarea[0], 'tipo': tarea[1], 'repeticion': repeticion,
-            **{k: v for k, v in tarea[4].items()}}
+            'proveedor': getattr(proveedor, 'id', ''), **{k: v for k, v in tarea[4].items()}}
+    if precio and precio.get('referencia'):
+        fila['precio_referencia'] = precio['referencia']
     async with proveedor.cliente(httpx.Timeout(240, connect=10), tarea={'effort': 'low'}) as cliente:
         try:
             texto, entrada, salida, total, trozos = await pedir(cliente, modelo, mensajes, max_salida)
@@ -359,7 +471,7 @@ async def una(proveedor, modelo, brazo, tarea, repeticion, max_salida):
         valida, exacta, errores, reparaciones = validar(brazo, tarea, texto)
         fila |= {'valida': valida, 'exacta': exacta, 'errores': errores[:8], 'reparaciones': reparaciones,
                  'entrada': entrada, 'salida': salida, 'total': round(total, 3), 'trozos': trozos[:400],
-                 'n_trozos': len(trozos), 'coste': m.coste(precio, entrada, salida), 'respuesta': texto[:20000],
+                 'n_trozos': len(trozos), 'coste': _coste(precio, entrada, salida), 'respuesta': texto[:20000],
                  'truncada': salida >= max_salida}
         if valida:
             return fila | {'valida_tras': True, 'exacta_tras': exacta}
@@ -373,15 +485,20 @@ async def una(proveedor, modelo, brazo, tarea, repeticion, max_salida):
         valida2, exacta2, errores2, _ = validar(brazo, tarea, texto2)
         return fila | {'valida_tras': valida2, 'exacta_tras': exacta2, 'errores_tras': errores2[:8],
                        'entrada2': entrada2, 'salida2': salida2, 'total2': round(total2, 3),
-                       'coste2': m.coste(precio, entrada2, salida2), 'respuesta2': texto2[:20000]}
+                       'coste2': _coste(precio, entrada2, salida2), 'respuesta2': texto2[:20000]}
 
 
 async def medir(opciones) -> None:
-    from alfalfa.proveedores.alfalfa import Alfalfa
-
-    proveedor = Alfalfa()
+    if opciones.proveedor == 'agy':
+        proveedor = Agy()
+    elif opciones.proveedor == 'ollama':
+        from alfalfa.proveedores.ollama import Ollama
+        proveedor = Ollama()
+    else:
+        from alfalfa.proveedores.alfalfa import Alfalfa
+        proveedor = Alfalfa()
     if not proveedor.configurado():
-        sys.exit('El proveedor Alfalfa (suscripción CUY) no está activado en este equipo.')
+        sys.exit(f'El proveedor {opciones.proveedor} no está configurado en este equipo.')
     lista = [t for t in tareas(opciones.conjunto, opciones.briefs) if not opciones.solo
              or t[0] in opciones.solo.split(',')]
     modelos = opciones.modelos.split(',')
@@ -504,6 +621,7 @@ def resumen(filas, mapa_tareas):
             'cortes': {str(f): (_med(v), sum(x >= 0.999 for x in v) / len(v) if v else None)
                        for f, v in cortes.items()},
             'truncadas': sum(r.get('truncada', False) for r in rs),
+            'referencia': next((r['precio_referencia'] for r in rs if r.get('precio_referencia')), None),
             'reparaciones': sum(bool(r.get('reparaciones')) for r in rs),
         }
         if clave[0] == 'openui':
@@ -513,6 +631,33 @@ def resumen(filas, mapa_tareas):
                 bandas[r['band']][1] += 1
             salida['|'.join(clave)]['bandas'] = dict(sorted(bandas.items()))
     return salida
+
+
+def clasificacion(res, brazo='lang'):
+    """Una fila por modelo con el formato `brazo`: validez a la primera en las 52 tareas y en los 46 briefs (con su
+    suelo de cobertura), coste medio por tarea del primer intento y si está en la frontera de Pareto. La validez y el
+    coste son la media de los dos conjuntos (pesan igual); sólo entran en la frontera los modelos medidos en los dos."""
+    modelos = defaultdict(dict)
+    for r in res.values():
+        if r['brazo'] == brazo:
+            modelos[r['modelo']][r['conjunto']] = r
+    filas = []
+    for modelo, por in modelos.items():
+        t, b = por.get('pacai'), por.get('openui')
+        coste = sum(x['coste_por_peticion'] for x in por.values()) / len(por)    # los dos conjuntos pesan igual
+        validez = (t['pct_validas'] + b['pct_validas']) / 2 if t and b else None
+        filas.append({'modelo': modelo, 'validez': validez,
+                      'tareas': (t['validas'], t['n']) if t else None, 'briefs': (b['validas'], b['n']) if b else None,
+                      'wilson_briefs': b['wilson'] if b else None, 'bandas': b.get('bandas') if b else None,
+                      'coste_tarea': coste, 'salida_med': _med([x['salida_med'] for x in por.values()]),
+                      'total_med': _med([x['total_med'] for x in por.values()]),
+                      'referencia': any(x.get('referencia') for x in por.values())})
+    completos = [f for f in filas if f['validez'] is not None]
+    for f in filas:
+        f['pareto'] = f['validez'] is not None and not any(
+            g is not f and g['validez'] >= f['validez'] and g['coste_tarea'] <= f['coste_tarea']
+            and (g['validez'] > f['validez'] or g['coste_tarea'] < f['coste_tarea']) for g in completos)
+    return sorted(filas, key=lambda f: (f['validez'] is None, -(f['validez'] or 0), f['coste_tarea']))
 
 
 def _p(rs, campo, q):
@@ -596,6 +741,7 @@ def informe(opciones) -> None:
     datos = {'resumen': resumen(filas, mapa_tareas), 'muestras': muestras_de_tokens(),
              'prompt_tokens': {b: tokens(sistema(b)) for b in BRAZOS},
              'errores_servicio': sum('error' in r for r in filas)}
+    datos['clasificacion'] = clasificacion(datos['resumen'])
     if opciones.json:
         Path(opciones.json).write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding='utf-8')
     if opciones.csv:
@@ -652,6 +798,13 @@ def escribir_csv(datos, carpeta: Path) -> None:
                'pct_validas': round(100 * v[0] / v[1], 1)} for r in res for b, v in r.get('bandas', {}).items()]
     if bandas:
         volcar('bandas.csv', bandas)
+    volcar('clasificacion.csv', [{
+        'modelo': f['modelo'], 'validez_pct': round(100 * f['validez'], 1) if f['validez'] is not None else None,
+        'tareas_validas': f['tareas'][0] if f['tareas'] else None, 'tareas_n': f['tareas'][1] if f['tareas'] else None,
+        'briefs_validas': f['briefs'][0] if f['briefs'] else None, 'briefs_n': f['briefs'][1] if f['briefs'] else None,
+        'coste_tarea_milesimas': round(1000 * f['coste_tarea'], 4), 'salida_med': f['salida_med'],
+        'total_med_s': round(f['total_med'], 2) if f['total_med'] else None, 'pareto': f['pareto'],
+        'precio_de_referencia': f['referencia']} for f in datos['clasificacion']])
     # Las muestras llevan saltos de línea: van en JSON, una lista de filas.
     clave = {'json_ej': 'json', 'lang': 'lang', 'openui_ej': 'openui'}
     muestras = [{'muestra': x['muestra'], 'formato': NOMBRES[b], 'tokens': x['tokens'][b],
@@ -712,6 +865,15 @@ def imprimir(datos):
     print('\nTokens o200k_base de la misma pantalla:')
     for x in datos['muestras']:
         print(f"- {x['muestra']}: " + ', '.join(f"{NOMBRES[b]} {x['tokens'][b]}" for b in BRAZOS))
+    print('\nClasificación con PACAI UI Lang 3 (validez = media de las 52 tareas y los 46 briefs; * = frontera de '
+          'Pareto validez/coste; ~ = precio de referencia, se paga con un plan):')
+    print('| Modelo | Validez | 52 tareas | 46 briefs | Coste por tarea | Salida (med.) | Total (med.) |')
+    print('|---|---|---|---|---:|---:|---:|')
+    for f in datos['clasificacion']:
+        fr = lambda x: f'{x[0]}/{x[1]}' if x else '—'  # noqa: E731
+        print(f"| {f['modelo']}{' *' if f['pareto'] else ''} | {_pct(f['validez'])} | {fr(f['tareas'])} |"
+              f" {fr(f['briefs'])} | {'~' if f['referencia'] else ''}{_usd(f['coste_tarea'])} |"
+              f" {_num(f['salida_med'])} | {_num(f['total_med'], 2)} s |")
     print('\nTokens del prompt de sistema (o200k_base):', datos['prompt_tokens'])
     print('Errores del servicio:', datos['errores_servicio'])
 
@@ -730,6 +892,8 @@ def main() -> None:
     a.add_argument('--brazos', default=','.join(BRAZOS))
     a.add_argument('--modelos', default=','.join(m.MODELOS))
     a.add_argument('--solo', help='tareas separadas por comas')
+    a.add_argument('--proveedor', choices=('alfalfa', 'ollama', 'agy'), default='alfalfa',
+                   help='alfalfa (suscripción CUY), ollama (local o su nube) o agy (Gemini con el CLI de Antigravity)')
     b = sub.add_parser('informe')
     b.add_argument('datos', nargs='+')
     b.add_argument('--json')

@@ -570,6 +570,9 @@ de modelos. `ALFALFA_PACAI_UI_LANG=1` o `0` lo fuerza en un sentido u otro.
 
 ### 10.2 PACAI UI Lang 3 frente a OpenUI Lang 1.0 y el JSON (26 de noviembre de 2026)
 
+La página para quien no conoce el formato, con el benchmark ampliado (pantallas que se dibujan en un navegador,
+validez por complejidad y clasificación de modelos), es [`ui-lang.md`](ui-lang.md).
+
 **Qué se compara.** Los tres formatos describen las mismas pantallas, con el mismo catálogo (los 12 componentes base y
 los 6 de CuyMercado), un ejemplo por componente traducido a cada sintaxis y el mismo validador (los nodos se convierten
 a `pacai.ui/1` y pasan el catálogo y el árbol).

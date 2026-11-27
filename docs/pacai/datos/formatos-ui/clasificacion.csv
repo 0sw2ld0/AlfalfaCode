@@ -1,0 +1,6 @@
+modelo,validez_pct,tareas_validas,tareas_n,briefs_validas,briefs_n,coste_tarea_milesimas,salida_med,total_med_s,pareto,precio_de_referencia
+gpt-6-luna,89.4,207,208,73,92,0.3136,262.25,2.37,True,False
+claude-haiku-5-5,87.9,205,208,71,92,0.5032,483.0,2.4,False,False
+glm-5.3-flash,,49,52,,,0.2462,71.5,1.37,False,False
+deepseek-v4.1-flash,,52,52,,,0.5637,83.5,0.98,False,False
+gpt-6.2-sol,,52,52,,,3.4212,65.0,1.96,False,False
