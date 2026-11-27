@@ -1,1 +1,3 @@
-Las pantallas que dibuja el agente se pierden menos: si las escribe en un formato con la marca del otro, se dibujan igual, y se aceptan también ids con tildes o mayúsculas y un «>» sin nada detrás.
+Las pantallas que dibuja el agente salen en un formato más compacto con cualquier modelo: cuestan menos y aparecen antes.
+En las sesiones nuevas, las pantallas del agente vienen apagadas: enciéndelas en el panel derecho de la sesión o en Ajustes ▸ General. Las sesiones que ya tenías las conservan.
+Al eliminar una sesión desde la barra lateral se libera también el espacio de sus instantáneas, y la sesión va a la Papelera.
