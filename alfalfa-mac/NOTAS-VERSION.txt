@@ -1,1 +1,2 @@
-Nuevo interruptor «Vista enriquecida» en el panel de cada sesión (Entorno): decide si el agente puede dibujar pantallas en el chat o contesta solo con texto. El valor para las sesiones nuevas está en Ajustes ▸ General.
+Las pantallas que dibuja el agente se pierden menos: se aceptan más variantes de su formato y una línea que aún está llegando se muestra en vez de esperar.
+En la lluvia de ideas puedes soltar un archivo .md o .txt arrastrándolo sobre la hoja o sobre la pregunta.
