@@ -55,3 +55,16 @@ def test_la_frontera_de_pareto_solo_con_los_dos_conjuntos():
     assert not tabla['peor']['pareto'] and not tabla['suelto']['pareto']
     assert tabla['suelto']['validez'] is None
     assert abs(tabla['bueno']['coste_tarea'] - 0.002) < 1e-12              # media de los dos conjuntos
+
+
+def test_el_streaming_de_ui_lang_publica_la_linea_pendiente_y_cuenta_el_contenido():
+    tarea = ('t', 'alta', '', lambda n: True, {})
+    texto = '```pacai-ui-lang view=t\nroot Stack > titulo,nota\ntitulo Text "Tickets abier'
+    assert c.visibles('lang', tarea, texto) == 2                      # la línea pendiente se publica cerrada
+    assert c.visibles('lang', tarea, texto, contenido=True) == 1      # el Stack vacío no enseña nada
+    # Un hijo sólo se ve cuando llegaron los anteriores (el prefijo contiguo del Flujo).
+    assert c.visibles('lang', tarea, '```pacai-ui-lang view=t\nroot Stack > a,b\nb Text "B"\n') == 1
+    # Una tabla como root ya enseña algo, aunque «root con un hijo» no llegue nunca.
+    tabla = '```pacai-ui-lang view=t\nroot Table columns=[{"key":"id","label":"Id"}] rows=[]\n```'
+    assert c.primera_pantalla('lang', tarea, tabla) is None
+    assert c.primera_pantalla('lang', tarea, tabla, contenido=True) is not None

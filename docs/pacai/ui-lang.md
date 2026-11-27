@@ -349,12 +349,39 @@ traen las respuestas de §6.2 y §6.3.
 
 - **Salida mediana en los briefs:** Luna 450 tokens en UI Lang 3, 562 en OpenUI y 819 en JSON; Haiku 848, 981 y
   1330.
-- **Latencia.** El servicio entrega cada respuesta de una vez, así que el tiempo hasta la primera pantalla medido
-  es el total. Con la estimación de OpenUI (tokens hasta ver `root` con un hijo, a 50 tokens/s), en las 52 tareas:
-  - Luna: OpenUI 0,49 s, UI Lang 3 0,85 s y JSON 1,50 s.
-  - Haiku: OpenUI 0,94 s, UI Lang 3 1,53 s y JSON 2,19 s.
-- OpenUI enseña antes la primera pantalla porque cierra la sentencia a medias. Esa medida calcula UI Lang 3 con
-  líneas completas: la regla de publicar la línea pendiente cerrada (§5) es posterior y no está en esa estimación.
+- **Latencia.** El servicio entrega cada respuesta de una vez, así que el tiempo medido hasta la primera pantalla
+  es el total. El streaming se estima como en OpenUI: con lo que el motor publicaría a cada 5 % del texto llegado
+  y a 50 tokens/s.
+  - UI Lang 3 se calcula con el `Flujo` del motor (§5): la línea que aún llega se publica cerrada y, por
+    contenedor, sólo el prefijo de hijos que ya llegaron.
+  - Hay dos criterios:
+    - **el de OpenUI,** `root` con al menos un hijo;
+    - **el primer contenido,** el primer nodo que enseña algo. Un `Stack` o un `Grid` vacíos no cuentan.
+  - El de OpenUI favorece a un formato que siempre envuelve la pantalla en un `Stack`, como OpenUI. En UI Lang,
+    `root` puede ser la tabla o el formulario: la pantalla ya se ve, pero «root con un hijo» no llega nunca.
+
+| Primera pantalla estimada (mediana) | PACAI UI Lang 3 | OpenUI Lang 1.0 | PACAI JSON |
+|---|---:|---:|---:|
+| 52 tareas · Luna · primer contenido | 0,68 s | **0,55 s** | 1,41 s |
+| 52 tareas · Haiku · primer contenido | 1,06 s | **0,98 s** | 2,04 s |
+| 46 briefs · Luna · primer contenido | 1,17 s | **1,16 s** | 1,89 s |
+| 46 briefs · Haiku · primer contenido | 1,73 s | **1,58 s** | 3,54 s |
+| 52 tareas · Luna · criterio de OpenUI | 0,77 s (antes 0,85) | **0,49 s** | 1,50 s |
+| 52 tareas · Haiku · criterio de OpenUI | 1,27 s (antes 1,53) | **0,94 s** | 2,19 s |
+| 46 briefs · Luna · criterio de OpenUI | **1,05 s** (antes 1,40) | 1,10 s | 1,89 s |
+| 46 briefs · Haiku · criterio de OpenUI | 1,73 s (antes 2,12) | **1,58 s** | 3,47 s |
+
+«Antes» es la estimación de §10.2 de perfil-ui, cuando UI Lang 3 sólo publicaba líneas enteras.
+
+- **La línea pendiente cerrada acerca a UI Lang 3 a OpenUI:** recorta 0,1–0,4 s.
+- **Con el primer contenido, la diferencia es de 0,01–0,15 s.**
+  - En los briefs con Luna hay empate.
+  - En las 52 tareas, lo que queda es casi todo la valla: `pacai-ui-lang view=tickets` ocupa 9 tokens y
+    `openui-lang` 5, unos 0,08 s a 50 tokens/s. Es el precio de nombrar la vista, que PACAI necesita.
+- **El JSON tarda el doble,** porque sólo se lee con la línea entera.
+- **Con la respuesta cortada,** al 25 % del texto OpenUI enseña el 32–38 % de los nodos y UI Lang 3 el 0–29 %.
+  Al 50 %, 55–63 % frente a 40–53 %. En las tareas, el primer nodo de UI Lang suele ser `root` con su lista de
+  hijos, y un hijo sólo se ve cuando llegan los anteriores.
 
 ### 6.7 Conclusiones
 
@@ -364,8 +391,8 @@ traen las respuestas de §6.2 y §6.3.
 - **En los briefs de OpenUI, empate en validez** (78–79 %) y UI Lang 3 es el más barato por pantalla válida.
 - **Todo lo que valida se dibuja.** El renderizador no encontró pantallas en blanco ni excepciones en 3377
   respuestas de 15 modelos.
-- **Dónde gana OpenUI:** en la primera pantalla del streaming y en tolerancia, porque dibuja aunque haya errores.
-  En los briefs largos gana con Luna.
+- **Dónde gana OpenUI:** en tolerancia, porque dibuja aunque haya errores, y en los briefs largos con Luna. En el
+  streaming va por delante por poco: el primer contenido se ve 0,01–0,15 s antes, y casi todo es la valla más corta.
 
 ## 7. Cómo repetirlo
 
@@ -402,7 +429,8 @@ python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos gemma4
 
 - Los modelos exactos del benchmark de OpenUI, su catálogo de 70 componentes, su temperatura de 0,7 y su SDK. El
   lector de OpenUI Lang es nuestro.
-- El streaming de verdad: el servicio no trocea, así que la primera pantalla es una estimación.
+- El streaming de verdad: el servicio no trocea, así que la primera pantalla es una estimación a 50 tokens/s sobre
+  respuestas guardadas.
 - Conversaciones con historial, el prompt real del motor y una sesión en la app: cada tarea va sola.
 - La caché de prompt. Con ella la entrada pesa menos y las diferencias de coste se acortan.
 - Los 6 componentes de CuyMercado en el renderizador: son de la app, así que en la prueba de dibujo llevan un dibujo

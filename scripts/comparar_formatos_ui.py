@@ -269,10 +269,17 @@ def clase(error: str) -> str:
 
 
 # -- streaming y cortes ------------------------------------------------------------------------------------------
-def visibles(brazo, tarea, prefijo: str) -> int:
+CONTENEDORES_VACIOS = {'Stack', 'Grid'}     # sólo colocan a sus hijos: vacíos no enseñan nada
+
+
+def visibles(brazo, tarea, prefijo: str, contenido: bool = False) -> int:
     """Cuántos nodos de un alta se verían con sólo `prefijo` del texto, con la regla de streaming de cada formato:
     PACAI (JSON y UI Lang) publica cada línea completa que vale (UI Lang con su `Flujo`); OpenUI cierra la cola
-    pendiente (§4). En los tres, un nodo se ve si cuelga de root por nodos ya llegados; un hijo que falta se omite."""
+    pendiente (§4). En los tres, un nodo se ve si cuelga de root por nodos ya llegados; un hijo que falta se omite.
+    Con `contenido`, sólo cuentan los nodos que enseñan algo: un Stack o un Grid sin nada dentro no."""
+    def contar(nodos):
+        return sum(n.get('component') not in CONTENEDORES_VACIOS for n in nodos) if contenido else len(nodos)
+
     if brazo == 'openui_ej':
         programa = o.extraer(prefijo)
         completas, cola = o.sentencias(programa, cerrar_cola=False)
@@ -283,16 +290,19 @@ def visibles(brazo, tarea, prefijo: str) -> int:
             if nombre_cola not in nombres:          # §4 regla 3: la cola cerrada no pisa una sentencia completa
                 texto += '\n' + o.cerrar(cola)
         nodos, _, _ = o.mapa(texto, DECL) if texto.strip() else ({}, [], [])
-        return len(_alcanzables(nodos))
+        return contar(_alcanzables(nodos).values())
     attrs, lineas = m.bloque(prefijo)
     if attrs is None:
         return 0
-    if not prefijo.endswith('\n') and lineas and not prefijo.rstrip().endswith('```'):
-        lineas = lineas[:-1]                     # la última línea aún no ha llegado entera
+    a_medias = not prefijo.endswith('\n') and lineas and not prefijo.rstrip().endswith('```')
     if brazo == 'lang':
+        # Lo que publica de verdad el motor (§10.3): las líneas enteras y la que aún llega, cerrada; por contenedor,
+        # sólo el prefijo contiguo de hijos llegados.
         flujo = ui_lang.Flujo(m.CAT_LANG)
-        flujo.alimentar('\n'.join(lineas) + '\n')
-        return len(_alcanzables(dict(flujo.nodos)))
+        flujo.alimentar('\n'.join(lineas) + ('' if a_medias else '\n'))
+        return contar(flujo.publicado.values())
+    if a_medias:
+        lineas = lineas[:-1]                     # el JSON sólo se lee con la línea entera
     nodos = {}
     for linea in lineas:
         try:
@@ -301,7 +311,7 @@ def visibles(brazo, tarea, prefijo: str) -> int:
             continue
         if isinstance(n, dict) and isinstance(n.get('id'), str) and not m.CAT.errores_del_nodo(n):
             nodos[n['id']] = n
-    return len(_alcanzables(nodos))
+    return contar(_alcanzables(nodos).values())
 
 
 def corte(brazo, tarea, texto, fraccion):
@@ -312,10 +322,12 @@ def corte(brazo, tarea, texto, fraccion):
     return min(1.0, visibles(brazo, tarea, texto[:int(len(texto) * fraccion)]) / total)
 
 
-def primera_pantalla(brazo, tarea, texto):
-    """La fracción del texto que hace falta para ver root con al menos un hijo (en pasos del 5 %)."""
+def primera_pantalla(brazo, tarea, texto, contenido=False):
+    """La fracción del texto que hace falta para ver root con al menos un hijo, el criterio de OpenUI (en pasos del
+    5 %). Con `contenido`, la que hace falta para ver el primer nodo que enseña algo (no un Stack o un Grid vacíos):
+    el criterio de OpenUI favorece a un formato que siempre envuelve la pantalla en un Stack."""
     for paso in range(1, 21):
-        if visibles(brazo, tarea, texto[:int(len(texto) * paso / 20)]) >= 2:
+        if visibles(brazo, tarea, texto[:int(len(texto) * paso / 20)], contenido) >= (1 if contenido else 2):
             return paso / 20
     return None
 
@@ -583,7 +595,7 @@ def resumen(filas, mapa_tareas):
         errores = Counter(clase(r['errores'][0]) for r in rs if not r['valida'] and r['errores'])
         errores_todos = Counter(c for r in rs if not r['valida'] for c in {clase(e) for e in r['errores']})
         cortes = {f: [] for f in (0.25, 0.5, 0.75)}
-        primeras, primeras_s, primeras_est = [], [], []
+        primeras, primeras_s, primeras_est, contenidos_est = [], [], [], []
         for r in altas:
             if not r['valida']:
                 continue
@@ -592,6 +604,9 @@ def resumen(filas, mapa_tareas):
                 v = corte(r['brazo'], tarea, r['respuesta'], f)
                 if v is not None:
                     cortes[f].append(v)
+            q = primera_pantalla(r['brazo'], tarea, r['respuesta'], contenido=True)
+            if q is not None:
+                contenidos_est.append(r['salida'] * q / TOKENS_POR_SEGUNDO)
             p = primera_pantalla(r['brazo'], tarea, r['respuesta'])
             if p is not None:
                 primeras.append(p)
@@ -614,7 +629,7 @@ def resumen(filas, mapa_tareas):
             'total_med': _med([r['total'] for r in rs]), 'total_p90': _p(rs, 'total', 0.9),
             'trozos_med': _med([r.get('n_trozos') for r in rs]),
             'primera_s_med': _med(primeras_s), 'primera_frac_med': _med(primeras),
-            'primera_est_med': _med(primeras_est),
+            'primera_est_med': _med(primeras_est), 'contenido_est_med': _med(contenidos_est),
             'coste_total': coste, 'coste_por_peticion': coste1 / n,
             'coste_por_valida_1': coste1 / validas if validas else None,
             'coste_por_exacta_1': coste1 / exactas if exactas else None,
@@ -784,6 +799,7 @@ def escribir_csv(datos, carpeta: Path) -> None:
         'primera_s_med': round(r['primera_s_med'], 2) if r['primera_s_med'] else None,
         'primera_est_s': round(r['primera_est_med'], 2) if r['primera_est_med'] else None,
         'primera_frac': r['primera_frac_med'],
+        'primer_contenido_est_s': round(r['contenido_est_med'], 2) if r['contenido_est_med'] else None,
         'coste_por_valida_milesimas': round(1000 * r['coste_por_valida_1'], 3) if r['coste_por_valida_1'] else None,
         'coste_por_exacta_milesimas': round(1000 * r['coste_por_exacta_1'], 3) if r['coste_por_exacta_1'] else None,
         'coste_por_valida_tras_milesimas': round(1000 * r['coste_por_valida_tras'], 3)
@@ -866,7 +882,8 @@ def imprimir(datos):
         print(f"- {r['conjunto']} · {r['modelo']} · {NOMBRES[r['brazo']]}: "
               + ' / '.join(_pct(c[f][0]) for f in ('0.25', '0.5', '0.75'))
               + f" · primera pantalla al {_pct(r['primera_frac_med'])} del texto, {_num(r['primera_s_med'], 2)} s "
-              f"medidos, {_num(r['primera_est_med'], 2)} s a 50 tok/s · trozos {_num(r['trozos_med'])}")
+              f"medidos, {_num(r['primera_est_med'], 2)} s a 50 tok/s · primer contenido "
+              f"{_num(r['contenido_est_med'], 2)} s a 50 tok/s · trozos {_num(r['trozos_med'])}")
     print('\nTokens o200k_base de la misma pantalla:')
     for x in datos['muestras']:
         print(f"- {x['muestra']}: " + ', '.join(f"{NOMBRES[b]} {x['tokens'][b]}" for b in BRAZOS))

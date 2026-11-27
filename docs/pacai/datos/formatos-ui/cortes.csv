@@ -1,69 +1,69 @@
 conjunto,modelo,formato,texto_llegado_pct,nodos_visibles_pct
-openui,beam:cloud,PACAI UI Lang 3,25,25.0
-openui,beam:cloud,PACAI UI Lang 3,50,43.2
-openui,beam:cloud,PACAI UI Lang 3,75,69.6
+openui,beam:cloud,PACAI UI Lang 3,25,30.2
+openui,beam:cloud,PACAI UI Lang 3,50,50.0
+openui,beam:cloud,PACAI UI Lang 3,75,72.7
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,25,25.0
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,50,50.0
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,75,71.9
-openui,claude-haiku-5-5,PACAI UI Lang 3,25,25.0
-openui,claude-haiku-5-5,PACAI UI Lang 3,50,50.0
-openui,claude-haiku-5-5,PACAI UI Lang 3,75,70.6
+openui,claude-haiku-5-5,PACAI UI Lang 3,25,28.6
+openui,claude-haiku-5-5,PACAI UI Lang 3,50,52.6
+openui,claude-haiku-5-5,PACAI UI Lang 3,75,75.0
 openui,claude-haiku-5-5,OpenUI Lang 1.0,25,32.1
 openui,claude-haiku-5-5,OpenUI Lang 1.0,50,55.0
 openui,claude-haiku-5-5,OpenUI Lang 1.0,75,75.0
-openui,deepseek-v4.1-flash,PACAI UI Lang 3,25,27.4
-openui,deepseek-v4.1-flash,PACAI UI Lang 3,50,50.0
-openui,deepseek-v4.1-flash,PACAI UI Lang 3,75,70.3
-openui,gemini-3.8-flash-low,PACAI UI Lang 3,25,31.4
-openui,gemini-3.8-flash-low,PACAI UI Lang 3,50,54.8
-openui,gemini-3.8-flash-low,PACAI UI Lang 3,75,75.9
-openui,gemini-4-argon-low,PACAI UI Lang 3,25,30.0
-openui,gemini-4-argon-low,PACAI UI Lang 3,50,55.0
-openui,gemini-4-argon-low,PACAI UI Lang 3,75,75.0
-openui,gemma4:31b-cloud,PACAI UI Lang 3,25,25.0
-openui,gemma4:31b-cloud,PACAI UI Lang 3,50,54.5
-openui,gemma4:31b-cloud,PACAI UI Lang 3,75,73.9
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,25,29.4
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,50,53.9
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,75,73.0
+openui,gemini-3.8-flash-low,PACAI UI Lang 3,25,34.8
+openui,gemini-3.8-flash-low,PACAI UI Lang 3,50,60.0
+openui,gemini-3.8-flash-low,PACAI UI Lang 3,75,79.1
+openui,gemini-4-argon-low,PACAI UI Lang 3,25,34.7
+openui,gemini-4-argon-low,PACAI UI Lang 3,50,60.0
+openui,gemini-4-argon-low,PACAI UI Lang 3,75,77.8
+openui,gemma4:31b-cloud,PACAI UI Lang 3,25,25.9
+openui,gemma4:31b-cloud,PACAI UI Lang 3,50,55.0
+openui,gemma4:31b-cloud,PACAI UI Lang 3,75,75.0
 openui,gemma4:e4b-u,PACAI UI Lang 3,25,
 openui,gemma4:e4b-u,PACAI UI Lang 3,50,
 openui,gemma4:e4b-u,PACAI UI Lang 3,75,
-openui,glm-5.3-flash,PACAI UI Lang 3,25,25.9
-openui,glm-5.3-flash,PACAI UI Lang 3,50,48.9
-openui,glm-5.3-flash,PACAI UI Lang 3,75,72.6
-openui,glm-5.3:cloud,PACAI UI Lang 3,25,29.7
-openui,glm-5.3:cloud,PACAI UI Lang 3,50,54.0
-openui,glm-5.3:cloud,PACAI UI Lang 3,75,71.4
+openui,glm-5.3-flash,PACAI UI Lang 3,25,27.1
+openui,glm-5.3-flash,PACAI UI Lang 3,50,53.6
+openui,glm-5.3-flash,PACAI UI Lang 3,75,75.7
+openui,glm-5.3:cloud,PACAI UI Lang 3,25,30.3
+openui,glm-5.3:cloud,PACAI UI Lang 3,50,55.8
+openui,glm-5.3:cloud,PACAI UI Lang 3,75,75.3
 openui,gpt-6-luna,PACAI JSON con ejemplos,25,26.9
 openui,gpt-6-luna,PACAI JSON con ejemplos,50,52.9
 openui,gpt-6-luna,PACAI JSON con ejemplos,75,76.9
-openui,gpt-6-luna,PACAI UI Lang 3,25,25.0
+openui,gpt-6-luna,PACAI UI Lang 3,25,27.3
 openui,gpt-6-luna,PACAI UI Lang 3,50,50.0
-openui,gpt-6-luna,PACAI UI Lang 3,75,70.0
+openui,gpt-6-luna,PACAI UI Lang 3,75,75.0
 openui,gpt-6-luna,OpenUI Lang 1.0,25,35.0
 openui,gpt-6-luna,OpenUI Lang 1.0,50,57.9
 openui,gpt-6-luna,OpenUI Lang 1.0,75,75.6
-openui,gpt-6.2-sol,PACAI UI Lang 3,25,28.1
-openui,gpt-6.2-sol,PACAI UI Lang 3,50,52.6
-openui,gpt-6.2-sol,PACAI UI Lang 3,75,75.0
-openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,25,31.2
-openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,50,57.1
-openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,75,70.4
-openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,25,25.0
-openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,50,50.0
-openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,75,70.3
-openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,25,29.4
-openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,50,57.1
-openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,75,75.0
-openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,25,25.0
-openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,50,50.0
-openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,75,62.5
+openui,gpt-6.2-sol,PACAI UI Lang 3,25,31.9
+openui,gpt-6.2-sol,PACAI UI Lang 3,50,56.6
+openui,gpt-6.2-sol,PACAI UI Lang 3,75,78.0
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,25,36.4
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,50,59.1
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,75,76.2
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,25,32.7
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,50,57.7
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,75,73.5
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,25,33.3
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,50,60.0
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,75,78.6
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,25,33.3
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,50,55.6
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,75,75.0
 pacai,beam:cloud,PACAI UI Lang 3,25,0.0
-pacai,beam:cloud,PACAI UI Lang 3,50,33.3
+pacai,beam:cloud,PACAI UI Lang 3,50,50.0
 pacai,beam:cloud,PACAI UI Lang 3,75,66.7
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,25,20.0
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,50,40.0
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,75,66.7
-pacai,claude-haiku-5-5,PACAI UI Lang 3,25,0.0
-pacai,claude-haiku-5-5,PACAI UI Lang 3,50,33.3
+pacai,claude-haiku-5-5,PACAI UI Lang 3,25,21.1
+pacai,claude-haiku-5-5,PACAI UI Lang 3,50,50.0
 pacai,claude-haiku-5-5,PACAI UI Lang 3,75,66.7
 pacai,claude-haiku-5-5,OpenUI Lang 1.0,25,33.3
 pacai,claude-haiku-5-5,OpenUI Lang 1.0,50,60.0
@@ -71,20 +71,20 @@ pacai,claude-haiku-5-5,OpenUI Lang 1.0,75,80.0
 pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,25,0.0
 pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,50,33.3
 pacai,deepseek-v4.1-flash,PACAI JSON con ejemplos,75,66.7
-pacai,deepseek-v4.1-flash,PACAI UI Lang 3,25,0.0
-pacai,deepseek-v4.1-flash,PACAI UI Lang 3,50,40.0
-pacai,deepseek-v4.1-flash,PACAI UI Lang 3,75,60.0
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,25,18.3
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,50,50.0
+pacai,deepseek-v4.1-flash,PACAI UI Lang 3,75,70.8
 pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,25,33.3
 pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,50,60.0
 pacai,deepseek-v4.1-flash,OpenUI Lang 1.0,75,75.0
-pacai,gemini-3.8-flash-low,PACAI UI Lang 3,25,0.0
+pacai,gemini-3.8-flash-low,PACAI UI Lang 3,25,8.3
 pacai,gemini-3.8-flash-low,PACAI UI Lang 3,50,33.3
-pacai,gemini-3.8-flash-low,PACAI UI Lang 3,75,63.3
-pacai,gemini-4-argon-low,PACAI UI Lang 3,25,0.0
-pacai,gemini-4-argon-low,PACAI UI Lang 3,50,33.3
+pacai,gemini-3.8-flash-low,PACAI UI Lang 3,75,66.7
+pacai,gemini-4-argon-low,PACAI UI Lang 3,25,20.0
+pacai,gemini-4-argon-low,PACAI UI Lang 3,50,50.0
 pacai,gemini-4-argon-low,PACAI UI Lang 3,75,66.7
 pacai,gemma4:31b-cloud,PACAI UI Lang 3,25,0.0
-pacai,gemma4:31b-cloud,PACAI UI Lang 3,50,33.3
+pacai,gemma4:31b-cloud,PACAI UI Lang 3,50,50.0
 pacai,gemma4:31b-cloud,PACAI UI Lang 3,75,66.7
 pacai,gemma4:e4b-u,PACAI UI Lang 3,25,0.0
 pacai,gemma4:e4b-u,PACAI UI Lang 3,50,0.0
@@ -93,19 +93,19 @@ pacai,glm-5.3-flash,PACAI JSON con ejemplos,25,0.0
 pacai,glm-5.3-flash,PACAI JSON con ejemplos,50,33.3
 pacai,glm-5.3-flash,PACAI JSON con ejemplos,75,66.7
 pacai,glm-5.3-flash,PACAI UI Lang 3,25,0.0
-pacai,glm-5.3-flash,PACAI UI Lang 3,50,33.3
-pacai,glm-5.3-flash,PACAI UI Lang 3,75,60.0
+pacai,glm-5.3-flash,PACAI UI Lang 3,50,50.0
+pacai,glm-5.3-flash,PACAI UI Lang 3,75,66.7
 pacai,glm-5.3-flash,OpenUI Lang 1.0,25,33.3
 pacai,glm-5.3-flash,OpenUI Lang 1.0,50,58.6
 pacai,glm-5.3-flash,OpenUI Lang 1.0,75,80.0
 pacai,glm-5.3:cloud,PACAI UI Lang 3,25,0.0
-pacai,glm-5.3:cloud,PACAI UI Lang 3,50,33.3
+pacai,glm-5.3:cloud,PACAI UI Lang 3,50,41.4
 pacai,glm-5.3:cloud,PACAI UI Lang 3,75,66.7
 pacai,gpt-6-luna,PACAI JSON con ejemplos,25,0.0
 pacai,gpt-6-luna,PACAI JSON con ejemplos,50,33.3
 pacai,gpt-6-luna,PACAI JSON con ejemplos,75,66.7
 pacai,gpt-6-luna,PACAI UI Lang 3,25,0.0
-pacai,gpt-6-luna,PACAI UI Lang 3,50,33.3
+pacai,gpt-6-luna,PACAI UI Lang 3,50,40.0
 pacai,gpt-6-luna,PACAI UI Lang 3,75,66.7
 pacai,gpt-6-luna,OpenUI Lang 1.0,25,37.5
 pacai,gpt-6-luna,OpenUI Lang 1.0,50,62.5
@@ -113,20 +113,20 @@ pacai,gpt-6-luna,OpenUI Lang 1.0,75,80.0
 pacai,gpt-6.2-sol,PACAI JSON con ejemplos,25,0.0
 pacai,gpt-6.2-sol,PACAI JSON con ejemplos,50,38.8
 pacai,gpt-6.2-sol,PACAI JSON con ejemplos,75,66.7
-pacai,gpt-6.2-sol,PACAI UI Lang 3,25,0.0
-pacai,gpt-6.2-sol,PACAI UI Lang 3,50,33.3
+pacai,gpt-6.2-sol,PACAI UI Lang 3,25,8.3
+pacai,gpt-6.2-sol,PACAI UI Lang 3,50,45.0
 pacai,gpt-6.2-sol,PACAI UI Lang 3,75,66.7
 pacai,gpt-6.2-sol,OpenUI Lang 1.0,25,33.3
 pacai,gpt-6.2-sol,OpenUI Lang 1.0,50,66.7
 pacai,gpt-6.2-sol,OpenUI Lang 1.0,75,75.0
 pacai,kimi-k3.1-pro:cloud,PACAI UI Lang 3,25,0.0
-pacai,kimi-k3.1-pro:cloud,PACAI UI Lang 3,50,33.3
+pacai,kimi-k3.1-pro:cloud,PACAI UI Lang 3,50,50.0
 pacai,kimi-k3.1-pro:cloud,PACAI UI Lang 3,75,66.7
-pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,25,0.0
-pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,50,33.3
+pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,25,6.2
+pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,50,50.0
 pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,75,66.7
 pacai,mimo-v2.6-pro:cloud,PACAI UI Lang 3,25,0.0
-pacai,mimo-v2.6-pro:cloud,PACAI UI Lang 3,50,33.3
+pacai,mimo-v2.6-pro:cloud,PACAI UI Lang 3,50,50.0
 pacai,mimo-v2.6-pro:cloud,PACAI UI Lang 3,75,66.7
 pacai,minimax-m3.1-flash:cloud,PACAI UI Lang 3,25,0.0
 pacai,minimax-m3.1-flash:cloud,PACAI UI Lang 3,50,33.3
