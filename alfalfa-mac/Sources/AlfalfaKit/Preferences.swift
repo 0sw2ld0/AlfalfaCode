@@ -162,10 +162,20 @@ public struct Preferences {
         nonmutating set { defaults.set(newValue, forKey: Key.richView) }
     }
 
-    /// La «Vista enriquecida» de una sesión: la suya si se cambió desde su panel; si no, la de Ajustes.
+    /// La «Vista enriquecida» de una sesión: la suya, guardada al crearla o desde su panel. Una sesión de antes de
+    /// 0.99.57 no tiene la suya: sigue la de Ajustes si se tocó y, si no, encendida, como cuando se creó; así
+    /// actualizar no le quita las pantallas. Sin id todavía (una sesión que arranca), la de Ajustes.
     public func richView(for id: String?) -> Bool {
-        guard let id, let value = defaults.dictionary(forKey: Key.richViews)?[id] as? Bool else { return richView }
-        return value
+        guard let id else { return richView }
+        if let value = defaults.dictionary(forKey: Key.richViews)?[id] as? Bool { return value }
+        return defaults.object(forKey: Key.richView) as? Bool ?? true
+    }
+
+    /// Una sesión nueva fija su «Vista enriquecida» con la de Ajustes en cuanto tiene id; después ya no la cambia
+    /// tocar Ajustes, sólo su panel. No pisa una que ya tenga.
+    public func adoptRichView(for id: String) {
+        guard defaults.dictionary(forKey: Key.richViews)?[id] == nil else { return }
+        setRichView(richView, for: id)
     }
 
     /// Guarda la «Vista enriquecida» de una sesión. No toca la de Ajustes.

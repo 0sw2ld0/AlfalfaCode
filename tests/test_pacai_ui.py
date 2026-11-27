@@ -502,6 +502,76 @@ async def test_al_reanudar_la_sesion_las_pantallas_siguen_su_revision(tmp_path, 
     c.comprobar()
 
 
+
+# -- lo mismo en PACAI UI Lang, el formato por defecto (sin el flag a 0) ----------------------------------------
+PANTALLA_LANG = '''Tienes 2 tickets abiertos:
+
+```pacai-ui-lang view=tickets
+root Stack > titulo,nuevo
+titulo Text "2 tickets abiertos" style=title
+nuevo Button "Crear" @press={"send":"crear_ticket"}
+```
+
+¿Creo otro?'''
+
+
+async def test_en_ui_lang_el_modelo_dibuja_y_el_usuario_responde_con_una_accion(monkeypatch):
+    monkeypatch.delenv(FLAG, raising=False)
+    c = Cliente(perfiles=('work', 'ui'))
+    c.hello['render'] = {'ui': {'version': '1'}}
+    await abrir(c, 'Enséñame los tickets')
+    assert '```pacai-ui-lang' in c.t.manual_ui()
+    c.t.emit('evento', rol='agent', texto=PANTALLA_LANG, hora=1.0)
+    mensajes = c.drenar()
+    textos = [b['text'] for m in mensajes if m['type'] == 'message_delta' for b in m['payload']['blocks']
+              if b['type'] == 'text']
+    assert textos[0].startswith('Tienes 2') and not any('pacai-ui' in t for t in textos)
+    (_, patch), = estructurados(mensajes, 'message_delta')
+    (_, foto), = estructurados(mensajes, 'message_end')
+    assert [n['id'] for n in patch['nodes']] == ['root', 'titulo', 'nuevo'] and errores_de('update', foto) == []
+    await cerrar(c)
+    c.enviar('input', {'blocks': [
+        {'type': 'text', 'text': 'Crear ticket'},
+        {'type': 'structured', 'schema': 'pacai.ui.action/1', 'data': {
+            'view': 'tickets', 'rev': foto['rev'], 'node': 'nuevo', 'event': 'press', 'name': 'crear_ticket',
+            'values': {}}}]})
+    entregado = await asyncio.wait_for(c.t.next_message(), 1)
+    texto = getattr(entregado, 'texto', None) or getattr(entregado, 'text', None) or str(entregado)
+    assert '[Acción en la pantalla]' in texto and 'desfasada' not in texto
+    c.comprobar()
+
+
+async def test_en_ui_lang_al_reanudar_la_pantalla_sigue_su_revision(tmp_path, monkeypatch):
+    monkeypatch.delenv(FLAG, raising=False)
+    monkeypatch.setenv('ALFALFA_HOME', str(tmp_path))
+    (tmp_path / 'sesiones' / 's1').mkdir(parents=True)
+
+    def sesion_ui():
+        c = Cliente(perfiles=('work', 'ui'))
+        c.hello['render'] = {'ui': {'version': '1'}}
+        c.t.emit('sesion', id='s1', cwd=str(tmp_path), modelo='m', esfuerzo='low', modo='auto')
+        return c
+
+    c = sesion_ui()
+    await abrir(c, 'Enséñame los tickets')
+    c.t.emit('evento', rol='agent', texto=PANTALLA_LANG, hora=1.0)
+    (_, primera), = estructurados(c.drenar(), 'message_end')
+    await cerrar(c)
+    c = sesion_ui()
+    await abrir(c, 'Ahora son 3')
+    # Un cambio en UI Lang sobre la vista recuperada: reescribe la línea entera del nodo.
+    c.t.emit('evento', rol='agent', hora=2.0,
+             texto='```pacai-ui-lang view=tickets\ntitulo Text "3 tickets abiertos" style=title\n```')
+    mensajes = c.drenar()
+    (_, patch), = estructurados(mensajes, 'message_delta')
+    (_, foto), = estructurados(mensajes, 'message_end')
+    assert patch['op'] == 'patch' and patch['rev'] == primera['rev'] + 1
+    assert [n['props']['text'] for n in patch['nodes'] if n['id'] == 'titulo'] == ['3 tickets abiertos']
+    assert {n['id'] for n in foto['nodes']} == {n['id'] for n in primera['nodes']}
+    await cerrar(c)
+    c.comprobar()
+
+
 def test_las_vistas_guardadas_se_recuperan_sin_lo_que_el_catalogo_no_admite():
     base = Catalogo.de({'version': '1'})
     vistas = Vistas(base)

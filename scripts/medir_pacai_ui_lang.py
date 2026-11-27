@@ -40,7 +40,7 @@ def main() -> None:
                   f'{len(muestra["lang"])} | {lang} | {1 - lang / r:.0%} |')
     print()
     con = Catalogo.de(declaracion, {ui_lang.FLAG: '1'})
-    sin = Catalogo.de(declaracion, {})
+    sin = Catalogo.de(declaracion, {ui_lang.FLAG: '0'})       # el JSON: sin el flag a 0 sale UI Lang
     print('| Prompt del perfil ui | Líneas | Tokens |')
     print('|---|---:|---:|')
     for nombre, texto in (('JSON (hoy, catálogo base + CuyMercado)', sin.manual()),

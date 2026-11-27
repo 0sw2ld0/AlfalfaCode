@@ -9,6 +9,8 @@ final class LiveSession: ObservableObject, Identifiable {
     let title: String
     /// Sesión que se reanuda; tras terminar su proceso pasa a ser la propia, para seguirla.
     private(set) var resumeID: String?
+    /// Se creó aquí, no se reanudó: fija su «Vista enriquecida» al recibir su id.
+    private let startedNew: Bool
     @Published private(set) var model: String
     @Published private(set) var effort: String
     /// El usuario cambió modelo o esfuerzo antes de arrancar el proceso: se pasan al reanudar.
@@ -136,6 +138,7 @@ final class LiveSession: ObservableObject, Identifiable {
         self.cwd = cwd
         self.title = title
         self.resumeID = resumeID
+        self.startedNew = resumeID == nil
         self.model = model
         self.effort = effort
         self.readOnly = readOnly
@@ -174,7 +177,9 @@ final class LiveSession: ObservableObject, Identifiable {
 
     private func handle(_ message: AlfalfaMessage) {
         timeline.apply(message)
-        // El motor anuncia la «Vista enriquecida» al abrir la sesión: si no es la que eligió el usuario, se la manda.
+        // Una sesión nueva fija su «Vista enriquecida» con la de Ajustes en cuanto tiene id (las de antes siguen como
+        // estaban). Luego, si el motor anuncia otra, se le manda la de esta sesión.
+        if case let .session(info) = message, startedNew { Preferences().adoptRichView(for: info.id) }
         if case let .session(info) = message, let reported = info.richView, reported != richView {
             process?.send(.richView(richView))
         }

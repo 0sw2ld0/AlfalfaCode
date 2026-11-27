@@ -38,7 +38,7 @@ MUESTRAS = json.loads((CONFORMIDAD / 'muestras-pacai-ui-lang.json').read_text(en
 MODELOS = ('gpt-6-luna', 'claude-haiku-5-5')
 MAX_SALIDA = 1500
 CAT = Catalogo.de(DECLARACION, {ui_lang.FLAG: '1'})            # valida los dos formatos con las piezas
-CAT_JSON = Catalogo.de(DECLARACION, {})
+CAT_JSON = Catalogo.de(DECLARACION, {ui_lang.FLAG: '0'})   # el JSON: sin el flag a 0 sale UI Lang
 
 PIEZAS_JSON = '''Piezas: name crea estado y {"$":"name"} lo lee; Data publica slots tipados que sólo se leen en su subárbol.
 Calc {"name":"m","preset":"margen","compra":{"$":"c"},"venta":{"$":"v"},"cantidad":{"$":"n"}} publica m.pct (fracción), m.u y m.total (dinero) y m.perdida.

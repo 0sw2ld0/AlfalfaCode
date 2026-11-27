@@ -405,10 +405,16 @@ async def main() -> None:
     brazos = opciones.brazos.split(',')
     if opciones.ui_lang:
         usar_ui_lang()
+    else:
+        # Sin el flag a 0 el motor enseña UI Lang con todos los modelos: el brazo JSON tiene que fijarlo.
+        from alfalfa.pacai import ui_lang
+        os.environ[ui_lang.FLAG] = '0'
     prompts = {b: capturar(b) for b in brazos}
     if opciones.ui_lang:
         assert all('pacai-ui-lang' in (prompts[b]['sistema'][0]['content'] if b == 'completo' else MANUAL)
                    for b in brazos)
+    elif 'completo' in prompts:
+        assert 'pacai-ui-lang' not in prompts['completo']['sistema'][0]['content']
     if 'bajo_demanda' in prompts:
         assert AVISO_MANUAL.strip() in prompts['bajo_demanda']['sistema'][0]['content']
         assert 'web_search' in prompts['bajo_demanda']['sistema'][0]['content'].split(AVISO_MANUAL.strip())[1]

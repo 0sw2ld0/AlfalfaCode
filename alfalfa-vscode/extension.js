@@ -25,6 +25,7 @@ const CLAVE_ULTIMA = 'alfalfa.ultimaSesion';
 // Estados de `--sesiones` cuando otro proceso tiene la sesión abierta con un turno en marcha.
 const TRABAJANDO = new Set(['running', 'waiting', 'starting']);
 const CLAVE_MODOS = 'alfalfa.modos';
+const { CLAVE_HEREDADA, yaSeUsaba, vistaEnriquecida } = require('./lib/vista');
 // Los esfuerzos que acepta `alfalfa` (terminal.EFFORTS); un modelo puede anunciar otros (`none`, `minimal`).
 const ESFUERZOS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -454,7 +455,7 @@ class ProveedorChat {
                 this.contexto.globalState.update(CLAVE_MODOS, m.payload.modes);
             }
             // El motor anuncia la «Vista enriquecida» (`rich_view`): si no es la del ajuste, se le manda la del ajuste.
-            const vista = vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', false);
+            const vista = this.vistaEnriquecida();
             if (typeof m.payload.rich_view === 'boolean' && m.payload.rich_view !== vista) cliente.vistaEnriquecida(vista);
         }
         // `alfalfa.context`, `alfalfa.awake`… no hacen falta en el panel y llenarían el historial.
@@ -491,6 +492,12 @@ class ProveedorChat {
             this.modelos.then(r => { if (r.error) this.modelos = null; });
         }
         return this.modelos;
+    }
+
+    /** La «Vista enriquecida» que vale: la del ajuste si se puso; si no, la heredada de antes de 0.99.57. */
+    vistaEnriquecida() {
+        return vistaEnriquecida(vscode.workspace.getConfiguration('alfalfa').inspect('vistaEnriquecida'),
+            this.contexto.globalState.get(CLAVE_HEREDADA));
     }
 
     _config() {
@@ -610,6 +617,10 @@ function archivoActivo() {
 }
 
 function activate(contexto) {
+    // La primera vez con 0.99.57: si la extensión ya se usaba, la «Vista enriquecida» sigue encendida (lib/vista.js).
+    if (contexto.globalState.get(CLAVE_HEREDADA) === undefined) {
+        contexto.globalState.update(CLAVE_HEREDADA, yaSeUsaba(contexto.globalState.keys()));
+    }
     const proveedor = new ProveedorChat(contexto);
     vscode.commands.executeCommand('setContext', SIN_SECUNDARIA, !admiteBarraSecundaria());
     const opciones = { webviewOptions: { retainContextWhenHidden: true } };
@@ -640,7 +651,7 @@ function activate(contexto) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('alfalfa.ejecutable')) proveedor.refrescarListas();
             if (e.affectsConfiguration('alfalfa.vistaEnriquecida')) {
-                proveedor.cliente?.vistaEnriquecida(vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', false));
+                proveedor.cliente?.vistaEnriquecida(proveedor.vistaEnriquecida());
             }
             if (['modo', 'modelo', 'esfuerzo'].some(k => e.affectsConfiguration('alfalfa.' + k))) {
                 proveedor._post(proveedor._config(), false);

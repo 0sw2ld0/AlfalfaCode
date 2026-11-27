@@ -390,7 +390,8 @@ exacto a `pacai.ui/1` y que sale un tercio más barato por pantalla. `ALFALFA_PA
 vuelve el JSON de siempre. `ALFALFA_PACAI_UI_LANG=1` enciende además, si el cliente declara `"pieces": true` en
 `render.ui`, las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos), que siguen siendo un
 prototipo. En la app de Mac y en VS Code las pantallas sólo salen con la «Vista enriquecida» encendida, que viene
-apagada por defecto en las sesiones nuevas. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
+apagada en las sesiones nuevas de la app y en las instalaciones nuevas de VS Code; lo que ya tenía pantallas antes
+de 0.99.57 las conserva. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-con-todos-los-modelos-y-piezas-declarativas-detrás-de-un-flag).
 
 `ALFALFA_PACAI_UI_MANUAL=1` enciende otro prototipo, también apagado por defecto: el manual de pantallas se carga
 bajo demanda, como una habilidad. El prompt de sistema lleva sólo un aviso de unas líneas (y, con buscador, que

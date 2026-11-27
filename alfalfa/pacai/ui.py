@@ -298,7 +298,8 @@ class Catalogo:
         from .ui_lang import para_modelo
 
         if self.forzado is None:
-            self.lang = para_modelo(modelo, {})
+            # El flag ya se leyó en `de` y no fuerza nada: decide sólo el modelo, sin volver a mirar el entorno.
+            self.lang = para_modelo(modelo, entorno={})
         return self
 
     def componentes(self) -> list[str]:

@@ -33,7 +33,7 @@ from alfalfa.pacai import ui_lang  # noqa: E402
 from alfalfa.pacai.ui import Catalogo, Vistas, ascii_de  # noqa: E402
 
 DECLARACION = json.loads((RAIZ / 'tests' / 'conformidad' / 'catalogo-cuymercado.json').read_text(encoding='utf-8'))
-CAT = Catalogo.de(DECLARACION, {})
+CAT = Catalogo.de(DECLARACION, {ui_lang.FLAG: '0'})        # el JSON con ejemplos: sin el flag a 0 sale UI Lang
 # PACAI UI Lang 2 (rama claude/pacai-ui-lang): el mismo catálogo sin las piezas declarativas, para enseñarle al modelo
 # lo mismo que al JSON. `positional` e `inherit` sí, que son parte del formato.
 CAT_LANG = Catalogo.de({k: v for k, v in DECLARACION.items() if k not in ('pieces', 'queries')},

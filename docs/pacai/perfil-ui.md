@@ -370,8 +370,11 @@ pruebas en `tests/test_pacai_ui.py`.
     que ya dibujó se siguen viendo y sus acciones siguen valiendo. Con `ui` negociado, `alfalfa.session` lleva
     `rich_view` con el estado actual, así el cliente sabe que el motor admite el interruptor. La app de Mac lo enseña
     en el panel derecho (Entorno), con su valor por defecto en Ajustes ▸ General, y la extensión de VS Code en el
-    ajuste `alfalfa.vistaEnriquecida`. En las dos viene apagada por defecto (desde 0.99.57); el motor la deja
-    encendida para el cliente que no dice nada.
+    ajuste `alfalfa.vistaEnriquecida`. Desde 0.99.57 viene apagada en lo nuevo: en la app, una sesión nueva fija la
+    suya con la de Ajustes al recibir su id (`Preferences.adoptRichView`); en VS Code, una instalación nueva. Lo de
+    antes no pierde las pantallas al actualizar: una sesión de la app sin valor propio sigue la de Ajustes si se tocó
+    y, si no, encendida, y en VS Code una instalación que ya se usaba sigue encendida mientras no se toque el ajuste
+    (`lib/vista.js`). El motor la deja encendida para el cliente que no dice nada.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
@@ -409,7 +412,7 @@ Las preguntas abiertas del primer borrador, ya resueltas:
    JSON y en los datos. Los nodos usan `component`, `props`, `children` y `events`, que el modelo y las
    personas entienden mejor, y la declaración de un componente propio dice `children` en vez de `kids`.
 
-## 10. PACAI UI Lang (por modelo) y piezas declarativas (detrás de un flag)
+## 10. PACAI UI Lang (con todos los modelos) y piezas declarativas (detrás de un flag)
 
 > **En pocas palabras.** PACAI es el idioma fijo con el que el motor y las apps (app de Mac, VS Code, la web)
 > se entienden, y las pantallas viajan siempre en su formato oficial, `pacai.ui/1`. PACAI UI Lang 3 es una
@@ -588,13 +591,15 @@ de modelos. `ALFALFA_PACAI_UI_LANG=1` o `0` lo fuerza en un sentido u otro.
 
 **Decisión posterior (dueño, 0.99.57):** UI Lang 3 con todos los modelos, no sólo con los medidos: es el formato de
 las pantallas y el JSON queda como reserva con `ALFALFA_PACAI_UI_LANG=0`. A la vez, las apps (Mac y VS Code) traen
-la «Vista enriquecida» apagada por defecto en las sesiones nuevas, así que nadie recibe pantallas sin encenderla. El
+la «Vista enriquecida» apagada por defecto en lo nuevo (sesiones nuevas de la app, instalaciones nuevas de VS Code),
+así que nadie empieza a recibir pantallas sin encenderla; lo que ya tenía pantallas las conserva (§8). El
 motor sigue con la vista encendida para el cliente que negocia `ui` sin decir nada (la web de CuyMercado, por
 ejemplo). Con los modelos que no se han medido, la validez puede ser algo menor (GLM 5.3 Flash: 94,2 % en §10.3).
 
 **Lo que no se ha probado**
 
-- Ningún otro modelo (Sonnet, Opus, GPT-6 sin Luna, GLM, DeepSeek, Gemma…): por eso siguen con el JSON.
+- Ningún otro modelo con este rigor (Sonnet, Opus, GPT-6 sin Luna, DeepSeek, Gemma…): usan UI Lang 3 sin esa
+  garantía; la clasificación de `docs/pacai/ui-lang.md` §6 da lo que sí se midió.
 - Una sesión de verdad en la app de Mac con Luna o Haiku: la medida es por tarea, sin herramientas ni historial.
 - Cambiar de modelo a mitad de sesión con pantallas en el historial.
 - El streaming por trozos sigue sin servirse (el servicio no trocea).
