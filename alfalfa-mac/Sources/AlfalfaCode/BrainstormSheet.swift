@@ -16,6 +16,8 @@ struct BrainstormSheet: View {
     @State private var topic = ""
     @State private var reference: URL?
     @State private var referenceError: String?
+    /// Se arrastra un archivo sobre la hoja: se resalta para soltarlo como adjunto.
+    @State private var dropTargeted = false
     @State private var limit = BrainstormConfiguration.defaultTurns
     @State private var moderator: BrainstormParticipant
     @State private var participants: [ParticipantRow]
@@ -79,6 +81,8 @@ struct BrainstormSheet: View {
         .frame(maxHeight: 620)
         .background(Theme.background)
         .foregroundStyle(Theme.text)
+        .overlay { if dropTargeted { dropHighlight } }
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in drop(providers) }
         .onAppear { topicFocused = true }
         .task { await app.reloadProviders() }
         .onChange(of: configuration) { checkSelectedGroup() }
@@ -174,6 +178,12 @@ struct BrainstormSheet: View {
                 }
                 .focused($topicFocused)
                 .accessibilityLabel("Pregunta")
+                .onChange(of: topic) { old, new in
+                    // Con el campo activo, un archivo soltado encima llega como su ruta escrita.
+                    guard let dropped = DroppedImages.extract(old: old, new: new) else { return }
+                    topic = dropped.text
+                    attach(dropped.images)
+                }
             if cleanTopic.count > 4_000 {
                 Text("La idea puede tener hasta 4.000 caracteres.")
                     .font(.callout).foregroundStyle(Theme.warning)
@@ -280,18 +290,48 @@ struct BrainstormSheet: View {
     private func chooseReference() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.plainText] + ["md", "markdown"].compactMap { UTType(filenameExtension: $0) }
-        panel.message = "Elige un archivo Markdown o de texto de hasta 16 KiB."
+        panel.message = BrainstormReference.notice
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let attributes = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard ["md", "markdown", "txt"].contains(url.pathExtension.lowercased()),
-              attributes?.isRegularFile == true, attributes?.isSymbolicLink == false,
-              let size = attributes?.fileSize, size <= 16 * 1024 else {
-            reference = nil
-            referenceError = "Elige un archivo Markdown o de texto de hasta 16 KiB."
-            return
+        attach([url])
+    }
+
+    /// Lo elegido o soltado: un único archivo Markdown o de texto válido; si no, el aviso.
+    private func attach(_ urls: [URL]) {
+        reference = BrainstormReference.pick(urls)
+        referenceError = reference == nil ? BrainstormReference.notice : nil
+    }
+
+    /// Soltar archivos arrastrados desde Finder u otra app sobre la hoja.
+    private func drop(_ providers: [NSItemProvider]) -> Bool {
+        let files = providers.filter { $0.canLoadObject(ofClass: URL.self) }
+        guard !files.isEmpty else { return false }
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var urls: [URL] = []
+        for provider in files {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url { lock.withLock { urls.append(url) } }
+                group.leave()
+            }
         }
-        reference = url
-        referenceError = nil
+        group.notify(queue: .main) { attach(urls) }
+        return true
+    }
+
+    private var dropHighlight: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Theme.alfalfa.opacity(0.08))
+            .strokeBorder(Theme.alfalfa, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+            .overlay {
+                Label("Suelta el archivo para adjuntarlo", systemImage: "paperclip")
+                    .font(.headline)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Theme.selection, in: Capsule())
+            }
+            .padding(8)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func modelLabel(_ participant: BrainstormParticipant) -> String {
