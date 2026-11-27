@@ -1024,6 +1024,34 @@ Las 4 que no son exactas son modelos que eligen otra forma de lo pedido:
 
 Es una sola tanda, así que no demuestra que el fallo sea imposible.
 
+**Confirmación con una tanda nueva (27 de noviembre de 2026).** Las cifras de arriba salían de volver a validar
+respuestas ya guardadas. Para confirmarlas se pidieron respuestas nuevas:
+
+- Motor y prompt de `main` 0.99.55, sólo el brazo `lang`.
+- Luna y Haiku, las 52 tareas y 4 repeticiones: 416 peticiones por el servicio Alfalfa.
+- Coste: 0,098 US$, con un tope de 0,30.
+- 0 errores del servicio.
+- Datos: `docs/pacai/datos/ui-lang-confirmacion.jsonl`.
+
+| | n | Válidas 1.er intento | IC95 % Wilson | Exactas | Entrada (med.) | Salida (med.) | Total (med. · p90) | Coste por exacta |
+|---|---:|---|---|---:|---:|---:|---|---:|
+| GPT-6 Luna | 208 | **208 (100 %)** | 98,2–100 % | 205 | 1328 | 81 | 1,51 s · 2,18 s | 0,186 m$ |
+| Claude Haiku 5.5 | 208 | **208 (100 %)** | 98,2–100 % | 207 | 2145 | 117 | 1,15 s · 1,51 s | 0,291 m$ |
+| **Luna y Haiku** | 416 | **416 (100 %)** | **99,1–100 %** | **412** | 1792 | 95 | 1,32 s · 1,89 s | **0,239 m$** |
+| Revalidación anterior, como referencia | 416 | 416 (100 %) | 99,1–100 % | 412 | — | — | — | 0,242 m$ |
+| OpenUI Lang 1.0 (§10.2), como referencia | 415 | 415 (100 %) | 99,1–100 % | 377 | — | — | — | 0,314 m$ |
+
+- **Se confirma con respuestas nuevas:** ninguna pantalla no válida, en altas ni en cambios (256/256 y 160/160).
+  Ninguna necesitó la corrección.
+- **Las 4 que no hacen lo pedido** son las mismas formas de antes:
+  - «una rejilla de 3 columnas» con un `Stack direction=grid` sin columnas (Luna, 2);
+  - «lado a lado» con un `Stack direction=grid` (Haiku 1, Luna 1).
+
+  Todos los cambios salen exactos (160/160).
+- **Coste:** 0,239 m$ por pantalla exacta, un 24 % menos que OpenUI en §10.2.
+- **El intervalo de Wilson** dice que, con esta muestra, la tasa real de pantallas válidas a la primera está por
+  encima del 99,1 % con un 95 % de confianza. No demuestra que un fallo sea imposible.
+
 ### 10.4 Dos tolerancias más que dejan el mismo árbol (27 de noviembre de 2026)
 
 Salen del benchmark de UI Lang 3 con los briefs de OpenUI y de una lluvia de ideas de la Mesa Dorada. Ocho
