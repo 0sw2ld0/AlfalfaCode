@@ -201,3 +201,22 @@ def test_ajustes_por_stdio_aceptan_el_modo():
     t.receive('{"tipo":"ajustes","modo":"libre"}')
     assert t.take_settings() == {'modo': 'plan'}
     assert 'inválido' in out.getvalue()
+
+
+def test_el_catalogo_de_modos_trae_cada_modo_con_nombre_resumen_y_confirmacion():
+    from alfalfa.permisos import modos
+    catalogo = modos.catalogo()
+    assert [m['modo'] for m in catalogo] == list(modos.MODOS)
+    assert all(m['nombre'] and m['resumen'] for m in catalogo)
+    assert [m['modo'] for m in catalogo if m.get('confirmar')] == [modos.OMITIR]
+
+
+def test_alfalfa_modos_json_lista_el_catalogo(capsys):
+    from alfalfa import terminal
+    from alfalfa.permisos import modos
+    assert terminal.main(['--modos', '--json']) == 0
+    salida = json.loads(capsys.readouterr().out)
+    assert salida['tipo'] == 'modos'
+    assert [m['modo'] for m in salida['modos']] == list(modos.MODOS)
+    assert {m['modo']: m['pacai'] for m in salida['modos']}['ediciones'] == 'accept_edits'
+    assert {m['modo']: m['pacai'] for m in salida['modos']}['omitir'] == 'bypass_permissions'

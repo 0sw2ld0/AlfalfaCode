@@ -286,6 +286,18 @@ class TransportePacai(Transport):
             cierre = self._acortar_cierre(m)
             if bytes_de_linea(codificar(cierre)) <= self.max_bytes:
                 return cierre
+        if m['type'] == 'alfalfa.session' and isinstance(m['payload'].get('modes'), list):
+            # Los modos son un extra para pintar el menú: primero sin descripciones y, si ni así, sin la lista.
+            # Lo demás de la sesión (id, modelo, modo…) es lo que el cliente necesita de verdad.
+            sin_resumen = copy.deepcopy(m)
+            for modo in sin_resumen['payload']['modes']:
+                if isinstance(modo, dict):
+                    modo.pop('summary', None)
+            if bytes_de_linea(codificar(sin_resumen)) <= self.max_bytes:
+                return sin_resumen
+            m = dict(m, payload={k: v for k, v in m['payload'].items() if k != 'modes'})
+            if bytes_de_linea(codificar(m)) <= self.max_bytes:
+                return m
         m = copy.deepcopy(m)              # el original lo guarda el traductor (el digest va con sus argumentos)
         for _ in range(60):
             cadenas: list[tuple[Any, Any]] = []

@@ -759,9 +759,12 @@ async def run(args, transport):
             manager.elegir_contexto(args.contexto)
         if esperar:
             code = 0  # Abrir y cerrar sin turno no es un fallo.
+        from .permisos.modos import catalogo as modos_disponibles
         transport.emit('sesion', id=manager.task['id'], cwd=manager.task['cwd'],
                        modelo=manager.task['model'], esfuerzo=manager.task['effort'], modo=manager.task['modo'],
                        contexto=manager.task.get('contexto_modo') or 'ahorro',
+                       # Los modos que admite este motor: el cliente los pinta sin tenerlos escritos.
+                       modos=modos_disponibles(),
                        # Lo ya gastado: al reanudar, el panel lo enseña sin esperar al primer turno.
                        tokens=manager.task.get('total_tokens') or 0,
                        **{k: v for k, v in gasto(manager.task).items() if k == 'coste'},

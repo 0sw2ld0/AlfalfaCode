@@ -145,3 +145,42 @@ def test_la_tabla_no_pisa_claves_y_cada_tipo_es_snake_case():
     assert de_la_orden({'session': 1, 'text': 'x'}) == {'sesion': 1, 'text': 'x'}
     for nombre in list(TIPOS.values()) + list(CAMPOS.values()):
         assert re.fullmatch(r'[a-z][a-z0-9_]*', nombre), nombre
+
+
+def test_los_modos_salen_del_motor_en_la_sesion_y_en_set_settings(monkeypatch):
+    from alfalfa.pacai import nombres
+    from alfalfa.permisos import modos
+    # La sesión los anuncia en inglés, con el id que acepta `set_settings`.
+    sesion = en_ingles({'modos': modos.catalogo()})
+    ids = [m['mode'] for m in sesion['modes']]
+    assert ids == ['auto', 'manual', 'accept_edits', 'plan', 'turbo', 'bypass_permissions']
+    assert sesion['modes'][-1]['confirm'] is True
+    for ident in ids:
+        assert de_la_orden({'mode': ident}, 'set_settings')['modo'] in modos.MODOS
+    # Un modo nuevo del motor se acepta sin tocar las tablas de PACAI.
+    monkeypatch.setattr(modos, 'MODOS', modos.MODOS + ('nuevo',))
+    import importlib
+    recargado = importlib.reload(nombres)
+    try:
+        assert recargado.de_la_orden({'mode': 'nuevo'}, 'set_settings') == {'modo': 'nuevo'}
+    finally:
+        monkeypatch.undo()
+        importlib.reload(nombres)
+
+
+def test_una_sesion_que_no_cabe_pierde_antes_las_descripciones_de_los_modos():
+    from alfalfa.pacai.transporte import TransportePacai
+    from alfalfa.permisos import modos
+    t = TransportePacai.__new__(TransportePacai)
+    modes = en_ingles({'modos': modos.catalogo()})['modes']
+    base = {'pacai': '0.3', 'id': 'm_1', 'type': 'alfalfa.session', 'session': 's', 'sender': 'agent', 'seq': 3,
+            'time': 't', 'payload': {'id': 'abc', 'model': 'x', 'mode': 'auto', 'modes': modes}}
+    sin_resumen = len(json.dumps(dict(base, payload=dict(base['payload'], modes=[
+        {k: v for k, v in m.items() if k != 'summary'} for m in modes])), ensure_ascii=False))
+    t.max_bytes = sin_resumen + 10
+    corto = t._acortar(base)
+    assert [m['mode'] for m in corto['payload']['modes']] == [m['mode'] for m in modes]
+    assert all('summary' not in m for m in corto['payload']['modes'])
+    t.max_bytes = 300
+    assert 'modes' not in t._acortar(base)['payload']
+    assert base['payload']['modes'] == modes            # el original no se toca

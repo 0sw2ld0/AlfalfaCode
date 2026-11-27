@@ -23,6 +23,24 @@ AUTO, MANUAL, EDICIONES, PLAN, TURBO, OMITIR = 'auto', 'manual', 'ediciones', 'p
 MODOS = (AUTO, MANUAL, EDICIONES, PLAN, TURBO, OMITIR)
 NOMBRES = {AUTO: 'Auto', MANUAL: 'Manual', EDICIONES: 'Aceptar ediciones', PLAN: 'Plan',
            TURBO: 'Turbo', OMITIR: 'Omitir permisos'}
+# Una línea por modo, la misma que enseña el menú de modos de la app de Mac (PermissionMode.summary).
+RESUMENES = {
+    AUTO: 'Las órdenes normales corren en el sandbox; pregunta las peligrosas',
+    MANUAL: 'Pregunta antes de cada cambio: órdenes y ediciones',
+    EDICIONES: 'Edita sin preguntar; pregunta antes de cada orden',
+    PLAN: 'Sólo lee y propone un plan antes de cambiar nada',
+    TURBO: 'Permite borrados forzados del proyecto sin confirmar. Mantiene el sandbox y los demás permisos.',
+    OMITIR: 'Aprueba todo sin preguntar, también fuera del sandbox',
+}
+# Los que el cliente confirma antes de activarlos.
+CONFIRMAR = frozenset({OMITIR})
+
+
+def catalogo() -> list[dict]:
+    """Los modos en el orden del menú, para que un cliente (la extensión de VS Code) los pinte sin tenerlos escritos:
+    un modo nuevo aparece en él sin tocar el cliente."""
+    return [{'modo': m, 'nombre': NOMBRES.get(m, m.capitalize()), 'resumen': RESUMENES.get(m, ''),
+             **({'confirmar': True} if m in CONFIRMAR else {})} for m in MODOS]
 # Motivos de permiso nuevos: una orden que el modo manda preguntar y una edición.
 MOTIVO_MODO = 'modo'
 MOTIVO_EDICION = 'edicion'

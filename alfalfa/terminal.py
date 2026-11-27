@@ -1545,6 +1545,8 @@ def main(argv=None):
     listing.add_argument('--delegacion-mcp', metavar='MODELO',
                          help='Servir por stdio consultas de texto al modelo elegido para Antigravity')
     listing.add_argument('--modelos', action='store_true')
+    listing.add_argument('--modos', action='store_true',
+                         help='Listar los modos de permisos (con --json, su id, nombre y descripción)')
     listing.add_argument('--complementos', action='store_true', help='Listar complementos autorizados sin ejecutarlos')
     listing.add_argument('--turnos', metavar='ID', help='Turnos de una sesión (con --json)')
     listing.add_argument('--historial', metavar='ID', help='Conversación guardada de una sesión (con --json)')
@@ -1697,6 +1699,18 @@ def main(argv=None):
             args.encargo = con_archivos(args.encargo, [os.path.abspath(os.path.expanduser(r)) for r in args.archivo])
         except ArchivoInvalido as exc:
             parser.error(str(exc))
+    if args.modos:
+        # Lo que pinta un cliente en su menú de modos antes de abrir una sesión (la extensión de VS Code).
+        from .pacai.nombres import en_ingles
+        from .permisos.modos import catalogo
+        if args.json:
+            # Cada modo lleva también su id de PACAI (`ediciones` → `accept_edits`): el que usa `set_settings`.
+            lista = [dict(m, pacai=en_ingles({'modo': m['modo']})['mode']) for m in catalogo()]
+            print(json.dumps({'version': 2, 'tipo': 'modos', 'modos': lista}, ensure_ascii=False))
+        else:
+            for entrada in catalogo():
+                print(f"{entrada['modo']:<10} {entrada['nombre']}: {entrada['resumen']}")
+        return 0
     if (args.stdio or args.pacai or args.sesiones or args.modelos or args.turnos or args.historial
             or args.complementos):
         from .stdio import entry

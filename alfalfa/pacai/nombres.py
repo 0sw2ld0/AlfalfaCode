@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..permisos import modos as _modos_del_motor
+
 __all__ = ['CAMPOS', 'TIPOS', 'VALORES', 'YA_EN_INGLES', 'ORDEN_VALORES', 'en_ingles', 'de_la_orden',
            'razon', 'peticion_del_navegador', 'respuesta_del_navegador']
 
@@ -47,6 +49,8 @@ CAMPOS = {
     'movidas': 'moved', 'saltadas': 'skipped_sessions', 'liberado': 'freed', 'totales': 'totals',
     'imagenes': 'images', 'en_uso': 'in_use', 'ultimo_uso': 'last_used', 'dias_sin_usar': 'days_unused',
     'vista_previa': 'preview', 'instantaneas': 'snapshots', 'indice': 'index',
+    # permisos/modos.py: catalogo() en el evento `sesion`
+    'modos': 'modes', 'confirmar': 'confirm',
     'accion': 'action', 'actividad': 'activity', 'activo': 'active', 'actualizada': 'updated',
     'actualizado': 'updated', 'agente': 'agent', 'agotado': 'exhausted', 'ajustes': 'settings', 'alcance': 'scope',
     'almacen': 'store', 'almacenes': 'stores', 'ambito': 'area', 'ancla': 'anchor', 'antes': 'before',
@@ -198,8 +202,9 @@ YA_EN_INGLES = frozenset({
 
 # Órdenes `alfalfa.*` del cliente con un valor enumerado: campo inglés → valor inglés → valor v2. Un valor que no
 # está aquí no llega al motor: es un error, como lo era un valor no válido en v2.
-_INVERSA_MODOS = {'auto': 'auto', 'manual': 'manual', 'accept_edits': 'ediciones', 'plan': 'plan', 'turbo': 'turbo',
-                  'bypass_permissions': 'omitir'}
+# Sale de permisos/modos.py: un modo nuevo se puede pedir por PACAI sin tocar esta tabla. Su nombre inglés es el de
+# `_MODOS` y, si no está, el mismo (`turbo` → `turbo`).
+_INVERSA_MODOS = {_MODOS.get(m, m): m for m in _modos_del_motor.MODOS}
 ORDEN_VALORES: dict[str, dict[str, dict[str, str]]] = {
     'set_settings': {'mode': _INVERSA_MODOS},
     'set_context_mode': {'mode': {'saving': 'ahorro', 'full': 'completo'}},
