@@ -410,6 +410,32 @@ Las preguntas abiertas del primer borrador, ya resueltas:
 
 ## 10. PACAI UI Lang (por modelo) y piezas declarativas (detrás de un flag)
 
+> **En pocas palabras.** PACAI es el idioma fijo con el que el motor y las apps (app de Mac, VS Code, la web)
+> se entienden, y las pantallas viajan siempre en su formato oficial, `pacai.ui/1`. PACAI UI Lang 3 es una
+> forma abreviada de escribir esas mismas pantallas que usa sólo el modelo, porque escribir menos tokens
+> cuesta menos. El motor la traduce a `pacai.ui/1`, la valida y le pone la revisión antes de mandarla, así
+> que las apps nunca la ven y no cambian.
+>
+> La misma tarjeta, en los dos formatos que puede escribir el modelo (49 y 86 tokens, `o200k_base`):
+>
+> ```text
+> root Card "Palta Hass" meta="hoy · fruta" > nota,ver
+> nota Text "Sube un 3 % esta semana."
+> ver Button "Ver historial" variant=primary @press={"send":"ver_historial"}
+> ```
+>
+> ```text
+> {"id":"root","component":"Card","props":{"title":"Palta Hass","meta":"hoy · fruta"},"children":["nota","ver"]}
+> {"id":"nota","component":"Text","props":{"text":"Sube un 3 % esta semana."}}
+> {"id":"ver","component":"Button","props":{"label":"Ver historial","variant":"primary"},"events":{"press":{"send":"ver_historial"}}}
+> ```
+>
+> En los dos casos, el `message_end` lleva al cliente los mismos tres nodos `pacai.ui/1`. Una analogía: el mozo
+> apunta «2 lomo s/ceb» en su libreta, y a la cocina le llega la comanda impresa con todo escrito. Deja de valer
+> en un punto: el motor no adivina. Una línea que no cumple el catálogo se rechaza y se le pide al modelo que la
+> corrija; sólo se hacen unos pocos arreglos que no cambian lo pedido (§10, «Reparaciones seguras»).
+> Explicación larga, con diagrama: https://claude.ai/artifact/SYvtFn3ZKZxULGKKk3WRPM (privada hasta que se comparta).
+
 Sale de la 3.ª y la 4.ª lluvia de ideas. **PACAI UI Lang va encendido por modelo**: sólo con los modelos con los que
 se midió y cumple el criterio de adopción (hoy GPT-6 Luna y Claude Haiku 5.5, `ui_lang.MODELOS_MEDIDOS`; §10.1).
 Con cualquier otro modelo el JSON con ejemplos de arriba sigue siendo el camino normal. `ALFALFA_PACAI_UI_LANG=1`
