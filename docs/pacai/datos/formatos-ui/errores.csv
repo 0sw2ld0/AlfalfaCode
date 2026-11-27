@@ -1,4 +1,8 @@
 conjunto,modelo,formato,clase,pantallas
+openui,beam:cloud,PACAI UI Lang 3,firma-o-tipo,8
+openui,beam:cloud,PACAI UI Lang 3,otros,3
+openui,beam:cloud,PACAI UI Lang 3,referencias,2
+openui,beam:cloud,PACAI UI Lang 3,enum,1
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,enum,6
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,firma-o-tipo,4
 openui,claude-haiku-5-5,PACAI JSON con ejemplos,acciones,4
@@ -13,6 +17,27 @@ openui,claude-haiku-5-5,OpenUI Lang 1.0,acciones,12
 openui,claude-haiku-5-5,OpenUI Lang 1.0,sintaxis,1
 openui,claude-haiku-5-5,OpenUI Lang 1.0,enum,1
 openui,claude-haiku-5-5,OpenUI Lang 1.0,firma-o-tipo,1
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,otros,4
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,enum,3
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,referencias,2
+openui,deepseek-v4.1-flash,PACAI UI Lang 3,sintaxis,1
+openui,gemma4:31b-cloud,PACAI UI Lang 3,enum,6
+openui,gemma4:31b-cloud,PACAI UI Lang 3,referencias,2
+openui,gemma4:31b-cloud,PACAI UI Lang 3,obligatoria,1
+openui,gemma4:e4b-u,PACAI UI Lang 3,sintaxis,42
+openui,gemma4:e4b-u,PACAI UI Lang 3,enum,3
+openui,gemma4:e4b-u,PACAI UI Lang 3,otros,1
+openui,glm-5.3-flash,PACAI UI Lang 3,firma-o-tipo,5
+openui,glm-5.3-flash,PACAI UI Lang 3,enum,5
+openui,glm-5.3-flash,PACAI UI Lang 3,referencias,4
+openui,glm-5.3-flash,PACAI UI Lang 3,sintaxis,3
+openui,glm-5.3-flash,PACAI UI Lang 3,otros,3
+openui,glm-5.3-flash,PACAI UI Lang 3,obligatoria,2
+openui,glm-5.3:cloud,PACAI UI Lang 3,otros,5
+openui,glm-5.3:cloud,PACAI UI Lang 3,referencias,5
+openui,glm-5.3:cloud,PACAI UI Lang 3,sintaxis,2
+openui,glm-5.3:cloud,PACAI UI Lang 3,sin-bloque,1
+openui,glm-5.3:cloud,PACAI UI Lang 3,firma-o-tipo,1
 openui,gpt-6-luna,PACAI JSON con ejemplos,firma-o-tipo,8
 openui,gpt-6-luna,PACAI JSON con ejemplos,obligatoria,5
 openui,gpt-6-luna,PACAI JSON con ejemplos,referencias,3
@@ -29,10 +54,32 @@ openui,gpt-6-luna,PACAI UI Lang 3,acciones,1
 openui,gpt-6-luna,PACAI UI Lang 3,firma-o-tipo,1
 openui,gpt-6-luna,OpenUI Lang 1.0,referencias,4
 openui,gpt-6-luna,OpenUI Lang 1.0,firma-o-tipo,1
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,referencias,7
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,otros,1
+openui,kimi-k3.1-pro:cloud,PACAI UI Lang 3,obligatoria,1
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,referencias,7
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,otros,3
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,enum,1
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,sintaxis,1
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,firma-o-tipo,1
+openui,mimo-v2.6-flash:cloud,PACAI UI Lang 3,acciones,1
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,referencias,12
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,firma-o-tipo,3
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,otros,1
+openui,mimo-v2.6-pro:cloud,PACAI UI Lang 3,sintaxis,1
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,enum,12
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,firma-o-tipo,6
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,referencias,6
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,sintaxis,4
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,obligatoria,2
+openui,minimax-m3.1-flash:cloud,PACAI UI Lang 3,acciones,1
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,sin-bloque,4
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,firma-o-tipo,3
 pacai,claude-haiku-5-5,PACAI JSON con ejemplos,referencias,1
 pacai,claude-haiku-5-5,PACAI UI Lang 3,referencias,3
+pacai,gemma4:e4b-u,PACAI UI Lang 3,sintaxis,18
+pacai,gemma4:e4b-u,PACAI UI Lang 3,componente-inventado,1
+pacai,gemma4:e4b-u,PACAI UI Lang 3,firma-o-tipo,1
 pacai,glm-5.3-flash,PACAI JSON con ejemplos,sin-bloque,2
 pacai,glm-5.3-flash,PACAI JSON con ejemplos,obligatoria,1
 pacai,glm-5.3-flash,PACAI JSON con ejemplos,referencias,1
@@ -40,3 +87,5 @@ pacai,glm-5.3-flash,PACAI UI Lang 3,sintaxis,2
 pacai,glm-5.3-flash,PACAI UI Lang 3,referencias,1
 pacai,gpt-6-luna,PACAI JSON con ejemplos,referencias,1
 pacai,gpt-6-luna,PACAI UI Lang 3,sin-bloque,1
+pacai,mimo-v2.6-flash:cloud,PACAI UI Lang 3,sin-bloque,2
+pacai,mimo-v2.6-pro:cloud,PACAI UI Lang 3,firma-o-tipo,1

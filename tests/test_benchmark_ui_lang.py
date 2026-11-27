@@ -41,7 +41,7 @@ def test_la_salida_json_de_agy_con_y_sin_tokens():
 def _fila(modelo, conjunto, validas, n, coste):
     return {'modelo': modelo, 'brazo': 'lang', 'conjunto': conjunto, 'validas': validas, 'n': n,
             'pct_validas': validas / n, 'wilson': c.wilson(validas, n), 'coste_por_peticion': coste,
-            'salida_med': 100, 'total_med': 1.0, 'referencia': None}
+            'salida_med': 100, 'total_med': 1.0, 'referencia': None, 'sin_precio': False}
 
 
 def test_la_frontera_de_pareto_solo_con_los_dos_conjuntos():

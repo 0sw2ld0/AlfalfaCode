@@ -266,7 +266,7 @@ visibles.
 | OpenUI Lang 1.0 | **182/182 (100 %)** | 0 | 182/182 |
 | PACAI JSON con ejemplos | 146/184 (79,3 %) | 0 | 183/184 (99,5 %) |
 
-- **Todas las pantallas válidas se dibujan**, con los cinco modelos y los tres formatos. Ninguna sale en blanco ni
+- **Todas las pantallas válidas se dibujan**, con los 15 modelos y los tres formatos. Ninguna sale en blanco ni
   rompe el renderizador, y todos sus nodos llegan al DOM. El validador del motor y el renderizador están de acuerdo.
 - OpenUI se dibuja al 100 % porque su renderizador tolera errores: dibuja lo que entiende aunque falten
   componentes. Es su «99,9 % que se dibuja» frente a su 96,9 % de validez. PACAI elige no enseñar una pantalla a
@@ -274,20 +274,67 @@ visibles.
 
 ### 6.5 Clasificación de modelos
 
-Validez a la primera con UI Lang 3 frente al coste medio por tarea. La validez es la media de las 52 tareas y los
-46 briefs (pesan igual). Sólo entran en la frontera de Pareto los modelos medidos en los dos conjuntos:
+**Qué se mide:** la validez al primer intento con UI Lang 3, frente al coste medio por tarea del primer intento.
 
-| Modelo | Validez | 52 tareas | 46 briefs | Coste por tarea | Frontera |
-|---|---|---|---|---:|:---:|
-| GPT-6 Luna | 89,4 % | 207/208 | 73/92 | 0,31 $/1000 | ✓ |
-| Claude Haiku 5.5 | 87,9 % | 205/208 | 71/92 | 0,50 $/1000 | |
-| DeepSeek v4.1 Flash | — | 52/52 | sin medir | 0,56 $/1000 | |
-| GPT-6.2 Sol | — | 52/52 | sin medir | 3,42 $/1000 | |
-| GLM 5.3 Flash | — | 49/52 | sin medir | 0,25 $/1000 | |
+- **Validez:** media de las 52 tareas y los 46 briefs (pesan igual).
+- **Coste:** también la media de los dos conjuntos.
+- **Frontera de Pareto (✓):** ningún otro modelo es a la vez igual o más válido e igual o más barato.
 
-La clasificación ampliada (modelos de Ollama de otras empresas, Gemini 4 por su CLI y los briefs de los tres de
-abajo) está preparada en `scripts/comparar_formatos_ui.py` (`--proveedor ollama` y `--proveedor agy`), pero está
-pendiente: es una tanda de pago y necesita el permiso del dueño.
+**Tanda del 27-11-2026:** 1 repetición por modelo, temperatura 0, el mismo prompt y el mismo validador. Luna y Haiku
+traen las respuestas de §6.2 y §6.3.
+
+| Modelo (empresa, vía) | Validez | 52 tareas | 46 briefs | Coste por tarea | Total (mediana) | Frontera |
+|---|---|---|---|---:|---:|:---:|
+| Gemini 3.8 Flash, esfuerzo bajo (Google, `agy`) | 100 % | 51/51 | 44/44 | ~6,15 $/1000 | 24,7 s | ✓ |
+| GPT-6.2 Sol (OpenAI, Alfalfa) | 100 % | 52/52 | 46/46 | 6,28 $/1000 | 6,0 s | |
+| Gemini 4 Argon, esfuerzo bajo (Google, `agy`) | 100 % | 50/50 | 45/45 | ~9,53 $/1000 | 35,9 s | |
+| Gemma 4 31B (Google, Ollama Cloud) | 90,2 % | 52/52 | 37/46 | ~0,32 $/1000 | 2,4 s | ✓ |
+| Kimi K3.1 Pro (Moonshot, Ollama Cloud) | 90,2 % | 52/52 | 37/46 | ~8,64 $/1000 | 4,9 s | |
+| GPT-6 Luna (OpenAI, Alfalfa) | 89,4 % | 207/208 | 73/92 | 0,31 $/1000 | 2,4 s | ✓ |
+| DeepSeek v4.1 Flash (DeepSeek, Alfalfa) | 89,1 % | 52/52 | 36/46 | 0,97 $/1000 | 3,0 s | |
+| Claude Haiku 5.5 (Anthropic, Alfalfa) | 87,9 % | 205/208 | 71/92 | 0,50 $/1000 | 2,4 s | |
+| Beam 1.0 (Ollama Cloud) | 84,8 % | 52/52 | 32/46 | sin precio | 6,7 s | |
+| GLM 5.3 (Z.ai, Ollama Cloud) | 84,8 % | 52/52 | 32/46 | ~3,69 $/1000 | 3,1 s | |
+| MiMo V2.6 Flash (Xiaomi, Ollama Cloud) | 82,9 % | 50/52 | 32/46 | ~0,31 $/1000 | 3,2 s | ✓ |
+| MiMo V2.6 Pro (Xiaomi, Ollama Cloud) | 80,6 % | 51/52 | 29/46 | ~1,09 $/1000 | 3,4 s | |
+| GLM 5.3 Flash (Z.ai, Alfalfa) | 73,2 % | 49/52 | 24/46 | 0,39 $/1000 | 3,8 s | |
+| MiniMax M3.1 Flash (MiniMax, Ollama Cloud) | 66,3 % | 52/52 | 15/46 | ~0,65 $/1000 | 5,9 s | |
+| Gemma 4 E4B, en este Mac (Google, Ollama local) | 30,8 % | 32/52 | 0/46 | 0 | 21,3 s | ✓ |
+
+`~` es un precio de referencia del catálogo: esos modelos se pagan con un plan (Ollama, Gemini), no por token.
+
+**Lectura:**
+
+- **Las 52 tareas propias son fáciles para casi todos:** 14 de los 15 modelos superan el 94 %. Los briefs largos de
+  OpenUI son los que separan.
+- **Sólo Gemini 3.8 Flash, Gemini 4 Argon y GPT-6.2 Sol sacan válidos todos los briefs,** también en la banda de
+  16–18 requisitos. Cuestan unas 20 veces más por tarea que Luna.
+- **En la zona barata, a unos 0,31 $/1000 por tarea,** Gemma 4 31B (90,2 %), GPT-6 Luna (89,4 %) y MiMo V2.6
+  Flash (82,9 %) están en la frontera.
+  - Gemma 4 31B y Kimi K3.1 Pro empatan en validez, pero Kimi cuesta 27 veces más.
+  - Gemma 4 31B es la candidata más clara para estudiar si se enciende UI Lang 3 en más modelos. Antes habría que
+    medirla con más repeticiones.
+- **Dónde fallan:**
+  - en los briefs, sobre todo por enums fuera del catálogo y por hijos que no existen;
+  - MiniMax M3.1 Flash pierde casi todos los briefs de más de 6 requisitos.
+- **Gemma 4 E4B, el modelo pequeño que corre en este Mac,** no aprende la sintaxis. Sangra los hijos en líneas
+  aparte en vez de ponerlos tras `>`, y no saca ningún brief. Está en la frontera sólo porque cuesta 0.
+
+**Cómo leerla:**
+
+- **Gemini va por el CLI de Antigravity (`agy -p`),** que es un agente con su propio prompt de sistema, de unos
+  19 000 tokens.
+  - El prompt de UI Lang va al principio del mensaje y se le pide que no use herramientas.
+  - Por eso tarda 20–40 s.
+  - Su coste cuenta sólo nuestro prompt, al precio de referencia.
+  - 6 de sus 196 peticiones fallaron cuatro veces en el servicio («empty conversation id») y no cuentan; por eso
+    su n es menor.
+- **Qwen 3.5 ya no está en Ollama:** el servicio responde que se retiró el 25-09-2026.
+- **1 repetición por modelo:** con 46 briefs, el intervalo de Wilson de un 80 % va de 66 a 89 %. Las diferencias
+  de pocos puntos no son significativas.
+- **Coste de la tanda:**
+  - 0,54 US$ reales por Alfalfa (los briefs de GLM 5.3 Flash, DeepSeek y Sol);
+  - Ollama Cloud y Gemini, contra la cuota de sus planes (1,73 y 1,43 US$ al precio de referencia).
 
 ### 6.6 Tokens y velocidad
 
@@ -315,8 +362,8 @@ pendiente: es una tanda de pago y necesita el permiso del dueño.
   OpenUI y 400 del JSON. Cuesta un 23 % menos que OpenUI y un 37 % menos que el JSON por pantalla exacta. En
   validez a la primera, OpenUI gana por 3 pantallas de 416.
 - **En los briefs de OpenUI, empate en validez** (78–79 %) y UI Lang 3 es el más barato por pantalla válida.
-- **Todo lo que valida se dibuja.** El renderizador no encontró pantallas en blanco ni excepciones en 2265
-  respuestas.
+- **Todo lo que valida se dibuja.** El renderizador no encontró pantallas en blanco ni excepciones en 3377
+  respuestas de 15 modelos.
 - **Dónde gana OpenUI:** en la primera pantalla del streaming y en tolerancia, porque dibuja aunque haya errores.
   En los briefs largos gana con Luna.
 
@@ -337,11 +384,11 @@ python scripts/renderizar_ui.py docs/pacai/datos/formatos-ui-tareas.jsonl docs/p
 Con gasto (antes, pide permiso), un modelo nuevo con UI Lang 3:
 
 ```bash
-python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos qwen3.5:cloud --brazos lang --repeticiones 1 --salida datos.jsonl
+python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos gemma4:31b-cloud --brazos lang --repeticiones 1 --salida datos.jsonl
 ```
 
 ```bash
-python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos qwen3.5:cloud --brazos lang --repeticiones 1 --conjunto openui --briefs ../generative-ui-bench/briefs/briefs.ts --salida briefs.jsonl
+python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos gemma4:31b-cloud --brazos lang --repeticiones 1 --conjunto openui --briefs ../generative-ui-bench/briefs/briefs.ts --salida briefs.jsonl
 ```
 
 - `--proveedor alfalfa` (por defecto) usa el servicio Alfalfa.

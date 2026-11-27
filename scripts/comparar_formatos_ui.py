@@ -446,9 +446,10 @@ async def pedir_agy(cliente, modelo, mensajes, max_salida):
     salida, error = await proc.communicate()
     if proc.returncode:
         raise RuntimeError(f'agy salió con {proc.returncode}: {error.decode(errors="replace")[:300]}')
-    texto, entrada, salida_t = _texto_agy(salida.decode(errors='replace'))
+    texto, _, salida_t = _texto_agy(salida.decode(errors='replace'))
     total = time.monotonic() - t0
-    return (texto, entrada or tokens(prompt), salida_t or tokens(texto), total, [(round(total, 3), len(texto))])
+    # La entrada que informa agy lleva su prompt de agente (~19 000 tokens): para el coste cuenta sólo el nuestro.
+    return (texto, tokens(prompt), salida_t or tokens(texto), total, [(round(total, 3), len(texto))])
 
 
 def _coste(precio, entrada, salida):
@@ -463,6 +464,8 @@ async def una(proveedor, modelo, brazo, tarea, repeticion, max_salida):
             'proveedor': getattr(proveedor, 'id', ''), **{k: v for k, v in tarea[4].items()}}
     if precio and precio.get('referencia'):
         fila['precio_referencia'] = precio['referencia']
+    if not precio:
+        fila['sin_precio'] = True              # cuesta 0 en la tabla, pero no entra en la frontera de Pareto
     async with proveedor.cliente(httpx.Timeout(240, connect=10), tarea={'effort': 'low'}) as cliente:
         try:
             texto, entrada, salida, total, trozos = await pedir(cliente, modelo, mensajes, max_salida)
@@ -622,6 +625,7 @@ def resumen(filas, mapa_tareas):
                        for f, v in cortes.items()},
             'truncadas': sum(r.get('truncada', False) for r in rs),
             'referencia': next((r['precio_referencia'] for r in rs if r.get('precio_referencia')), None),
+            'sin_precio': any(r.get('sin_precio') for r in rs),
             'reparaciones': sum(bool(r.get('reparaciones')) for r in rs),
         }
         if clave[0] == 'openui':
@@ -651,10 +655,11 @@ def clasificacion(res, brazo='lang'):
                       'wilson_briefs': b['wilson'] if b else None, 'bandas': b.get('bandas') if b else None,
                       'coste_tarea': coste, 'salida_med': _med([x['salida_med'] for x in por.values()]),
                       'total_med': _med([x['total_med'] for x in por.values()]),
-                      'referencia': any(x.get('referencia') for x in por.values())})
-    completos = [f for f in filas if f['validez'] is not None]
+                      'referencia': any(x.get('referencia') for x in por.values()),
+                      'sin_precio': any(x.get('sin_precio') for x in por.values())})
+    completos = [f for f in filas if f['validez'] is not None and not f['sin_precio']]
     for f in filas:
-        f['pareto'] = f['validez'] is not None and not any(
+        f['pareto'] = f in completos and not any(
             g is not f and g['validez'] >= f['validez'] and g['coste_tarea'] <= f['coste_tarea']
             and (g['validez'] > f['validez'] or g['coste_tarea'] < f['coste_tarea']) for g in completos)
     return sorted(filas, key=lambda f: (f['validez'] is None, -(f['validez'] or 0), f['coste_tarea']))
@@ -804,7 +809,7 @@ def escribir_csv(datos, carpeta: Path) -> None:
         'briefs_validas': f['briefs'][0] if f['briefs'] else None, 'briefs_n': f['briefs'][1] if f['briefs'] else None,
         'coste_tarea_milesimas': round(1000 * f['coste_tarea'], 4), 'salida_med': f['salida_med'],
         'total_med_s': round(f['total_med'], 2) if f['total_med'] else None, 'pareto': f['pareto'],
-        'precio_de_referencia': f['referencia']} for f in datos['clasificacion']])
+        'precio_de_referencia': f['referencia'], 'sin_precio': f['sin_precio']} for f in datos['clasificacion']])
     # Las muestras llevan saltos de línea: van en JSON, una lista de filas.
     clave = {'json_ej': 'json', 'lang': 'lang', 'openui_ej': 'openui'}
     muestras = [{'muestra': x['muestra'], 'formato': NOMBRES[b], 'tokens': x['tokens'][b],
@@ -871,8 +876,9 @@ def imprimir(datos):
     print('|---|---|---|---|---:|---:|---:|')
     for f in datos['clasificacion']:
         fr = lambda x: f'{x[0]}/{x[1]}' if x else '—'  # noqa: E731
+        coste = 'sin precio' if f['sin_precio'] else ('~' if f['referencia'] else '') + _usd(f['coste_tarea'])
         print(f"| {f['modelo']}{' *' if f['pareto'] else ''} | {_pct(f['validez'])} | {fr(f['tareas'])} |"
-              f" {fr(f['briefs'])} | {'~' if f['referencia'] else ''}{_usd(f['coste_tarea'])} |"
+              f" {fr(f['briefs'])} | {coste} |"
               f" {_num(f['salida_med'])} | {_num(f['total_med'], 2)} s |")
     print('\nTokens del prompt de sistema (o200k_base):', datos['prompt_tokens'])
     print('Errores del servicio:', datos['errores_servicio'])
