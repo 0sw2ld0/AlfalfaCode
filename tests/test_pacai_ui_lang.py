@@ -666,6 +666,30 @@ def test_sin_el_formato_compacto_no_hay_pantallas_sin_valla():
     assert Vistas(Catalogo.de(DECLARACION, {})).sin_valla(TABLERO) is None
 
 
+def test_ui_lang_en_la_valla_del_json_se_lee_como_ui_lang():
+    # CuyMercado pedía «un bloque pacai-ui view=tablero op=replace» y el modelo escribía ahí líneas de UI Lang: cada
+    # una salía «no es JSON» y el tablero no cambiaba.
+    vistas = Vistas(catalogo())
+    data, errores = vistas.aplicar({'view': 'tablero', 'op': 'replace'}, TABLERO.splitlines())
+    assert errores == [] and data['view'] == 'tablero' and len(data['nodes']) == 8
+    assert vistas.reparaciones == ['Bloque pacai-ui con líneas de PACAI UI Lang: se lee como PACAI UI Lang.']
+    # El segundo pedido es un cambio contra lo que ya hay, como con la valla de UI Lang.
+    data, errores = vistas.aplicar({'view': 'tablero', 'op': 'replace'}, PATCH.splitlines())
+    assert errores == [] and data['rev'] == 2
+
+
+def test_la_valla_del_json_sigue_siendo_json():
+    vistas = Vistas(catalogo())
+    data, errores = vistas.aplicar({'view': 'tablero'}, TABLERO_JSON.splitlines())
+    assert errores == [] and len(data['nodes']) == 8 and vistas.reparaciones == []
+    # Una línea que no es del formato ni JSON: no se adivina, se rechaza como siempre.
+    data, errores = Vistas(catalogo()).aplicar({'view': 'v'}, ['root Stack > a', 'esto no es nada'])
+    assert data is None and errores == ['Línea 1: no es JSON.', 'Línea 2: no es JSON.']
+    # Sin el formato compacto tampoco se lee.
+    data, errores = Vistas(Catalogo.de(DECLARACION, {})).aplicar({'view': 'v'}, TABLERO.splitlines())
+    assert data is None and errores[0] == 'Línea 1: no es JSON.'
+
+
 async def test_el_motor_dibuja_una_respuesta_sin_valla_y_deja_la_prosa_como_texto(monkeypatch):
     monkeypatch.setenv(ui_lang.FLAG, '1')
     c = Cliente(perfiles=('work', 'ui'))

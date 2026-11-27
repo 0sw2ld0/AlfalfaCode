@@ -501,6 +501,23 @@ class Vistas:
         self.vistas: dict[str, Vista] = {}
         self.ultima: str | None = None          # la última vista que cambió: la que el modelo acaba de ver
 
+    def es_lang(self, lineas: list[str]) -> bool:
+        """Si un bloque ```pacai-ui (el del JSON) trae en realidad PACAI UI Lang: sólo con el formato activo, sin
+        ninguna línea que empiece por `{` y con cada línea leída como un nodo del catálogo o una baja `-id`."""
+        if not self.catalogo.lang or not lineas or any(x.lstrip().startswith('{') for x in lineas):
+            return False
+        from .ui_lang import ErrorDeLinea, fichas, leer_linea
+
+        tabla = fichas(self.catalogo)
+        for linea in lineas:
+            try:
+                leida = leer_linea(linea)
+            except ErrorDeLinea:
+                return False
+            if leida.tipo == 'cambio' or (leida.tipo == 'alta' and leida.componente not in tabla):
+                return False
+        return True
+
     def sin_valla(self, texto: str) -> dict | None:
         """Los atributos de un bloque de PACAI UI Lang escrito sin valla, o None: la respuesta entera se lee como
         un bloque, pero sólo con el formato compacto activo, sin ninguna valla ``` en el texto y si
@@ -578,6 +595,12 @@ class Vistas:
         un `root` Stack vertical envuelve los nodos de primer nivel (las dos quedan en `reparaciones`)."""
         if attrs.get('lang') is True:
             return self.aplicar_lang(attrs, lineas)
+        if self.es_lang(lineas):
+            # El modelo escribió PACAI UI Lang en la valla del JSON (p. ej. un cliente le pide «un bloque pacai-ui»):
+            # se lee como lo que es en vez de rechazar cada línea. `op` y `rev` del JSON no cuentan aquí.
+            data, errores = self.aplicar_lang({**attrs, 'lang': True}, lineas)
+            self.reparaciones.insert(0, 'Bloque pacai-ui con líneas de PACAI UI Lang: se lee como PACAI UI Lang.')
+            return data, errores
         self.reparaciones = []
         nombre = ascii_de(attrs.get('view', ''), minusculas=True)
         if attrs.get('reabierto'):

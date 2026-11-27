@@ -141,6 +141,7 @@ reparaciones:
 | **Gana la última línea de un id**, también en los cambios. | `-fuente` y luego `fuente Text "otra"` | `test_en_un_cambio_gana_la_ultima_linea_de_un_id` |
 | **Borrar un id que no está no hace nada**, salvo dejar un aviso. | `-c_filtros` | `test_una_baja_con_espacio_vale_y_la_de_un_id_que_no_existe_no_hace_nada` |
 | **Sin valla.** Una respuesta que son sólo líneas del formato se lee como un bloque (`view=pantalla`). La prosa sigue siendo texto. | el tablero sin ```` ``` ```` | `test_una_pantalla_sin_valla_se_lee_si_todo_son_lineas_del_formato` |
+| **UI Lang en la valla del JSON.** Un bloque ```` ```pacai-ui ```` sin ninguna línea `{` cuyas líneas son todas nodos del catálogo o bajas se lee como UI Lang (`op` no cuenta). Una línea que no es ni lo uno ni lo otro deja el bloque como JSON, que la rechaza. | `pacai-ui view=tablero op=replace` con el tablero en UI Lang | `test_ui_lang_en_la_valla_del_json_se_lee_como_ui_lang` |
 | **Vallas de tildes o de dos puntos** (`~~~`, `:::`). | `~~~pacai-ui-lang view=resumen` | `test_un_bloque_con_valla_de_tildes_o_de_dos_puntos_tambien_vale` |
 | **Un `rev` del modelo** se ignora. | `view=v rev=…` | `test_la_revision_la_pone_el_motor_y_un_rev_del_modelo_se_ignora` |
 | **Un `>` sin nada detrás** es un nodo sin hijos. Una lista empezada (`> a,`) sigue siendo un error. | `ahora Card "Ahora" >` | `test_un_mayor_que_sin_hijos_es_como_no_ponerlo` |
