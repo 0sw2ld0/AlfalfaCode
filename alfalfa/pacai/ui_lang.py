@@ -40,6 +40,7 @@ import copy
 import json
 import os
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -76,6 +77,10 @@ PROMPT_BASE = {
 }
 
 _ID = re.compile(r'[a-z][a-z0-9_]*')
+# Un id como lo escriben a veces los modelos: con tildes, eñes o mayúsculas después de la primera letra
+# (`previsión_panel`, `serviceTable`). Se lee como su forma ASCII en minúsculas si el resultado es un id válido; dos ids
+# distintos que dan la misma forma son un error (lo comprueba `Alias`), así que el árbol nunca cambia.
+_ID_ANCHO = re.compile(r'[^\W\d_A-Z][\w]*')
 _COMP = re.compile(r'[A-Z][A-Za-z0-9]*')
 _CLAVE = re.compile(r'(@?)([A-Za-z_][A-Za-z0-9_]*)=')
 _ENLACE = re.compile(r'\$([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)')
@@ -196,6 +201,7 @@ class Linea:
     eventos: dict[str, Any] = field(default_factory=dict)
     operador: str | None = None                 # None | '>' | '+>'
     hijos: list[str] = field(default_factory=list)
+    escritos: dict[str, str] = field(default_factory=dict)    # id normalizado → como lo escribió el modelo
 
 
 def _valor(texto: str, i: int) -> tuple[Any, int]:
@@ -220,24 +226,67 @@ def _valor(texto: str, i: int) -> tuple[Any, int]:
     return m.group(0), m.end()
 
 
+def normalizar_id(texto: str) -> str | None:
+    """`previsión_panel` → `prevision_panel`, `serviceTable` → `servicetable`; None si no queda un id válido."""
+    if _ID.fullmatch(texto):
+        return texto
+    if not _ID_ANCHO.fullmatch(texto):
+        return None
+    sin_tildes = ''.join(c for c in unicodedata.normalize('NFD', texto) if not unicodedata.combining(c)).lower()
+    return sin_tildes if _ID.fullmatch(sin_tildes) else None
+
+
+def _id(texto: str, salida: Linea) -> str | None:
+    ident = normalizar_id(texto)
+    if ident is not None and ident != texto:
+        salida.escritos[ident] = texto
+    return ident
+
+
+class Alias:
+    """Los ids que se normalizaron en un bloque: dos formas distintas que dan el mismo id no se juntan nunca (sería
+    adivinar que son el mismo nodo). Los ids de la pantalla que ya existe cuentan como escritos tal cual."""
+
+    def __init__(self, existentes=()):
+        self.formas: dict[str, str] = {i: i for i in existentes}
+
+    def comprobar(self, linea: Linea) -> list[str]:
+        """Las reparaciones que deja la línea. `ErrorDeLinea` si choca con otra forma del mismo id."""
+        notas = []
+        for ident in [linea.ident, *linea.hijos]:
+            forma = linea.escritos.get(ident, ident)
+            antes = self.formas.setdefault(ident, forma)
+            if antes != forma:
+                raise ErrorDeLinea(f'«{antes}» y «{forma}» son ids distintos que sólo cambian en tildes o mayúsculas; '
+                                   'los ids van en a-z, 0-9 y _.', linea.ident)
+            if ident in linea.escritos and f'{forma} → {ident}' not in notas:
+                notas.append(f'{forma} → {ident}')
+        return notas
+
+
 def leer_linea(linea: str) -> Linea:
     """Una línea de PACAI UI Lang, sin mirar el catálogo. `ErrorDeLinea` si no sigue la gramática."""
     texto = linea.strip()
     if texto.startswith('-'):
-        ident = texto[1:].strip()                  # `- fuente` también: el espacio no cambia lo que pide
-        if not _ID.fullmatch(ident):
+        crudo = texto[1:].strip()                  # `- fuente` también: el espacio no cambia lo que pide
+        salida = Linea('baja', crudo)
+        ident = _id(crudo, salida)
+        if ident is None:
             raise ErrorDeLinea('Una baja es -id, sin nada más.')
-        return Linea('baja', ident)
+        salida.ident = ident
+        return salida
     if texto.startswith('~'):
         m = _ID.match(texto, 1)
         if not m:
             raise ErrorDeLinea('Un cambio empieza por ~id.')
         salida, i = Linea('cambio', m.group(0)), m.end()
     else:
-        m = _ID.match(texto)
-        if not m or m.end() < len(texto) and not texto[m.end()].isspace():
+        m = _ID_ANCHO.match(texto)
+        salida = Linea('alta', '')
+        ident = _id(m.group(0), salida) if m else None
+        if ident is None or m.end() < len(texto) and not texto[m.end()].isspace():
             raise ErrorDeLinea('Una línea empieza por un id [a-z][a-z0-9_]*.')
-        salida = Linea('alta', m.group(0))
+        salida.ident = ident
         j = m.end()
         while j < len(texto) and texto[j].isspace():
             j += 1
@@ -254,8 +303,11 @@ def leer_linea(linea: str) -> Linea:
             if texto.startswith(('+>', '>'), i):
                 salida.operador = '+>' if texto[i] == '+' else '>'
                 resto = texto[i + len(salida.operador):].strip()
-                hijos = [h.strip() for h in resto.split(',')] if resto else []
-                if not hijos or any(not _ID.fullmatch(h) for h in hijos):
+                if not resto and salida.operador == '>':
+                    salida.operador = None             # `>` sin nada detrás: sin hijos, como si no estuviera
+                    break
+                hijos = [_id(h.strip(), salida) for h in resto.split(',')] if resto else []
+                if not hijos or any(h is None for h in hijos):
                     raise ErrorDeLinea('Los hijos van como id,id tras ' + salida.operador + ', al final de la línea.')
                 if len(set(hijos)) != len(hijos):
                     raise ErrorDeLinea('Un hijo repetido en la lista.')
@@ -375,6 +427,7 @@ class Flujo:
         self.hijos_rechazados: set[str] = set()    # hijos de una línea de alta que no valió
         self.primero: str | None = None            # el id de la primera línea si valió; '' si no valió
         self.provisional: dict[str, dict] = {}     # el nodo de la línea que aún no llegó entera, si ya se lee
+        self.alias = Alias()                       # ids escritos con tildes o mayúsculas, y cómo
 
     def alimentar(self, trozo: str) -> list[list[dict]]:
         """Las publicaciones que deja este trozo. Una línea entera se valida y se queda; la que todavía llega se lee
@@ -419,6 +472,9 @@ class Flujo:
                 raise ErrorDeLinea('En una pantalla nueva sólo van líneas de nodo (para borrar, la vista tiene que '
                                    'existir).',
                                    leida.ident)
+            for nota in self.alias.comprobar(leida):
+                if f'{nota}: los ids van en a-z, 0-9 y _.' not in self.reparaciones:
+                    self.reparaciones.append(f'{nota}: los ids van en a-z, 0-9 y _.')
             nodo = nodo_de(leida, self.catalogo, self.tabla, reparaciones=self.reparaciones)
             if leida.ident in self.nodos:
                 if self.nodos[leida.ident] == nodo:
@@ -561,6 +617,7 @@ class Flujo:
         if self.reintentado:
             raise RuntimeError('Sólo se pide una vez.')
         self.reintentado = True
+        self.alias = Alias()                       # el reintento reenvía el bloque entero
         self.diagnosticos = []
         for linea in texto.splitlines():
             self._linea(linea)
@@ -681,9 +738,13 @@ def _aplicar_cambio(texto: str, nodos: dict[str, dict], catalogo: Catalogo,
     diagnosticos: list[Diagnostico] = []
     avisos: list[str] = []
     ultimo: dict[str, tuple[int, dict | None]] = {}     # id → (línea, nodo; None si la última fue una baja)
+    alias = Alias(nodos)
     for n, texto_linea in enumerate((x for x in texto.splitlines() if x.strip()), 1):
         try:
             linea = leer_linea(texto_linea)
+            for nota in alias.comprobar(linea):
+                if f'{nota}: los ids van en a-z, 0-9 y _.' not in avisos:
+                    avisos.append(f'{nota}: los ids van en a-z, 0-9 y _.')
             if linea.tipo == 'cambio':
                 raise ErrorDeLinea('Un cambio es la línea entera del nodo («id Comp …», con todos sus hijos tras >), '
                                    'sin ~ ni +>.', linea.ident)

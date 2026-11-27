@@ -997,3 +997,36 @@ Las 4 que no son exactas son modelos que eligen otra forma de lo pedido:
 - Haiku, en «lado a lado», usa un `Stack direction=grid`, que en una pantalla estrecha los apila (2).
 
 Es una sola tanda, así que no demuestra que el fallo sea imposible.
+
+### 10.4 Dos tolerancias más que dejan el mismo árbol (27 de noviembre de 2026)
+
+Salen del benchmark de UI Lang 3 con los briefs de OpenUI y de una lluvia de ideas de la Mesa Dorada. Ocho
+pantallas de Luna y Haiku se perdían por sintaxis, y casi todas por dos fallos que no cambian lo pedido:
+
+5. **Un `>` sin nada detrás** (`current Card "Ahora" detail="…" >`) vale como si no estuviera: el nodo no tiene
+   hijos. Una lista empezada (`> a,`) sigue siendo un error.
+6. **Ids con tildes, eñes o mayúsculas** (`previsión_panel`, `serviceTable`) se leen en ASCII y minúsculas
+   (`prevision_panel`, `servicetable`), en la línea del nodo, en los hijos y en las bajas.
+   - Queda en las reparaciones (`previsión → prevision: los ids van en a-z, 0-9 y _.`).
+   - **No se juntan nunca dos ids distintos.** Si un bloque escribe `prevision` y `previsión`, es un error. En
+     un cambio, los ids de la pantalla que ya existe cuentan, así que `fuénte` no es `fuente`.
+   - La primera letra sigue teniendo que ser una minúscula: `T Text "a"` es un error.
+
+Lo que **no** se repara, porque obligaría a adivinar:
+
+- un panel que el modelo define pero no pone en el `>` de ningún padre;
+- un hijo que se nombra en el padre y no se define.
+
+Son la mayoría de los fallos de referencias de los briefs. Si se arreglan, será en el prompt, y eso pide una tanda
+nueva.
+
+**Medida, sin gastar:** todas las respuestas guardadas de UI Lang 3, vueltas a validar con el motor nuevo. Son las
+de §10.2 y las de la clasificación de 15 modelos del benchmark (1868 respuestas).
+
+- **5 pantallas más,** válidas y exactas:
+  - 4 de Luna en los briefs de OpenUI: de 73/92 a 77/92. Con Luna y Haiku juntos, los briefs pasan de 144/184 (78,3 %) a
+    148/184 (80,4 %).
+  - 1 de GLM 5.3 Flash en las 52 tareas: de 49/52 a 50/52.
+- **Ninguna pantalla que ya valía cambia:** las 1868 dan los mismos nodos `pacai.ui/1`.
+- **Las demás pantallas con estos dos fallos** (Haiku y otros modelos) ahora pasan la sintaxis, pero fallan en un
+  error real del catálogo, casi siempre un enum. Es el diagnóstico correcto para la corrección.

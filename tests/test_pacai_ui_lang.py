@@ -752,3 +752,42 @@ def test_un_bloque_que_se_vuelve_a_abrir_sin_cerrarse_empieza_de_nuevo():
     vistas.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())
     data, errores = vistas.aplicar(trozos[0][1] | {}, ['fuente Text "Otra" style=caption'])
     assert errores == [] and 'se volvió a abrir' in vistas.reparaciones[0]
+
+
+# -- más tolerancias que dejan el mismo árbol (benchmark de UI Lang, docs/pacai/ui-lang.md) -------------------------
+def test_un_mayor_que_sin_hijos_es_como_no_ponerlo():
+    linea = 'c Card "Ahora" detail="Sin datos"'
+    assert ui_lang.leer_linea(linea + ' >') == ui_lang.leer_linea(linea)
+    nodos, diagnosticos = ui_lang.traducir('root Stack > c\nc Card "Ahora" >', catalogo())
+    assert diagnosticos == [] and 'children' not in nodos[1]
+    with pytest.raises(ui_lang.ErrorDeLinea):
+        ui_lang.leer_linea('root Stack > a,')                 # una lista empezada sigue teniendo que ser id,id
+
+
+def test_ids_con_tildes_o_mayusculas_se_leen_en_ascii_si_son_coherentes():
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('root Stack > previsión,serviceTable\nprevisión Text "Mañana"\nserviceTable Text "Pendientes"\n')
+    nodos, diagnosticos = flujo.cerrar()
+    assert diagnosticos == [] and [n['id'] for n in nodos] == ['root', 'prevision', 'servicetable']
+    assert nodos[0]['children'] == ['prevision', 'servicetable']
+    assert any('previsión → prevision' in r for r in flujo.reparaciones)
+    assert ui_lang.leer_linea('- previsión').ident == 'prevision'
+    for malo in ('T Text "a"', '_x Text "a"', '2x Text "a"'):
+        with pytest.raises(ui_lang.ErrorDeLinea):
+            ui_lang.leer_linea(malo)
+
+
+def test_dos_ids_que_solo_cambian_en_tildes_no_se_juntan():
+    flujo = ui_lang.Flujo(catalogo())
+    flujo.alimentar('root Stack > prevision,previsión\nprevision Text "A"\nprevisión Text "B"\n')
+    _, diagnosticos = flujo.cerrar()
+    assert any('sólo cambian en tildes' in d.motivo for d in diagnosticos)
+    # En un cambio, la pantalla que ya existe cuenta: «fuénte» no es «fuente».
+    cambio, diagnosticos = ui_lang.aplicar_cambio(tablero(), 'fuénte Text "x" style=caption', catalogo())
+    assert cambio is None and any('sólo cambian en tildes' in d.motivo for d in diagnosticos)
+    # Un id nuevo con tilde, escrito igual en el padre y en su línea, vale y queda avisado.
+    cambio, diagnosticos = ui_lang.aplicar_cambio(
+        tablero(), 'root Stack direction=vertical gap=medium > filtros,cifras,p_bajo,fuente,nota_más\n'
+                   'nota_más Text "Más"', catalogo())
+    assert diagnosticos == [] and 'nota_mas' in cambio.nodos['root']['children']
+    assert cambio.avisos == ['nota_más → nota_mas: los ids van en a-z, 0-9 y _.']
