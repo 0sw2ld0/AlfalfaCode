@@ -2,8 +2,18 @@
 import asyncio
 import dataclasses
 
+import pytest
+
 from alfalfa.pacai.ui import Catalogo, Vistas, accion_para_el_modelo, errores_de, partir
+from alfalfa.pacai.ui_lang import FLAG
 from tests.pacai_comun import Cliente, abrir, cerrar
+
+
+@pytest.fixture(autouse=True)
+def _con_json(monkeypatch):
+    """Estas pruebas son del JSON con ejemplos; desde que UI Lang va con todos los modelos, sólo sale con el flag a 0
+    (UI Lang tiene las suyas en test_pacai_ui_lang.py)."""
+    monkeypatch.setenv(FLAG, '0')
 
 PANTALLA = '''Tienes 2 tickets abiertos:
 

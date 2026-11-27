@@ -292,13 +292,13 @@ class Catalogo:
                    forzado=forzado(entorno), bajo_demanda=manual_bajo_demanda(entorno))
 
     def con_modelo(self, modelo: str | None) -> Catalogo:
-        """Ajusta el formato al modelo de esta inferencia: PACAI UI Lang con un modelo medido, el JSON con el resto.
+        """Ajusta el formato al modelo de esta inferencia (hoy PACAI UI Lang con todos; el JSON sólo con el flag a 0).
         Con el flag forzado no cambia. El modelo puede cambiar a mitad de sesión: lo que lea el motor después sigue
         al último prompt que vio el modelo."""
-        from .ui_lang import medido
+        from .ui_lang import para_modelo
 
         if self.forzado is None:
-            self.lang = medido(modelo)
+            self.lang = para_modelo(modelo, {})
         return self
 
     def componentes(self) -> list[str]:

@@ -33,10 +33,11 @@ OpenUI Lang 1.0 y al JSON de PACAI. La especificación completa del perfil está
 - **PACAI UI Lang 3** es otra forma de escribir esos nodos. Sólo existe entre el modelo y el motor: la app nunca
   la ve.
 
-**Cuándo se usa.** El motor la enseña sólo a los modelos con los que se midió y cumple el criterio de adopción
-(`MODELOS_MEDIDOS` en `ui_lang.py`): hoy **GPT-6 Luna** y **Claude Haiku 5.5**. Los demás reciben el manual en
-JSON con ejemplos. `ALFALFA_PACAI_UI_LANG=1` la fuerza con cualquier modelo y `=0` la apaga con todos. El modelo no
-elige el formato: lo decide el motor en cada inferencia.
+**Cuándo se usa.** Desde la 0.99.57 el motor la enseña a todos los modelos. `MODELOS_MEDIDOS`, en `ui_lang.py`, sólo
+dice con cuáles se midió y cumple el criterio de adopción: **GPT-6 Luna** y **Claude Haiku 5.5**; la clasificación
+de §6 da los demás. `ALFALFA_PACAI_UI_LANG=0` la apaga con todos y vuelve el manual en JSON con ejemplos;
+`ALFALFA_PACAI_UI_LANG=1` enciende además las piezas declarativas. El modelo no elige el formato: lo decide el motor
+en cada inferencia.
 
 **Por qué.** Un modelo cobra por cada token que lee y escribe, y el JSON gasta mucho en puntuación. El tablero de
 CuyMercado ocupa 146 tokens en UI Lang 3, 193 en OpenUI Lang 1.0 y 308 en JSON. El manual del prompt de sistema

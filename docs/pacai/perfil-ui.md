@@ -370,7 +370,8 @@ pruebas en `tests/test_pacai_ui.py`.
     que ya dibujó se siguen viendo y sus acciones siguen valiendo. Con `ui` negociado, `alfalfa.session` lleva
     `rich_view` con el estado actual, así el cliente sabe que el motor admite el interruptor. La app de Mac lo enseña
     en el panel derecho (Entorno), con su valor por defecto en Ajustes ▸ General, y la extensión de VS Code en el
-    ajuste `alfalfa.vistaEnriquecida`.
+    ajuste `alfalfa.vistaEnriquecida`. En las dos viene apagada por defecto (desde 0.99.57); el motor la deja
+    encendida para el cliente que no dice nada.
 
 ## 9. Decisiones (24 de noviembre de 2026)
 
@@ -436,12 +437,11 @@ Las preguntas abiertas del primer borrador, ya resueltas:
 > corrija; sólo se hacen unos pocos arreglos que no cambian lo pedido (§10, «Reparaciones seguras»).
 > Explicación larga, con diagrama: https://claude.ai/artifact/SYvtFn3ZKZxULGKKk3WRPM (privada hasta que se comparta).
 
-Sale de la 3.ª y la 4.ª lluvia de ideas. **PACAI UI Lang va encendido por modelo**: sólo con los modelos con los que
-se midió y cumple el criterio de adopción (hoy GPT-6 Luna y Claude Haiku 5.5, `ui_lang.MODELOS_MEDIDOS`; §10.1).
-Con cualquier otro modelo el JSON con ejemplos de arriba sigue siendo el camino normal. `ALFALFA_PACAI_UI_LANG=1`
-lo fuerza con cualquier modelo (y es lo único que enciende las piezas declarativas); `ALFALFA_PACAI_UI_LANG=0` lo
-apaga con todos, y así se revierte. La app de Mac no lo conoce y no hace falta: el motor sigue mandando
-`pacai.ui/1`.
+Sale de la 3.ª y la 4.ª lluvia de ideas. **PACAI UI Lang va encendido con todos los modelos.** `ui_lang.MODELOS_MEDIDOS`
+sólo dice con cuáles se midió y cumple el criterio de adopción (hoy GPT-6 Luna y Claude Haiku 5.5; §10.1); con el
+resto el formato se usa igual, sin esa medida. `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos y vuelve el JSON con
+ejemplos de arriba, y así se revierte; `ALFALFA_PACAI_UI_LANG=1` enciende además las piezas declarativas.
+La app de Mac no lo conoce y no hace falta: el motor sigue mandando `pacai.ui/1`.
 
 - **Dónde se decide:** `Catalogo.de(declaracion, entorno, modelo)` y, antes de cada inferencia,
   `Catalogo.con_modelo(modelo)` desde `manual_ui(modelo=…)`, con el modelo sin el prefijo del proveedor (vale
@@ -585,6 +585,12 @@ lugar en las 16 preguntas de código.
 
 **Decisión:** UI Lang 3 encendido por defecto con GPT-6 Luna y Claude Haiku 5.5; el JSON con ejemplos con el resto
 de modelos. `ALFALFA_PACAI_UI_LANG=1` o `0` lo fuerza en un sentido u otro.
+
+**Decisión posterior (dueño, 0.99.57):** UI Lang 3 con todos los modelos, no sólo con los medidos: es el formato de
+las pantallas y el JSON queda como reserva con `ALFALFA_PACAI_UI_LANG=0`. A la vez, las apps (Mac y VS Code) traen
+la «Vista enriquecida» apagada por defecto en las sesiones nuevas, así que nadie recibe pantallas sin encenderla. El
+motor sigue con la vista encendida para el cliente que negocia `ui` sin decir nada (la web de CuyMercado, por
+ejemplo). Con los modelos que no se han medido, la validez puede ser algo menor (GLM 5.3 Flash: 94,2 % en §10.3).
 
 **Lo que no se ha probado**
 

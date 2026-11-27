@@ -1,5 +1,5 @@
-"""PACAI UI Lang (encendido por modelo o con ALFALFA_PACAI_UI_LANG) y las piezas declarativas (sólo con el flag):
-traducción exacta, cambios atómicos, streaming, prompt, encendido por modelo, flag apagado y los vectores de
+"""PACAI UI Lang (con todos los modelos; ALFALFA_PACAI_UI_LANG=0 lo apaga) y las piezas declarativas (sólo con el
+flag a 1): traducción exacta, cambios atómicos, streaming, prompt, encendido por modelo, flag apagado y los vectores de
 conformidad compartidos con la web."""
 import asyncio
 import dataclasses
@@ -20,6 +20,7 @@ CONFORMIDAD = Path(__file__).with_name('conformidad')
 DECLARACION = json.loads((CONFORMIDAD / 'catalogo-cuymercado.json').read_text(encoding='utf-8'))
 VECTORES = json.loads((CONFORMIDAD / 'pacai-ui-piezas.json').read_text(encoding='utf-8'))['vectores']
 CON_FLAG = {ui_lang.FLAG: '1'}
+SIN_LANG = {ui_lang.FLAG: '0'}                  # el JSON con ejemplos: sólo con el flag a 0
 
 TABLERO = '''root Stack direction=vertical gap=medium > filtros,cifras,p_bajo,fuente
 filtros Filters
@@ -54,8 +55,9 @@ def tablero():
 
 
 # -- flag ------------------------------------------------------------------------------------------------
-def test_sin_flag_todo_sigue_como_hoy():
-    cat = Catalogo.de(DECLARACION, {})
+def test_con_el_flag_a_0_vuelve_el_json_con_ejemplos():
+    assert Catalogo.de(DECLARACION, {}).lang                                   # sin flag: UI Lang, sin piezas
+    cat = Catalogo.de(DECLARACION, SIN_LANG)
     assert not cat.lang and not cat.piezas and 'Calc' not in cat.componentes()
     assert '```pacai-ui view=tickets' in cat.manual() and ui_lang.VALLA_LANG not in cat.manual()
     # La valla compacta es texto normal sin el flag; con él, un bloque de pantalla.
@@ -378,7 +380,7 @@ def test_la_revision_la_pone_el_motor_y_un_rev_del_modelo_se_ignora():
     assert 'rev' not in resumen and 'p_bajo Panel "Bajas e historial" > bajo_top,bajo_hist' in resumen
     assert 'bajo_hist PriceLines query={"tipo":"historial","productos":["palta","limon"]}' in resumen
     assert 'period' not in resumen                                   # lo heredado no se repite
-    sin_flag = Vistas(Catalogo.de(DECLARACION, {}))
+    sin_flag = Vistas(Catalogo.de(DECLARACION, SIN_LANG))
     assert sin_flag.aplicar({'view': 'tablero', 'lang': True}, TABLERO.splitlines())[0] is None
 
 
@@ -455,13 +457,14 @@ async def test_el_motor_traduce_la_valla_compacta_con_el_flag(monkeypatch):
 
 
 # -- encendido por modelo -----------------------------------------------------------------------------------
-def test_el_modelo_decide_el_formato_y_el_flag_lo_fuerza():
+def test_ui_lang_va_con_todos_los_modelos_y_el_flag_a_0_lo_apaga():
     for modelo in ('gpt-6-luna', 'chatgpt/gpt-6-luna', 'alfalfa/claude-haiku-5-5', 'claude-haiku-5-5-20261001',
                    'openrouter/anthropic/claude-haiku-5.5'):
         assert ui_lang.medido(modelo) and ui_lang.para_modelo(modelo, {}), modelo
-    for modelo in ('claude-sonnet-5-5', 'gpt-6', 'glm-5.3-flash', 'luna', '', None):
-        assert not ui_lang.medido(modelo) and not ui_lang.para_modelo(modelo, {}), modelo
-    assert ui_lang.para_modelo('glm-5.3-flash', CON_FLAG)                      # forzado: con cualquier modelo
+    for modelo in ('claude-sonnet-5-5', 'gpt-6', 'ollama/glm-5.3', 'qwen3.8:27b', '', None):
+        assert not ui_lang.medido(modelo) and ui_lang.para_modelo(modelo, {}), modelo      # medido es informativo
+        assert not ui_lang.para_modelo(modelo, SIN_LANG), modelo
+    assert ui_lang.para_modelo('glm-5.3-flash', CON_FLAG)
     assert not ui_lang.para_modelo('gpt-6-luna', {ui_lang.FLAG: '0'})          # apagado: con todos
     assert ui_lang.forzado({}) is None and ui_lang.forzado({ui_lang.FLAG: 'quizá'}) is None
     assert not ui_lang.activo({ui_lang.FLAG: '0'})
@@ -472,23 +475,22 @@ def test_el_catalogo_sigue_al_modelo_de_cada_inferencia():
     # Por modelo sólo cambia el formato: las piezas declarativas siguen pidiendo el flag, aunque el cliente las declare.
     assert cat.lang and not cat.piezas and 'Calc' not in cat.componentes()
     assert ui_lang.VALLA_LANG in cat.manual()
-    assert not cat.con_modelo('claude-sonnet-5-5').lang and '```pacai-ui view=' in cat.manual()
-    assert cat.con_modelo('claude-haiku-5-5').lang
-    assert not Catalogo.de(DECLARACION, {}).lang                               # sin modelo todavía: el JSON
+    assert cat.con_modelo('claude-sonnet-5-5').lang and cat.con_modelo('ollama/qwen3.8:27b').lang
+    assert Catalogo.de(DECLARACION, {}).lang                                   # sin modelo todavía: también
     apagado = Catalogo.de(DECLARACION, {ui_lang.FLAG: '0'}, modelo='gpt-6-luna')
     assert not apagado.lang and not apagado.con_modelo('claude-haiku-5-5').lang
     encendido = Catalogo.de(DECLARACION, CON_FLAG)
     assert encendido.lang and encendido.piezas and encendido.con_modelo('claude-sonnet-5-5').lang
 
 
-async def test_el_motor_usa_ui_lang_con_un_modelo_medido_sin_flag(monkeypatch):
+async def test_el_motor_usa_ui_lang_con_cualquier_modelo_sin_flag(monkeypatch):
     monkeypatch.delenv(ui_lang.FLAG, raising=False)
     c = Cliente(perfiles=('work', 'ui'))
     c.hello['render'] = {'ui': {'version': '1'}}
     await abrir(c, 'Enséñame un resumen')
-    assert '```pacai-ui-lang' not in c.t.manual_ui()                           # sin modelo, el JSON de siempre
-    assert '```pacai-ui-lang' not in c.t.manual_ui(modelo='claude-sonnet-5-5')
-    assert '```pacai-ui-lang' in c.t.manual_ui(modelo='claude-haiku-5-5')
+    assert '```pacai-ui-lang' in c.t.manual_ui()
+    assert '```pacai-ui-lang' in c.t.manual_ui(modelo='claude-sonnet-5-5')
+    assert '```pacai-ui-lang' in c.t.manual_ui(modelo='ollama/glm-5.3')
     c.t.emit('evento', rol='agent', hora=1.0, texto='```pacai-ui-lang view=resumen\n'
              'root Stack direction=vertical > titulo\ntitulo Text "2 tickets" style=title\n```\n')
     mensajes = c.drenar()
@@ -663,7 +665,7 @@ def test_lo_que_no_es_una_pantalla_sin_valla_sigue_siendo_texto(texto):
 
 
 def test_sin_el_formato_compacto_no_hay_pantallas_sin_valla():
-    assert Vistas(Catalogo.de(DECLARACION, {})).sin_valla(TABLERO) is None
+    assert Vistas(Catalogo.de(DECLARACION, SIN_LANG)).sin_valla(TABLERO) is None
 
 
 def test_ui_lang_en_la_valla_del_json_se_lee_como_ui_lang():
@@ -686,7 +688,7 @@ def test_la_valla_del_json_sigue_siendo_json():
     data, errores = Vistas(catalogo()).aplicar({'view': 'v'}, ['root Stack > a', 'esto no es nada'])
     assert data is None and errores == ['Línea 1: no es JSON.', 'Línea 2: no es JSON.']
     # Sin el formato compacto tampoco se lee.
-    data, errores = Vistas(Catalogo.de(DECLARACION, {})).aplicar({'view': 'v'}, TABLERO.splitlines())
+    data, errores = Vistas(Catalogo.de(DECLARACION, SIN_LANG)).aplicar({'view': 'v'}, TABLERO.splitlines())
     assert data is None and errores[0] == 'Línea 1: no es JSON.'
 
 
@@ -723,8 +725,8 @@ def test_el_prompt_compacto_pide_colgar_cada_nodo_nuevo_y_ensena_la_rejilla():
     manual = catalogo().manual()
     assert 'Cada id nuevo va en el > de su padre, en la posición pedida' in manual
     assert 'tarjetas Stack direction=grid gap=small > palta' in manual and 'fila Stack' not in manual
-    # El JSON (modelos sin UI Lang) conserva su ejemplo de Stack.
-    assert '"id":"fila","component":"Stack"' in Catalogo.de(DECLARACION, {}).manual()
+    # El JSON (con el flag a 0) conserva su ejemplo de Stack.
+    assert '"id":"fila","component":"Stack"' in Catalogo.de(DECLARACION, SIN_LANG).manual()
 
 
 

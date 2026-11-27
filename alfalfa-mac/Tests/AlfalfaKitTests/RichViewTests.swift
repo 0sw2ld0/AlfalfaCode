@@ -33,7 +33,9 @@ final class RichViewTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = Preferences(defaults: defaults)
-        XCTAssertTrue(preferences.richView)
+        XCTAssertFalse(preferences.richView)                 // apagada por defecto
+        XCTAssertFalse(preferences.richView(for: "s1"))
+        preferences.richView = true
         XCTAssertTrue(preferences.richView(for: "s1"))
         preferences.setRichView(false, for: "s1")
         preferences.richView = false

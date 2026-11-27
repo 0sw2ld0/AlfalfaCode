@@ -379,11 +379,12 @@ extensión `alfalfa`**, sobre el transporte stdio. El perfil `ui` (borrador) dej
 chat; está descrito en [pacai/perfil-ui.md](pacai/perfil-ui.md). Quedan fuera por ahora la reanudación en red,
 WebSocket y SSE, y los perfiles `voice`, `shared_state` y `expression`.
 
-Con GPT-6 Luna y Claude Haiku 5.5 el modelo escribe las pantallas en PACAI UI Lang, un formato compacto que el motor
-traduce exacto a `pacai.ui/1` y que sale un tercio más barato por pantalla; con el resto de modelos, en el JSON de
-siempre. `ALFALFA_PACAI_UI_LANG=1` lo fuerza con cualquier modelo y, si el cliente declara `"pieces": true` en
-`render.ui`, enciende también las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos), que
-siguen siendo un prototipo; `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
+Con cualquier modelo, el modelo escribe las pantallas en PACAI UI Lang, un formato compacto que el motor traduce
+exacto a `pacai.ui/1` y que sale un tercio más barato por pantalla. `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos y
+vuelve el JSON de siempre. `ALFALFA_PACAI_UI_LANG=1` enciende además, si el cliente declara `"pieces": true` en
+`render.ui`, las piezas declarativas (`Calc`, `Data`, `si`, `rojo`, validación de campos), que siguen siendo un
+prototipo. En la app de Mac y en VS Code las pantallas sólo salen con la «Vista enriquecida» encendida, que viene
+apagada por defecto en las sesiones nuevas. Está en [pacai/perfil-ui.md §10](pacai/perfil-ui.md#10-pacai-ui-lang-por-modelo-y-piezas-declarativas-detrás-de-un-flag).
 
 `ALFALFA_PACAI_UI_MANUAL=1` enciende otro prototipo, también apagado por defecto: el manual de pantallas se carga
 bajo demanda, como una habilidad. El prompt de sistema lleva sólo un aviso de unas líneas (y, con buscador, que

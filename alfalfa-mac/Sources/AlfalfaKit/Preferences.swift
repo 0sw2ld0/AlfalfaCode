@@ -155,10 +155,10 @@ public struct Preferences {
         if all.isEmpty { defaults.removeObject(forKey: Key.sessionBudgets) } else { defaults.set(all, forKey: Key.sessionBudgets) }
     }
 
-    /// «Vista enriquecida» de las sesiones nuevas: que el agente pueda dibujar pantallas en el chat. Encendida si
+    /// «Vista enriquecida» de las sesiones nuevas: que el agente pueda dibujar pantallas en el chat. Apagada si
     /// nunca se tocó.
     public var richView: Bool {
-        get { defaults.object(forKey: Key.richView) as? Bool ?? true }
+        get { defaults.object(forKey: Key.richView) as? Bool ?? false }
         nonmutating set { defaults.set(newValue, forKey: Key.richView) }
     }
 

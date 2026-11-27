@@ -454,7 +454,7 @@ class ProveedorChat {
                 this.contexto.globalState.update(CLAVE_MODOS, m.payload.modes);
             }
             // El motor anuncia la «Vista enriquecida» (`rich_view`): si no es la del ajuste, se le manda la del ajuste.
-            const vista = vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', true);
+            const vista = vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', false);
             if (typeof m.payload.rich_view === 'boolean' && m.payload.rich_view !== vista) cliente.vistaEnriquecida(vista);
         }
         // `alfalfa.context`, `alfalfa.awake`… no hacen falta en el panel y llenarían el historial.
@@ -640,7 +640,7 @@ function activate(contexto) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('alfalfa.ejecutable')) proveedor.refrescarListas();
             if (e.affectsConfiguration('alfalfa.vistaEnriquecida')) {
-                proveedor.cliente?.vistaEnriquecida(vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', true));
+                proveedor.cliente?.vistaEnriquecida(vscode.workspace.getConfiguration('alfalfa').get('vistaEnriquecida', false));
             }
             if (['modo', 'modelo', 'esfuerzo'].some(k => e.affectsConfiguration('alfalfa.' + k))) {
                 proveedor._post(proveedor._config(), false);

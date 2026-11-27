@@ -6,11 +6,21 @@ import asyncio
 import json
 from unittest.mock import patch
 
+import pytest
+
 from alfalfa.pacai import ui_lang
 from alfalfa.pacai.ui import AVISO_MANUAL, BUSCAR_ANTES, FLAG_MANUAL, Catalogo, manual_bajo_demanda
 from alfalfa.proveedores.nativo.runtime import NativeRuntime
 from alfalfa.terminal import TerminalManager
 from tests.pacai_comun import Cliente
+
+
+@pytest.fixture(autouse=True)
+def _con_json(monkeypatch):
+    """Las comprobaciones de texto miran el manual del JSON con ejemplos (con el flag a 0); la prueba de UI Lang lo
+    enciende ella misma."""
+    monkeypatch.setenv(ui_lang.FLAG, '0')
+
 
 PROPIO = {'Precio': {'description': 'Precio de un producto', 'props': {'type': 'object', 'properties': {
     'producto': {'type': 'string'}}}}}

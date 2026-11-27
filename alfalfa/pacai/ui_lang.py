@@ -1,10 +1,9 @@
 """PACAI UI Lang (3.ª lluvia de ideas): una forma compacta, sólo datos, de escribir nodos `pacai.ui/1`.
 
-Encendido por modelo: sólo con los modelos con los que se midió y cumple el criterio de adopción
-(`MODELOS_MEDIDOS`, perfil-ui.md §10); con el resto el motor ni lo enseña ni lo lee, y el JSON con ejemplos sigue
-siendo el camino normal. `ALFALFA_PACAI_UI_LANG=1` lo fuerza con cualquier modelo (y enciende las piezas
-declarativas si el cliente las declara); `ALFALFA_PACAI_UI_LANG=0` lo apaga con todos. Los clientes no cambian: el
-motor lo traduce exacto a `pacai.ui/1`.
+Encendido con todos los modelos: es el formato en que el modelo escribe las pantallas. `MODELOS_MEDIDOS` sólo
+dice con cuáles se midió y cumple el criterio de adopción (perfil-ui.md §10). `ALFALFA_PACAI_UI_LANG=0` lo apaga
+con todos y deja el JSON con ejemplos; `ALFALFA_PACAI_UI_LANG=1` enciende además las piezas declarativas si el
+cliente las declara. Los clientes no cambian: el motor lo traduce exacto a `pacai.ui/1`.
 
 Una línea por nodo, en DFS desde `root`:
 
@@ -90,7 +89,7 @@ _JSON = json.JSONDecoder()
 
 # Los modelos con los que PACAI UI Lang 3 cumple el criterio de adopción (perfil-ui.md §10: ≥95 % de pantallas
 # válidas a la primera, límite inferior de Wilson ≥90 % y al menos un 20 % menos de coste por pantalla exacta que el
-# JSON con ejemplos). Un modelo que no está aquí no se ha medido y sigue con el JSON.
+# JSON con ejemplos). Es informativo: el formato va encendido con todos (`para_modelo`).
 MODELOS_MEDIDOS = frozenset({'gpt-6-luna', 'claude-haiku-5-5'})
 _SI = ('1', 'true', 'si', 'sí')
 _NO = ('0', 'false', 'no')
@@ -98,8 +97,8 @@ _INSTANTANEA = re.compile(r'-(?:\d{4}-\d{2}-\d{2}|\d{8})$')
 
 
 def forzado(entorno: dict | None = None) -> bool | None:
-    """Lo que dice `ALFALFA_PACAI_UI_LANG`: True (encendido con cualquier modelo), False (apagado con todos) o None
-    (sin la variable, o con otro valor: decide el modelo)."""
+    """Lo que dice `ALFALFA_PACAI_UI_LANG`: True (encendido, con las piezas declarativas), False (apagado con todos:
+    el JSON con ejemplos) o None (sin la variable, o con otro valor: encendido sin piezas)."""
     valor = (os.environ if entorno is None else entorno).get(FLAG, '').strip().lower()
     return True if valor in _SI else False if valor in _NO else None
 
@@ -117,10 +116,9 @@ def medido(modelo: str | None) -> bool:
 
 
 def para_modelo(modelo: str | None, entorno: dict | None = None) -> bool:
-    """Si el modelo de la sesión escribe las pantallas en PACAI UI Lang: lo que fuerce el flag o, sin él, si el modelo
-    está medido."""
-    valor = forzado(entorno)
-    return medido(modelo) if valor is None else valor
+    """Si el modelo de la sesión escribe las pantallas en PACAI UI Lang: sí con cualquier modelo, salvo que
+    `ALFALFA_PACAI_UI_LANG=0` lo apague. `modelo` se mantiene por si un modelo concreto necesitara el JSON."""
+    return forzado(entorno) is not False
 
 
 # -- catálogo ------------------------------------------------------------------------------------------------
