@@ -1,1 +1,1 @@
-Las apps que sólo enseñan la respuesta, como un chat, pueden arrancar AlfalfaCode con --no-plan: el agente no gasta vueltas en el plan ni en el cierre del turno, y contesta antes.
+El formato de pantallas de PACAI se llama ahora PACAI UI Lang, sin el «3»: el número venía de la lluvia de ideas que lo propuso, no de una versión.
