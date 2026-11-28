@@ -11,11 +11,11 @@ El modelo dice con quién se habla:
 | `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
 
 ```bash
-alfalfa --proveedores                         # estado, sin secretos
-alfalfa --guardar-clave openai                # pide la clave sin enseñarla
-alfalfa --guardar-clave anthropic             # la de Claude
-alfalfa --fijar-url ollama https://ollama.com
-alfalfa --proveedor-por-defecto openai
+alfalfa --providers                         # estado, sin secretos
+alfalfa --save-key openai                # pide la clave sin enseñarla
+alfalfa --save-key anthropic             # la de Claude
+alfalfa --set-url ollama https://ollama.com
+alfalfa --default-provider openai
 ```
 
 Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.
@@ -24,9 +24,9 @@ También valen las variables estándar `OLLAMA_API_KEY`, `OPENAI_API_KEY` y
 `ALFALFA_OLLAMA_URL` (por defecto `http://127.0.0.1:11434`). Lo que no es
 secreto (URL, proveedor por defecto) queda en `$ALFALFA_HOME/proveedores.json`.
 Si el proveedor por defecto deja de poder usarse (por ejemplo, falta su clave en esa
-terminal), una sesión nueva sin `--modelo` no se abre con otro proveedor: se para y dice
-qué falta. Guarda la clave, elige otro con `--proveedor-por-defecto` o indica el modelo
-con `--modelo`.
+terminal), una sesión nueva sin `--model` no se abre con otro proveedor: se para y dice
+qué falta. Guarda la clave, elige otro con `--default-provider` o indica el modelo
+con `--model`.
 La app de Mac lo configura todo en AlfalfaCode ▸ Ajustes… (⌘,) ▸ Proveedores, que
 también abre «Proveedores…» en el selector de modelo.
 
@@ -53,8 +53,8 @@ Con un **código de cortesía** de un servicio Alfalfa, que trae la dirección d
 servicio detrás de una arroba (`CUY-XXXX-XXXX-XXXX@servicio.example.com`):
 
 ```bash
-alfalfa --activar-codigo     # pide el CUY-…@servicio y lo ata a este equipo
-alfalfa --cuota              # % usado este mes
+alfalfa --activate-code     # pide el CUY-…@servicio y lo ata a este equipo
+alfalfa --quota              # % usado este mes
 ```
 
 El repositorio no trae la dirección de ningún servicio: llega con el código. Al
@@ -62,7 +62,7 @@ servicio sólo se le manda la parte `CUY-…`, y la dirección queda guardada en
 `proveedores.json` cuando el servicio acepta el código. Sin esquema se usa HTTPS
 (HTTP sólo en este mismo equipo, como `@127.0.0.1:8090`). Un código suelto, sin
 arroba, vale si la dirección ya está guardada o se fija a mano con
-`alfalfa --fijar-url alfalfa https://…`.
+`alfalfa --set-url alfalfa https://…`.
 
 El código queda atado a este Mac con una clave del Secure Enclave: copiado a otro
 ordenador no funciona. Los modelos salen como «GPT-6 Luna - Alfalfa» y la app
@@ -75,10 +75,10 @@ y autoriza en tu navegador que AlfalfaCode use tu plan. Luego elige uno de los
 modelos disponibles para tu cuenta en el selector. Desde la terminal:
 
 ```bash
-alfalfa --conectar chatgpt
-alfalfa --modelos
-alfalfa --modelo chatgpt/<modelo> "tu encargo"
-alfalfa --desconectar chatgpt
+alfalfa --connect chatgpt
+alfalfa --models
+alfalfa --model chatgpt/<modelo> "tu encargo"
+alfalfa --disconnect chatgpt
 ```
 
 Las peticiones elegibles usan la cuota de tu plan. Puedes consultar su consumo
@@ -139,9 +139,9 @@ formato de OpenAI funcionan con tu clave y la URL del catálogo.
 - Para añadir una clave:
 
   ```bash
-  alfalfa --guardar-clave openrouter     # pide la clave sin enseñarla
-  alfalfa --guardar-clave opencode       # OpenCode Zen
-  alfalfa --guardar-clave nvidia         # cualquier otro id del catálogo
+  alfalfa --save-key openrouter     # pide la clave sin enseñarla
+  alfalfa --save-key opencode       # OpenCode Zen
+  alfalfa --save-key nvidia         # cualquier otro id del catálogo
   ```
 
   En la app, en Ajustes ▸ Proveedores. Si eliges en el selector un modelo cuyo

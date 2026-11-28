@@ -1,8 +1,129 @@
 # Uso de AlfalfaCode
 
+## Nombres de las opciones: en inglés, y en español también
+
+Las opciones de `alfalfa` se llaman en inglés, como en Codex y Claude Code (`--model`, `--resume`,
+`--read-only`, `--effort`, `--json`, `--version`…), y así salen en `alfalfa --help` y en esta guía.
+**El nombre en español de antes sigue valiendo** para la misma opción: `alfalfa --modelo X --reanudar ID`
+hace lo mismo que `alfalfa --model X --resume ID`. Las apps e integraciones que ya usan los nombres en
+español (la app de Mac, la extensión de VS Code, CuyMercado Chat…) no tienen que cambiar nada, y si
+arrancan un `alfalfa` más viejo, sólo el nombre en español lo entiende: por eso lo siguen usando.
+
+`--stdio`, `--pacai`, `--json`, `--auto`, `--cuybrowser-cli` y `--version` no cambian. Los **valores**
+de las opciones siguen siendo los de siempre (`--permission-mode ediciones`, `--context ahorro`,
+`--scope conversacion`, `--memory ver usuario`…).
+
+<details>
+<summary>Las 99 opciones con nombre nuevo</summary>
+
+| Inglés | Español (alias) |
+| --- | --- |
+| `--model` | `--modelo` |
+| `--effort` | `--esfuerzo` |
+| `--permission-mode` | `--modo` |
+| `--read-only` | `--solo-lectura` |
+| `--brainstorm` | `--lluvia-de-ideas` |
+| `--brainstorm-participants` | `--lluvia-participantes` |
+| `--prototype` | `--prototipo` |
+| `--resume` | `--reanudar` |
+| `--wait` | `--esperar` |
+| `--compact-at` | `--compactar-en` |
+| `--context` | `--contexto` |
+| `--fork` | `--bifurcar` |
+| `--parent` | `--padre` |
+| `--title` | `--titulo` |
+| `--turn` | `--turno` |
+| `--image` | `--imagen` |
+| `--file` | `--archivo` |
+| `--no-keep-awake` | `--sin-mantener-despierto` |
+| `--budget` | `--presupuesto` |
+| `--monthly-budget` | `--presupuesto-mes` |
+| `--no-diagnostics` | `--sin-diagnosticos` |
+| `--swift-diagnostics` | `--diagnosticos-swift` |
+| `--no-co-author` | `--sin-firma` |
+| `--approval-timeout` | `--caducidad-aprobacion` |
+| `--task-queue` | `--cola-encargos` |
+| `--clean-worktrees` | `--limpiar-worktrees` |
+| `--browser` | `--navegador` |
+| `--browser-engine` | `--motor-navegador` |
+| `--cuybrowser-profile` | `--perfil-cuybrowser` |
+| `--cuybrowser-from-path` | `--cuybrowser-desde-path` |
+| `--cuybrowser-bundled-only` | `--cuybrowser-solo-incluido` |
+| `--confirm-chromium-download` | `--confirmar-descarga-chromium` |
+| `--cuybrowser-status` | `--cuybrowser-estado` |
+| `--download-chromium` | `--descargar-chromium` |
+| `--browser-sites` | `--navegador-sitios` |
+| `--sessions` | `--sesiones` |
+| `--mcp-delegation` | `--delegacion-mcp` |
+| `--models` | `--modelos` |
+| `--permission-modes` | `--modos` |
+| `--plugins` | `--complementos` |
+| `--turns` | `--turnos` |
+| `--history` | `--historial` |
+| `--check-command` | `--comprobar-orden` |
+| `--check-update` | `--buscar-actualizacion` |
+| `--update` | `--actualizar` |
+| `--mark` | `--marcar` |
+| `--delete-session` | `--eliminar-sesion` |
+| `--ollama-chats` | `--chats-ollama` |
+| `--import-ollama` | `--importar-ollama` |
+| `--import` | `--importar` |
+| `--slim-sessions` | `--aligerar-sesiones` |
+| `--key-only` | `--solo-clave` |
+| `--discard-irrelevant` | `--descartar-no-relevantes` |
+| `--fork-only` | `--solo-bifurcar` |
+| `--image-provider` | `--proveedor-imagen` |
+| `--codex-image-settings` | `--ajustes-imagen-codex` |
+| `--providers` | `--proveedores` |
+| `--save-key` | `--guardar-clave` |
+| `--delete-key` | `--borrar-clave` |
+| `--default-provider` | `--proveedor-por-defecto` |
+| `--set-url` | `--fijar-url` |
+| `--catalog` | `--catalogo` |
+| `--first-run` | `--primera-vez` |
+| `--connect` | `--conectar` |
+| `--disconnect` | `--desconectar` |
+| `--activate-code` | `--activar-codigo` |
+| `--quota` | `--cuota` |
+| `--web-search` | `--buscador` |
+| `--set-searxng` | `--fijar-searxng` |
+| `--install-web-search` | `--instalar-buscador` |
+| `--report` | `--reportar` |
+| `--authorize` | `--autorizar` |
+| `--revoke` | `--retirar` |
+| `--no-internet` | `--sin-internet` |
+| `--rewind` | `--volver` |
+| `--redo` | `--rehacer` |
+| `--scope` | `--alcance` |
+| `--force` | `--forzar` |
+| `--dry-run` | `--vista-previa` |
+| `--undo-id` | `--deshecho` |
+| `--memory` | `--memoria` |
+| `--learned` | `--aprendido` |
+| `--text` | `--texto` |
+| `--search-sessions` | `--buscar-sesiones` |
+| `--show-result` | `--ver-resultado` |
+| `--reindex` | `--reindexar` |
+| `--delete-index` | `--borrar-indice` |
+| `--search-scope` | `--alcance-busqueda` |
+| `--all` | `--todas` |
+| `--max-results` | `--max-resultados` |
+| `--messages` | `--mensajes` |
+| `--time-limit` | `--tiempo` |
+| `--include-external` | `--incluir-externas` |
+| `--session-sizes` | `--espacio-sesiones` |
+| `--free-sessions` | `--liberar-sesiones` |
+| `--sort` | `--ordenar` |
+| `--unused-days` | `--sin-usar-dias` |
+| `--include-pinned` | `--incluir-fijadas` |
+| `--yes` | `--si` |
+
+</details>
+
+
 ## Control desde aplicaciones: JSONL versión 2
 
-`alfalfa --stdio "encargo"` y `alfalfa --stdio --reanudar ID` usan el mismo
+`alfalfa --stdio "encargo"` y `alfalfa --stdio --resume ID` usan el mismo
 TerminalManager y NativeRuntime que la terminal. Ejecutar desde el cwd original.
 stdout contiene exclusivamente mensajes JSON UTF-8, uno por línea; diagnósticos
 van a stderr. Cada salida incluye `version: 2` y `tipo`. Ejemplos:
@@ -28,7 +149,7 @@ el % usado del mes:
 ```
 
 Los clientes deben ignorar los `tipo` y los campos que no conozcan.
-`--solo-lectura` no ofrece al modelo `write_file`, `edit_file`, `run_command` ni
+`--read-only` no ofrece al modelo `write_file`, `edit_file`, `run_command` ni
 `run_checks` (el motor también las rechaza).
 
 Entradas (una línea por mensaje):
@@ -42,7 +163,7 @@ Entradas (una línea por mensaje):
 
 `{"tipo":"mantener_despierto","activo":false}` apaga (o, con `true`, enciende) ya la
 aserción que impide que el Mac se duerma por inactividad mientras trabaja un turno; al
-arrancar decide `--sin-mantener-despierto` o `ALFALFA_MANTENER_DESPIERTO=0` (por defecto,
+arrancar decide `--no-keep-awake` o `ALFALFA_MANTENER_DESPIERTO=0` (por defecto,
 encendida). Cada vez que el arnés la toma o la suelta de verdad emite
 `{"version":2,"tipo":"despierto","activo":true|false}`; si macOS no la concede, no se
 emite nada. Siempre se suelta antes de `turno_terminado`.
@@ -76,7 +197,7 @@ se haya elegido entretanto, y ahí se comprueba:
 
 Cada turno acaba con `turno_terminado` (mismos campos que `fin`) y el proceso
 **sigue abierto**: un `mensaje` válido reanuda la sesión como un turno nuevo, con
-el historial completo, tanto en una sesión nueva como en una de `--reanudar`.
+el historial completo, tanto en una sesión nueva como en una de `--resume`.
 `cancelar` o EOF sin turno en curso cierran con el estado y el código del último
 turno; con un turno en curso lo interrumpen (130). Los mensajes aún no
 entregados al cerrar se descartan. Cambio frente a v1: el proceso ya no termina
@@ -109,8 +230,8 @@ estado. `fin` aparece exactamente una vez, al final: códigos 0 completado,
 Consultas independientes:
 
 ```sh
-alfalfa --sesiones --json
-alfalfa --modelos --json
+alfalfa --sessions --json
+alfalfa --models --json
 ```
 
 ```jsonl
@@ -151,7 +272,7 @@ que ahorra leerla).
 Diagnósticos de Swift: `sourcekit-lsp` es el único servidor de lenguaje que corre fuera
 del sandbox, así que viene apagado, como el LSP de OpenCode. Los demás diagnósticos
 (pyright, ruff, `typescript-language-server`, ESLint y SwiftLint, todos en el sandbox)
-siguen igual. Se enciende con `--diagnosticos-swift`, `ALFALFA_DIAGNOSTICOS_SWIFT=1`,
+siguen igual. Se enciende con `--swift-diagnostics`, `ALFALFA_DIAGNOSTICOS_SWIFT=1`,
 `{"diagnosticos_swift": true}` en el `ajustes.json` del usuario o, en vivo,
 `{"tipo":"diagnosticos_swift","activo":true}`. El `.alfalfa/ajustes.json` del proyecto sólo
 puede apagarlo. Encendido, su permiso llega con `motivo` `diagnosticos_swift` y `sin_sandbox`:
@@ -176,7 +297,7 @@ Las órdenes peligrosas preguntan como siempre. El permiso trae `para_sesion` (�
 esta sesión», con una clave propia: lo aprobado antes de leer contenido externo no vale) y,
 en una edición, `diff` en formato unificado (`--- a/…`, `+++ b/…`) en vez de la llamada.
 
-Presupuesto: `--presupuesto USD` y `--presupuesto-mes USD` (o `ALFALFA_PRESUPUESTO` y
+Presupuesto: `--budget USD` y `--monthly-budget USD` (o `ALFALFA_PRESUPUESTO` y
 `ALFALFA_PRESUPUESTO_MES`) ponen los topes de la sesión y del mes en este Mac.
 `{"tipo":"presupuesto","sesion":5,"mes":null}` los cambia ya, también a mitad de turno
 (null o 0 quitan el tope; sin la clave, ese tope no cambia). El arnés emite
@@ -195,14 +316,14 @@ Proveedores (las claves y el código se leen por la entrada estándar, nunca en 
 argumentos):
 
 ```sh
-alfalfa --proveedores --json
-printf '%s\n' "$CLAVE" | alfalfa --guardar-clave openai --json
-alfalfa --fijar-url alfalfa https://servicio.example.com --json
-printf '%s\n' CUY-XXXX-XXXX-XXXX | alfalfa --activar-codigo --json
-alfalfa --cuota --json
-alfalfa --primera-vez --json
-alfalfa --conectar openrouter --json
-alfalfa --conectar openrouter --solo-clave --json
+alfalfa --providers --json
+printf '%s\n' "$CLAVE" | alfalfa --save-key openai --json
+alfalfa --set-url alfalfa https://servicio.example.com --json
+printf '%s\n' CUY-XXXX-XXXX-XXXX | alfalfa --activate-code --json
+alfalfa --quota --json
+alfalfa --first-run --json
+alfalfa --connect openrouter --json
+alfalfa --connect openrouter --key-only --json
 ```
 
 ```jsonl
@@ -211,13 +332,13 @@ alfalfa --conectar openrouter --solo-clave --json
 ```
 
 La primera vez, sin ningún proveedor (ni claves, ni proveedor elegido, ni Ollama en el
-Mac), `--primera-vez` da los gratis con los que empezar. `--conectar openrouter` hace
+Mac), `--first-run` da los gratis con los que empezar. `--connect openrouter` hace
 el OAuth de OpenRouter en el navegador:
 
 1. Emite `conectando` con la URL que abrió, por si el navegador no se abre.
 2. Al autorizar, guarda la clave en el Llavero sin emitirla.
 3. Sólo si no había ningún proveedor (la bienvenida), deja OpenRouter por defecto con
-   su gratis recomendado. Si ya había uno, o con `--solo-clave` (la hoja de la clave
+   su gratis recomendado. Si ya había uno, o con `--key-only` (la hoja de la clave
    de la app), no cambia ni el proveedor ni el modelo por defecto, y `modelo` va `null`.
 4. Emite `conectado`, con los mismos campos que `proveedores`.
 
@@ -227,7 +348,7 @@ el OAuth de OpenRouter en el navegador:
 {"version":2,"tipo":"conectado","proveedor":"openrouter","modelo":"openrouter/nvidia/nemotron-3.5-super-vl:free","por_defecto":"openrouter","proveedores":[…]}
 ```
 
-El código de cortesía queda atado a este Mac: `--activar-codigo` crea una clave en
+El código de cortesía queda atado a este Mac: `--activate-code` crea una clave en
 el Secure Enclave (`alfalfa/proveedores/firmante.swift`, compilado con `swiftc` la
 primera vez) y cada petición al servicio va firmada con ella. Si no hay ningún otro
 proveedor (ni elegido, ni con clave, ni Ollama en este Mac), el código pasa a ser el
@@ -235,16 +356,16 @@ proveedor por defecto y la respuesta trae `"modelo"`, el de las sesiones nuevas.
 conexión con el servicio, el error lo dice en una línea («No se pudo conectar con el
 servicio Alfalfa (…)») y no se guarda nada.
 
-Fuera de macOS (un servidor Linux) no hay Secure Enclave ni Llavero. `--activar-codigo`
+Fuera de macOS (un servidor Linux) no hay Secure Enclave ni Llavero. `--activate-code`
 crea una clave P-256 en `~/.alfalfa/firma/clave.pem` (carpeta 0700, archivo 0600) y firma
 con el mismo formato, así que el servicio no distingue. Después pide el código en la
 variable `ALFALFA_CODIGO`: es el `CUY-…` sin lo que va tras la arroba, porque la dirección
 del servicio ya queda en `proveedores.json`.
 
 ```bash
-printf '%s\n' 'CUY-XXXX-XXXX-XXXX@servicio.example.com' | alfalfa --activar-codigo
+printf '%s\n' 'CUY-XXXX-XXXX-XXXX@servicio.example.com' | alfalfa --activate-code
  export ALFALFA_CODIGO='CUY-XXXX-XXXX-XXXX'
-alfalfa --cuota
+alfalfa --quota
 ```
 
 Esa clave es un archivo, no un chip: quien la copie puede usar el código hasta que lo anules
@@ -258,9 +379,9 @@ Las sesiones se ordenan por fecha descendente; una sesión ilegible se identific
 con `estado: "corrupta"` y campos desconocidos nulos. Ollama inaccesible produce
 error JSON y código 1. Estas consultas no emiten `fin` (no ejecutan sesiones).
 
-`alfalfa --espacio-sesiones --json` responde `espacio_sesiones` (lo que ocupa cada sesión
-guardada y los totales) y `alfalfa --liberar-sesiones ID… --si --json`, `sesiones_liberadas`
-(`movidas`, `saltadas` con su `motivo`, como `en_uso` o `no_existe`, y `liberado`). Sin `--si`, la
+`alfalfa --session-sizes --json` responde `espacio_sesiones` (lo que ocupa cada sesión
+guardada y los totales) y `alfalfa --free-sessions ID… --yes --json`, `sesiones_liberadas`
+(`movidas`, `saltadas` con su `motivo`, como `en_uso` o `no_existe`, y `liberado`). Sin `--yes`, la
 respuesta es `espacio_sesiones` con `vista_previa`. Por PACAI son `alfalfa.session_storage` y
 `alfalfa.sessions_freed`. Detalle en [Sesiones](guia/sesiones.md#liberar-disco-sesiones-guardadas).
 
@@ -272,9 +393,9 @@ Desde una carpeta de trabajo:
 
 ```sh
 /ruta/al/repositorio/scripts/alfalfa "Corrige el cálculo de la suma"
-alfalfa --modelo deepseek-v4.1-flash:cloud --esfuerzo low "encargo"
+alfalfa --model deepseek-v4.1-flash:cloud --effort low "encargo"
 alfalfa --auto "Consulta el estado del proyecto"
-alfalfa --reanudar ID
+alfalfa --resume ID
 ```
 
 Requiere el `.venv` Python del repositorio con las dependencias de `server`,
@@ -282,28 +403,28 @@ y Ollama iniciado con un modelo que declare herramientas y contexto de al menos
 8192 tokens. Los modelos Cloud requieren iniciar sesión con el flujo oficial de
 Ollama y disponer de acceso. No instala componentes. Lee `ALFALFA_OLLAMA_URL`
 (por defecto `http://127.0.0.1:11434`) y `OLLAMA_API_KEY`, si el servicio la
-requiere, o la clave guardada en el Llavero con `--guardar-clave ollama`. Con un modelo con visión, `inspect_image`
+requiere, o la clave guardada en el Llavero con `--save-key ollama`. Con un modelo con visión, `inspect_image`
 mira las imágenes con el mismo modelo.
 
 `web_search` y `read_web` buscan y leen la web con la librería
 [CuySearch](https://github.com/0sw2ld0/CuySearch), desde tu conexión. Lo hace el
 proceso de AlfalfaCode: el sandbox de las órdenes sigue sin red, y `read_web`
 rechaza localhost y las redes privadas. El buscador se elige en Ajustes ▸ General
-de la app, con `alfalfa --buscador MODO` o con `ALFALFA_BUSCADOR`:
+de la app, con `alfalfa --web-search MODO` o con `ALFALFA_BUSCADOR`:
 
 - `auto` (por defecto): DuckDuckGo, Bing, Brave, Mojeek y Wikipedia, en ese orden;
 - `ollama`: Ollama Web Search con tu clave de Ollama y, si falla, los anteriores;
 - `searxng`: tu SearXNG (por defecto `http://127.0.0.1:8888`, el de CuySearch
-  Manager; otro con `alfalfa --fijar-searxng URL`) y, si falla, los anteriores;
+  Manager; otro con `alfalfa --set-searxng URL`) y, si falla, los anteriores;
 - `apagado`: los agentes no reciben las herramientas web.
 
 Si un motor bloquea o falla, se pasa al siguiente. Si falta la librería (por ejemplo,
 tras un `git pull` sin reinstalar), los agentes no reciben las herramientas web. La app
-de Mac la instala sola al abrirse; en la terminal, `alfalfa --instalar-buscador`. Con `ALFALFA_CUYSEARCH_URL` se usa
+de Mac la instala sola al abrirse; en la terminal, `alfalfa --install-web-search`. Con `ALFALFA_CUYSEARCH_URL` se usa
 en su lugar un servicio CuySearch remoto (`ALFALFA_CUYSEARCH_KEY` es su clave).
 
-`--modelo` selecciona el modelo (por defecto `deepseek-v4.1-flash:cloud`).
-`--esfuerzo` acepta `low`, `medium` (predeterminado), `high`, `xhigh` y `max`.
+`--model` selecciona el modelo (por defecto `deepseek-v4.1-flash:cloud`).
+`--effort` acepta `low`, `medium` (predeterminado), `high`, `xhigh` y `max`.
 Al reanudar se conservan modelo y esfuerzo salvo que se indiquen otros.
 El lanzador conserva la carpeta actual y utiliza el `.venv` del repositorio;
 en worktrees utiliza el del repositorio compartido.
@@ -335,7 +456,7 @@ aprobación `antigravity_delegation` en PACAI antes de enviar el texto. En la di
 inversa, Antigravity usa `delegate_alfalfa` por MCP con el modelo elegido al conectar.
 
 La herramienta `generate_image` usa el proveedor elegido en Ajustes o mediante
-`alfalfa --proveedor-imagen codex|openai|none`. Con `--ajustes-imagen-codex MODELO ESFUERZO`
+`alfalfa --image-provider codex|openai|none`. Con `--codex-image-settings MODELO ESFUERZO`
 se eligen los ajustes del encargo de imagen. Usa `-` para heredar el valor de Codex.
 La consulta JSON devuelve `modelo_codex_imagen` y `esfuerzo_codex_imagen` cuando se configuran.
 En el mapa de PACAI corresponden a `image_codex_model` y `image_codex_effort`.
@@ -368,7 +489,7 @@ aprobación antes de enviar el prompt al generador.
 
 El listado JSON de sesiones incluye `lluvia_limite` y `lluvia_participantes` para
 las salas. Sus nombres en PACAI son `brainstorm_limit` y `brainstorm_participants`.
-El lanzador usa `--prototipo` con PACAI o stdio para abrir el encargo dedicado.
+El lanzador usa `--prototype` con PACAI o stdio para abrir el encargo dedicado.
 
 ## Control con PACAI: `alfalfa --pacai`
 
@@ -404,13 +525,13 @@ cuando el cliente negoció el perfil `ui`. Está en [pacai/perfil-ui.md §8](pac
 
 ```bash
 alfalfa --pacai                      # sesión nueva; el primer encargo llega como `input`
-alfalfa --pacai --reanudar ID        # abre una sesión guardada y espera un `input`
-alfalfa --pacai --navegador          # el cliente ofrece su navegador (herramienta del cliente `browser`)
-alfalfa --pacai --caducidad-aprobacion 3600   # las aprobaciones caducan a la hora (por defecto, no caducan)
+alfalfa --pacai --resume ID        # abre una sesión guardada y espera un `input`
+alfalfa --pacai --browser          # el cliente ofrece su navegador (herramienta del cliente `browser`)
+alfalfa --pacai --approval-timeout 3600   # las aprobaciones caducan a la hora (por defecto, no caducan)
 ```
 
-`--pacai` no admite un encargo en la orden, ni `--stdio`, `--bifurcar`, adjuntos o un archivo de `--cola-encargos`:
-la entrada llega siempre como mensajes. `--cola-encargos` sin archivo sí vale: abre la sesión de una cola, que el
+`--pacai` no admite un encargo en la orden, ni `--stdio`, `--fork`, adjuntos o un archivo de `--task-queue`:
+la entrada llega siempre como mensajes. `--task-queue` sin archivo sí vale: abre la sesión de una cola, que el
 cliente prepara e inicia con sus mensajes. stdout lleva **sólo** mensajes PACAI, uno por línea; los registros van a stderr.
 Cerrar la entrada (EOF) equivale a `close` del cliente y **niega** los permisos pendientes.
 
@@ -442,7 +563,7 @@ Lo que llega **antes** del `hello` es `invalid_message`.
 | entrada `mensaje` | `input` `new_run` (con una ejecución en curso **espera** a que acabe); `imagenes` y `archivos`, bloques `file` con `url` `file://` (`media_type` `image/*` → imagen) |
 | entrada `mensaje` con un turno en marcha | `input` `steer` con el `run_id` raíz y `payload.alfalfa.redirect: false` (entra en la siguiente inferencia del turno, sin cortar la respuesta) |
 | entrada `redirigir`, `enviar_ahora` | `input` `steer` con el `run_id` de la ejecución (mensaje y redirigir a la vez); `alfalfa.redirect` (redirigir sin texto) y `alfalfa.send_now` (sacar una entrada de la cola) |
-| encargo de la orden (sin eco) / `--reanudar` sin encargo | `input` con `payload.alfalfa.echo: false` / `input` sin bloques con `payload.alfalfa.continue: true` |
+| encargo de la orden (sin eco) / `--resume` sin encargo | `input` con `payload.alfalfa.echo: false` / `input` sin bloques con `payload.alfalfa.continue: true` |
 | entrada `cancelar` / EOF | `close` del cliente / EOF (niegan lo pendiente) |
 | entrada `interrumpir` | `interrupt` con `run_id` (la raíz o una subejecución) |
 | primer evento de un turno | `run_started` (`payload.input_id`); su `id` es el `run_id` |
@@ -526,14 +647,14 @@ mientras corre no espera: el motor para el trabajo y abre el turno, como en v2.
   sigue abierta cierra esa herramienta con `cancelled` y la madre sigue.
 - **Aprobaciones.** El `digest` es `sha256` de los argumentos canonizados (JCS, RFC 8785) y cubre los mismos
   argumentos que el `tool_start`. **Por defecto no caducan**: no llevan `expires` y esperan al usuario, como en
-  Claude Code, ACP y Codex. `--caducidad-aprobacion SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` les ponen
+  Claude Code, ACP y Codex. `--approval-timeout SEGUNDOS` o `ALFALFA_CADUCIDAD_APROBACION=SEGUNDOS` les ponen
   plazo (más de 0 y hasta un año); pasado, el agente declara `expired` y no ejecuta. Sin `expires` nunca hay
   `expired`. Si la ejecución termina o se interrumpe (también por `close` o EOF) con una petición sin contestar,
   el agente la resuelve con `approval_result` `cancelled` antes del `tool_end` `cancelled` de su herramienta.
   Una respuesta tardía, o un valor que no sea exactamente `approved` o `denied`, no vale. «Aprobar para la sesión»
   (`scope: "session"`) sólo cubre el mismo nombre y los mismos argumentos; cada repetición es un `tool_start` con
   `approval_id`. Lo que la política resuelve sola (lecturas permitidas) no se pregunta.
-- **Herramientas del cliente.** El navegador de la app (`--navegador`) es la herramienta `browser` que el cliente
+- **Herramientas del cliente.** El navegador de la app (`--browser`) es la herramienta `browser` que el cliente
   declara en `hello.client_tools`: el agente emite `tool_start` con `side: "client"` y el cliente contesta con
   `tool_end` y `reply_to`. Sus argumentos son la petición del navegador de la app en inglés: `action` (`open`,
   `read`, `click`, `type`, `scroll`, `screenshot`, `eval`, `handoff`, `wait`, `key`, `hover`, `state`, `upload`,
@@ -569,7 +690,7 @@ mientras corre no espera: el motor para el trabajo y abre el turno, como en v2.
 - Un permiso que llega fuera de una ejecución se niega: PACAI exige atribuirlo a una ejecución activa. Por eso
   guardar una prueba del navegador y las colas de encargos se piden con un `input` (arriba).
 - Un `hello` con `resume_after_seq` recibe `retention_expired`: este proceso no retiene una sesión anterior. Para
-  seguir una sesión guardada se usa `alfalfa --pacai --reanudar ID`.
+  seguir una sesión guardada se usa `alfalfa --pacai --resume ID`.
 - `diff_updated` sale al cerrar una ejecución que cambió archivos, y es el **acumulado** de la ejecución (todo desde
   su `run_started`; si hubiera varios, cada uno sustituye al anterior). Con la instantánea de deshacer, es su diff. Sin
   ella (`ALFALFA_INSTANTANEAS=0`, o un turno que la instantánea no cubre) y en un repo git, lo calcula el propio
@@ -673,7 +794,7 @@ Si `/usr/bin/sandbox-exec` no existe, el sistema no es macOS o la sonda
 `/usr/bin/true` no arranca con la política, no hay alternativa silenciosa. La
 orden pide `salir_sandbox` con el error de Seatbelt, y negarla no lanza nada.
 
-`--solo-lectura` no cambia: no ofrece al modelo `write_file`, `edit_file`,
+`--read-only` no cambia: no ofrece al modelo `write_file`, `edit_file`,
 `run_command` ni `run_checks`, y el motor las rechaza aunque lleguen con los
 campos on-request.
 
@@ -689,7 +810,7 @@ protégelos como datos del proyecto. El arnés necesita escribir allí además d
 en la carpeta de trabajo.
 
 Ctrl-C o SIGTERM interrumpen, guardan el estado y devuelven `130`.
-Desde la carpeta original, `alfalfa --reanudar ID` continúa el diario existente.
+Desde la carpeta original, `alfalfa --resume ID` continúa el diario existente.
 Una operación interrumpida de resultado incierto se entrega al mecanismo de
 recuperación y no se repite automáticamente; las órdenes inciertas requieren
 inspección manual. Una sesión sólo puede tener un proceso activo. Código `0`
@@ -811,7 +932,7 @@ qué se conserva; en
 `--stdio` v2 cada encargo lleva `limpieza` (`estado`: `quitado`, `conservado` o
 `rama_conservada`; `motivo`). La orden explícita es `{"tipo": "encargos",
 "accion": "limpiar"}` por `--stdio` (`alfalfa.jobs_command` con `action: "clean"`
-por PACAI) o, en la CLI, `alfalfa --reanudar ID --limpiar-worktrees`, que no
+por PACAI) o, en la CLI, `alfalfa --resume ID --clean-worktrees`, que no
 ejecuta ningún encargo.
 
 Las tareas heredan modelo, esfuerzo y modo de permisos de la sesión que preparó la cola,
@@ -823,7 +944,7 @@ nuevo interrumpen los activos y conservan los pendientes. «Reanudar cola» cont
 las sesiones interrumpidas o bloqueadas, comprobando las operaciones inciertas,
 y salta las tareas que ya terminaron. Al reabrir, nunca arranca sola.
 
-En la CLI, guarda un JSON como este y ejecuta `alfalfa --cola-encargos cola.json`:
+En la CLI, guarda un JSON como este y ejecuta `alfalfa --task-queue cola.json`:
 
 ```json
 {"modo": "serie", "encargos": ["Corrige el cálculo de la suma.", "Añade pruebas de los casos límite."]}
@@ -831,7 +952,7 @@ En la CLI, guarda un JSON como este y ejecuta `alfalfa --cola-encargos cola.json
 
 Para tareas independientes puedes usar `"modo": "paralelo", "paralelos": 2`.
 La CLI muestra el ID de la sesión de la cola al empezar. Con
-`alfalfa --reanudar ID --cola-encargos` continúas una cola guardada. Ctrl-C
+`alfalfa --resume ID --task-queue` continúas una cola guardada. Ctrl-C
 la detiene conservando el estado para reanudarla.
 
 ## Vista previa del control de apps en macOS
@@ -941,7 +1062,7 @@ decision = "prohibida"
   gana la más estricta. Una regla de equipo que pregunta requiere una respuesta
   incluso en «Omitir permisos». El sandbox, las reglas de contenido externo y
   las demás comprobaciones de permisos siguen aplicándose.
-  Consulta la decisión de las reglas con `alfalfa --comprobar-orden <orden>`.
+  Consulta la decisión de las reglas con `alfalfa --check-command <orden>`.
 - **Topes.** Los importes son dólares positivos. Se aplica el menor de cada
   tope de equipo y tu tope personal. El mensual usa el gasto de este Mac que ya
   muestra AlfalfaCode. Los modelos de pago sin precio conocido se rechazan si
@@ -1070,7 +1191,7 @@ Diferencias con el Mac, porque un montaje sólo protege lo que existe al lanzar 
 
 ### Linux: claves
 
-No hay Llavero: `alfalfa --guardar-clave` lo dice, sin pedir la clave, y nombra la
+No hay Llavero: `alfalfa --save-key` lo dice, sin pedir la clave, y nombra la
 variable de entorno donde va:
 
 | Proveedor | Variable |
@@ -1080,13 +1201,13 @@ variable de entorno donde va:
 | Anthropic | `ANTHROPIC_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
 | OpenCode Zen | `OPENCODE_API_KEY` |
-| otro compatible del catálogo | la que dice `alfalfa --proveedores --json` (`variable`) |
+| otro compatible del catálogo | la que dice `alfalfa --providers --json` (`variable`) |
 
 Para **Ollama Cloud**, además de la clave, apunta Ollama a la nube una vez, porque en un
 servidor no hay Ollama local y el motor lo busca en `http://127.0.0.1:11434`:
 
 ```bash
-alfalfa --fijar-url ollama https://ollama.com
+alfalfa --set-url ollama https://ollama.com
 ```
 
 Por SSH, se exporta en la sesión antes de usar `alfalfa`. En Ubuntu, con un espacio
@@ -1098,7 +1219,7 @@ delante, bash no la guarda en el historial:
 
 Con `--pacai`, `--stdio` o desde otro programa, el proceso que lanza `alfalfa` le pasa la
 variable en su entorno. Las órdenes del agente no la reciben: el arnés les da un entorno
-mínimo y el sandbox no les deja leer el de AlfalfaCode. `alfalfa --proveedores` dice qué
+mínimo y el sandbox no les deja leer el de AlfalfaCode. `alfalfa --providers` dice qué
 proveedores tienen clave, sin enseñarla. Para un servicio sin nadie delante, la clave va
 cifrada con `systemd-creds` (en la sección siguiente).
 
@@ -1111,7 +1232,7 @@ un permiso que nadie puede dar:
 - **`alfalfa "encargo"` sin terminal** (temporizador, cron, un guion): lo que pide permiso
   se niega en el acto, queda en el registro de la sesión y el proceso termina con código 3.
 - **`alfalfa --pacai`** desde tu programa: los permisos le llegan como `approval_request`.
-  Si puede no contestar, arráncalo con `--caducidad-aprobacion SEGUNDOS` (o
+  Si puede no contestar, arráncalo con `--approval-timeout SEGUNDOS` (o
   `ALFALFA_CADUCIDAD_APROBACION`): pasado el plazo, la petición caduca y se niega. Sin
   plazo, espera la respuesta.
 - **`alfalfa --stdio`** es para una app con alguien delante: espera al cliente y no caduca.
@@ -1125,17 +1246,17 @@ un permiso que nadie puede dar:
 
 **Qué puede hacer solo** se decide de antemano. Todo corre igual dentro de bubblewrap:
 
-- `--modo auto` (el de siempre): las órdenes normales corren en el sandbox sin preguntar,
+- `--permission-mode auto` (el de siempre): las órdenes normales corren en el sandbox sin preguntar,
   escriben sólo en la carpeta y no salen a la red. Lo peligroso, la red y salir del sandbox
   piden permiso; sin nadie, se niegan.
-- `--modo turbo` activa Turbo sólo para la sesión. Además de lo que permite Auto,
+- `--permission-mode turbo` activa Turbo sólo para la sesión. Además de lo que permite Auto,
   ejecuta un `rm -f` o `rm -rf` directo sin confirmación cuando las rutas quedan
   dentro del proyecto y el sandbox corre sin red. Los permisos de red, salida del
   sandbox, apps y navegador siguen su flujo habitual. También puedes elegir Turbo
   en el selector de permisos de la app.
-- `--modo plan` sólo lee y propone un plan. `manual` y `ediciones` preguntan casi todo, así
+- `--permission-mode plan` sólo lee y propone un plan. `manual` y `ediciones` preguntan casi todo, así
   que sin nadie lo niegan casi todo.
-- `--modo omitir` lo aprueba todo, también fuera del sandbox: no lo uses sin nadie delante.
+- `--permission-mode omitir` lo aprueba todo, también fuera del sandbox: no lo uses sin nadie delante.
 - Las reglas de `~/.alfalfa/reglas.toml` («No volver a preguntar») abren lo concreto. Por
   ejemplo, `npm install` con red, dentro del sandbox:
 
@@ -1188,7 +1309,7 @@ Type=oneshot
 User=alfalfa
 WorkingDirectory=/home/alfalfa/proyecto
 LoadCredentialEncrypted=ollama:/etc/credstore.encrypted/ollama
-ExecStart=/bin/sh -c 'OLLAMA_API_KEY="$$(cat "$$CREDENTIALS_DIRECTORY/ollama")" exec /home/alfalfa/.local/bin/alfalfa --modelo deepseek-v4.1-flash:cloud "Revisa los cambios de ayer y deja un informe en informes/"'
+ExecStart=/bin/sh -c 'OLLAMA_API_KEY="$$(cat "$$CREDENTIALS_DIRECTORY/ollama")" exec /home/alfalfa/.local/bin/alfalfa --model deepseek-v4.1-flash:cloud "Revisa los cambios de ayer y deja un informe en informes/"'
 # Si una orden se come la memoria, muere AlfalfaCode y no lo demás del servidor.
 MemoryMax=600M
 MemorySwapMax=1G
@@ -1212,7 +1333,7 @@ systemd-ask-password -n 'Código CUY:' | sudo systemd-creds encrypt --name=alfal
 LoadCredentialEncrypted=alfalfa-firma:/etc/credstore.encrypted/alfalfa-firma
 LoadCredentialEncrypted=alfalfa-codigo:/etc/credstore.encrypted/alfalfa-codigo
 Environment=ALFALFA_FIRMA_CLAVE=%d/alfalfa-firma
-ExecStart=/bin/sh -c 'ALFALFA_CODIGO="$$(cat "$$CREDENTIALS_DIRECTORY/alfalfa-codigo")" exec /home/alfalfa/.local/bin/alfalfa --modelo alfalfa/<modelo> "…"'
+ExecStart=/bin/sh -c 'ALFALFA_CODIGO="$$(cat "$$CREDENTIALS_DIRECTORY/alfalfa-codigo")" exec /home/alfalfa/.local/bin/alfalfa --model alfalfa/<modelo> "…"'
 ```
 
 La carpeta `~/.alfalfa/firma` y el archivo de `ALFALFA_FIRMA_CLAVE` también quedan vacíos
@@ -1240,7 +1361,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now alfalfa-encargo.time
 Para probarlo en el momento, `sudo systemctl start alfalfa-encargo.service`. Lo que
 escribe en pantalla queda en `journalctl -u alfalfa-encargo`. El registro de cada sesión
 queda en `/home/alfalfa/.alfalfa/sesiones/<id>/`: `<id>.jsonl` con los eventos, permisos
-negados incluidos, y `task.json` con el estado. `sudo -iu alfalfa alfalfa --sesiones`
+negados incluidos, y `task.json` con el estado. `sudo -iu alfalfa alfalfa --sessions`
 las lista. Un código 3 sale como fallo en `systemctl status`: se negó algo.
 
 **En un servidor pequeño** (1 GB de RAM, como un droplet de 6 $):
@@ -1268,7 +1389,7 @@ las lista. Un código 3 sale como fallo en `systemctl status`: se negó algo.
   ```
 
 - una cola de encargos, una tras otra y no en paralelo: `{"encargos": ["…", "…"], "modo":
-  "serie"}` en un archivo y `alfalfa --cola-encargos cola.json`.
+  "serie"}` en un archivo y `alfalfa --task-queue cola.json`.
 
 En WSL2, systemd tiene que estar activo (`[boot]` con `systemd=true` en `/etc/wsl.conf`).
 

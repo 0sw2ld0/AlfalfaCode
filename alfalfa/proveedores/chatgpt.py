@@ -35,7 +35,7 @@ DINAMICO = 'dynamic_agent_client'
 PERMISO = 'chatgpt.tokens.use.direct'
 SCOPES = ('openid', 'profile', 'email', 'offline_access', 'resource.invoke', PERMISO)
 SECRETOS = ('access_token', 'refresh_token', 'id_token')
-AVISO = 'Conecta tu plan con `alfalfa --conectar chatgpt` o desde Ajustes ▸ Proveedores.'
+AVISO = 'Conecta tu plan con `alfalfa --connect chatgpt` o desde Ajustes ▸ Proveedores.'
 
 
 def _cuenta():

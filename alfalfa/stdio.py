@@ -901,7 +901,7 @@ async def run(args, transport):
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, cierre.senal)
         vigia = asyncio.create_task(cierre.vigilar_padre())
-        # Con --esperar la sesión se abre sin turno: el primero lo trae un mensaje.
+        # Con --wait la sesión se abre sin turno: el primero lo trae un mensaje.
         prompt = await transport.next_message() if esperar else (args.encargo or CONTINUAR_ENCARGO)
         # El encargo inicial ya lo pinta la app; lo que llega después se le devuelve.
         eco = esperar
@@ -1270,7 +1270,7 @@ def _en_ejecucion(path):
 
 
 def marcar(ident, campo, valor):
-    """`--marcar ID CAMPO VALOR`: título (texto; vacío lo quita), fijada o archivada (sí/no)."""
+    """`--mark ID CAMPO VALOR`: título (texto; vacío lo quita), fijada o archivada (sí/no)."""
     if campo not in MARCAS:
         raise ValueError('Campo desconocido: usa titulo, fijada o archivada.')
     path = _carpeta_de_sesion(ident)
@@ -1284,7 +1284,7 @@ def marcar(ident, campo, valor):
     import fcntl
 
     from .sesiones import _escribir
-    # Leer, cambiar y escribir bajo un cerrojo propio: dos `--marcar` a la vez (fijar y renombrar desde
+    # Leer, cambiar y escribir bajo un cerrojo propio: dos `--mark` a la vez (fijar y renombrar desde
     # la barra lateral) perdían uno de los dos. No es el de la sesión: una en marcha también se marca.
     cerrojo = os.open(path / 'marcas.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
@@ -1301,7 +1301,7 @@ def marcar(ident, campo, valor):
 
 
 def eliminar(ident):
-    """`--eliminar-sesion ID`: la mueve a la Papelera de macOS, de donde se puede recuperar."""
+    """`--delete-session ID`: la mueve a la Papelera de macOS, de donde se puede recuperar."""
     from .sesiones.espacio import a_la_papelera
     return a_la_papelera(_carpeta_de_sesion(ident), ident)
 
@@ -1413,7 +1413,7 @@ def history(ident):
 
 
 def check_command(argv):
-    """`alfalfa --comprobar-orden ARGV`: lo que deciden las reglas, como `codex execpolicy check`."""
+    """`alfalfa --check-command ARGV`: lo que deciden las reglas, como `codex execpolicy check`."""
     from . import equipo, reglas
     from .terminal import home_dir
     home = home_dir()

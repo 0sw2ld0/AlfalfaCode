@@ -62,7 +62,7 @@ Está **encendido por defecto**: sólo dura lo que dura un turno, no apaga ni en
 pantalla y no hace nada cuando el agente no trabaja. Sin él, un encargo largo que dejas
 corriendo se para a la media hora porque el Mac se durmió. Para apagarlo:
 
-- en la terminal, `ALFALFA_MANTENER_DESPIERTO=0 alfalfa "…"` o `alfalfa --sin-mantener-despierto "…"`;
+- en la terminal, `ALFALFA_MANTENER_DESPIERTO=0 alfalfa "…"` o `alfalfa --no-keep-awake "…"`;
 - en la app, **Ajustes ▸ General ▸ Mantener el Mac despierto**. El cambio vale ya, también
   en las sesiones que están trabajando.
 

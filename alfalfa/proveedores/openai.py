@@ -350,7 +350,7 @@ class OpenAI(Proveedor):
     def cliente(self, timeout, tarea=None, al_cambiar_cuota=None):
         clave = self.clave()
         if not clave:
-            raise ValueError('Falta la clave de OpenAI: guárdala con `alfalfa --guardar-clave openai`.')
+            raise ValueError('Falta la clave de OpenAI: guárdala con `alfalfa --save-key openai`.')
         return httpx.AsyncClient(base_url='https://openai.alfalfa.invalid',
                                  transport=Transporte(self.url(), clave, tarea, timeout), timeout=timeout)
 

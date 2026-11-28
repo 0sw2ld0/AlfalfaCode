@@ -11,7 +11,7 @@ Enseñan los modelos de **Gratis ahora** (ver [Catálogo, coste y presupuesto](c
 OpenRouter se conecta con un clic, sin pegar ninguna clave:
 
 ```bash
-alfalfa --conectar openrouter
+alfalfa --connect openrouter
 ```
 
 En la app, el botón está en Nuevo encargo («Empieza gratis») y en la hoja que pide
@@ -26,17 +26,17 @@ la clave de OpenRouter. Esto es lo que pasa:
    con herramientas: Nemotron 3.5 Super VL. Lo eliges tú, después de ver el aviso
    de datos.
 
-Si ya tenías un proveedor, `--conectar` sólo guarda la clave. Lo mismo pasa con
-`--solo-clave`, que es lo que usa la hoja de la clave de la app: ni el proveedor
+Si ya tenías un proveedor, `--connect` sólo guarda la clave. Lo mismo pasa con
+`--key-only`, que es lo que usa la hoja de la clave de la app: ni el proveedor
 ni el modelo por defecto cambian. Un modelo gratis nunca se elige por su cuenta:
 con OpenRouter por defecto y sin modelo elegido, `alfalfa "encargo"` pide
-`--modelo`.
+`--model`.
 
 En una terminal, `alfalfa "encargo"` lo ofrece directamente y sigue con el
 encargo. La pregunta lleva el aviso de datos, y hay que contestar «s»: Enter es
 que no. Los demás proveedores con
 modelos gratis dicen dónde se saca su clave gratis
-(`alfalfa --guardar-clave nvidia`). `alfalfa --primera-vez [--json]` da el
+(`alfalfa --save-key nvidia`). `alfalfa --first-run [--json]` da el
 mismo resumen. Para verlo en un Mac que ya tiene claves, usa
 `ALFALFA_FORZAR_PRIMERA_VEZ=1`.
 

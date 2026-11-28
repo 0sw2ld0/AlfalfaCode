@@ -45,7 +45,7 @@ CAMPOS = {
     'vista_enriquecida': 'rich_view',
     'lluvia_limite': 'brainstorm_limit', 'lluvia_participantes': 'brainstorm_participants',
     'modelo_codex_imagen': 'image_codex_model', 'esfuerzo_codex_imagen': 'image_codex_effort',
-    # sesiones/espacio.py (--espacio-sesiones y --liberar-sesiones)
+    # sesiones/espacio.py (--session-sizes y --free-sessions)
     'movidas': 'moved', 'saltadas': 'skipped_sessions', 'liberado': 'freed', 'totales': 'totals',
     'imagenes': 'images', 'en_uso': 'in_use', 'ultimo_uso': 'last_used', 'dias_sin_usar': 'days_unused',
     'vista_previa': 'preview', 'instantaneas': 'snapshots', 'indice': 'index',

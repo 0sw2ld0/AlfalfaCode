@@ -6,7 +6,7 @@ localhost, las IPs privadas y demás destinos no públicos (también tras cada
 redirección), así que un agente no puede usarla para asomarse a servicios del
 Mac.
 
-Qué buscador se usa (Ajustes ▸ General de la app, `alfalfa --buscador` o
+Qué buscador se usa (Ajustes ▸ General de la app, `alfalfa --web-search` o
 `ALFALFA_BUSCADOR`):
 
 - `auto`: DuckDuckGo, Bing, Brave, Mojeek y Wikipedia, en ese orden;

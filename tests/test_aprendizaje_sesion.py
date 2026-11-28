@@ -652,7 +652,7 @@ def test_en_la_terminal_la_propuesta_dice_como_aplicarla(tmp_path, monkeypatch, 
                                            'operaciones': [], 'diff': largo, 'motivo': 'Lo dijo.'})
         salida = capsys.readouterr().out
         assert 'propuesta ' + guardada['id'] + ': guardar en la memoria usuario (Lo dijo.)' in salida
-        assert '+1999' in salida and 'alfalfa --aprendido aplicar ' + guardada['id'] in salida
+        assert '+1999' in salida and 'alfalfa --learned aplicar ' + guardada['id'] in salida
     finally:
         m.close()
 

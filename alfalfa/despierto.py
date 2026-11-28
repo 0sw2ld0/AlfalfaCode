@@ -10,7 +10,7 @@ La aserción es del propio proceso del arnés, por IOKit. macOS la suelta al
 salir el proceso, aunque muera con SIGKILL, así que nunca queda un hijo
 huérfano como podría quedar un `caffeinate`.
 
-Se apaga con `ALFALFA_MANTENER_DESPIERTO=0`, con `--sin-mantener-despierto` o,
+Se apaga con `ALFALFA_MANTENER_DESPIERTO=0`, con `--no-keep-awake` o,
 desde la app, con el interruptor de Ajustes ▸ General.
 """
 from __future__ import annotations

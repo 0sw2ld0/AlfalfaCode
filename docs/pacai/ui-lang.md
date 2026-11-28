@@ -420,11 +420,11 @@ python scripts/renderizar_ui.py docs/pacai/datos/formatos-ui-tareas.jsonl docs/p
 Con gasto (antes, pide permiso), un modelo nuevo con UI Lang 3:
 
 ```bash
-python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos gemma4:31b-cloud --brazos lang --repeticiones 1 --salida datos.jsonl
+python scripts/comparar_formatos_ui.py medir --proveedor ollama --models gemma4:31b-cloud --brazos lang --repeticiones 1 --salida datos.jsonl
 ```
 
 ```bash
-python scripts/comparar_formatos_ui.py medir --proveedor ollama --modelos gemma4:31b-cloud --brazos lang --repeticiones 1 --conjunto openui --briefs ../generative-ui-bench/briefs/briefs.ts --salida briefs.jsonl
+python scripts/comparar_formatos_ui.py medir --proveedor ollama --models gemma4:31b-cloud --brazos lang --repeticiones 1 --conjunto openui --briefs ../generative-ui-bench/briefs/briefs.ts --salida briefs.jsonl
 ```
 
 - `--proveedor alfalfa` (por defecto) usa el servicio Alfalfa.

@@ -2,7 +2,7 @@
 
 Cada propuesta es un JSON en $ALFALFA_HOME/aprendido/pendientes/<id>.json con su diff.
 Aplicarla (la tarjeta de la app, `{"tipo":"aprendizaje"}` por --stdio o
-`alfalfa --aprendido aplicar ID`) vuelve a validarla contra lo que hay ahora: si
+`alfalfa --learned aplicar ID`) vuelve a validarla contra lo que hay ahora: si
 el almacén o la habilidad cambiaron desde la propuesta, se rechaza.
 
 El archivo de una propuesta no es de fiar por sí solo (el hogar está protegido del
@@ -149,7 +149,7 @@ class Pendientes:
 
 
 def para_el_cliente(propuesta):
-    """Lo que viaja en el evento `aprendizaje_propuesto` y en `--aprendido pendientes --json`."""
+    """Lo que viaja en el evento `aprendizaje_propuesto` y en `--learned pendientes --json`."""
     # `clase` (memoria o habilidad): `tipo` es el del sobre del protocolo.
     datos = {k: propuesta.get(k) for k in ('id', 'motivo', 'diff', 'sesion', 'turno', 'creada')}
     datos['clase'] = propuesta.get('tipo')

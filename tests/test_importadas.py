@@ -469,7 +469,7 @@ def test_project_doc_fallback_filenames_de_codex(tmp_path, casa):
     assert agents_md.cargar(tmp_path).texto() == 'Prevalece.'
 
 
-# ------------------------------------------------------------------ orden --importar
+# ------------------------------------------------------------------ orden --import
 
 def test_orden_importar_lista_autoriza_y_json(demo, tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(demo)
@@ -481,7 +481,7 @@ def test_orden_importar_lista_autoriza_y_json(demo, tmp_path, monkeypatch, capsy
     salida = capsys.readouterr().out
     assert 'eco  [sin autorizar]  OpenCode · opencode.json' in salida
     eco = elemento(Importadas(demo, hogar), 'mcp', 'eco')
-    assert 'alfalfa --importar --autorizar mcp:eco@' + eco.huella in salida and SECRETO not in salida
+    assert 'alfalfa --import --authorize mcp:eco@' + eco.huella in salida and SECRETO not in salida
     assert 'orden: ' + sys.executable in salida and 'internet: sí' in salida
     Args.autorizar, Args.sin_internet = ['mcp:eco@' + eco.huella, 'mcp:nada'], True
     assert orden_importar.orden(Args, hogar) == 1  # una clave desconocida es un error, la otra se autoriza
@@ -499,22 +499,22 @@ def test_cli_importar_de_verdad_con_home_de_demo(demo, casa, tmp_path):
     entorno.update(HOME=str(casa), ALFALFA_HOME=str(tmp_path / 'alfalfa'), PYTHONPATH=str(RAIZ))
 
     def importar(*extra):
-        return subprocess.run([sys.executable, '-m', 'alfalfa.terminal', '--importar', '--json', *extra], cwd=demo,
+        return subprocess.run([sys.executable, '-m', 'alfalfa.terminal', '--import', '--json', *extra], cwd=demo,
                               env=entorno, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
     # Sin terminal, «todo» no vale: hay que nombrar cada uno con la huella que se vio.
-    salida = importar('--autorizar', 'todo')
+    salida = importar('--authorize', 'todo')
     assert salida.returncode == 1
     evento = json.loads(salida.stdout.splitlines()[-1])
     claves = [a for f in evento['elementos'] if f['estado'] == 'pendiente'
-              for a in ('--autorizar', f['corta'] + '@' + f['huella'])]
+              for a in ('--authorize', f['corta'] + '@' + f['huella'])]
     salida = importar(*claves)
     assert salida.returncode == 0, salida.stderr
     evento = json.loads(salida.stdout.splitlines()[-1])
     assert {f['nombre'] for f in evento['elementos'] if f['estado'] == 'autorizado'} == {
         'eco', 'git-tools', 'revisor', 'probar'}
-    sin_importar = subprocess.run([sys.executable, '-m', 'alfalfa.terminal', '--autorizar', 'todo'], cwd=demo,
+    sin_importar = subprocess.run([sys.executable, '-m', 'alfalfa.terminal', '--authorize', 'todo'], cwd=demo,
                                   env=entorno, capture_output=True, text=True, timeout=60)
-    assert sin_importar.returncode == 2 and 'sólo valen con --importar' in sin_importar.stderr
+    assert sin_importar.returncode == 2 and 'sólo valen con --import' in sin_importar.stderr
 
 
 def test_el_aviso_de_la_sesion_lleva_todos_los_pendientes_con_su_huella(demo, tmp_path):
@@ -558,7 +558,7 @@ def test_sesion_sin_autorizar_avisa_y_no_inicia_nada(demo, tmp_path, monkeypatch
                                          herramienta=e.herramienta, estado='pendiente') for e in imp.autorizables()]}
     assert {(f['tipo'], f['nombre']) for f in datos['pendientes']} >= {('mcp', 'eco'), ('agente', 'revisor'),
                                                                        ('comando', 'probar')}
-    # Y al reabrir la sesión (`--historial`) siguen ahí.
+    # Y al reabrir la sesión (`--history`) siguen ahí.
     from alfalfa.stdio import history
     monkeypatch.setenv('ALFALFA_HOME', str(sesion.home))
     historial = history(sesion.m.task['id'])

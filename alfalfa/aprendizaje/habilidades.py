@@ -7,7 +7,7 @@
 El registro ($ALFALFA_HOME/aprendido/registro.json) es lo único que dice qué creó
 AlfalfaCode: una carpeta que no está en él, o cuyo contenido cambió desde la última
 escritura del arnés, no se toca. Una habilidad bloqueada tampoco (el usuario sí puede
-editarla con `alfalfa --aprendido editar`).
+editarla con `alfalfa --learned editar`).
 
 Formato compatible con Claude Code: front matter con `name` (igual a la carpeta) y
 `description`, y el cuerpo en Markdown. «Lecciones, no registros» (Hermes Agent): sin
@@ -264,7 +264,7 @@ class Habilidades:
         actuales = self.archivos_actuales(alcance, nombre)
         if para_el_agente and ({k: sha(v) if v is not None else None for k, v in actuales.items()} != guardados):
             raise ErrorDeHabilidad('La habilidad «' + nombre + '» cambió fuera de AlfalfaCode desde que la escribió: '
-                                   'no se toca. El usuario puede editarla con alfalfa --aprendido editar.')
+                                   'no se toca. El usuario puede editarla con alfalfa --learned editar.')
         return fila, actuales
 
     def planear(self, accion, alcance, nombre, contenido=None, buscar=None, reemplazar=None, archivo=None,

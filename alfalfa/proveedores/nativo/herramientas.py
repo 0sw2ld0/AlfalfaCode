@@ -1254,7 +1254,7 @@ class WorkspaceTools:
         if name.startswith('browser_'):
             navegador = getattr(self.runtime.manager, 'navegador', None)
             if navegador is None:
-                raise ValueError('Activa el navegador en la app o usa --motor-navegador cuybrowser en la terminal.')
+                raise ValueError('Activa el navegador en la app o usa --browser-engine cuybrowser en la terminal.')
             from ...navegador_actividad import ejecutar
             exportacion = getattr(self.runtime.manager, 'exportacion_navegador', None)
             pruebas = getattr(self.runtime.manager, 'pruebas_interfaz', None)

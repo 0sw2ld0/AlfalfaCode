@@ -54,7 +54,7 @@ class Autorizaciones:
 
     @staticmethod
     def publica(elemento):
-        """Huella corta y pública de la definición: la lista la enseña y `--autorizar CLAVE@HUELLA`
+        """Huella corta y pública de la definición: la lista la enseña y `--authorize CLAVE@HUELLA`
         sólo autoriza si lo que hay en disco sigue siendo lo que se vio. SHA-256 recortado de toda
         la definición: no deja recuperar ningún valor."""
         cuerpo = json.dumps([elemento.tipo, elemento.nombre, str(elemento.origen), elemento.crudo],

@@ -6,7 +6,7 @@ recibe explícitamente el proyecto y su modelo de Ajustes; el host sustituye só
 el contenedor de la app para no abrir conversaciones ni proveedores.
 
 El motor de prueba usa Navegador y Transport reales sin inferencia; la edición de
-reglas pasa por `alfalfa --navegador-sitios --stdio`, con propuesta, diff y respuesta
+reglas pasa por `alfalfa --browser-sites --stdio`, con propuesta, diff y respuesta
 de permiso correlacionada. WKWebView usa un almacén no persistente propio. HOME,
 CFFIXED_USER_HOME, ALFALFA_HOME y TMPDIR apuntan a carpetas ficticias. Las páginas
 están en 127.0.0.1:18484 y :18485; no se usa el puerto 8765 ni un navegador personal.

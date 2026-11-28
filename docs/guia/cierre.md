@@ -20,8 +20,8 @@ carpeta y con el mismo modelo, esfuerzo y modo, sin cambiar de pantalla: la
 sesión sale en la barra lateral. «Hacerlo aquí» se lo pide a la sesión actual. En
 la terminal se imprime el encargo para abrir otra sesión a mano.
 
-La sesión que nace así es hija de la que la propuso: se crea con `--padre ID`, que
-queda guardado en ella y sale como `padre` en `--sesiones --json`, y con `--titulo`
+La sesión que nace así es hija de la que la propuso: se crea con `--parent ID`, que
+queda guardado en ella y sale como `padre` en `--sessions --json`, y con `--title`
 y el título de la propuesta, que la barra lateral enseña en vez del principio del
 encargo. Si el padre vuelve a abrirse, su tarjeta ya no ofrece «Nueva sesión». En la barra
 lateral va debajo de su padre, con sangría. Cada vez que la hija termina un turno, la

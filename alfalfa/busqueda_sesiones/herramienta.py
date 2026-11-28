@@ -2,7 +2,7 @@
 
 Va en el catálogo de AlfalfaCode (`ON_REQUEST_TOOLS`), no en el de un integrador
 (`TOOLS`). Sólo lee (está en `SIN_EFECTOS` y no en `terminal.ESCRITURA`), así que
-se ofrece en todos los modos, también en Plan y con `--solo-lectura`. La búsqueda corre en
+se ofrece en todos los modos, también en Plan y con `--read-only`. La búsqueda corre en
 otro hilo y actualiza el índice como mucho `TIEMPO` segundos: el turno no se
 queda esperando a indexar sesiones enormes (`indice_al_dia: false` lo dice).
 La sesión en curso no entra: su conversación ya está en el contexto.

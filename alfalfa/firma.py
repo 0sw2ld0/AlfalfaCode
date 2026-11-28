@@ -16,7 +16,7 @@ No se firma si:
 Para saber la versión el arnés ejecuta `git --version` en su propio proceso: fuera del sandbox
 y antes de que nadie apruebe la orden. Por eso nunca lo hace con un `git` que no sea de confianza.
 
-Se apaga con `--sin-firma`, con `ALFALFA_FIRMA=0` o con el interruptor de
+Se apaga con `--no-co-author`, con `ALFALFA_FIRMA=0` o con el interruptor de
 Ajustes ▸ General de la app. Una aplicación que integra el arnés cambia la línea,
 o la quita, con `ajustes.firma_de_commits()`.
 """

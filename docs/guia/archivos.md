@@ -1,7 +1,7 @@
 # Archivos: PDF, texto, código, Word y Excel
 
 ```bash
-alfalfa --archivo informe.pdf --archivo datos.xlsx "resume el informe y cuadra las cifras"
+alfalfa --file informe.pdf --file datos.xlsx "resume el informe y cuadra las cifras"
 ```
 
 Además de imágenes se adjuntan PDF, texto y código (txt, md, csv, json, yaml, py, swift,

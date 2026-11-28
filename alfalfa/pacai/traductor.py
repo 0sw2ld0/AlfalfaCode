@@ -24,9 +24,9 @@ __all__ = ['Traductor', 'archivos_del_diff', 'CADUCIDAD_APROBACION', 'NAVEGADOR'
 
 # Segundos que una aprobación espera respuesta antes de darse por caducada (§4.5). Por defecto ninguno: en la 0.3
 # `expires` es opcional y, como en Claude Code, ACP y Codex, una petición espera hasta que el usuario conteste o el
-# agente la cancele. `ALFALFA_CADUCIDAD_APROBACION` o `--caducidad-aprobacion` le ponen plazo.
+# agente la cancele. `ALFALFA_CADUCIDAD_APROBACION` o `--approval-timeout` le ponen plazo.
 CADUCIDAD_APROBACION: float | None = None
-# La herramienta del cliente que hace de navegador propio de la app (`--navegador`): su `hello` la declara.
+# La herramienta del cliente que hace de navegador propio de la app (`--browser`): su `hello` la declara.
 NAVEGADOR = 'browser'
 TROZO = 4000                  # máximo de caracteres antes de ajustar al límite de bytes
 MAX_ARGUMENTOS = 256 * 1024   # bytes de los `arguments` de un `tool_start` (el transporte lo ajusta al negociado)

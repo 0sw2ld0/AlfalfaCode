@@ -406,8 +406,8 @@ class Aprendizaje:
             self.manager.event(self.manager.task, 'system', 'Aprendizaje · propuesta ' + guardada['id'] + ': '
                                + _titulo(datos) + (' (' + datos['motivo'] + ')' if datos.get('motivo') else '')
                                + '\n' + (datos.get('diff') or '')
-                               + '\nAplícala con: alfalfa --aprendido aplicar ' + guardada['id']
-                               + ' (o descártala con: alfalfa --aprendido descartar ' + guardada['id'] + ')')
+                               + '\nAplícala con: alfalfa --learned aplicar ' + guardada['id']
+                               + ' (o descártala con: alfalfa --learned descartar ' + guardada['id'] + ')')
         return guardada
 
     def resolver(self, ident, aplicar):

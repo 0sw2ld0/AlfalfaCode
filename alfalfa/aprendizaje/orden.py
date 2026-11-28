@@ -1,22 +1,22 @@
-"""`alfalfa --memoria` y `alfalfa --aprendido`: ver y corregir lo que aprende AlfalfaCode.
+"""`alfalfa --memory` y `alfalfa --learned`: ver y corregir lo que aprende AlfalfaCode.
 
-    alfalfa --memoria                         los tres almacenes de esta carpeta
-    alfalfa --memoria ver ALMACEN             usuario, entorno o proyecto
-    alfalfa --memoria escribir ALMACEN        el texto entero (--texto, o $EDITOR / la entrada)
-    alfalfa --memoria quitar ALMACEN TEXTO    la entrada que contiene TEXTO
-    alfalfa --memoria vaciar ALMACEN
+    alfalfa --memory                         los tres almacenes de esta carpeta
+    alfalfa --memory ver ALMACEN             usuario, entorno o proyecto
+    alfalfa --memory escribir ALMACEN        el texto entero (--text, o $EDITOR / la entrada)
+    alfalfa --memory quitar ALMACEN TEXTO    la entrada que contiene TEXTO
+    alfalfa --memory vaciar ALMACEN
 
-    alfalfa --aprendido                       habilidades aprendidas, propuestas y ajustes
-    alfalfa --aprendido ver NOMBRE            usuario:NOMBRE, proyecto:NOMBRE o NOMBRE
-    alfalfa --aprendido editar NOMBRE         reescribir su SKILL.md (también si está bloqueada)
-    alfalfa --aprendido borrar NOMBRE         a la papelera de $ALFALFA_HOME/aprendido
-    alfalfa --aprendido bloquear NOMBRE       el agente ya no la cambia (desbloquear la suelta)
-    alfalfa --aprendido pendientes            lo que propuso la revisión al cerrar el turno
-    alfalfa --aprendido pendientes ver ID     una propuesta con su diff entero
-    alfalfa --aprendido aplicar ID / descartar ID
-    alfalfa --aprendido ajustes [CLAVE sí|no] memoria, habilidades o revision
-    alfalfa --aprendido ajustes modelo_revision PROVEEDOR/MODELO (o «ninguno»)
-    alfalfa --aprendido proyecto sí|no        aprender o no en esta carpeta
+    alfalfa --learned                       habilidades aprendidas, propuestas y ajustes
+    alfalfa --learned ver NOMBRE            usuario:NOMBRE, proyecto:NOMBRE o NOMBRE
+    alfalfa --learned editar NOMBRE         reescribir su SKILL.md (también si está bloqueada)
+    alfalfa --learned borrar NOMBRE         a la papelera de $ALFALFA_HOME/aprendido
+    alfalfa --learned bloquear NOMBRE       el agente ya no la cambia (desbloquear la suelta)
+    alfalfa --learned pendientes            lo que propuso la revisión al cerrar el turno
+    alfalfa --learned pendientes ver ID     una propuesta con su diff entero
+    alfalfa --learned aplicar ID / descartar ID
+    alfalfa --learned ajustes [CLAVE sí|no] memoria, habilidades o revision
+    alfalfa --learned ajustes modelo_revision PROVEEDOR/MODELO (o «ninguno»)
+    alfalfa --learned proyecto sí|no        aprender o no en esta carpeta
 
 Con `--json` responde con líneas del protocolo de `--stdio` (`memoria`, `aprendido`,
 `habilidad`, `error`).
@@ -39,12 +39,12 @@ NO = ('no', 'false', '0', 'off')
 
 
 def argumentos(parser, grupo):
-    grupo.add_argument('--memoria', nargs='*', metavar='ACCION',
+    grupo.add_argument('--memory', '--memoria', dest='memoria', nargs='*', metavar='ACTION',
                        help='Ver y corregir la memoria de AlfalfaCode (usuario, entorno y proyecto)')
-    grupo.add_argument('--aprendido', nargs='*', metavar='ACCION',
+    grupo.add_argument('--learned', '--aprendido', dest='aprendido', nargs='*', metavar='ACTION',
                        help='Habilidades aprendidas, propuestas de la revisión y ajustes de aprendizaje')
-    parser.add_argument('--texto', metavar='TEXTO',
-                        help='Con --memoria escribir o --aprendido editar: el texto nuevo, entero')
+    parser.add_argument('--text', '--texto', dest='texto', metavar='TEXT',
+                        help='Con --memory escribir o --learned editar: el texto nuevo, entero')
 
 
 def pedida(args):
@@ -92,7 +92,7 @@ def _texto_memoria(estado, solo=None):
                       + ' (' + str(almacen['usados']) + '/' + str(almacen['limite']) + ' caracteres)')
         lineas += ['  · ' + e.replace('\n', '\n    ') for e in almacen['entradas']] or ['  (vacía)']
     if not solo and not estado['aprende_aqui']:
-        lineas.append('El aprendizaje está apagado en esta carpeta (alfalfa --aprendido proyecto sí lo enciende).')
+        lineas.append('El aprendizaje está apagado en esta carpeta (alfalfa --learned proyecto sí lo enciende).')
     return '\n'.join(lineas)
 
 
@@ -122,7 +122,7 @@ def _memoria(partes, texto, home, cwd):
     elif accion == 'vaciar' and len(partes) == 2:
         memoria.guardar(_almacen(partes[1]), [])
     else:
-        raise ValueError('Uso: alfalfa --memoria [ver ALMACEN | escribir ALMACEN [--texto T] | quitar ALMACEN TEXTO '
+        raise ValueError('Uso: alfalfa --memory [ver ALMACEN | escribir ALMACEN [--text T] | quitar ALMACEN TEXTO '
                          '| vaciar ALMACEN]')
     estado = _estado_memoria(home, cwd)
     return 'memoria', estado, _texto_memoria(estado, partes[1])
@@ -231,7 +231,7 @@ def _aprendido(partes, texto, home, cwd):
         mensaje = 'Aprendizaje ' + ('encendido' if _booleano(partes[1]) else 'apagado') + ' en ' \
             + str(raiz_de_proyecto(cwd)) + '.'
     else:
-        raise ValueError('Uso: alfalfa --aprendido [ver|editar|borrar|bloquear|desbloquear NOMBRE | '
+        raise ValueError('Uso: alfalfa --learned [ver|editar|borrar|bloquear|desbloquear NOMBRE | '
                          'pendientes [ver ID] | aplicar|descartar ID | ajustes [CLAVE VALOR] | proyecto sí|no]')
     estado = _estado_aprendido(home, cwd)
     if mensaje:

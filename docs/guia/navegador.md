@@ -23,7 +23,7 @@ los datos guardados; **Borrar los datos del navegador de este proyecto…** los 
 tras confirmar, sin borrar los de otros proyectos. Mientras el agente trabaja,
 espera un permiso o está en relevo, estos cambios quedan bloqueados.
 
-Herramientas del motor WebKit (la app arranca el motor con `--stdio --navegador`). En terminal
+Herramientas del motor WebKit (la app arranca el motor con `--stdio --browser`). En terminal
 se pueden activar explícitamente con el segundo motor AlfalfaBrowser, descrito abajo. Con el buscador web en
 «apagado» tampoco se ofrecen:
 
@@ -99,7 +99,7 @@ En Ajustes → Navegador se puede elegir **AlfalfaBrowser · Chromium** para las
 WebKit sigue siendo la opción inicial. En terminal se activa expresamente:
 
 ```sh
-alfalfa --motor-navegador cuybrowser --perfil-cuybrowser alfalfa "Revisa mi página"
+alfalfa --browser-engine cuybrowser --cuybrowser-profile alfalfa "Revisa mi página"
 ```
 
 La distribución de AlfalfaCode incluye AlfalfaBrowser 0.8.0 en `Helpers/alfalfabrowser`. El cursor de hoja
@@ -107,13 +107,13 @@ marca los clics y movimientos del agente en la ventana de Chromium. Las capturas
 Los clones y las instalaciones anteriores pueden usar `alfalfabrowser` desde `PATH`.
 AlfalfaCode también reconoce el comando `cuybrowser` de las versiones publicadas
 con ese nombre. Para usar una instalación externa, elige «Usar AlfalfaBrowser del
-PATH» en Ajustes → Navegador o usa `--cuybrowser-desde-path` en la CLI.
+PATH» en Ajustes → Navegador o usa `--cuybrowser-from-path` en la CLI.
 El motor comprueba `exactOrigins` y `localNetwork` antes de abrir Chromium.
 
-`alfalfa --cuybrowser-estado` comprueba qué navegador compatible está disponible. Si falta,
-la app ofrece descargar Chromium de Playwright y `alfalfa --descargar-chromium` pide confirmación
+`alfalfa --cuybrowser-status` comprueba qué navegador compatible está disponible. Si falta,
+la app ofrece descargar Chromium de Playwright y `alfalfa --download-chromium` pide confirmación
 en la terminal. La descarga se comparte entre proyectos y cada uno conserva su perfil propio.
-En el primer uso interactivo de `--motor-navegador cuybrowser` puedes guardar la elección
+En el primer uso interactivo de `--browser-engine cuybrowser` puedes guardar la elección
 para la terminal. Se cambia con `alfalfa --cuybrowser-cli activar` o `desactivar`.
 
 El motor pide permiso una vez por sesión para iniciar el servidor fuera del sandbox. Usa HTTP

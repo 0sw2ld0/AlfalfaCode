@@ -2,8 +2,8 @@
 
 ## Sesiones desde la app
 
-`--marcar ID titulo|fijada|archivada VALOR`, `--eliminar-sesion ID` (a la Papelera
-de macOS) y `--solo-bifurcar ID` responden una línea JSON. Son lo que usa el menú de
+`--mark ID titulo|fijada|archivada VALOR`, `--delete-session ID` (a la Papelera
+de macOS) y `--fork-only ID` responden una línea JSON. Son lo que usa el menú de
 clic derecho de la barra lateral. En ese menú, «Mostrar en Finder» abre la carpeta del
 proyecto y «Mostrar historial en Finder», la de la sesión en `$ALFALFA_HOME/sesiones`.
 El botón de carpeta de la cabecera de una sesión también abre la del proyecto.
@@ -14,9 +14,9 @@ si se mantiene el Mac despierto mientras trabaja y la búsqueda de actualizacion
 la abre en esa parte al arrancar (`general`, `proveedores`, `modelo` o
 `actualizaciones`).
 
-Al abrir una sesión guardada, la app carga su conversación (`alfalfa --historial ID
+Al abrir una sesión guardada, la app carga su conversación (`alfalfa --history ID
 --json`) y la deja lista para seguir, como un hilo de Codex: el siguiente mensaje
-abre un turno nuevo con `--reanudar ID "mensaje"`, también si la sesión ya estaba
+abre un turno nuevo con `--resume ID "mensaje"`, también si la sesión ya estaba
 completada. Las interrumpidas o bloqueadas tienen además «Reanudar» para seguir
 sin mensaje.
 
@@ -30,15 +30,15 @@ subagentes, en `native/<id>-aN/`). Aparte hay dos sitios que guardan cosas de el
 carpeta (`instantaneas/<huella>/`, refs `refs/alfalfa/<id>/…`).
 
 ```bash
-alfalfa --espacio-sesiones                      # tamaño, último uso, carpeta y título; de mayor a menor
-alfalfa --espacio-sesiones --ordenar uso        # de la menos usada a la más
-alfalfa --liberar-sesiones ID1 ID2              # pregunta y las mueve a la Papelera
-alfalfa --liberar-sesiones --sin-usar-dias 30   # las que llevan más de 30 días sin usarse
+alfalfa --session-sizes                      # tamaño, último uso, carpeta y título; de mayor a menor
+alfalfa --session-sizes --sort uso        # de la menos usada a la más
+alfalfa --free-sessions ID1 ID2              # pregunta y las mueve a la Papelera
+alfalfa --free-sessions --unused-days 30   # las que llevan más de 30 días sin usarse
 ```
 
-`--liberar-sesiones` enseña lo que va a mover y pregunta; `--si` no pregunta (sin
-terminal y sin `--si` no mueve nada). Con `--sin-usar-dias` no entran las fijadas salvo
-con `--incluir-fijadas`. Nunca toca una sesión en uso: la mueve con su cerrojo tomado, y
+`--free-sessions` enseña lo que va a mover y pregunta; `--yes` no pregunta (sin
+terminal y sin `--yes` no mueve nada). Con `--unused-days` no entran las fijadas salvo
+con `--include-pinned`. Nunca toca una sesión en uso: la mueve con su cerrojo tomado, y
 si lo tiene otro proceso (está trabajando, o abierta en la app entre turnos) la salta.
 Cambiar el título no cuenta como usarla.
 
@@ -56,10 +56,10 @@ Lo que hace con cada una:
    sesiones de la misma carpeta se quedan). Esto no pasa por la Papelera: si se recupera la
    sesión, se lee, pero ya no se pueden deshacer sus turnos.
 
-`--eliminar-sesion ID` (el menú de la barra lateral) hace lo mismo con una. En la app,
+`--delete-session ID` (el menú de la barra lateral) hace lo mismo con una. En la app,
 Ajustes ▸ Almacenamiento enseña la lista, ordenable por tamaño o por último uso, elige
 las de «Sin usar hace más de N días» y las mueve tras confirmarlo; las abiertas en la app
-no se pueden elegir. Con `--json`, las respuestas son `espacio_sesiones` (sin `--si`,
+no se pueden elegir. Con `--json`, las respuestas son `espacio_sesiones` (sin `--yes`,
 con `vista_previa`) y `sesiones_liberadas`.
 
 ## Buscar en sesiones anteriores
@@ -73,24 +73,24 @@ también en Plan. La sesión en curso no entra: ya está en su contexto. La idea
 de `session_search` de Hermes Agent.
 
 ```bash
-alfalfa --buscar-sesiones "compactación tarifa"         # sesiones de esta carpeta
-alfalfa --buscar-sesiones "compactación tarifa" --todas # de todas las carpetas
-alfalfa --ver-resultado a1b2c3d4e5f6a7b8#42             # los mensajes de alrededor
-alfalfa --reindexar                                     # rehacer el índice desde cero
-alfalfa --borrar-indice                                 # borrarlo (se rehace al buscar)
+alfalfa --search-sessions "compactación tarifa"         # sesiones de esta carpeta
+alfalfa --search-sessions "compactación tarifa" --all # de todas las carpetas
+alfalfa --show-result a1b2c3d4e5f6a7b8#42             # los mensajes de alrededor
+alfalfa --reindex                                     # rehacer el índice desde cero
+alfalfa --delete-index                                 # borrarlo (se rehace al buscar)
 ```
 
 Con `--json` responden una línea `busqueda_sesiones`, `sesiones_alrededor` o
-`indice_sesiones`. `--tiempo S` (más de 0) limita lo que la búsqueda espera a que el
+`indice_sesiones`. `--time-limit S` (más de 0) limita lo que la búsqueda espera a que el
 índice se ponga al día, y una consulta que empieza por «-» va pegada a la opción
-(`--buscar-sesiones=-x`). En la app, «Buscar» de la barra lateral busca a la vez en
+(`--search-sessions=-x`). En la app, «Buscar» de la barra lateral busca a la vez en
 los títulos y, con tres letras o más, dentro de las conversaciones (la misma orden,
-con `--todas`, `--incluir-externas` y `--tiempo 3`; al escribir otra letra, la
+con `--all`, `--include-external` y `--time-limit 3`; al escribir otra letra, la
 búsqueda anterior se termina); al pulsar un resultado se abre su sesión en ese
 mensaje, y lo que viene de fuera lleva «de fuera».
 
 - **Dónde busca el agente.** Por defecto, sólo en las sesiones de la misma carpeta de
-  trabajo. Ampliarlo a todas lo decides tú: `alfalfa --alcance-busqueda todas` (se
+  trabajo. Ampliarlo a todas lo decides tú: `alfalfa --search-scope todas` (se
   guarda en `proveedores.json`; `carpeta` lo devuelve) o `ALFALFA_BUSCAR_SESIONES=todas`.
 - **Índice.** `$ALFALFA_HOME/indice/sesiones.sqlite3`, SQLite con FTS5 (sin tildes ni
   mayúsculas; si las palabras enteras no dan nada, se prueban como prefijos). Si el Python
@@ -126,11 +126,11 @@ mensaje, y lo que viene de fuera lleva «de fuera».
   de una sesión propuesta por el agente (`propose_session`) sale con
   `titulo_origen: "agente"`. Buscando en todas las carpetas, de las otras sólo salen
   tus mensajes y los del agente no marcados: ninguna salida de herramienta (un README
-  malicioso leído con `read_file` también es de fuera). `--incluir-externas` las
+  malicioso leído con `read_file` también es de fuera). `--include-external` las
   devuelve, marcadas, para lo que lee una persona (la app); el agente nunca lo usa.
 - **Tamaño y borrado.** Cada mensaje se guarda recortado (8.000 caracteres; 4.000 la
   salida de una herramienta), una sesión que ya no está se quita del índice
-  (`--eliminar-sesion` lo hace en el acto) y, pasado el tope (`ALFALFA_INDICE_MAX_MB`,
+  (`--delete-session` lo hace en el acto) y, pasado el tope (`ALFALFA_INDICE_MAX_MB`,
   256 MB), se sueltan las sesiones más viejas hasta que el archivo queda por debajo.
   Lo quitado no queda legible en el archivo: borrado seguro de SQLite y de FTS5, y
   después se optimiza, se devuelven las páginas libres y se vacía el WAL (si otra sesión

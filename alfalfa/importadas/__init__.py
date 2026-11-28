@@ -21,7 +21,7 @@ como OpenCode) y por último lo del usuario. Un nombre repetido se enseña como 
 se activa; si lo que queda tapado es algo que ya autorizaste, se avisa.
 
 Seguridad: un servidor MCP, un agente o una orden «/» importados no se activan hasta que el
-usuario los autoriza una vez (`alfalfa --importar --autorizar CLAVE@HUELLA` o Ajustes ▸
+usuario los autoriza una vez (`alfalfa --import --authorize CLAVE@HUELLA` o Ajustes ▸
 Importar), viendo antes su definición, y vuelven a «pendiente» si cambia. Las claves de esas
 configuraciones no se copian: las referencias a variables se resuelven en memoria al abrir la
 sesión y `importadas.json` sólo guarda huellas. Las instrucciones no necesitan autorización: son
@@ -634,13 +634,13 @@ class Importadas:
 
         Los datos van en el campo `importadas` del evento: la clave, la huella, el tipo, el nombre, la herramienta y
         el estado de cada pendiente. Con ellos la app ofrece «Revisar y autorizar…» sin leer el texto; la huella
-        sólo dice qué se avisó: la app vuelve a pedir la lista (`--importar --json`) antes de autorizar nada."""
+        sólo dice qué se avisó: la app vuelve a pedir la lista (`--import --json`) antes de autorizar nada."""
         pendientes = self.autorizables()
         if not pendientes:
             return None
         texto = ('Importar · ' + ', '.join(e.tipo + ' ' + e.nombre + ' (' + e.herramienta + ')' for e in pendientes[:6])
                  + (' y ' + str(len(pendientes) - 6) + ' más' if len(pendientes) > 6 else '')
-                 + ' sin autorizar: no se activan hasta que los autorices con alfalfa --importar '
+                 + ' sin autorizar: no se activan hasta que los autorices con alfalfa --import '
                  'o en Ajustes ▸ Importar.')
         datos = {'pendientes': [dict(clave=e.clave, huella=e.huella, tipo=e.tipo, nombre=e.nombre,
                                      herramienta=e.herramienta, estado=e.estado) for e in pendientes]}
@@ -663,7 +663,7 @@ class Importadas:
         for elemento in self.elementos:
             fila = elemento.como_dict(self.autorizaciones)
             fila['lugar'] = self.lugar(fila['origen'])
-            # La clave corta vale en --autorizar si no hay otra igual activa en esta carpeta.
+            # La clave corta vale en --authorize si no hay otra igual activa en esta carpeta.
             corta = elemento.clave.split('@', 1)[0]
             fila['corta'] = corta if self.buscar(corta) is elemento else elemento.clave
             filas.append(fila)
@@ -697,7 +697,7 @@ class Importadas:
                 motivo = 'sin autorizar' if elemento.estado == 'pendiente' else 'cambió desde que lo autorizaste'
                 filas.append(configuracion_mcp.Diagnostico(
                     'IMPORTADA-PENDIENTE', 'Servidor MCP importado ' + nombre + ' ' + motivo + '; no se inicia. '
-                    'Autorízalo con alfalfa --importar o en Ajustes ▸ Importar.', None, False))
+                    'Autorízalo con alfalfa --import o en Ajustes ▸ Importar.', None, False))
             elif elemento.estado == 'invalido':
                 filas.append(configuracion_mcp.Diagnostico('IMPORTADA-INVALIDA', 'Servidor MCP importado ' + nombre
                                                            + ': ' + elemento.problema + '.', None, False))

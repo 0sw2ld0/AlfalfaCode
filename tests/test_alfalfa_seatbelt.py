@@ -125,7 +125,8 @@ def test_cli_offers_no_network_switch(capsys):
     with pytest.raises(SystemExit):
         main(['--help'])
     help_text = capsys.readouterr().out
-    assert 'red' not in help_text.replace('reanudar', '').casefold()
+    # Ni «red» ni «network»: palabras sueltas, que «--redo» no cuenta.
+    assert not re.search(r'\b(red|network)\b', help_text.replace('--reanudar', '').casefold())
 
 
 def test_writable_roots_resolve_symlinks_and_ignore_wide_tmpdir(tmp_path):

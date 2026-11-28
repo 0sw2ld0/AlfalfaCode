@@ -1,4 +1,4 @@
-"""`alfalfa --aligerar-sesiones`: pasa todas las sesiones guardadas al formato ligero.
+"""`alfalfa --slim-sessions`: pasa todas las sesiones guardadas al formato ligero.
 
 Una sesión vieja sólo se convierte cuando se vuelve a abrir, y su handoff.json
 sólo se acota cuando el agente usa otra herramienta. Así, las sesiones que ya no
@@ -109,7 +109,7 @@ def _mb(n):
 
 
 def orden(home, descartar=False, como_json=False):
-    """Lo que hace `alfalfa --aligerar-sesiones`; devuelve el código de salida."""
+    """Lo que hace `alfalfa --slim-sessions`; devuelve el código de salida."""
     filas = aligerar(Path(home) / 'sesiones', descartar)
     antes = sum(f['antes'] for f in filas)
     despues = sum(f['despues'] for f in filas)
@@ -130,5 +130,5 @@ def orden(home, descartar=False, como_json=False):
             peso = sum(p.stat().st_size for p in archivos if p.is_file())
             if peso:
                 print('Las resoluciones sin relación guardadas aparte ocupan ' + _mb(peso)
-                      + '. Nada las lee: con --descartar-no-relevantes se borran.')
+                      + '. Nada las lee: con --discard-irrelevant se borran.')
     return 1 if any(f['estado'] == 'error' for f in filas) else 0

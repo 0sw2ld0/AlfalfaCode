@@ -47,7 +47,7 @@ OpenAI-compatible providers. The picker also lists currently available free
 models. To connect OpenRouter from the CLI:
 
 ```sh
-alfalfa --conectar openrouter
+alfalfa --connect openrouter
 ```
 
 The Alfalfa provider can also be activated with a CUY courtesy code. On Intel

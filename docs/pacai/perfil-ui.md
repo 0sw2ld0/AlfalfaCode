@@ -287,7 +287,7 @@ pruebas en `tests/test_pacai_ui.py`.
     código.
 14. **Las pantallas se guardan con la sesión.** El transporte guarda cada vista (revisión, nodos, estado inicial y
     resumen) en `pacai-vistas.json`, en la carpeta de la sesión, cada vez que cambia una revisión. Con
-    `--pacai --reanudar` las recupera: la vista sigue por la revisión siguiente y no vuelve a la 1, y una acción
+    `--pacai --resume` las recupera: la vista sigue por la revisión siguiente y no vuelve a la 1, y una acción
     sobre una pantalla de antes de reanudar llega al modelo como cualquier otra. Al recuperarlas se descartan los
     nodos que el catálogo del cliente nuevo no admite.
 15. **Una vista nueva sin `root` se repara.** Si el primer bloque de una vista no trae nodo `root` (el modelo empieza

@@ -267,7 +267,7 @@ def test_el_tramo_del_catalogo_sobrevive_a_guardar_y_releer():
 def test_la_clave_sale_del_entorno_o_del_llavero(monkeypatch):
     proveedor = proveedores.obtener('anthropic')
     assert not proveedor.configurado()
-    assert 'ANTHROPIC_API_KEY' in proveedor.falta() and '--guardar-clave anthropic' in proveedor.falta()
+    assert 'ANTHROPIC_API_KEY' in proveedor.falta() and '--save-key anthropic' in proveedor.falta()
     llavero.guardar('anthropic', CLAVE)
     assert proveedor.configurado() and CLAVE in proveedores.secretos()
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-del-entorno')

@@ -113,7 +113,7 @@ def test_topes_del_entorno_y_explicitos(tmp_path, monkeypatch):
     monkeypatch.setenv('ALFALFA_PRESUPUESTO_MES', '40,5')
     p = Presupuesto(tmp_path, {'id': 's'})
     assert (p.sesion, p.mes) == (3.0, 40.5)
-    # Un --presupuesto 0 quita el del entorno.
+    # Un --budget 0 quita el del entorno.
     assert Presupuesto(tmp_path, {'id': 's'}, sesion='0', mes='9').sesion is None
     p.cambiar(sesion=None)
     assert p.sesion is None and p.mes == 40.5
@@ -138,8 +138,8 @@ def test_un_modelo_sin_precio_no_se_para(tmp_path):
 
 def test_la_terminal_valida_el_tope(capsys):
     with pytest.raises(SystemExit):
-        main(['--presupuesto', 'mucho', 'Hola'])
-    assert '--presupuesto' in capsys.readouterr().err
+        main(['--budget', 'mucho', 'Hola'])
+    assert '--budget' in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------- tope de la sesión
@@ -158,7 +158,7 @@ def test_el_turno_se_para_al_llegar_al_tope_de_la_sesion(tmp_path, monkeypatch):
     assert m.task['status'] == 'blocked'
     assert m.task['coste_usd'] == pytest.approx(3 * coste_opus(100_000, 1000))
     assert 'se agotó' in m.task['summary'] and '1,26 $ de 1,00 $' in m.task['summary']
-    assert '--presupuesto' in m.task['summary'] and 'Ajustes' in m.task['summary']
+    assert '--budget' in m.task['summary'] and 'Ajustes' in m.task['summary']
     salidas = eventos(salida)
     # Un solo camino por aviso: la app pinta el 80 % del evento `presupuesto` y el corte del resumen
     # del turno; ninguno de los dos llega además como `evento` de sistema.
@@ -204,7 +204,7 @@ def test_el_tope_del_mes_cuenta_las_demas_sesiones(tmp_path, monkeypatch):
     assert correr(m, 'Lee.') == 1
     assert claude.peticiones == 1
     assert 'presupuesto del mes en este Mac se agotó' in m.task['summary']
-    assert '10,05 $ de 10,00 $' in m.task['summary'] and '--presupuesto-mes' in m.task['summary']
+    assert '10,05 $ de 10,00 $' in m.task['summary'] and '--monthly-budget' in m.task['summary']
     assert GastoMensual(home).total() == pytest.approx(10.05)
 
 

@@ -21,7 +21,7 @@ OpenCode). Funciona así:
   la compactación y el tope de salida que se pide.
 
 ```bash
-alfalfa --catalogo           # fecha, origen y cuántos modelos gratis hay ahora
+alfalfa --catalog           # fecha, origen y cuántos modelos gratis hay ahora
 ```
 
 Los datos de models.dev y su licencia están en
@@ -66,9 +66,9 @@ formato de OpenAI funcionan con tu clave y la URL del catálogo.
 - Para añadir una clave:
 
   ```bash
-  alfalfa --guardar-clave openrouter     # pide la clave sin enseñarla
-  alfalfa --guardar-clave opencode       # OpenCode Zen
-  alfalfa --guardar-clave nvidia         # cualquier otro id del catálogo
+  alfalfa --save-key openrouter     # pide la clave sin enseñarla
+  alfalfa --save-key opencode       # OpenCode Zen
+  alfalfa --save-key nvidia         # cualquier otro id del catálogo
   ```
 
   En la app, en Ajustes ▸ Proveedores. Si eliges en el selector un modelo cuyo
@@ -146,7 +146,7 @@ el tope. La sesión queda lista para seguir.
 - Bifurcar una sesión o seguir en una nueva empieza su gasto de cero; el del mes sigue
   sumando.
 - Se configura en la app, en **Ajustes ▸ General ▸ Presupuesto**, y vale ya para
-  las sesiones abiertas. En la terminal, `alfalfa --presupuesto 5 --presupuesto-mes 40 "…"`
+  las sesiones abiertas. En la terminal, `alfalfa --budget 5 --monthly-budget 40 "…"`
   o `ALFALFA_PRESUPUESTO=5 ALFALFA_PRESUPUESTO_MES=40`. Con `0` se quita el tope.
 - El gasto del mes vive en `~/.alfalfa/gasto/AAAA-MM.jsonl`, una línea por
   petición con coste. Ese archivo sólo crece y se lee por el final, así que

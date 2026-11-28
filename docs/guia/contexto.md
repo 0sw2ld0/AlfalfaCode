@@ -16,14 +16,14 @@ medida, la reserva de compactación, el espacio libre y cuánto falta para compa
 
 ## Compactar
 
-La compactación automática salta al 90 % de la ventana (o en `--compactar-en`).
+La compactación automática salta al 90 % de la ventana (o en `--compact-at`).
 Además se puede compactar a mano en cualquier momento, como `/compact` de Claude
 Code: el botón **Compactar sesión** del panel o `/compactar`, con instrucciones
 detrás si quieres centrar el resumen (`/compactar conserva las rutas y los
 errores`). Entre turnos se compacta al momento sin abrir turno; con un turno en
 marcha, antes de la siguiente respuesta del modelo. Por `--stdio` es
 `{"tipo":"compactar","instrucciones":"…"}`. Una sesión guardada se abre sin turno
-con `--reanudar ID --esperar` para compactarla.
+con `--resume ID --wait` para compactarla.
 
 La conversación enseña la marca «Conversación compactada · 120k → 9k» con el
 resumen que ahora lee el modelo, plegado; el historial completo sigue guardado.
@@ -41,7 +41,7 @@ ventana es de 1.050.000); Claude Haiku 5.5, si el prompt pasa de 100.000 tokens
 contando la caché, 5× (ventana de 1M). El umbral sale de los tramos de precio de
 models.dev (`tiers`, o `context_over_200k` en el formato antiguo), de una tabla
 propia comprobada en las páginas oficiales, o de lo que diga el proveedor
-(Alfalfa Cloud lo manda en `/api/show` como `alfalfa_tarifa`). `--modelos --json`
+(Alfalfa Cloud lo manda en `/api/show` como `alfalfa_tarifa`). `--models --json`
 lo da junto a la ventana (`barato_hasta`, y `tarifa_larga` con los multiplicadores),
 y el selector lo enseña: «1M · barato hasta 100K».
 
@@ -66,11 +66,11 @@ Cada sesión elige cómo usarlo, y se guarda con ella:
 - **Contexto completo**: usa la ventana entera y avisa una vez al pasar el umbral.
 
 Se cambia con `/contexto ahorro` o `/contexto completo`, en el panel de contexto,
-con `--contexto ahorro|completo` en la terminal, o con
+con `--context ahorro|completo` en la terminal, o con
 `{"tipo":"contexto","modo":"completo"}` por stdio (vale ya, también a mitad de
 turno). El evento `sesion` dice el modo (`contexto`), el `contexto` lleva `tarifa`
 (`desde`, `entrada`, `salida`, `modo`) y el aviso es un `evento` de sistema con
-`tarifa` (también en `--historial`, donde la app lo pinta ya contestado). El coste
+`tarifa` (también en `--history`, donde la app lo pinta ya contestado). El coste
 estimado cobra el tramo aunque models.dev no lo traiga (GPT-6 Luna). «Seguir en una sesión nueva» es `{"tipo":"continuar_en_nueva"}`: el
 motor responde `sesion_cambiada` con `continuada_de` y se cierra. Con un código de
 Alfalfa Cloud el servicio anuncia como ventana el umbral barato, salvo a los

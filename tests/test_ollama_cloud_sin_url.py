@@ -7,7 +7,7 @@ def test_con_clave_y_ollama_local_ausente_dice_como_apuntar_a_la_nube(monkeypatc
     monkeypatch.setenv('OLLAMA_API_KEY', 'clave-de-prueba-1234')
     accion = proveedores.obtener('ollama').accion({'cause': 'network'}, 'All connection attempts failed')
     assert accion and 'http://127.0.0.1:11434' in accion
-    assert 'alfalfa --fijar-url ollama https://ollama.com' in accion
+    assert 'alfalfa --set-url ollama https://ollama.com' in accion
 
 
 def test_sin_clave_queda_el_aviso_de_siempre(monkeypatch):
@@ -30,4 +30,4 @@ def test_la_guia_de_linux_lo_dice():
     from pathlib import Path
     guia = (Path(__file__).resolve().parents[1] / 'docs' / 'USO.md').read_text().split('### Linux: claves', 1)[1]
     guia = guia.split('\n### ', 1)[0]
-    assert 'alfalfa --fijar-url ollama https://ollama.com' in guia
+    assert 'alfalfa --set-url ollama https://ollama.com' in guia

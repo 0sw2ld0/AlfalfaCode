@@ -258,7 +258,7 @@ class Memoria:
         return dict(self.guardar(almacen, entradas), notas=notas)
 
     def reemplazar(self, almacen, texto):
-        """El texto entero de un almacén (lo edita el usuario en Ajustes o con --memoria escribir)."""
+        """El texto entero de un almacén (lo edita el usuario en Ajustes o con --memory escribir)."""
         entradas = [self._contenido(e) for e in separar(texto)]
         usados, limite = len(unir(entradas)), LIMITES[self._almacen(almacen)]
         if usados > limite:

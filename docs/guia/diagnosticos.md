@@ -95,7 +95,7 @@ rota, regla que no existe) cuenta como fallido, nunca como limpio.
 
 Está **encendido por defecto**. Para apagarlo:
 
-- en la terminal, `ALFALFA_DIAGNOSTICOS=0 alfalfa "…"` o `alfalfa --sin-diagnosticos "…"`;
+- en la terminal, `ALFALFA_DIAGNOSTICOS=0 alfalfa "…"` o `alfalfa --no-diagnostics "…"`;
 - para el usuario, `{"diagnosticos": false}` en `~/.alfalfa/ajustes.json`;
 - en un proyecto, `{"diagnosticos": false}` en `.alfalfa/ajustes.json`. El proyecto sólo
   puede apagarlo: nunca enciende lo que el usuario apagó;
@@ -105,7 +105,7 @@ Está **encendido por defecto**. Para apagarlo:
 
 Los de Swift (`sourcekit-lsp`) están **apagados por defecto**. Para encenderlos:
 
-- en la terminal, `ALFALFA_DIAGNOSTICOS_SWIFT=1 alfalfa "…"` o `alfalfa --diagnosticos-swift "…"`;
+- en la terminal, `ALFALFA_DIAGNOSTICOS_SWIFT=1 alfalfa "…"` o `alfalfa --swift-diagnostics "…"`;
 - para el usuario, `{"diagnosticos_swift": true}` en `~/.alfalfa/ajustes.json`;
 - en la app, **Ajustes ▸ General ▸ Diagnósticos de Swift (sourcekit-lsp, fuera del sandbox)**.
   Por `--stdio`: `{"tipo":"diagnosticos_swift","activo":true}`.

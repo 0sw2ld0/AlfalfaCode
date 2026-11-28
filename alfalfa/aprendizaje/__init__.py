@@ -10,7 +10,7 @@ que vale la pena recordar. Aquí:
   (del usuario) o .alfalfa/skills (del proyecto), con su registro de origen.
 - `revision`: una pasada breve al cerrar el turno que propone memoria o habilidades.
 - `pendientes`: lo que la revisión propone y espera al usuario.
-- `orden`: `alfalfa --memoria` y `alfalfa --aprendido`.
+- `orden`: `alfalfa --memory` y `alfalfa --learned`.
 
 Ajustes en $ALFALFA_HOME/aprendizaje.json (Ajustes ▸ Memoria de la app los escribe):
 

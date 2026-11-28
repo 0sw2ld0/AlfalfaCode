@@ -17,7 +17,7 @@ el servicio no distingue. Sin Llavero, el código llega en `ALFALFA_CODIGO`.
 La URL del servicio no viene en el repositorio: va dentro del código que se
 reparte, `CUY-XXXX-XXXX-XXXX@servicio.example.com`, y se guarda al activarlo.
 Al servicio sólo le llega la parte `CUY-…`. También se puede fijar a mano con
-`alfalfa --fijar-url alfalfa https://…` o `ALFALFA_SERVICIO_URL`.
+`alfalfa --set-url alfalfa https://…` o `ALFALFA_SERVICIO_URL`.
 """
 from __future__ import annotations
 
@@ -248,7 +248,7 @@ class FirmanteArchivo:
                                      + '.') from None
             if not crear:
                 raise ErrorDeAlfalfa('Falta la clave de firma de este equipo (' + str(ruta) + '): activa el '
-                                     'código con `alfalfa --activar-codigo`.') from None
+                                     'código con `alfalfa --activate-code`.') from None
             return self._crear(ruta)
         except OSError as exc:
             raise ErrorDeAlfalfa('No se pudo leer la clave de firma (' + str(ruta) + '): '
@@ -326,7 +326,7 @@ def falta_codigo():
     if sys.platform == 'darwin':
         return 'Falta el código de cortesía: actívalo en Proveedores.'
     return ('Falta el código de cortesía: ponlo en la variable de entorno ALFALFA_CODIGO (si aún no está '
-            'activado en este equipo, antes `alfalfa --activar-codigo`).')
+            'activado en este equipo, antes `alfalfa --activate-code`).')
 
 
 def cabeceras(codigo, firma_de, metodo, ruta, cuerpo):
@@ -451,7 +451,7 @@ class Alfalfa(Proveedor):
         valor = ajustes.alfalfa_servicio_url()
         if not valor:
             raise ErrorDeAlfalfa('Falta la dirección del servicio Alfalfa: pega el código completo, '
-                                 'CUY-…@servicio, en Proveedores o con `alfalfa --activar-codigo`.')
+                                 'CUY-…@servicio, en Proveedores o con `alfalfa --activate-code`.')
         return validar_url(valor, 'ALFALFA_SERVICIO_URL', 'El servicio Alfalfa')
 
     def codigo(self):

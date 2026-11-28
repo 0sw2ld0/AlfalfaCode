@@ -10,7 +10,7 @@
 | `compactacion/`, `agents_md/`, `sesiones/` | Compactación del contexto, `AGENTS.md` y sesiones con id por turno |
 | `importadas/` | Proyectos de OpenCode, Codex y Claude Code: MCP, agentes, órdenes «/» e instrucciones |
 | `deshacer/` | Instantáneas por turno en un git paralelo, volver con el código y rehacer |
-| `busqueda_sesiones/` | `buscar_sesiones` y `--buscar-sesiones`: índice FTS5 de las conversaciones guardadas |
+| `busqueda_sesiones/` | `buscar_sesiones` y `--search-sessions`: índice FTS5 de las conversaciones guardadas |
 | `apply_patch/`, `edicion_tolerante/` | Edición por parches y reemplazos tolerantes |
 | `diagnosticos/` | Servidores de lenguaje y linters tras cada edición |
 | `catalogo/`, `proveedores/compatible.py` | Catálogo de models.dev y proveedores compatibles con OpenAI |

@@ -17,4 +17,4 @@ Modificado para AlfalfaCode en noviembre de 2026:
 4. Se quitan envoltorios sencillos (`env VAR=…`, `command`, `nohup`, `time`, `nice`, `sudo`) para evaluar también la orden de dentro.
 5. `permitida` no salta el sandbox: sólo quita la pregunta de orden peligrosa. La red y la salida del sandbox siguen preguntando. En Codex, `allow` puede ejecutar sin sandbox.
 6. Un archivo de reglas inválido impide arrancar la sesión, para no perder una prohibición en silencio.
-7. `alfalfa --comprobar-orden ARGV` hace lo que `codex execpolicy check`.
+7. `alfalfa --check-command ARGV` hace lo que `codex execpolicy check`.

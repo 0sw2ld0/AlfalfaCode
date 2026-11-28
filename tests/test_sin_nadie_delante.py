@@ -35,7 +35,7 @@ def lanzar(tmp_path, pide):
     proyecto.mkdir()
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]), ALFALFA_HOME=str(tmp_path / 'home'),
                OLLAMA_API_KEY='falsa-0123456789')
-    return subprocess.run([sys.executable, '-c', ORDEN, pide, '--modelo', 'deepseek-v4.1-flash:cloud', 'Encargo'],
+    return subprocess.run([sys.executable, '-c', ORDEN, pide, '--model', 'deepseek-v4.1-flash:cloud', 'Encargo'],
                           cwd=proyecto, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
 
 
@@ -56,7 +56,7 @@ def test_sin_terminal_lo_que_pide_permiso_se_niega_y_sale_con_3(tmp_path):
     hecho = lanzar(tmp_path, 'red')
     assert hecho.returncode == 3, (hecho.returncode, hecho.stdout[-500:], hecho.stderr[-500:])
     assert 'Sin terminal no hay quien responda' in hecho.stdout
-    assert 'Un permiso negado sin nadie que respondiera' in hecho.stderr and '--modo' in hecho.stderr
+    assert 'Un permiso negado sin nadie que respondiera' in hecho.stderr and '--permission-mode' in hecho.stderr
     texto = registro(tmp_path)
     assert 'Comando rechazado' in texto and 'Un permiso negado sin nadie que respondiera' in texto
 

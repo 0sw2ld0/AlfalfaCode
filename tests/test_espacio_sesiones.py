@@ -1,4 +1,4 @@
-"""`--espacio-sesiones` y `--liberar-sesiones`: ver lo que ocupan las sesiones y liberarlo.
+"""`--session-sizes` y `--free-sessions`: ver lo que ocupan las sesiones y liberarlo.
 
 - El listado da tamaño, último uso, carpeta y título, y se ordena por tamaño.
 - Lo liberado va a la Papelera (una de prueba, con HOME temporal), nunca se borra para siempre.
@@ -85,7 +85,7 @@ def test_libera_las_viejas_a_la_papelera_sin_tocar_la_en_uso_ni_la_fijada(demo, 
     fd = os.open(demo.home / 'sesiones' / 'en_uso' / 'lock', os.O_CREAT | os.O_RDWR)
     fcntl.flock(fd, fcntl.LOCK_EX)  # el motor de esa sesión, o la app con ella abierta entre turnos
     try:
-        codigo, salida = ejecutar(['--liberar-sesiones', '--sin-usar-dias', '30', '--si', '--json'], monkeypatch)
+        codigo, salida = ejecutar(['--free-sessions', '--unused-days', '30', '--yes', '--json'], monkeypatch)
     finally:
         os.close(fd)
     assert codigo == 0
@@ -109,7 +109,7 @@ def test_con_ids_y_las_fijadas_si_se_nombran(demo, monkeypatch):
     demo.crear('a', [{'role': 'user', 'content': 'x'}])
     demo.crear('b', [{'role': 'user', 'content': 'x'}])
     (demo.home / 'sesiones' / 'a' / 'marcas.json').write_text(json.dumps({'fijada': True}))
-    codigo, salida = ejecutar(['--liberar-sesiones', 'a', 'zz', '--si', '--json'], monkeypatch)
+    codigo, salida = ejecutar(['--free-sessions', 'a', 'zz', '--yes', '--json'], monkeypatch)
     respuesta = json.loads(salida)
     assert codigo == 0 and [m['id'] for m in respuesta['movidas']] == ['a']
     assert respuesta['saltadas'] == [{'id': 'zz', 'motivo': 'no_existe'}]
@@ -119,14 +119,14 @@ def test_con_ids_y_las_fijadas_si_se_nombran(demo, monkeypatch):
 def test_sin_si_solo_enseña_lo_que_se_moveria(demo, monkeypatch):
     s = demo.crear('vieja', [{'role': 'user', 'content': 'x'}])
     envejecer(s, 40)
-    codigo, salida = ejecutar(['--liberar-sesiones', '--sin-usar-dias', '30', '--json'], monkeypatch)
+    codigo, salida = ejecutar(['--free-sessions', '--unused-days', '30', '--json'], monkeypatch)
     respuesta = json.loads(salida)
     assert codigo == 0 and respuesta['vista_previa'] is True and [f['id'] for f in respuesta['sesiones']] == ['vieja']
     assert s.is_dir()
     # En la terminal, sin poder preguntar, tampoco mueve nada.
     monkeypatch.setattr('sys.stdin', io.StringIO(''))
-    codigo, salida = ejecutar(['--liberar-sesiones', '--sin-usar-dias', '30'], monkeypatch)
-    assert codigo == 1 and '--si' in salida and 'ya no se podrán retomar' in salida and s.is_dir()
+    codigo, salida = ejecutar(['--free-sessions', '--unused-days', '30'], monkeypatch)
+    assert codigo == 1 and '--yes' in salida and 'ya no se podrán retomar' in salida and s.is_dir()
 
 
 def test_en_la_terminal_pregunta_y_solo_mueve_con_un_si(demo, monkeypatch):
@@ -136,9 +136,9 @@ def test_en_la_terminal_pregunta_y_solo_mueve_con_un_si(demo, monkeypatch):
         def isatty(self):
             return True
     monkeypatch.setattr('sys.stdin', Tecla('n\n'))
-    assert ejecutar(['--liberar-sesiones', 'vieja'], monkeypatch)[0] == 1 and s.is_dir()
+    assert ejecutar(['--free-sessions', 'vieja'], monkeypatch)[0] == 1 and s.is_dir()
     monkeypatch.setattr('sys.stdin', Tecla('s\n'))
-    codigo, salida = ejecutar(['--liberar-sesiones', 'vieja'], monkeypatch)
+    codigo, salida = ejecutar(['--free-sessions', 'vieja'], monkeypatch)
     assert codigo == 0 and 'a la Papelera' in salida and not s.exists()
 
 
@@ -152,7 +152,7 @@ def test_se_borran_sus_instantaneas_y_no_las_de_otra_sesion_de_la_carpeta(demo, 
     (demo.proyecto / 'grande.txt').unlink()
     almacen.guardar('s2', 'antes')
     peso = almacen.tamano()
-    codigo, salida = ejecutar(['--liberar-sesiones', 's1', '--si', '--json'], monkeypatch)
+    codigo, salida = ejecutar(['--free-sessions', 's1', '--yes', '--json'], monkeypatch)
     respuesta = json.loads(salida)
     assert codigo == 0 and respuesta['instantaneas']['refs'] == 2
     refs = almacen.git('for-each-ref', '--format=%(refname)', 'refs/alfalfa/').decode().split()
@@ -165,7 +165,7 @@ def test_eliminar_una_desde_la_barra_lateral_tambien_libera_sus_instantaneas(dem
     demo.crear('s1', [{'role': 'user', 'content': 'x'}])
     almacen = Almacen(demo.home, demo.proyecto)
     almacen.guardar('s1', 'antes')
-    codigo, salida = ejecutar(['--eliminar-sesion', 's1'], monkeypatch)
+    codigo, salida = ejecutar(['--delete-session', 's1'], monkeypatch)
     assert codigo == 0 and json.loads(salida)['eliminada'] is True
     assert almacen.git('for-each-ref', 'refs/alfalfa/').decode() == ''
     assert (demo.home.parent / '.Trash' / 'alfalfa-s1' / 'task.json').is_file()
@@ -174,7 +174,7 @@ def test_eliminar_una_desde_la_barra_lateral_tambien_libera_sus_instantaneas(dem
 def test_listado_en_json_con_los_totales(demo, monkeypatch):
     demo.crear('s1', [{'role': 'user', 'content': 'el tapir'}])
     demo.buscar('tapir')
-    codigo, salida = ejecutar(['--espacio-sesiones', '--json'], monkeypatch)
+    codigo, salida = ejecutar(['--session-sizes', '--json'], monkeypatch)
     respuesta = json.loads(salida)
     assert codigo == 0 and respuesta['tipo'] == 'espacio_sesiones'
     assert respuesta['sesiones'][0]['id'] == 's1' and respuesta['totales']['indice'] > 0
@@ -183,6 +183,6 @@ def test_listado_en_json_con_los_totales(demo, monkeypatch):
 
 def test_opciones_sueltas_dan_error(demo, monkeypatch):
     with pytest.raises(SystemExit):
-        terminal.main(['--si'])
-    codigo, salida = ejecutar(['--liberar-sesiones', '--json'], monkeypatch)
+        terminal.main(['--yes'])
+    codigo, salida = ejecutar(['--free-sessions', '--json'], monkeypatch)
     assert codigo == 1 and json.loads(salida)['tipo'] == 'error'

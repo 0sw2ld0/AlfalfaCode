@@ -79,8 +79,8 @@ Si una espera se interrumpe por una navegación de fondo, no se afirma que su
 condición se cumplió. Si la acción no llegó a completarse (`iniciada:false`),
 se informa de ello para releer la página antes de repetirla.
 
-La consulta `alfalfa --navegador-sitios --json` no modifica nada. El canal interactivo
-`--navegador-sitios --stdio` sólo guarda tras una respuesta de permiso con el ID
+La consulta `alfalfa --browser-sites --json` no modifica nada. El canal interactivo
+`--browser-sites --stdio` sólo guarda tras una respuesta de permiso con el ID
 de la propuesta pendiente. No hay herramienta del modelo para ampliar las listas.
 
 Un adaptador de CuyBrowser debe comprobar capacidades de origen exacto, leases y

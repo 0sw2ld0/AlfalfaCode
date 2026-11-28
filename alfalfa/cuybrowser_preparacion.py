@@ -121,5 +121,5 @@ def orden(args, home):
     elif estado['navegador']:
         print(f"AlfalfaBrowser puede usar {estado['navegador']} con un perfil propio.")
     else:
-        print(estado['mensaje'] or 'Falta Chromium. Usa alfalfa --descargar-chromium para instalarlo.')
+        print(estado['mensaje'] or 'Falta Chromium. Usa alfalfa --download-chromium para instalarlo.')
     return int(estado['estado'] != 'disponible')

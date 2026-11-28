@@ -1,4 +1,4 @@
-"""Lo que ocupan las sesiones guardadas y cómo liberarlo: `--espacio-sesiones` y `--liberar-sesiones`.
+"""Lo que ocupan las sesiones guardadas y cómo liberarlo: `--session-sizes` y `--free-sessions`.
 
 Dónde guarda AlfalfaCode una conversación:
 
@@ -333,19 +333,19 @@ def _imprimir(filas, salida):
 
 
 def argumentos(parser, grupo):
-    grupo.add_argument('--espacio-sesiones', action='store_true',
+    grupo.add_argument('--session-sizes', '--espacio-sesiones', dest='espacio_sesiones', action='store_true',
                        help='Las sesiones guardadas con lo que ocupa cada una, su último uso y su carpeta')
-    grupo.add_argument('--liberar-sesiones', nargs='*', metavar='ID',
-                       help='Mover a la Papelera esas sesiones (o, con --sin-usar-dias, las que no se usan) y '
+    grupo.add_argument('--free-sessions', '--liberar-sesiones', dest='liberar_sesiones', nargs='*', metavar='ID',
+                       help='Mover a la Papelera esas sesiones (o, con --unused-days, las que no se usan) y '
                             'quitarlas del índice y de las instantáneas')
-    parser.add_argument('--ordenar', choices=('tamano', 'uso'), default='tamano',
-                        help='Con --espacio-sesiones: por tamaño (por defecto) o de la menos usada a la más')
-    parser.add_argument('--sin-usar-dias', type=_dias, metavar='N',
-                        help='Con --liberar-sesiones sin ids: las que llevan más de N días sin usarse')
-    parser.add_argument('--incluir-fijadas', action='store_true',
-                        help='Con --liberar-sesiones --sin-usar-dias: también las fijadas')
-    parser.add_argument('--si', action='store_true',
-                        help='Con --liberar-sesiones: no preguntar antes de moverlas a la Papelera')
+    parser.add_argument('--sort', '--ordenar', dest='ordenar', choices=('tamano', 'uso'), default='tamano',
+                        help='Con --session-sizes: por tamaño (por defecto) o de la menos usada a la más')
+    parser.add_argument('--unused-days', '--sin-usar-dias', dest='sin_usar_dias', type=_dias, metavar='N',
+                        help='Con --free-sessions sin ids: las que llevan más de N días sin usarse')
+    parser.add_argument('--include-pinned', '--incluir-fijadas', dest='incluir_fijadas', action='store_true',
+                        help='Con --free-sessions --unused-days: también las fijadas')
+    parser.add_argument('--yes', '--si', dest='si', action='store_true',
+                        help='Con --free-sessions: no preguntar antes de moverlas a la Papelera')
 
 
 def _dias(valor):
@@ -364,7 +364,7 @@ def pedida(args):
 
 
 def orden(args, home, salida=None, entrada=None):
-    """`--espacio-sesiones` y `--liberar-sesiones`; devuelve el código de salida."""
+    """`--session-sizes` y `--free-sessions`; devuelve el código de salida."""
     from ..stdio import Transport
     salida = salida or sys.stdout
     entrada = entrada or sys.stdin
@@ -380,13 +380,13 @@ def orden(args, home, salida=None, entrada=None):
         print(f"{n} {'sesión' if n == 1 else 'sesiones'}: {tamano_legible(t['sesiones'])}. Índice de búsqueda: "
               f"{tamano_legible(t['indice'])}. Instantáneas de deshacer: {tamano_legible(t['instantaneas'])}.",
               file=salida)
-        print('Para liberar: alfalfa --liberar-sesiones ID … o --liberar-sesiones --sin-usar-dias 30', file=salida)
+        print('Para liberar: alfalfa --free-sessions ID … o --free-sessions --unused-days 30', file=salida)
         return 0
     ids = args.liberar_sesiones
     if not ids and args.sin_usar_dias is None:
-        return _error(transporte, 'Di qué sesiones (sus ids) o cuántos días sin usarse con --sin-usar-dias N.', salida)
+        return _error(transporte, 'Di qué sesiones (sus ids) o cuántos días sin usarse con --unused-days N.', salida)
     if ids and args.sin_usar_dias is not None:
-        return _error(transporte, 'Usa ids o --sin-usar-dias, no las dos cosas.', salida)
+        return _error(transporte, 'Usa ids o --unused-days, no las dos cosas.', salida)
     conocidas = {f['id'] for f in filas}
     desconocidas = [i for i in ids if i not in conocidas]
     elegidas = elegir(filas, ids, args.sin_usar_dias, args.incluir_fijadas)
@@ -396,7 +396,7 @@ def orden(args, home, salida=None, entrada=None):
                 + [dict(id=f['id'], motivo='en_uso') for f in en_uso_ya])
     if not args.si:
         if transporte:
-            # La app pregunta ella misma; sin --si sólo enseña lo que se movería.
+            # La app pregunta ella misma; sin --yes sólo enseña lo que se movería.
             transporte.emit('espacio_sesiones', sesiones=candidatas, totales=totales(home, filas), nota=AVISO,
                             vista_previa=True, saltadas=saltadas)
             return 0
@@ -410,7 +410,7 @@ def orden(args, home, salida=None, entrada=None):
         print(f"\n{n} {'sesión' if n == 1 else 'sesiones'}, "
               f"{tamano_legible(sum(f['bytes'] for f in candidatas))}. {AVISO}", file=salida)
         if not entrada.isatty():
-            print('Añade --si para confirmarlo sin preguntar.', file=salida)
+            print('Añade --yes para confirmarlo sin preguntar.', file=salida)
             return 1
         print('¿Moverlas a la Papelera? [s/N] ', end='', file=salida, flush=True)
         if entrada.readline().strip().lower() not in ('s', 'si', 'sí', 'y', 'yes'):

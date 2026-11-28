@@ -301,7 +301,7 @@ def texto(resultado):
                 f'Instálala con `{ORDEN_BREW}`.')
     if resultado['hay_nueva']:
         return (f'Hay una versión nueva: {resultado["ultima"]} (tienes {resultado["instalada"]}). '
-                'Instálala con `alfalfa --actualizar`.')
+                'Instálala con `alfalfa --update`.')
     if resultado['ultima'] is None:
         return f'Tienes {resultado["instalada"]}; el repositorio todavía no tiene versiones publicadas.'
     if clave(resultado['instalada']) and clave(resultado['instalada']) > clave(resultado['ultima']):
@@ -310,7 +310,7 @@ def texto(resultado):
 
 
 def orden(actualizar_ya, como_json, salida=None):
-    """`alfalfa --buscar-actualizacion` y `alfalfa --actualizar`."""
+    """`alfalfa --check-update` y `alfalfa --update`."""
     salida = salida or sys.stdout
     if como_json:
         from .stdio import Transport

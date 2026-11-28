@@ -10,7 +10,7 @@ para ella (https://openrouter.ai/docs/guides/overview/auth/oauth):
    sólo atiende esa ruta, comprueba `state` y se cierra.
 3. El código y el `code_verifier` se cambian por la clave en
    `POST https://openrouter.ai/api/v1/auth/keys`. La clave va derecha al Llavero,
-   como la de `--guardar-clave openrouter`: nunca se escribe ni se emite.
+   como la de `--save-key openrouter`: nunca se escribe ni se emite.
 
 Así la primera vez basta con un clic para usar los modelos gratis de OpenRouter.
 """
@@ -189,7 +189,7 @@ def conectar(proveedor='openrouter', elegir=False, **opciones):
         return chatgpt.conectar(**opciones)
     if proveedor not in CONECTABLES:
         raise ErrorAlConectar('Sólo se puede conectar así OpenRouter; para ' + str(proveedor)
-                              + ' guarda su clave con `alfalfa --guardar-clave ' + str(proveedor) + '`.')
+                              + ' guarda su clave con `alfalfa --save-key ' + str(proveedor) + '`.')
     from . import configuracion, llavero
     from .compatible import Compatible
     clave = obtener_clave(**opciones)

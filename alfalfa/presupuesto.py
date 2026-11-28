@@ -27,9 +27,9 @@ ENTORNO_SESION = 'ALFALFA_PRESUPUESTO'
 ENTORNO_MES = 'ALFALFA_PRESUPUESTO_MES'
 # Lo que sube cada tope, para el mensaje del corte.
 COMO_SUBIR = {
-    'sesion': ('Ajustes ▸ General ▸ Presupuesto en la app, --presupuesto USD en la terminal o '
+    'sesion': ('Ajustes ▸ General ▸ Presupuesto en la app, --budget USD en la terminal o '
                + ENTORNO_SESION),
-    'mes': ('Ajustes ▸ General ▸ Presupuesto en la app, --presupuesto-mes USD en la terminal o '
+    'mes': ('Ajustes ▸ General ▸ Presupuesto en la app, --monthly-budget USD en la terminal o '
             + ENTORNO_MES),
 }
 _SIN_CAMBIO = object()

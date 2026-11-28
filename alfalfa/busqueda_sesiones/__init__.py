@@ -8,8 +8,8 @@ un resumen hecho por un modelo.
 El índice vive en `$ALFALFA_HOME/indice/sesiones.sqlite3` (SQLite con FTS5, de
 la biblioteca estándar; el Python de la app lo trae). Si el Python no tiene
 FTS5, la misma tabla se recorre con LIKE: más lento, mismo resultado. El índice
-es desechable: se puede borrar entero (`--borrar-indice`) y se rehace leyendo
-las sesiones (`--reindexar`); las sesiones nunca se tocan.
+es desechable: se puede borrar entero (`--delete-index`) y se rehace leyendo
+las sesiones (`--reindex`); las sesiones nunca se tocan.
 
 Se actualiza solo y por partes: de cada `messages.jsonl` se lee lo que hay
 detrás de lo ya indexado (`lectura.py`), empezando por las sesiones que
@@ -24,7 +24,7 @@ más viejas hasta quedar en el 80 %.
 
 Por defecto sólo se busca en las sesiones de la misma carpeta de trabajo. Buscar
 en todas lo decide el usuario: `ALFALFA_BUSCAR_SESIONES=todas`, o
-`alfalfa --alcance-busqueda todas` (se guarda en proveedores.json), o `--todas`
+`alfalfa --search-scope todas` (se guarda en proveedores.json), o `--all`
 en su propia búsqueda desde la terminal o la app.
 """
 from __future__ import annotations

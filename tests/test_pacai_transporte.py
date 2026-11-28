@@ -551,20 +551,20 @@ async def test_la_caducidad_se_cambia_con_alfalfa_caducidad_aprobacion(monkeypat
 @pytest.mark.parametrize('valor', ['0', '-5', 'nunca', 'nan', str(366 * 24 * 3600)])
 def test_una_caducidad_que_no_es_un_numero_razonable_de_segundos_es_un_error(monkeypatch, valor):
     from alfalfa.pacai.transporte import caducidad_de
-    with pytest.raises(ValueError, match='--caducidad-aprobacion'):
+    with pytest.raises(ValueError, match='--approval-timeout'):
         caducidad_de(valor)
     monkeypatch.setenv('ALFALFA_CADUCIDAD_APROBACION', valor)
     with pytest.raises(ValueError, match='ALFALFA_CADUCIDAD_APROBACION'):
         caducidad_de()
 
 
-@pytest.mark.parametrize('argumentos', [['--pacai', '--caducidad-aprobacion', '0'],
-                                        ['--caducidad-aprobacion', '60', '--stdio']])
+@pytest.mark.parametrize('argumentos', [['--pacai', '--approval-timeout', '0'],
+                                        ['--approval-timeout', '60', '--stdio']])
 def test_la_opcion_de_caducidad_se_valida_y_solo_vale_con_pacai(argumentos, capsys):
     from alfalfa.terminal import main
     with pytest.raises(SystemExit) as salida:
         main(argumentos)
-    assert salida.value.code == 2 and '--caducidad-aprobacion' in capsys.readouterr().err
+    assert salida.value.code == 2 and '--approval-timeout' in capsys.readouterr().err
 
 
 async def test_interrumpir_con_una_aprobacion_pendiente_la_niega_cierra_su_herramienta_y_olvida_su_plazo():

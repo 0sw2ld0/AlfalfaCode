@@ -1,7 +1,7 @@
 # Imágenes
 
 ```bash
-alfalfa --modelo deepseek-v4.1-flash:cloud --imagen captura.png "¿qué falla aquí?"
+alfalfa --model deepseek-v4.1-flash:cloud --image captura.png "¿qué falla aquí?"
 ```
 
 Como en Codex, cada imagen va al texto con `<image name=[Image #N] path="...">`, se
@@ -13,7 +13,7 @@ miniatura, como en Codex: si el campo de texto escribe la ruta al soltarla, la a
 quita y la adjunta. Una captura arrastrada desde su miniatura flotante se copia a
 los adjuntos, porque macOS borra enseguida su archivo temporal.
 
-Cada modelo de `--modelos --json` dice si ve imágenes (`vision`: true, false o null si
+Cada modelo de `--models --json` dice si ve imágenes (`vision`: true, false o null si
 no se sabe), de su `/api/show` en Ollama, de lo que dice cada proveedor o el servicio
 Alfalfa, o del catálogo de models.dev. Un mensaje con imágenes para un modelo que no las
 ve se rechaza antes de empezar el turno, con un error que nombra modelos con visión que
@@ -48,14 +48,14 @@ En **Ajustes → Proveedores → Generación de imágenes**, elige **ChatGPT med
 Codex**, **API de OpenAI** o **Ninguno**. Antes de elegir, AlfalfaCode usa Codex si
 detecta que has iniciado sesión con ChatGPT. Si no hay una sesión de ChatGPT
 disponible, se desactiva la herramienta. La elección también se puede hacer con
-`alfalfa --proveedor-imagen codex|openai|none`.
+`alfalfa --image-provider codex|openai|none`.
 
 Al elegir **ChatGPT mediante Codex**, puedes guardar un **Modelo de Codex** y un
 **Esfuerzo de razonamiento** para preparar el prompt y llamar al generador.
 Deja el modelo vacío o selecciona **Predeterminado de Codex** en esfuerzo para
 heredar ese valor. Estos ajustes se aplican al encargo efímero de imagen y son
 independientes del modelo del chat y de la calidad del PNG. Por CLI, por ejemplo,
-`alfalfa --ajustes-imagen-codex gpt-6.2-sol low`.
+`alfalfa --codex-image-settings gpt-6.2-sol low`.
 
 Con Codex seleccionado, pide en un chat de AlfalfaCode «Genera un icono con una
 hoja verde y guárdalo como `icono.png`». AlfalfaCode muestra el texto, el destino y

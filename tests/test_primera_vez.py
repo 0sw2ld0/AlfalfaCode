@@ -95,8 +95,8 @@ def test_ofertas_pone_primero_lo_que_se_conecta_sin_clave(sin_nada):
     assert len(primero['modelos']) == 3
     assert segundo['id'] == 'nvidia' and not segundo['conectar']
     texto = primera_vez.texto(datos)
-    assert 'alfalfa --conectar openrouter' in texto
-    assert 'alfalfa --guardar-clave nvidia' in texto
+    assert 'alfalfa --connect openrouter' in texto
+    assert 'alfalfa --save-key nvidia' in texto
     assert 'puede usar tus datos para entrenar' in texto
 
 
@@ -199,7 +199,7 @@ def test_conectar_guarda_la_clave_en_el_llavero_y_elige_un_gratis(sin_nada, monk
 
 
 def test_conectar_sin_elegir_no_cambia_el_modelo_ni_el_proveedor(sin_nada, monkeypatch):
-    # La hoja de la clave de la app (--solo-clave): el usuario ya eligió su modelo, quizá de pago.
+    # La hoja de la clave de la app (--key-only): el usuario ya eligió su modelo, quizá de pago.
     configuracion.cambiar(None, 'por_defecto', 'openai')
     monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
     assert conectar.conectar('openrouter') == {'proveedor': 'openrouter', 'modelo': None}
@@ -211,17 +211,17 @@ def test_conectar_sin_elegir_no_cambia_el_modelo_ni_el_proveedor(sin_nada, monke
 def test_la_orden_solo_elige_el_gratis_la_primera_vez(sin_nada, monkeypatch, capsys):
     import json
     monkeypatch.setattr(conectar, 'obtener_clave', lambda **kw: 'sk-or-v1-guardada')
-    assert terminal.main(['--conectar', 'openrouter', '--solo-clave', '--json']) == 0
+    assert terminal.main(['--connect', 'openrouter', '--key-only', '--json']) == 0
     salida = [json.loads(linea) for linea in capsys.readouterr().out.splitlines()]
     assert salida[-1]['tipo'] == 'conectado' and salida[-1]['modelo'] is None
     assert 'por_defecto' not in configuracion.leer()
-    # Ya hay proveedor (la clave de OpenRouter): otro --conectar tampoco elige nada.
-    assert terminal.main(['--conectar', 'openrouter', '--json']) == 0
+    # Ya hay proveedor (la clave de OpenRouter): otro --connect tampoco elige nada.
+    assert terminal.main(['--connect', 'openrouter', '--json']) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])['modelo'] is None
     # Sin nada configurado, sí: es la bienvenida.
     llavero._almacen.clear()
     configuracion.escribir({})
-    assert terminal.main(['--conectar', 'openrouter', '--json']) == 0
+    assert terminal.main(['--connect', 'openrouter', '--json']) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])['modelo'] == \
         'openrouter/nvidia/nemotron-3.5-super-vl:free'
 
@@ -244,7 +244,7 @@ def test_un_encargo_sin_modelo_elegido_lo_pide(sin_nada, capsys):
     configuracion.cambiar('openrouter', 'url', 'https://openrouter.ai/api/v1')
     configuracion.cambiar(None, 'por_defecto', 'openrouter')
     assert terminal.main(['arregla el test']) == 1
-    assert '--modelo openrouter/' in capsys.readouterr().err
+    assert '--model openrouter/' in capsys.readouterr().err
 
 
 def test_sin_proveedor_no_lee_el_llavero_si_hay_ollama(monkeypatch):
@@ -259,19 +259,19 @@ def test_sin_proveedor_no_lee_el_llavero_si_hay_ollama(monkeypatch):
 
 
 def test_solo_se_conecta_openrouter():
-    with pytest.raises(conectar.ErrorAlConectar, match='guardar-clave nvidia'):
+    with pytest.raises(conectar.ErrorAlConectar, match='save-key nvidia'):
         conectar.conectar('nvidia')
 
 
 def test_alfalfa_sin_nada_ensena_los_gratis_en_vez_de_un_error(sin_nada, capsys):
     assert terminal.main([]) == 0
     err = capsys.readouterr().err
-    assert 'No hay ningún proveedor configurado' in err and 'alfalfa --conectar openrouter' in err
+    assert 'No hay ningún proveedor configurado' in err and 'alfalfa --connect openrouter' in err
 
 
 def test_un_encargo_sin_proveedor_no_va_a_ollama(sin_nada, capsys):
     assert terminal.main(['arregla el test']) == 1
-    assert 'alfalfa --conectar openrouter' in capsys.readouterr().err
+    assert 'alfalfa --connect openrouter' in capsys.readouterr().err
 
 
 def test_en_la_terminal_se_ofrece_conectar_y_se_sigue_con_el_gratis(sin_nada, monkeypatch):
@@ -300,13 +300,13 @@ def test_con_modelo_explicito_no_hay_bienvenida(sin_nada, monkeypatch):
     async def ejecutar(args):
         return 0
     monkeypatch.setattr(terminal, 'execute', ejecutar)
-    assert terminal.main(['--modelo', 'gpt-oss:20b', 'hola']) == 0
+    assert terminal.main(['--model', 'gpt-oss:20b', 'hola']) == 0
     assert not llamadas
 
 
 def test_primera_vez_en_json_para_la_app(sin_nada, capsys):
     import json
-    assert terminal.main(['--primera-vez', '--json']) == 0
+    assert terminal.main(['--first-run', '--json']) == 0
     datos = json.loads(capsys.readouterr().out)
     assert datos['tipo'] == 'primera_vez' and datos['sin_proveedor']
     assert datos['proveedores'][0]['id'] == 'openrouter'

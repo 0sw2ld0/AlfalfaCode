@@ -1,10 +1,10 @@
-"""`alfalfa --importar`: lo que hay de OpenCode, Codex y Claude Code en esta carpeta y su estado.
+"""`alfalfa --import`: lo que hay de OpenCode, Codex y Claude Code en esta carpeta y su estado.
 
-    alfalfa --importar                             # la lista, con la definición de cada cosa
-    alfalfa --importar --autorizar mcp:docs@HUELLA # autoriza lo que viste (se puede repetir)
-    alfalfa --importar --autorizar todo            # en una terminal: todos los pendientes
-    alfalfa --importar --autorizar todo --sin-internet
-    alfalfa --importar --retirar CLAVE
+    alfalfa --import                             # la lista, con la definición de cada cosa
+    alfalfa --import --authorize mcp:docs@HUELLA # autoriza lo que viste (se puede repetir)
+    alfalfa --import --authorize todo            # en una terminal: todos los pendientes
+    alfalfa --import --authorize todo --no-internet
+    alfalfa --import --revoke CLAVE
 
 `CLAVE@HUELLA` sólo autoriza si la definición en disco sigue siendo la que tenía esa huella
 (la que enseña la lista); sin huella, o con `todo`, hace falta una terminal de verdad. Dentro de
@@ -29,13 +29,14 @@ EN_SESION = 'ALFALFA_SESION'
 
 
 def argumentos(parser):
-    parser.add_argument('--autorizar', action='append', default=[], metavar='CLAVE@HUELLA',
-                        help='Con --importar: autorizar un servidor MCP, un agente o una orden «/» importados, '
+    parser.add_argument('--authorize', '--autorizar', dest='autorizar',
+                        action='append', default=[], metavar='KEY@FINGERPRINT',
+                        help='Con --import: autorizar un servidor MCP, un agente o una orden «/» importados, '
                              'si su huella sigue siendo la de la lista («todo»: los pendientes, en una terminal)')
-    parser.add_argument('--retirar', action='append', default=[], metavar='CLAVE',
-                        help='Con --importar: retirar una autorización')
-    parser.add_argument('--sin-internet', action='store_true',
-                        help='Con --importar --autorizar: el servidor MCP corre en el sandbox sin internet')
+    parser.add_argument('--revoke', '--retirar', dest='retirar', action='append', default=[], metavar='KEY',
+                        help='Con --import: retirar una autorización')
+    parser.add_argument('--no-internet', '--sin-internet', dest='sin_internet', action='store_true',
+                        help='Con --import --authorize: el servidor MCP corre en el sandbox sin internet')
 
 
 def _terminal():
@@ -122,12 +123,12 @@ def imprimir(importadas, errores=()):
             if fila.get('vista'):
                 print('      ┊ ' + fila['vista'].replace('\n', '\n      ┊ '))
             if fila['autorizable'] and fila['estado'] != 'autorizado':
-                print('      alfalfa --importar --autorizar ' + shlex.quote(fila['corta'] + '@' + fila['huella']))
+                print('      alfalfa --import --authorize ' + shlex.quote(fila['corta'] + '@' + fila['huella']))
     for aviso in informe['avisos']:
         print('\nAviso: ' + visible(aviso))
     if importadas.autorizables():
         print('\nLos servidores MCP, los agentes y las órdenes «/» no se activan hasta que los autorizas, una vez.'
-              ' Todos (en esta terminal): alfalfa --importar --autorizar todo')
+              ' Todos (en esta terminal): alfalfa --import --authorize todo')
     print('Autorizaciones en ' + informe['archivo'] + ' (sólo huellas; ninguna clave se copia).')
     for error in errores:
         print('Error: ' + visible(error), file=sys.stderr)

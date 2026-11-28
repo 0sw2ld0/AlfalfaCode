@@ -61,16 +61,16 @@ sube, así que ninguna comprobación anterior sigue valiendo.
 Desde la terminal:
 
 ```bash
-alfalfa --volver ID --turno T --vista-previa        # qué haría, sin tocar nada
-alfalfa --volver ID --turno T                       # conversación y código
-alfalfa --volver ID --turno T --alcance codigo      # sólo el código, en la misma sesión
-alfalfa --volver ID --turno T --alcance conversacion
-alfalfa --rehacer ID [--deshecho D]
+alfalfa --rewind ID --turn T --dry-run        # qué haría, sin tocar nada
+alfalfa --rewind ID --turn T                       # conversación y código
+alfalfa --rewind ID --turn T --scope codigo      # sólo el código, en la misma sesión
+alfalfa --rewind ID --turn T --scope conversacion
+alfalfa --redo ID [--undo-id D]
 ```
 
 En una terminal interactiva pregunta archivo por archivo por los que cambiaste
-después; si no, `--forzar RUTA` (se repite) los restaura igualmente. Con `--json`
+después; si no, `--force RUTA` (se repite) los restaura igualmente. Con `--json`
 responde con líneas del protocolo de `--stdio`: `deshacer_vista` y `rehacer_vista`
 (vista previa), `deshecho` y, si la conversación sigue en otra sesión,
-`sesion_cambiada`. El historial (`--historial ID --json`) trae la marca como el campo
+`sesion_cambiada`. El historial (`--history ID --json`) trae la marca como el campo
 `deshacer` de su evento.

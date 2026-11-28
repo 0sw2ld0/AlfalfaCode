@@ -17,8 +17,8 @@ siguen igual.
 
 Como [Hermes Agent](https://hermes-agent.nousresearch.com/docs) (Nous Research), lo
 aprende el arnés, no el modelo. Nada se aprende sin que lo veas: todo pasa por una tarjeta
-con su diff, y se corrige en Ajustes ▸ Memoria o con `alfalfa --memoria` y
-`alfalfa --aprendido`.
+con su diff, y se corrige en Ajustes ▸ Memoria o con `alfalfa --memory` y
+`alfalfa --learned`.
 
 **Memoria.** Tres almacenes de notas cortas, separadas por una línea `§`, con un tope
 duro: *usuario* (quién eres y cómo te gusta trabajar, 2500 caracteres), *entorno* (hechos
@@ -109,22 +109,22 @@ propuesta pendiente se recalcula desde sus operaciones: si no coincide con su di
 descarta.
 
 ```bash
-alfalfa --memoria                              # los tres almacenes de esta carpeta
-alfalfa --memoria escribir usuario --texto "Prefiere commits pequeños."   # o por la entrada estándar
-alfalfa --memoria quitar entorno "Xcode 25"
-alfalfa --aprendido                            # habilidades, propuestas y ajustes
-alfalfa --aprendido ver pasar-pruebas          # usuario:NOMBRE o proyecto:NOMBRE si hay dos
-alfalfa --aprendido bloquear pasar-pruebas     # el agente ya no la cambia; tú sí (editar)
-alfalfa --aprendido pendientes ver ID          # una propuesta con su diff entero
-alfalfa --aprendido aplicar ID                 # o descartar ID
-alfalfa --aprendido ajustes revision no        # memoria, habilidades o revision
-alfalfa --aprendido proyecto no                # no aprender nada en esta carpeta
+alfalfa --memory                              # los tres almacenes de esta carpeta
+alfalfa --memory escribir usuario --text "Prefiere commits pequeños."   # o por la entrada estándar
+alfalfa --memory quitar entorno "Xcode 25"
+alfalfa --learned                            # habilidades, propuestas y ajustes
+alfalfa --learned ver pasar-pruebas          # usuario:NOMBRE o proyecto:NOMBRE si hay dos
+alfalfa --learned bloquear pasar-pruebas     # el agente ya no la cambia; tú sí (editar)
+alfalfa --learned pendientes ver ID          # una propuesta con su diff entero
+alfalfa --learned aplicar ID                 # o descartar ID
+alfalfa --learned ajustes revision no        # memoria, habilidades o revision
+alfalfa --learned proyecto no                # no aprender nada en esta carpeta
 ```
 
 `ALFALFA_APRENDER=0` lo apaga todo y `ALFALFA_APRENDER_REVISION=0` sólo el repaso. En
 `--stdio` el permiso trae `motivo: "aprendizaje"` y `diff`; el repaso emite
 `aprendizaje_propuesto` (`id`, `clase`, `almacen` o `accion`/`alcance`/`nombre`, `motivo`,
 `diff`) y la orden `{"tipo":"aprendizaje","id":…,"aplicar":true|false}` lo resuelve con
-`aprendizaje_resuelto` (`aplicado`, `descartada`, `texto`). Con `--json`, `--memoria`
-responde `memoria`; `--aprendido`, `aprendido` (o `habilidad` con `ver` y `pendiente` con
+`aprendizaje_resuelto` (`aplicado`, `descartada`, `texto`). Con `--json`, `--memory`
+responde `memoria`; `--learned`, `aprendido` (o `habilidad` con `ver` y `pendiente` con
 `pendientes ver`).

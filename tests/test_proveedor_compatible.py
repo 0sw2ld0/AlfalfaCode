@@ -42,7 +42,7 @@ def test_sin_clave_explica_cual_falta_y_donde_conseguirla(con_catalogo):  # noqa
     with pytest.raises(ValueError) as error:
         nube.cliente(30)
     texto = str(error.value)
-    assert 'NUBE_API_KEY' in texto and 'https://nube.example/claves' in texto and '--guardar-clave nube' in texto
+    assert 'NUBE_API_KEY' in texto and 'https://nube.example/claves' in texto and '--save-key nube' in texto
     abierto = proveedores.obtener('openrouter')
     assert 'OPENROUTER_API_KEY' in abierto.falta() and 'openrouter.ai/settings/keys' in abierto.falta()
 

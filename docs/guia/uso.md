@@ -1,20 +1,20 @@
 # Uso diario
 
 ```bash
-alfalfa --modelo deepseek-v4.1-flash:cloud "corrige la prueba que falla"
-alfalfa --sesiones
-alfalfa --reanudar ID "sigue"
-alfalfa --bifurcar ID --turno T "prueba otra solución"
-alfalfa --volver ID --turno T          # conversación y código a antes de ese mensaje
-alfalfa --rehacer ID                   # devuelve el código que quitó el último deshacer
-alfalfa --comprobar-orden git push
+alfalfa --model deepseek-v4.1-flash:cloud "corrige la prueba que falla"
+alfalfa --sessions
+alfalfa --resume ID "sigue"
+alfalfa --fork ID --turn T "prueba otra solución"
+alfalfa --rewind ID --turn T          # conversación y código a antes de ese mensaje
+alfalfa --redo ID                   # devuelve el código que quitó el último deshacer
+alfalfa --check-command git push
 ```
 
 ## Opciones de cada mensaje
 
 Bajo cada mensaje tuyo la app muestra hace cuánto lo enviaste y tres botones, como
 en Claude: copiarlo; **volver** a él; y **bifurcar**, que abre una sesión nueva con
-la conversación hasta ese mensaje y su respuesta (`--solo-bifurcar ID --turno T`; los
+la conversación hasta ese mensaje y su respuesta (`--fork-only ID --turn T`; los
 archivos no cambian).
 
 ## Órdenes con «/»
@@ -40,9 +40,9 @@ en una sesión nueva de la carpeta actual. Sus mensajes de usuario y asistente
 quedan como contexto, y el siguiente mensaje la continúa. Desde la terminal:
 
 ```bash
-alfalfa --chats-ollama
-alfalfa --importar-ollama ID_DEL_CHAT
-alfalfa --reanudar SESION "sigue desde aquí"
+alfalfa --ollama-chats
+alfalfa --import-ollama ID_DEL_CHAT
+alfalfa --resume SESION "sigue desde aquí"
 ```
 
 La base de Ollama (`~/Library/Application Support/Ollama/db.sqlite`) sólo se lee:

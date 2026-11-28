@@ -32,7 +32,7 @@ Activa **Ver mensajes PACAI** para ver, a la derecha, cada mensaje que va y vien
 node docs/demos/pacai-ui/servidor.mjs --carpeta ~/mi-proyecto
 ```
 
-Abre `alfalfa --pacai` en esa carpeta con el modelo que tengas configurado (o el de `--modelo`). El modelo recibe
+Abre `alfalfa --pacai` en esa carpeta con el modelo que tengas configurado (o el de `--model`). El modelo recibe
 el catálogo en su prompt y decide cuándo dibujar. Las aprobaciones de herramientas salen en el chat con botones.
 Otras opciones: `--alfalfa RUTA` para elegir el ejecutable y `--puerto N`. `--help` las lista todas.
 

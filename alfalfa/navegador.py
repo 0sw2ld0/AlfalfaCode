@@ -3,8 +3,8 @@
 La app de AlfalfaCode tiene un panel con un WKWebView (el motor de Safari, ya en
 macOS), aislado por sesión de forma predeterminada. La persona puede elegir un
 perfil guardado por proyecto para conservar accesos iniciados a mano en el panel.
-Las herramientas `browser_*` existen dentro de la app (`--stdio --navegador`) o
-explícitamente con el segundo motor HTTP (`--motor-navegador cuybrowser`, en
+Las herramientas `browser_*` existen dentro de la app (`--stdio --browser`) o
+explícitamente con el segundo motor HTTP (`--browser-engine cuybrowser`, en
 navegador_cuybrowser.py). Ambos usan perfiles propios; nunca se copian las cookies
 ni las cuentas de navegadores personales.
 
@@ -183,7 +183,7 @@ TOOLS = [
            example={'url': 'http://127.0.0.1:8000/', 'preset': 'mobile'}),
 ]
 NOMBRES = tuple(t['function']['name'] for t in TOOLS)
-# Lo que no reciben `plan` ni `--solo-lectura` (terminal.ESCRITURA). browser_eval tampoco:
+# Lo que no reciben `plan` ni `--read-only` (terminal.ESCRITURA). browser_eval tampoco:
 # que un script sólo lea no se puede asegurar desde aquí (ver `parece_que_cambia`).
 ESCRITURA = ('browser_click', 'browser_type', 'browser_download', 'browser_eval',
              'browser_key', 'browser_hover', 'browser_upload')

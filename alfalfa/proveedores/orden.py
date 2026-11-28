@@ -1,23 +1,23 @@
 """Las órdenes de terminal para configurar proveedores.
 
-    alfalfa --proveedores [--json]            estado, sin secretos
-    alfalfa --guardar-clave openai            lee la clave por la entrada estándar
-    alfalfa --guardar-clave anthropic         (la de Claude)
-    alfalfa --guardar-clave openrouter        (o cualquier compatible con OpenAI del catálogo)
-    alfalfa --borrar-clave openai
-    alfalfa --catalogo [--json]               estado del catálogo de models.dev y los gratis ahora
-    alfalfa --primera-vez [--json]            si falta proveedor y los gratis ahora con los que empezar
-    alfalfa --conectar openrouter [--json]    conecta OpenRouter en el navegador (OAuth), sin pegar la clave
-    alfalfa --conectar chatgpt               conecta el plan de ChatGPT para inferencia
-    alfalfa --desconectar chatgpt            desconecta el plan de ChatGPT
-    alfalfa --proveedor-por-defecto openai
-    alfalfa --fijar-url alfalfa https://…     (o «-» para quitarla)
-    alfalfa --activar-codigo                  lee el código CUY-…@servicio por la entrada y lo ata a este equipo
-    alfalfa --cuota [--json]                  % usado este mes del servicio Alfalfa
-    alfalfa --buscador [MODO] [--json]        buscador web: auto, ollama, searxng o apagado
-    alfalfa --fijar-searxng URL               SearXNG del modo searxng («-» vuelve a la de CuySearch Manager)
-    alfalfa --instalar-buscador               instala la librería cuysearch si falta (tras un `git pull`)
-    alfalfa --reportar [--json]               manda un reporte de error; lee por la entrada una línea
+    alfalfa --providers [--json]            estado, sin secretos
+    alfalfa --save-key openai            lee la clave por la entrada estándar
+    alfalfa --save-key anthropic         (la de Claude)
+    alfalfa --save-key openrouter        (o cualquier compatible con OpenAI del catálogo)
+    alfalfa --delete-key openai
+    alfalfa --catalog [--json]               estado del catálogo de models.dev y los gratis ahora
+    alfalfa --first-run [--json]            si falta proveedor y los gratis ahora con los que empezar
+    alfalfa --connect openrouter [--json]    conecta OpenRouter en el navegador (OAuth), sin pegar la clave
+    alfalfa --connect chatgpt               conecta el plan de ChatGPT para inferencia
+    alfalfa --disconnect chatgpt            desconecta el plan de ChatGPT
+    alfalfa --default-provider openai
+    alfalfa --set-url alfalfa https://…     (o «-» para quitarla)
+    alfalfa --activate-code                  lee el código CUY-…@servicio por la entrada y lo ata a este equipo
+    alfalfa --quota [--json]                  % usado este mes del servicio Alfalfa
+    alfalfa --web-search [MODO] [--json]        buscador web: auto, ollama, searxng o apagado
+    alfalfa --set-searxng URL               SearXNG del modo searxng («-» vuelve a la de CuySearch Manager)
+    alfalfa --install-web-search               instala la librería cuysearch si falta (tras un `git pull`)
+    alfalfa --report [--json]               manda un reporte de error; lee por la entrada una línea
                                               JSON {texto, contacto?, registro?, diagnostico?} o, en la
                                               terminal, pregunta qué pasó
 """
@@ -135,7 +135,7 @@ def orden(args, entrada=None):
                     'Ya hay un proveedor configurado: ' + configuracion.por_defecto() + '.')
             return 0
         if getattr(args, 'conectar', None):
-            # Desde la bienvenida (sin proveedor) se elige el gratis; con --solo-clave (la hoja de la
+            # Desde la bienvenida (sin proveedor) se elige el gratis; con --key-only (la hoja de la
             # clave de la app) o si ya había proveedor, sólo se guarda la clave.
             from .. import primera_vez
             elegir = not getattr(args, 'solo_clave', False) and primera_vez.sin_proveedor()
@@ -242,14 +242,14 @@ def conectar_ahora(proveedor, como_json=False, **opciones):
 def _texto_conectado(hecho):
     if hecho.get('proveedor') == 'chatgpt':
         return ('Plan de ChatGPT conectado. Elige un modelo en el selector o usa '
-                '`alfalfa --modelos` y luego `--modelo chatgpt/<modelo>`.')
+                '`alfalfa --models` y luego `--model chatgpt/<modelo>`.')
     texto = 'OpenRouter conectado; la clave quedó en el Llavero.'
     if hecho.get('modelo'):
         from .. import catalogo
         texto += (' Modelo por defecto: ' + hecho['modelo'] + ' (' + catalogo.AVISO_GRATIS.lower() + ').'
                   ' Prueba: alfalfa "tu encargo"')
     else:
-        texto += ' El proveedor y el modelo por defecto no cambian; elige uno con --modelo openrouter/<modelo>.'
+        texto += ' El proveedor y el modelo por defecto no cambian; elige uno con --model openrouter/<modelo>.'
     return texto
 
 
@@ -310,39 +310,46 @@ def _diagnostico():
 
 
 def argumentos(grupo):
-    grupo.add_argument('--proveedor-imagen', nargs='?', const='', choices=('', 'codex', 'openai', 'none'),
+    grupo.add_argument('--image-provider', '--proveedor-imagen', dest='proveedor_imagen',
+                       nargs='?', const='', choices=('', 'codex', 'openai', 'none'),
                        help='Consultar o elegir el proveedor de generación de imágenes')
-    grupo.add_argument('--ajustes-imagen-codex', nargs=2, metavar=('MODELO', 'ESFUERZO'),
+    grupo.add_argument('--codex-image-settings', '--ajustes-imagen-codex', dest='ajustes_imagen_codex',
+                       nargs=2, metavar=('MODEL', 'EFFORT'),
                        help='Modelo y esfuerzo de Codex sólo para generar imágenes («-» usa la configuración de Codex)')
-    grupo.add_argument('--proveedores', action='store_true', help='Estado de los proveedores (sin secretos)')
-    grupo.add_argument('--guardar-clave', metavar='PROVEEDOR',
+    grupo.add_argument('--providers', '--proveedores', dest='proveedores',
+                       action='store_true', help='Estado de los proveedores (sin secretos)')
+    grupo.add_argument('--save-key', '--guardar-clave', dest='guardar_clave', metavar='PROVIDER',
                        help='Guardar en el Llavero la clave que llega por la entrada estándar (ollama, openai, '
                             'anthropic o un compatible con OpenAI del catálogo, como openrouter u opencode)')
-    grupo.add_argument('--borrar-clave', metavar='PROVEEDOR',
+    grupo.add_argument('--delete-key', '--borrar-clave', dest='borrar_clave', metavar='PROVIDER',
                        help='Borrar del Llavero una clave o el código de cortesía')
-    grupo.add_argument('--proveedor-por-defecto', metavar='PROVEEDOR',
+    grupo.add_argument('--default-provider', '--proveedor-por-defecto', dest='proveedor_por_defecto',
+                       metavar='PROVIDER',
                        help='Proveedor por defecto: ' + ', '.join(PREFIJOS) + ' o un compatible del catálogo')
-    grupo.add_argument('--fijar-url', nargs=2, metavar=('PROVEEDOR', 'URL'),
+    grupo.add_argument('--set-url', '--fijar-url', dest='fijar_url', nargs=2, metavar=('PROVIDER', 'URL'),
                        help='URL base de Ollama, del servicio Alfalfa o de un compatible («-» la quita)')
-    grupo.add_argument('--catalogo', action='store_true',
+    grupo.add_argument('--catalog', '--catalogo', dest='catalogo', action='store_true',
                        help='Catálogo de models.dev: fecha, origen y modelos gratis ahora')
-    grupo.add_argument('--primera-vez', action='store_true',
+    grupo.add_argument('--first-run', '--primera-vez', dest='primera_vez', action='store_true',
                        help='¿Falta configurar un proveedor? Y los modelos gratis ahora con los que empezar')
-    grupo.add_argument('--conectar', metavar='PROVEEDOR', choices=('openrouter', 'chatgpt'),
+    grupo.add_argument('--connect', '--conectar', dest='conectar',
+                       metavar='PROVIDER', choices=('openrouter', 'chatgpt'),
                        help='Conectar OpenRouter o un plan de ChatGPT mediante OAuth')
-    grupo.add_argument('--desconectar', metavar='PROVEEDOR', choices=('chatgpt',),
+    grupo.add_argument('--disconnect', '--desconectar', dest='desconectar', metavar='PROVIDER', choices=('chatgpt',),
                        help='Desconectar el plan de ChatGPT')
-    grupo.add_argument('--activar-codigo', action='store_true',
+    grupo.add_argument('--activate-code', '--activar-codigo', dest='activar_codigo', action='store_true',
                        help='Atar a este equipo el código de cortesía que llega por la entrada estándar')
-    grupo.add_argument('--cuota', action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
+    grupo.add_argument('--quota', '--cuota', dest='cuota',
+                       action='store_true', help='Cuota del mes usada en el servicio Alfalfa')
     from .nativo.web import MODOS
-    grupo.add_argument('--buscador', nargs='?', const='', choices=('',) + MODOS, metavar='MODO',
+    grupo.add_argument('--web-search', '--buscador', dest='buscador',
+                       nargs='?', const='', choices=('',) + MODOS, metavar='MODE',
                        help='Buscador web de los agentes: ' + ', '.join(MODOS) + ' (sin MODO, el actual)')
-    grupo.add_argument('--fijar-searxng', metavar='URL',
+    grupo.add_argument('--set-searxng', '--fijar-searxng', dest='fijar_searxng', metavar='URL',
                        help='URL del SearXNG del modo searxng («-» vuelve a http://127.0.0.1:8888)')
-    grupo.add_argument('--instalar-buscador', action='store_true',
+    grupo.add_argument('--install-web-search', '--instalar-buscador', dest='instalar_buscador', action='store_true',
                        help='Instalar la librería de búsqueda web si falta (por ejemplo, tras un git pull)')
-    grupo.add_argument('--reportar', action='store_true',
+    grupo.add_argument('--report', '--reportar', dest='reportar', action='store_true',
                        help='Mandar un reporte de error (al servicio Alfalfa o, si no se puede, por correo)')
 
 

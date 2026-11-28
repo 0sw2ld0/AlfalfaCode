@@ -217,7 +217,7 @@ def test_apagado_el_turno_no_la_toma(con_falsa, tmp_path, capsys):
 def test_la_opcion_de_la_orden_existe(capsys):
     with pytest.raises(SystemExit) as salida:
         main(['--help'])
-    assert salida.value.code == 0 and '--sin-mantener-despierto' in capsys.readouterr().out
+    assert salida.value.code == 0 and '--no-keep-awake' in capsys.readouterr().out
 
 
 # --- De verdad: lo que dice macOS ---
@@ -310,7 +310,7 @@ def test_real_si_el_proceso_muere_macos_la_suelta(tmp_path):
 
 @mac
 def test_real_apagado_no_hay_asercion(tmp_path):
-    proc, proyecto = _sesion(tmp_path, '--sin-mantener-despierto')
+    proc, proyecto = _sesion(tmp_path, '--no-keep-awake')
     try:
         _hasta(proc, 'sesion')
         time.sleep(1)

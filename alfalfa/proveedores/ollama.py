@@ -34,7 +34,7 @@ class Ollama(Proveedor):
         # apuntar a la nube: «revisa el servicio de Ollama» no lo dice.
         if clas.get('cause') == 'network' and self.alcance() == 'local' and self.clave():
             return ('no responde Ollama en ' + self.url() + '. Si usas Ollama Cloud con tu clave, apunta a la '
-                    'nube: `alfalfa --fijar-url ollama https://ollama.com`; y reintenta.')
+                    'nube: `alfalfa --set-url ollama https://ollama.com`; y reintenta.')
         return None  # las de reintentos.fallos ya hablan de Ollama
 
     def url(self):

@@ -59,7 +59,7 @@ La delegación entre motores devuelve su resultado al chat de origen.
   Utiliza la configuración guardada de AlfalfaCode. Las credenciales de la app no viajan
   al proceso de Antigravity.
   Para conectar el mismo servidor desde otro cliente MCP usa la ruta absoluta de
-  `alfalfa` y los argumentos `--delegacion-mcp MODELO`.
+  `alfalfa` y los argumentos `--mcp-delegation MODELO`.
 
 La delegación está desactivada en proyectos con política de equipo. Cada consulta dura
 hasta 90 segundos. Comparte sólo el texto que haga falta para la tarea.

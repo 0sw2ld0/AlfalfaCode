@@ -28,7 +28,7 @@ def test_sin_clave_no_se_cambia_de_proveedor_por_su_cuenta(carpeta, proveedor, v
     with pytest.raises(SinProveedorPorDefecto) as fallo:
         modelo_por_defecto()
     texto = str(fallo.value)
-    assert variable in texto and '--proveedor-por-defecto' in texto and '--modelo' in texto
+    assert variable in texto and '--default-provider' in texto and '--model' in texto
     assert 'deepseek' not in texto
 
 

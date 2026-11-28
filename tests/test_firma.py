@@ -159,11 +159,11 @@ def test_cli_stdio_e_instrucciones(capsys):
     t.receive('{"tipo":"firma","activo":"no"}')
     assert pedidos == [False]
     assert out.getvalue().count('inválido') == 2
-    assert 'Co-Authored-By de AlfalfaCode' in INSTRUCTIONS and '--sin-firma' in INSTRUCTIONS
+    assert 'Co-Authored-By de AlfalfaCode' in INSTRUCTIONS and '--no-co-author' in INSTRUCTIONS
     from alfalfa.terminal import main
     with pytest.raises(SystemExit):
         main(['--help'])
-    assert '--sin-firma' in capsys.readouterr().out
+    assert '--no-co-author' in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------- un `git` que no es el del sistema

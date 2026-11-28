@@ -268,7 +268,7 @@ def test_la_terminal_ofrece_sin_diagnosticos(capsys):
     assert 'diagnosticos' in MANUAL and 'run_checks' in MANUAL
     with pytest.raises(SystemExit):
         main(['--help'])
-    assert '--sin-diagnosticos' in capsys.readouterr().out
+    assert '--no-diagnostics' in capsys.readouterr().out
 
 
 def test_la_app_ve_cuantos_hay_en_el_fin_de_la_llamada():
@@ -1178,7 +1178,7 @@ def test_swift_viene_apagado_y_sin_tarjeta(sourcekit, sesion, permisos, monkeypa
     ('0', {'diagnosticos_swift': True}, None, None, False),   # la variable manda sobre el archivo
     (None, {'diagnosticos_swift': True}, None, None, True),
     (None, {'diagnosticos_swift': 'sí'}, None, None, False),  # sólo true de verdad
-    (None, None, None, True, True),          # --diagnosticos-swift o la app
+    (None, None, None, True, True),          # --swift-diagnostics o la app
     (None, {'diagnosticos_swift': True}, None, False, False),  # la app lo apaga
     ('1', None, {'diagnosticos_swift': False}, None, False),   # el proyecto apaga
     (None, None, {'diagnosticos_swift': True}, None, False),   # pero nunca enciende

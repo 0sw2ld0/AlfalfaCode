@@ -46,13 +46,13 @@ Permisos y aislamiento, porque estos programas cargan código del proyecto:
 Los diagnósticos orientan, pero no son una comprobación: la evidencia
 (`alfalfa/evidencia`) sólo cuenta `run_checks`, y el resultado lo recuerda.
 
-Se apaga con `ALFALFA_DIAGNOSTICOS=0`, `alfalfa --sin-diagnosticos`, en la app
+Se apaga con `ALFALFA_DIAGNOSTICOS=0`, `alfalfa --no-diagnostics`, en la app
 (Ajustes ▸ General) o con `{"diagnosticos": false}` en el `ajustes.json` del
 usuario o en `.alfalfa/ajustes.json` del proyecto. El proyecto sólo puede
 apagarlo: nunca enciende lo que el usuario apagó.
 
 Los de Swift (sourcekit-lsp) se encienden con `ALFALFA_DIAGNOSTICOS_SWIFT=1`,
-`alfalfa --diagnosticos-swift`, en la app (Ajustes ▸ General) o con
+`alfalfa --swift-diagnostics`, en la app (Ajustes ▸ General) o con
 `{"diagnosticos_swift": true}` en el `ajustes.json` del usuario. El proyecto
 sólo puede apagarlos (`{"diagnosticos_swift": false}`).
 """
@@ -124,7 +124,7 @@ def _leer_ajustes(ruta):
 def activos(raiz, hogar, forzado=None):
     """¿Se miran los diagnósticos? Se lee en cada edición: cambiar el archivo vale ya.
 
-    Primero decide el usuario: `forzado` (--sin-diagnosticos o la app), luego
+    Primero decide el usuario: `forzado` (--no-diagnostics o la app), luego
     `ALFALFA_DIAGNOSTICOS` y luego su `ajustes.json`; por defecto, sí. Después el
     proyecto (`.alfalfa/ajustes.json`) sólo puede apagarlo.
     """
@@ -144,7 +144,7 @@ def activos(raiz, hogar, forzado=None):
 def swift_activos(raiz, hogar, forzado=None):
     """¿Se lanza sourcekit-lsp? Apagado por defecto: es el único que sale del sandbox.
 
-    Decide el usuario: `forzado` (--diagnosticos-swift o la app), luego
+    Decide el usuario: `forzado` (--swift-diagnostics o la app), luego
     `ALFALFA_DIAGNOSTICOS_SWIFT` y luego su `ajustes.json` (`diagnosticos_swift`);
     por defecto, no. El proyecto (`.alfalfa/ajustes.json`) sólo puede apagarlo.
     """

@@ -82,13 +82,13 @@ con bubblewrap; los pasos, el perfil de AppArmor y las claves están en
 3. Para empezar gratis, conecta OpenRouter con un clic, sin pegar ninguna clave:
 
    ```bash
-   alfalfa --conectar openrouter
+   alfalfa --connect openrouter
    ```
 
    En la app, el botón «Empieza gratis» está en Nuevo encargo. Abre OpenRouter en el
    navegador, donde autorizas AlfalfaCode, y la clave queda en el Llavero.
-4. Con tu clave de un proveedor de pago: `alfalfa --guardar-clave openai`
-   (o `anthropic`). El modelo se elige con `alfalfa --modelo …` o en el selector.
+4. Con tu clave de un proveedor de pago: `alfalfa --save-key openai`
+   (o `anthropic`). El modelo se elige con `alfalfa --model …` o en el selector.
 
 Todo lo dicho, paso a paso, está en la [primera vez, sin claves](docs/guia/primera-vez.md).
 Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
@@ -96,7 +96,7 @@ Las sesiones, reglas, complementos y hooks del usuario viven en `$ALFALFA_HOME`
 
 ## Generar imágenes con OpenAI
 
-Configura tu clave de OpenAI en Ajustes, con `alfalfa --guardar-clave openai`
+Configura tu clave de OpenAI en Ajustes, con `alfalfa --save-key openai`
 en macOS o mediante `OPENAI_API_KEY`. No pegues la clave en el chat. El modelo
 que usa el agente para conversar puede ser de otro proveedor.
 
@@ -126,9 +126,9 @@ El modelo dice con quién se habla:
 | `alfalfa/…` | un servicio Alfalfa, con un código de cortesía |
 
 ```bash
-alfalfa --proveedores                         # estado, sin secretos
-alfalfa --guardar-clave anthropic             # pide la clave sin enseñarla
-alfalfa --proveedor-por-defecto openai
+alfalfa --providers                         # estado, sin secretos
+alfalfa --save-key anthropic             # pide la clave sin enseñarla
+alfalfa --default-provider openai
 ```
 
 Las claves van al Llavero de macOS (servicio `AlfalfaCode`), nunca a un archivo.

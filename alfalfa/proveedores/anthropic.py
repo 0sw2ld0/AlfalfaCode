@@ -666,7 +666,7 @@ class Anthropic(Proveedor):
     def falta(self):
         return ('Falta la clave de Anthropic (ANTHROPIC_API_KEY). Consíguela en '
                 'https://platform.claude.com/settings/keys y guárdala en Ajustes ▸ Proveedores o con '
-                '`alfalfa --guardar-clave anthropic`.')
+                '`alfalfa --save-key anthropic`.')
 
     def accion(self, clas, error_text):
         if clas.get('cause') == 'access_denied':

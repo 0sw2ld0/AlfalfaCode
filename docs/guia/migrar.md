@@ -1,7 +1,7 @@
 # Venir de OpenCode, Codex o Claude Code
 
 Un proyecto preparado para otra herramienta funciona en AlfalfaCode sin tocar nada.
-`alfalfa --importar` dice qué encontró en la carpeta y en qué estado está; en la app
+`alfalfa --import` dice qué encontró en la carpeta y en qué estado está; en la app
 está en Ajustes ▸ Importar.
 
 | Herramienta | Qué se lee | Qué se usa |
@@ -44,7 +44,7 @@ la definición declara un PATH, se busca con él, y un tramo vacío cuenta como 
 carpeta del proceso. Por último, la carpeta que podrá escribir, si
 tendrá internet y qué variables lee. De uno HTTP enseña sólo el host. De una orden «/» o un agente enseña el principio de su texto.
 Al empezar una sesión, un aviso dice qué queda sin autorizar. El evento lleva en
-`importadas` la clave y la huella de cada pendiente (también en `--historial`). En la
+`importadas` la clave y la huella de cada pendiente (también en `--history`). En la
 app, el aviso trae «Revisar y autorizar…»: una casilla por cada servidor MCP, agente u
 orden «/», con su definición plegada y el interruptor de internet (encendido, como en
 Ajustes). Antes de autorizar vuelve a leer la lista, así que autoriza la huella de lo
@@ -55,11 +55,11 @@ nueva en la misma carpeta. La misma hoja se abre desde la barra lateral, donde s
 desde Archivo ▸ Revisar lo importado sin autorizar… (⇧⌘I).
 
 ```bash
-alfalfa --importar                                # qué hay, su definición y su huella
-alfalfa --importar --autorizar mcp:docs@HUELLA    # lo que viste (la clave corta vale si no hay dudas)
-alfalfa --importar --autorizar todo               # en una terminal: todos los pendientes
-alfalfa --importar --autorizar todo --sin-internet
-alfalfa --importar --retirar agente:revisor
+alfalfa --import                                # qué hay, su definición y su huella
+alfalfa --import --authorize mcp:docs@HUELLA    # lo que viste (la clave corta vale si no hay dudas)
+alfalfa --import --authorize todo               # en una terminal: todos los pendientes
+alfalfa --import --authorize todo --no-internet
+alfalfa --import --revoke agente:revisor
 ```
 
 `CLAVE@HUELLA` sólo autoriza si el archivo sigue diciendo lo que viste: si cambió
@@ -74,7 +74,7 @@ otro entorno, el archivo `{file:…}` del prompt de un agente), vuelve a «sin
 autorizar». Otro proyecto con un servidor del mismo nombre no hereda la autorización.
 
 - Los servidores corren como los de `mcp.json`: stdio dentro del sandbox Seatbelt
-  (con internet salvo `--sin-internet`) y cada llamada pide permiso. Sólo reciben el
+  (con internet salvo `--no-internet`) y cada llamada pide permiso. Sólo reciben el
   entorno que declaran. Las referencias (`{env:X}` de OpenCode, `${X}` de Claude Code,
   `env_vars` y `bearer_token_env_var` de Codex) se resuelven en memoria al abrir la
   sesión y nunca entregan una clave de proveedor. Lo que sale de ellas, también en la

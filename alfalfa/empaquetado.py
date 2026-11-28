@@ -8,7 +8,7 @@ allí mismo los ayudantes Swift (`firmante.swift`, `ayudante.swift`) en
 necesita `swiftc` ni las herramientas de línea de órdenes.
 
 Dentro de la app nada se escribe en el bundle: está firmado y notarizado, y
-cambiar un archivo rompería la firma. Por eso `alfalfa --actualizar` no instala
+cambiar un archivo rompería la firma. Por eso `alfalfa --update` no instala
 nada en este modo (lo dice `actualizacion.py`).
 
 La CLI suelta (`instalar.sh` o la fórmula de Homebrew) copia de la app del DMG sólo

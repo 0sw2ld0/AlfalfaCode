@@ -1,13 +1,13 @@
-"""`alfalfa --volver ID --turno T` y `alfalfa --rehacer ID`: deshacer y rehacer desde la terminal o la app.
+"""`alfalfa --rewind ID --turn T` y `alfalfa --redo ID`: deshacer y rehacer desde la terminal o la app.
 
-- `--alcance todo` (por defecto): la conversación y el código vuelven a antes del
+- `--scope todo` (por defecto): la conversación y el código vuelven a antes del
   mensaje del turno T. La conversación sigue en una sesión bifurcada hasta el turno
   anterior (si T es el primero, en una nueva: la app la abre con el mensaje en el cuadro).
-- `--alcance conversacion`: sólo la conversación, como hasta ahora; los archivos no cambian.
-- `--alcance codigo`: sólo el código, en la misma sesión; la conversación sigue igual.
-- `--vista-previa`: dice qué se restauraría, qué no (y por qué) y qué no se puede
+- `--scope conversacion`: sólo la conversación, como hasta ahora; los archivos no cambian.
+- `--scope codigo`: sólo el código, en la misma sesión; la conversación sigue igual.
+- `--dry-run`: dice qué se restauraría, qué no (y por qué) y qué no se puede
   deshacer, sin tocar nada.
-- `--forzar RUTA` (se repite): restaurar también ese archivo aunque lo cambiaras después.
+- `--force RUTA` (se repite): restaurar también ese archivo aunque lo cambiaras después.
   En una terminal interactiva se pregunta archivo por archivo.
 
 Con `--json` responde con líneas del protocolo de `--stdio` (`deshacer_vista`,
@@ -39,15 +39,18 @@ ACCIONES = {'restaurar': 'se restaura', 'recrear': 'se recrea', 'borrar': 'se bo
 
 
 def argumentos(parser, grupo):
-    grupo.add_argument('--volver', metavar='ID', help='Volver a antes del mensaje del turno --turno (ver --alcance)')
-    grupo.add_argument('--rehacer', metavar='ID', help='Devolver el código que quitó el último deshacer de la sesión')
-    parser.add_argument('--alcance', choices=ALCANCES, default='todo',
-                        help='Con --volver: «todo» (conversación y código), «conversacion» o «codigo»')
-    parser.add_argument('--forzar', action='append', default=[], metavar='RUTA',
-                        help='Con --volver o --rehacer: restaurar también este archivo aunque cambiara después')
-    parser.add_argument('--vista-previa', action='store_true',
-                        help='Con --volver o --rehacer: decir qué cambiaría sin tocar nada')
-    parser.add_argument('--deshecho', metavar='ID', help='Con --rehacer: qué deshacer (por defecto, el último)')
+    grupo.add_argument('--rewind', '--volver', dest='volver',
+                       metavar='ID', help='Volver a antes del mensaje del turno --turn (ver --scope)')
+    grupo.add_argument('--redo', '--rehacer', dest='rehacer',
+                       metavar='ID', help='Devolver el código que quitó el último deshacer de la sesión')
+    parser.add_argument('--scope', '--alcance', dest='alcance', choices=ALCANCES, default='todo',
+                        help='Con --rewind: «todo» (conversación y código), «conversacion» o «codigo»')
+    parser.add_argument('--force', '--forzar', dest='forzar', action='append', default=[], metavar='PATH',
+                        help='Con --rewind o --redo: restaurar también este archivo aunque cambiara después')
+    parser.add_argument('--dry-run', '--vista-previa', dest='vista_previa', action='store_true',
+                        help='Con --rewind o --redo: decir qué cambiaría sin tocar nada')
+    parser.add_argument('--undo-id', '--deshecho', dest='deshecho',
+                        metavar='ID', help='Con --redo: qué deshacer (por defecto, el último)')
 
 
 def pedida(args):
@@ -155,7 +158,7 @@ def _texto_de_vista(vista, rehacer_=False):
         lineas.append('  ' + fila['ruta'] + ' — ' + ACCIONES[fila['accion']])
     for fila in vista['conflictos']:
         lineas.append('  ' + fila['ruta'] + ' — se queda: ' + MOTIVOS.get(fila['motivo'], fila['motivo'])
-                      + ' (--forzar ' + fila['ruta'] + ' para restaurarlo)')
+                      + ' (--force ' + fila['ruta'] + ' para restaurarlo)')
     for fila in vista.get('no_cubiertos') or []:
         lineas.append('  ' + fila['ruta'] + ' — no se toca: ' + MOTIVOS.get(fila['motivo'], fila['motivo']))
     for aviso in vista.get('irreversibles') or []:
@@ -198,7 +201,7 @@ def orden(args):
             _rehacer(hogar, args, decir)
         else:
             if not args.turno:
-                raise ValueError('Indica con --turno el turno del mensaje al que quieres volver.')
+                raise ValueError('Indica con --turn el turno del mensaje al que quieres volver.')
             _volver(hogar, args, decir)
         return 0
     except (OSError, ValueError, SinInstantanea) as exc:
@@ -274,7 +277,7 @@ def _volver(hogar, args, decir):
         decir('deshecho', texto, sesion=nueva or ident, texto=texto, **datos_del_paso(paso, vista),
               **({'nueva_conversacion': True} if alcance == 'todo' and previo is None else {}))
     if nueva:
-        decir('sesion_cambiada', 'Sigue en la sesión ' + nueva + ': alfalfa --reanudar ' + nueva + ' "…"',
+        decir('sesion_cambiada', 'Sigue en la sesión ' + nueva + ': alfalfa --resume ' + nueva + ' "…"',
               id=nueva, bifurcada_de=ident)
     elif alcance != 'codigo' and previo is None:
         decir('volver', 'Era el primer mensaje: empieza una sesión nueva en la misma carpeta.', sesion=ident,

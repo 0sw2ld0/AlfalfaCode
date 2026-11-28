@@ -9,7 +9,7 @@ Lo que PACAI exige y v2 no hacía:
 - saludo y negociación antes de nada (lo que el cliente encadena tras su `hello` vale; lo que el motor emite
   mientras tanto espera);
 - una sola ejecución raíz activa: un `input` `new_run` que llega con una en curso espera a que termine;
-- aprobaciones sin plazo por defecto; con `--caducidad-aprobacion`, pasado `expires` el agente declara `expired`;
+- aprobaciones sin plazo por defecto; con `--approval-timeout`, pasado `expires` el agente declara `expired`;
 - EOF o `close` del cliente, y la interrupción, niegan lo pendiente (eso ya lo hace `Transport.stop`), y el
   traductor lo cuenta con `approval_result` `cancelled`; las herramientas del cliente abiertas se cancelan;
 - el trabajo que pide permisos fuera de un turno (guardar una prueba del navegador, una cola de encargos) necesita una
@@ -17,7 +17,7 @@ Lo que PACAI exige y v2 no hacía:
 
 Con la extensión `alfalfa`, el `payload.alfalfa` de un `input` admite `redirect: false` (un `steer` que entra en el
 turno en curso sin cortar la respuesta, como un `mensaje` de v2), `echo: false` (el turno que abre no devuelve el
-mensaje, como el encargo de la orden) y `continue: true` (reanudar sin mensaje, como `--reanudar` sin encargo).
+mensaje, como el encargo de la orden) y `continue: true` (reanudar sin mensaje, como `--resume` sin encargo).
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ TRABAJOS = {'alfalfa.export_browser_test': 'exportar_prueba_navegador', 'alfalfa
 def caducidad_de(valor: Any = None) -> float | None:
     """Los segundos que espera una aprobación: `valor` (la opción), si no `ALFALFA_CADUCIDAD_APROBACION`; sin
     ninguno, None (no caduca). Un número positivo de segundos, como mucho un año; lo demás es un error que lo dice."""
-    origen = '--caducidad-aprobacion'
+    origen = '--approval-timeout'
     if valor is None:
         valor, origen = os.environ.get(ENTORNO_CADUCIDAD), ENTORNO_CADUCIDAD
     if valor is None or (isinstance(valor, str) and not valor.strip()):

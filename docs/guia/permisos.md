@@ -2,7 +2,7 @@
 
 ## Modos de permisos
 
-Como en Claude Code, cada sesión tiene un modo (`--modo` en la terminal, el selector
+Como en Claude Code, cada sesión tiene un modo (`--permission-mode` en la terminal, el selector
 junto al modelo en la app, o `/modo`). Se guarda con la sesión y se puede cambiar
 en cualquier momento; vale desde el siguiente turno.
 

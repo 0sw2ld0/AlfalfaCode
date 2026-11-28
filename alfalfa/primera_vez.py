@@ -150,17 +150,17 @@ def texto(datos):
             mas = f' y {len(modelos) - 3} más' if len(modelos) > 3 else ''
             lineas.append(f'  {fila["nombre"]}: {nombres}{mas}.')
             if fila['conectar']:
-                lineas.append(f'    Sin pegar claves: alfalfa --conectar {fila["id"]}  '
+                lineas.append(f'    Sin pegar claves: alfalfa --connect {fila["id"]}  '
                               '(se abre el navegador; la cuenta es gratis)')
             else:
                 lineas.append(f'    Con su clave gratis{" de " + fila["donde"] if fila["donde"] else ""}: '
-                              f'alfalfa --guardar-clave {fila["id"]}')
+                              f'alfalfa --save-key {fila["id"]}')
         resto = len(datos['proveedores']) - EN_LA_TERMINAL
         if resto > 0:
-            lineas.append(f'  Y {resto} proveedores más con modelos gratis: alfalfa --catalogo')
+            lineas.append(f'  Y {resto} proveedores más con modelos gratis: alfalfa --catalog')
         lineas.append('')
     lineas += ['Otras formas:',
                '  Ollama en este Mac (modelos locales): https://ollama.com/download',
-               '  Tu clave de OpenAI o de Claude: alfalfa --guardar-clave openai (o anthropic)',
-               '  Un código de cortesía del servicio Alfalfa: alfalfa --activar-codigo']
+               '  Tu clave de OpenAI o de Claude: alfalfa --save-key openai (o anthropic)',
+               '  Un código de cortesía del servicio Alfalfa: alfalfa --activate-code']
     return '\n'.join(lineas)

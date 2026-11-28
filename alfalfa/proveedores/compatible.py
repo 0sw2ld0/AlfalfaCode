@@ -372,7 +372,7 @@ class Compatible(Proveedor):
         texto = ('Falta la clave de ' + self.nombre + ' (' + self.variable() + ').')
         if self.donde():
             texto += ' Consíguela en ' + self.donde() + '.'
-        return texto + ' Guárdala en Ajustes ▸ Proveedores o con `alfalfa --guardar-clave ' + self.id + '`.'
+        return texto + ' Guárdala en Ajustes ▸ Proveedores o con `alfalfa --save-key ' + self.id + '`.'
 
     def accion(self, clas, error_text):
         if clas.get('cause') == 'access_denied':
