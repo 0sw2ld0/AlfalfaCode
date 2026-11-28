@@ -1,3 +1,1 @@
-Las pantallas que dibuja el agente salen en un formato más compacto con cualquier modelo: cuestan menos y aparecen antes.
-En las sesiones nuevas, las pantallas del agente vienen apagadas: enciéndelas en el panel derecho de la sesión o en Ajustes ▸ General. Las sesiones que ya tenías las conservan.
-Al eliminar una sesión desde la barra lateral se libera también el espacio de sus instantáneas, y la sesión va a la Papelera.
+Las opciones de la orden alfalfa se llaman ahora en inglés, como en Codex y Claude Code (--model, --resume, --read-only…). Las de español siguen valiendo igual.
