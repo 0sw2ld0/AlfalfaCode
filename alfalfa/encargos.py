@@ -193,6 +193,7 @@ class ColaEncargos:
             hijo = TerminalManager(fila['texto'], resume=reanudada, cwd=cwd, home=self.manager.home,
                 model=self.datos['modelo'], effort=self.datos['esfuerzo'], mode=None if permisos == TURBO else permisos,
                 transport=transporte, parent=self.manager.task['id'], read_only=self.manager.read_only,
+                sin_plan=self.manager.sin_plan,
                 compact_limit=self.manager.compact_limit, firma=self.manager.firma.activa(), auto=self.manager.auto,
                 keep_awake=self.manager.despierto.activo,
                 diagnosticos=self.manager.diagnosticos.activos() if self.manager.diagnosticos else False,

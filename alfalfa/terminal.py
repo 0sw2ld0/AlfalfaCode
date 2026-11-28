@@ -57,7 +57,7 @@ Para enseñar al usuario una imagen o un vídeo local (PNG, JPG, GIF, WebP, MP4,
 ponlo en tu respuesta en su propia línea como ![descripción](ruta): la app de Mac
 lo muestra en la conversación y en la terminal la ruta queda a la vista.'''
 AGENT_TONE = 'Mantén un tono profesional, claro y cordial.\n'
-MANUAL = '''Usa las herramientas locales para leer antes de editar. edit_file recibe path,
+MANUAL_BASE = '''Usa las herramientas locales para leer antes de editar. edit_file recibe path,
 old, new y expected_sha256; write_file recibe path, content y expected_sha256
 (NEW para crear). Si old no coincide literalmente, edit_file prueba líneas exactas,
 espacios finales, espacios en ambos extremos y puntuación Unicode equivalente;
@@ -117,7 +117,9 @@ visual, no pruebas aprobadas: comprueba también la consola y las pruebas pertin
 Todas las herramientas que lanzan procesos comparten la política de aprobación.
 Una denegación no autoriza reintentar por otra herramienta. No hay herramientas
 web disponibles en esta terminal. Un error requiere diagnóstico;
-no inventes resultados. Declara las pruebas no ejecutadas.
+no inventes resultados. Declara las pruebas no ejecutadas.'''
+# El cierre del turno y las sesiones propuestas: sólo con una app que los enseña (no con --no-plan).
+CIERRE_MANUAL = '''
 Si en el turno cambiaste archivos, ejecutaste órdenes o hiciste varios pasos,
 llama a wrap_up justo antes de tu respuesta final: un resumen corto de cómo
 queda (qué cambió y qué falta o no verificaste) y, sólo si lo siguiente lo
@@ -134,6 +136,7 @@ recomiendas y no vas a hacer ahora), propónla con propose_session: un título
 corto y el encargo completo, porque la sesión nueva no ve esta conversación.
 Sale como tarjeta y decide el usuario. No la uses para lo que vas a hacer tú
 ni para una pieza que necesitas para responder (para eso, spawn_agent).'''
+MANUAL = MANUAL_BASE + CIERRE_MANUAL
 SUBAGENTES_MANUAL = '''
 Subagentes (spawn_agent), como Codex y Claude Code: un agente aparte con su propia
 conversación para una tarea acotada. Úsalos cuando el usuario pida subagentes o
@@ -171,6 +174,10 @@ def excluidas():
         from .navegador import NOMBRES as DEL_NAVEGADOR
         return WEB + DEL_NAVEGADOR
     return () if web.disponible() else WEB
+
+# Lo que sólo sirve a la app que enseña el plan y el cierre del turno: --no-plan no lo ofrece. Un chat que sólo
+# dibuja respuestas (CuyMercado) no lo enseña, y cada llamada era una vuelta más del modelo antes de contestar.
+SIN_PLAN = ('update_plan', 'wrap_up', 'propose_session')
 
 ESCRITURA = ('write_file', 'edit_file', 'run_command', 'run_checks', 'apply_patch', 'app_action',
              'browser_click', 'browser_type', 'browser_download', 'browser_eval',
@@ -270,7 +277,7 @@ class TerminalManager:
                  navegador=False, budget=None, monthly_budget=None, diagnosticos=None, firma=None,
                  diagnosticos_swift=None, cwd=None, motor_navegador=None, perfil_cuybrowser='alfalfa',
                  origen_cuybrowser=None, lluvia_limite=None, lluvia_participantes=None,
-                 reglas_equipo=_CARGAR_EQUIPO, prototipo=False):
+                 reglas_equipo=_CARGAR_EQUIPO, prototipo=False, sin_plan=False):
         if lluvia_limite is not None:
             from .lluvia import validar
             validar(lluvia_limite, lluvia_participantes)
@@ -307,6 +314,7 @@ class TerminalManager:
         self.despierto = MantenerDespierto(keep_awake, aviso=self._aviso_despierto)
         self._despierto_dicho = False
         self.read_only = read_only
+        self.sin_plan = sin_plan
         # La app contesta los permisos: como en Codex, el de salir del sandbox no caduca.
         if transport is not None:
             self.unsandboxed_approval_seconds = None
@@ -829,7 +837,8 @@ class TerminalManager:
 
         rt = NativeRuntime(self, self.task, instructions=INSTRUCTIONS, agent_tone=AGENT_TONE,
                              engine_text=engine_text,
-                             manual=lambda model: MANUAL + SUBAGENTES_MANUAL + self.subagentes.descripcion_de_tipos()
+                             manual=lambda model: (MANUAL_BASE if self.sin_plan else MANUAL) + SUBAGENTES_MANUAL
+                             + self.subagentes.descripcion_de_tipos()
                              + (HOOKS_MANUAL if self.hooks and self.hooks.activo() else '')
                              + (modos.PLAN_MANUAL if modos.solo_lee(modos.modo_de(self.task)) else '')
                              + (getattr(self.navegador, 'manual', navegador_manual()) if self.navegador is not None
@@ -841,7 +850,7 @@ class TerminalManager:
                              approval_label='Aprobado por AlfalfaCode', approval_policy=self.approval,
                              excluded_tools=excluidas() + (ESCRITURA
                                                          if self.read_only or modos.solo_lee(modos.modo_de(self.task))
-                                                         else ()),
+                                                         else ()) + (SIN_PLAN if self.sin_plan else ()),
                              working_text='AlfalfaCode está trabajando…',
                              # Sin bytecode: `python3 uso.py` en run_checks creaba __pycache__ en un
                              # repo sin .gitignore y la comprobación quedaba «el workspace cambió».
@@ -1392,6 +1401,7 @@ async def execute(args):
     manager = TerminalManager(args.encargo or ('Cola de encargos' if cola is not None else None),
                               resume=args.reanudar, model=args.modelo,
                               effort=args.esfuerzo, auto=args.auto, read_only=getattr(args, 'solo_lectura', False),
+                              sin_plan=getattr(args, 'sin_plan', False),
                               compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                               parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                               # Limpiar sólo abre la sesión de la cola: no hace falta un mensaje nuevo.
@@ -1480,6 +1490,9 @@ def parser_de_la_orden():
     parser.add_argument('--read-only', '--solo-lectura', dest='solo_lectura',
                         action='store_true', help='No ofrecer herramientas de escritura ni de '
                                                   'ejecución')
+    parser.add_argument('--no-plan', '--sin-plan', dest='sin_plan', action='store_true',
+                        help='No ofrecer update_plan, wrap_up ni propose_session: para una app que no enseña el plan '
+                             'ni el cierre del turno')
     from .lluvia import MAXIMO, MINIMO
     parser.add_argument('--brainstorm', '--lluvia-de-ideas', dest='lluvia_de_ideas',
                         type=int, choices=range(MINIMO, MAXIMO + 1), metavar='TURNS',

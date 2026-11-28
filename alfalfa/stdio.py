@@ -738,6 +738,7 @@ async def run(args, transport):
                                   resume=args.reanudar, model=args.modelo,
                                   effort=args.esfuerzo, auto=args.auto, transport=transport,
                                   read_only=getattr(args, 'solo_lectura', False),
+                                  sin_plan=getattr(args, 'sin_plan', False),
                                   compact_limit=getattr(args, 'compactar_en', None), mode=getattr(args, 'modo', None),
                                   wait=esperar, parent=getattr(args, 'padre', None), keep_awake=keep_awake(args),
                                   navegador=bool(getattr(args, 'navegador', False)),

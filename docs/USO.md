@@ -14,7 +14,7 @@ de las opciones siguen siendo los de siempre (`--permission-mode ediciones`, `--
 `--scope conversacion`, `--memory ver usuario`…).
 
 <details>
-<summary>Las 99 opciones con nombre nuevo</summary>
+<summary>Las 100 opciones con nombre nuevo</summary>
 
 | Inglés | Español (alias) |
 | --- | --- |
@@ -22,6 +22,7 @@ de las opciones siguen siendo los de siempre (`--permission-mode ediciones`, `--
 | `--effort` | `--esfuerzo` |
 | `--permission-mode` | `--modo` |
 | `--read-only` | `--solo-lectura` |
+| `--no-plan` | `--sin-plan` |
 | `--brainstorm` | `--lluvia-de-ideas` |
 | `--brainstorm-participants` | `--lluvia-participantes` |
 | `--prototype` | `--prototipo` |
@@ -151,6 +152,11 @@ el % usado del mes:
 Los clientes deben ignorar los `tipo` y los campos que no conozcan.
 `--read-only` no ofrece al modelo `write_file`, `edit_file`, `run_command` ni
 `run_checks` (el motor también las rechaza).
+`--no-plan` no ofrece `update_plan`, `wrap_up` ni `propose_session` ni le pide
+al modelo el cierre del turno: es para una app que sólo enseña la respuesta
+(un chat como CuyMercado) y no dibuja el plan, la caja del cierre ni las
+sesiones propuestas. Así el modelo no gasta vueltas en algo que nadie ve. Si las
+pide igual, el motor las rechaza.
 
 Entradas (una línea por mensaje):
 

@@ -41,7 +41,7 @@ def _valor(accion):
 
 def test_cada_opcion_tiene_nombre_en_ingles_y_su_alias_en_espanol():
     pares = _pares()
-    assert len(pares) == 99
+    assert len(pares) == 100
     todas = {o for a in parser_de_la_orden()._actions for o in a.option_strings if o.startswith('--')}
     sueltas = {o for a in parser_de_la_orden()._actions
                if len([x for x in a.option_strings if x.startswith('--')]) == 1
@@ -66,11 +66,13 @@ def test_el_alias_en_espanol_deja_lo_mismo_que_el_nombre_en_ingles(ingles, espan
 def test_lo_que_usan_las_apps_sigue_valiendo():
     # CuyMercado Chat, la app de Mac y la extensión de VS Code arrancan el motor con los nombres en español.
     viejo = parser_de_la_orden().parse_args(['--pacai', '--solo-lectura', '--auto', '--modelo', 'openai/gpt-6',
-                                             '--reanudar', 'abc', '--esfuerzo', 'high', '--modo', 'plan'])
+                                             '--reanudar', 'abc', '--esfuerzo', 'high', '--modo', 'plan', '--sin-plan'])
     nuevo = parser_de_la_orden().parse_args(['--pacai', '--read-only', '--auto', '--model', 'openai/gpt-6',
-                                             '--resume', 'abc', '--effort', 'high', '--permission-mode', 'plan'])
+                                             '--resume', 'abc', '--effort', 'high', '--permission-mode', 'plan',
+                                             '--no-plan'])
     assert vars(viejo) == vars(nuevo)
     assert viejo.solo_lectura and viejo.modelo == 'openai/gpt-6' and viejo.reanudar == 'abc' and viejo.modo == 'plan'
+    assert viejo.sin_plan
     assert parser_de_la_orden().parse_args(['--eliminar-sesion', 'abc', '--json']).eliminar_sesion == 'abc'
 
 
