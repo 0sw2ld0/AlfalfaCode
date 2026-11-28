@@ -1,1 +1,1 @@
-Las opciones de la orden alfalfa se llaman ahora en inglés, como en Codex y Claude Code (--model, --resume, --read-only…). Las de español siguen valiendo igual.
+Las apps que sólo enseñan la respuesta, como un chat, pueden arrancar AlfalfaCode con --no-plan: el agente no gasta vueltas en el plan ni en el cierre del turno, y contesta antes.
