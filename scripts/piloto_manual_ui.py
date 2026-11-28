@@ -154,7 +154,7 @@ def capturar(brazo: str) -> dict:
     return {'sistema': sistema, 'tools': payload.get('tools', []), 'options': payload.get('options', {})}
 
 
-# Con --ui-lang los dos brazos llevan PACAI UI Lang 3 (ALFALFA_PACAI_UI_LANG=1): el manual compacto y su valla.
+# Con --ui-lang los dos brazos llevan PACAI UI Lang (ALFALFA_PACAI_UI_LANG=1): el manual compacto y su valla.
 CAT = Catalogo()
 MANUAL = CAT.manual().strip()                   # lo que devuelve ui_manual: buscar antes ya está en el prompt
 
@@ -387,7 +387,7 @@ async def main() -> None:
     args.add_argument('--modelos', help='modelos separados por comas (por defecto, los dos)')
     args.add_argument('--primera-repeticion', type=int, default=0)
     args.add_argument('--proveedor', choices=('chatgpt', 'alfalfa'), default='chatgpt')
-    args.add_argument('--ui-lang', action='store_true', help='los dos brazos con PACAI UI Lang 3')
+    args.add_argument('--ui-lang', action='store_true', help='los dos brazos con PACAI UI Lang')
     opciones = args.parse_args()
     if opciones.resumen:
         resumen(opciones.resumen)

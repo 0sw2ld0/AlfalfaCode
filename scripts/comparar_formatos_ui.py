@@ -1,4 +1,4 @@
-"""PACAI UI Lang 3 frente a OpenUI Lang 1.0 y el JSON de PACAI con ejemplos: mismas tareas, catálogo y modelos.
+"""PACAI UI Lang frente a OpenUI Lang 1.0 y el JSON de PACAI con ejemplos: mismas tareas, catálogo y modelos.
 
     # medir (gasta: pide permiso antes)
     python scripts/comparar_formatos_ui.py medir --salida datos.jsonl [--repeticiones 4] [--tope 0.6]
@@ -11,7 +11,7 @@ Tres brazos, con el servicio Alfalfa (suscripción CUY; nada de claves directas)
 herramientas y una corrección con los errores si la primera salida falla:
 
 - `json_ej`: el prompt de `main` para los modelos sin UI Lang (`Catalogo.manual()`, un ejemplo por componente);
-- `lang`: PACAI UI Lang 3, el prompt que ve hoy GPT-6 Luna o Claude Haiku 5.5;
+- `lang`: PACAI UI Lang, el prompt que ve hoy GPT-6 Luna o Claude Haiku 5.5;
 - `openui_ej`: OpenUI Lang 1.0 (`scripts/openui_lang.py`) con el mismo catálogo y los mismos ejemplos traducidos. El
   prompt sigue el que genera el SDK de OpenUI (`packages/lang-core/src/parser/prompt.ts`): reglas de sintaxis,
   firmas posicionales, acciones con `@`, modo edición y verificación final.
@@ -53,7 +53,7 @@ import openui_lang as o  # noqa: E402
 from alfalfa.pacai import ui_lang  # noqa: E402
 
 BRAZOS = ('json_ej', 'lang', 'openui_ej')
-NOMBRES = {'json_ej': 'PACAI JSON con ejemplos', 'lang': 'PACAI UI Lang 3', 'openui_ej': 'OpenUI Lang 1.0'}
+NOMBRES = {'json_ej': 'PACAI JSON con ejemplos', 'lang': 'PACAI UI Lang', 'openui_ej': 'OpenUI Lang 1.0'}
 DECL = {k: v for k, v in m.DECLARACION.items() if k not in ('pieces', 'queries')}
 MAX_SALIDA = {'pacai': 1500, 'openui': 6000}
 TOKENS_POR_SEGUNDO = 50          # la estimación de streaming del benchmark de OpenUI
@@ -887,7 +887,7 @@ def imprimir(datos):
     print('\nTokens o200k_base de la misma pantalla:')
     for x in datos['muestras']:
         print(f"- {x['muestra']}: " + ', '.join(f"{NOMBRES[b]} {x['tokens'][b]}" for b in BRAZOS))
-    print('\nClasificación con PACAI UI Lang 3 (validez = media de las 52 tareas y los 46 briefs; * = frontera de '
+    print('\nClasificación con PACAI UI Lang (validez = media de las 52 tareas y los 46 briefs; * = frontera de '
           'Pareto validez/coste; ~ = precio de referencia, se paga con un plan):')
     print('| Modelo | Validez | 52 tareas | 46 briefs | Coste por tarea | Salida (med.) | Total (med.) |')
     print('|---|---|---|---|---:|---:|---:|')

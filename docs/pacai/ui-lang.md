@@ -21,7 +21,7 @@ OpenUI Lang 1.0 y al JSON de PACAI. La especificación completa del perfil está
 ## 1. Qué es y dónde vive
 
 ```text
- modelo ──UI Lang 3 o JSON──▶ motor alfalfa ──PACAI · pacai.ui/1──▶ app (Mac, VS Code, web)
+ modelo ──UI Lang o JSON──▶ motor alfalfa ──PACAI · pacai.ui/1──▶ app (Mac, VS Code, web)
                               traduce, valida,                      dibuja
                               repara lo seguro,
                               pone la revisión
@@ -30,8 +30,13 @@ OpenUI Lang 1.0 y al JSON de PACAI. La especificación completa del perfil está
 - **PACAI** es el protocolo entre el motor y las apps.
 - **`pacai.ui/1`** es el formato de las pantallas de su perfil `ui`: una lista de nodos de un catálogo (12
   componentes base más los que declare la app).
-- **PACAI UI Lang 3** es otra forma de escribir esos nodos. Sólo existe entre el modelo y el motor: la app nunca
+- **PACAI UI Lang** es otra forma de escribir esos nodos. Sólo existe entre el modelo y el motor: la app nunca
   la ve.
+
+**El nombre.** Hasta el 28 de noviembre de 2026 estos documentos, los scripts y los datos del benchmark lo llamaban
+«PACAI UI Lang 3». El 3 venía de la 3.ª lluvia de ideas que lo propuso, no de una versión: nunca hubo un 1 ni un 2
+públicos. Es el mismo formato, y la valla sigue siendo `pacai-ui-lang`. La «versión 3» que aún nombra `ui_lang.py`
+es la forma interna de escribir cambios sobre una pantalla.
 
 **Cuándo se usa.** Desde la 0.99.57 el motor la enseña a todos los modelos. `MODELOS_MEDIDOS`, en `ui_lang.py`, sólo
 dice con cuáles se midió y cumple el criterio de adopción: **GPT-6 Luna** y **Claude Haiku 5.5**; la clasificación
@@ -40,7 +45,7 @@ de §6 da los demás. `ALFALFA_PACAI_UI_LANG=0` la apaga con todos y vuelve el m
 en cada inferencia.
 
 **Por qué.** Un modelo cobra por cada token que lee y escribe, y el JSON gasta mucho en puntuación. El tablero de
-CuyMercado ocupa 146 tokens en UI Lang 3, 193 en OpenUI Lang 1.0 y 308 en JSON. El manual del prompt de sistema
+CuyMercado ocupa 146 tokens en UI Lang, 193 en OpenUI Lang 1.0 y 308 en JSON. El manual del prompt de sistema
 ocupa 1276, 1843 y 2037 tokens.
 
 ## 2. Sintaxis
@@ -149,7 +154,7 @@ reparaciones:
 | **Ids con tildes, eñes o mayúsculas** se leen sin tildes y en minúsculas, en la línea, en los hijos y en las bajas. Dos ids que sólo cambian en eso (también contra los de la pantalla en un cambio) son un error. | `previsión_panel` → `prevision_panel` | `test_ids_con_tildes_o_mayusculas_se_leen_en_ascii_si_son_coherentes` y `test_dos_ids_que_solo_cambian_en_tildes_no_se_juntan` |
 
 Las dos últimas reglas llegaron después del benchmark (véase [perfil-ui.md §10.4](perfil-ui.md)). Al revalidar las
-1868 respuestas guardadas de UI Lang 3 recuperan 5 pantallas, todas exactas (Luna pasa de 73 a 77 de 92 en los
+1868 respuestas guardadas de UI Lang recuperan 5 pantallas, todas exactas (Luna pasa de 73 a 77 de 92 en los
 briefs y GLM 5.3 Flash de 49 a 50 de 52 en las tareas), y no cambian ninguna de las que ya valían. Las tablas de §6
 son las del motor 0.99.55, sin ellas.
 
@@ -186,7 +191,7 @@ https://claude.ai/artifact/XgVaYRPDWiFdHZzNQLAbBV
 
 - **Tres formatos con el mismo catálogo** (12 componentes base y 6 de CuyMercado), el mismo ejemplo por componente
   traducido a cada sintaxis y el mismo validador: todo se convierte a `pacai.ui/1` y pasa el catálogo y el árbol.
-  - **PACAI UI Lang 3**, con el prompt que ven hoy Luna y Haiku.
+  - **PACAI UI Lang**, con el prompt que ven hoy Luna y Haiku.
   - **OpenUI Lang 1.0**, según su especificación (`spec/language.md` y `spec/prompt.md`). El lector es nuestro,
     [`scripts/openui_lang.py`](../../scripts/openui_lang.py), con sus códigos de error.
   - **PACAI JSON con ejemplos**, el camino por defecto de los modelos sin UI Lang.
@@ -210,7 +215,7 @@ https://claude.ai/artifact/XgVaYRPDWiFdHZzNQLAbBV
 
 GPT-6 Luna y Claude Haiku 5.5, 4 repeticiones (416 pantallas por formato):
 
-| | PACAI UI Lang 3 | OpenUI Lang 1.0 | PACAI JSON con ejemplos |
+| | PACAI UI Lang | OpenUI Lang 1.0 | PACAI JSON con ejemplos |
 |---|---|---|---|
 | Válidas al primer intento | 412/416 (99,0 %) | **415/415 (100 %)** | 407/416 (97,8 %) |
 | Altas válidas | 256/256 | 256/256 | 256/256 |
@@ -219,7 +224,7 @@ GPT-6 Luna y Claude Haiku 5.5, 4 repeticiones (416 pantallas por formato):
 | Coste por pantalla exacta | **0,24 $/1000** | 0,31 $/1000 | 0,38 $/1000 |
 | Válidas tras una corrección | 416/416 | 415/415 | 416/416 |
 
-Por modelo (UI Lang 3, intervalo de confianza del 95 % de Wilson):
+Por modelo (UI Lang, intervalo de confianza del 95 % de Wilson):
 
 | Modelo | Válidas | IC95 % | Salida (mediana) | Total (mediana) | Coste por exacta |
 |---|---|---|---:|---:|---:|
@@ -236,7 +241,7 @@ Lo que queda sin valer con Luna y Haiku son 4 pantallas: 3 de Haiku, que crea un
 
 Luna y Haiku juntos, 2 repeticiones. Las bandas son las del benchmark de OpenUI, por número de requisitos del brief:
 
-| Banda | Requisitos | PACAI UI Lang 3 | OpenUI Lang 1.0 | PACAI JSON con ejemplos |
+| Banda | Requisitos | PACAI UI Lang | OpenUI Lang 1.0 | PACAI JSON con ejemplos |
 |---|---|---|---|---|
 | b1 | 2–3 | 37/40 (92,5 %) | **38/40 (95,0 %)** | 37/40 (92,5 %) |
 | b2 | 4–6 | 37/40 (92,5 %) | 35/40 (87,5 %) | **39/40 (97,5 %)** |
@@ -246,9 +251,9 @@ Luna y Haiku juntos, 2 repeticiones. Las bandas son las del benchmark de OpenUI,
 | **Total** | | 144/184 (78,3 %) | 144/182 (79,1 %) | **146/184 (79,3 %)** |
 | Coste por válida | | **0,74 $/1000** | 0,93 $/1000 | 1,21 $/1000 |
 
-- Los tres formatos empatan en validez (78–79 %) y bajan con la complejidad. UI Lang 3 es el más barato por
+- Los tres formatos empatan en validez (78–79 %) y bajan con la complejidad. UI Lang es el más barato por
   pantalla válida: un 20 % menos que OpenUI y un 39 % menos que el JSON.
-- Depende del modelo: con Luna, OpenUI llega al 94,4 % (UI Lang 3 79,3 %); con Haiku, UI Lang 3 saca 77,2 % y
+- Depende del modelo: con Luna, OpenUI llega al 94,4 % (UI Lang 79,3 %); con Haiku, UI Lang saca 77,2 % y
   OpenUI 64,1 %.
 - Con 16–18 requisitos, OpenUI publica un 90,6 % con sus modelos, su catálogo de 70 componentes y temperatura 0,7.
   No es comparable con estas cifras.
@@ -260,18 +265,18 @@ renderizador real ([`docs/demos/pacai-ui/ui.js`](../demos/pacai-ui/ui.js), el qu
 en Chrome sin ventana. Cuenta como dibujada si no lanza ninguna excepción y lo que sale tiene texto o controles
 visibles.
 
-- Con UI Lang 3 y el JSON, la app sólo recibe pantallas que el motor acepta. Si las rechaza, pide una corrección.
+- Con UI Lang y el JSON, la app sólo recibe pantallas que el motor acepta. Si las rechaza, pide una corrección.
 - Con OpenUI se dibuja lo que lea su lector aunque haya errores, como hace su renderizador.
 
 | Formato (Luna y Haiku, 52 tareas) | Dibujadas al primer intento | En blanco o con excepción | Tras la corrección |
 |---|---|---|---|
-| PACAI UI Lang 3 | 412/416 (99,0 %) | 0 | **416/416** |
+| PACAI UI Lang | 412/416 (99,0 %) | 0 | **416/416** |
 | OpenUI Lang 1.0 | **415/415 (100 %)** | 0 | 415/415 |
 | PACAI JSON con ejemplos | 407/416 (97,8 %) | 0 | 416/416 |
 
 | Formato (Luna y Haiku, 46 briefs) | Dibujadas al primer intento | En blanco o con excepción | Tras la corrección |
 |---|---|---|---|
-| PACAI UI Lang 3 | 144/184 (78,3 %) | 0 | 180/184 (97,8 %) |
+| PACAI UI Lang | 144/184 (78,3 %) | 0 | 180/184 (97,8 %) |
 | OpenUI Lang 1.0 | **182/182 (100 %)** | 0 | 182/182 |
 | PACAI JSON con ejemplos | 146/184 (79,3 %) | 0 | 183/184 (99,5 %) |
 
@@ -279,11 +284,11 @@ visibles.
   rompe el renderizador, y todos sus nodos llegan al DOM. El validador del motor y el renderizador están de acuerdo.
 - OpenUI se dibuja al 100 % porque su renderizador tolera errores: dibuja lo que entiende aunque falten
   componentes. Es su «99,9 % que se dibuja» frente a su 96,9 % de validez. PACAI elige no enseñar una pantalla a
-  medias y pedir la corrección. Tras ella, UI Lang 3 se dibuja en el 100 % de las tareas y el 97,8 % de los briefs.
+  medias y pedir la corrección. Tras ella, UI Lang se dibuja en el 100 % de las tareas y el 97,8 % de los briefs.
 
 ### 6.5 Clasificación de modelos
 
-**Qué se mide:** la validez al primer intento con UI Lang 3, frente al coste medio por tarea del primer intento.
+**Qué se mide:** la validez al primer intento con UI Lang, frente al coste medio por tarea del primer intento.
 
 - **Validez:** media de las 52 tareas y los 46 briefs (pesan igual).
 - **Coste:** también la media de los dos conjuntos.
@@ -321,7 +326,7 @@ traen las respuestas de §6.2 y §6.3.
 - **En la zona barata, a unos 0,31 $/1000 por tarea,** Gemma 4 31B (90,2 %), GPT-6 Luna (89,4 %) y MiMo V2.6
   Flash (82,9 %) están en la frontera.
   - Gemma 4 31B y Kimi K3.1 Pro empatan en validez, pero Kimi cuesta 27 veces más.
-  - Gemma 4 31B es la candidata más clara para estudiar si se enciende UI Lang 3 en más modelos. Antes habría que
+  - Gemma 4 31B es la candidata más clara para estudiar si se enciende UI Lang en más modelos. Antes habría que
     medirla con más repeticiones.
 - **Dónde fallan:**
   - en los briefs, sobre todo por enums fuera del catálogo y por hijos que no existen;
@@ -347,7 +352,7 @@ traen las respuestas de §6.2 y §6.3.
 
 ### 6.6 Tokens y velocidad
 
-| Pantalla escrita a mano (`o200k_base`) | PACAI UI Lang 3 | OpenUI Lang 1.0 | PACAI JSON |
+| Pantalla escrita a mano (`o200k_base`) | PACAI UI Lang | OpenUI Lang 1.0 | PACAI JSON |
 |---|---:|---:|---:|
 | Tablero de CuyMercado | **146** | 193 | 308 |
 | Formulario de contacto | **66** | 73 | 120 |
@@ -356,12 +361,12 @@ traen las respuestas de §6.2 y §6.3.
 | Cambio: «Iguales» en lugar de «Bajaron» | **40** | 52 | 80 |
 | Prompt de sistema | **1276** | 1843 | 2037 |
 
-- **Salida mediana en los briefs:** Luna 450 tokens en UI Lang 3, 562 en OpenUI y 819 en JSON; Haiku 848, 981 y
+- **Salida mediana en los briefs:** Luna 450 tokens en UI Lang, 562 en OpenUI y 819 en JSON; Haiku 848, 981 y
   1330.
 - **Latencia.** El servicio entrega cada respuesta de una vez, así que el tiempo medido hasta la primera pantalla
   es el total. El streaming se estima como en OpenUI: con lo que el motor publicaría a cada 5 % del texto llegado
   y a 50 tokens/s.
-  - UI Lang 3 se calcula con el `Flujo` del motor (§5): la línea que aún llega se publica cerrada y, por
+  - UI Lang se calcula con el `Flujo` del motor (§5): la línea que aún llega se publica cerrada y, por
     contenedor, sólo el prefijo de hijos que ya llegaron.
   - Hay dos criterios:
     - **el de OpenUI,** `root` con al menos un hijo;
@@ -369,7 +374,7 @@ traen las respuestas de §6.2 y §6.3.
   - El de OpenUI favorece a un formato que siempre envuelve la pantalla en un `Stack`, como OpenUI. En UI Lang,
     `root` puede ser la tabla o el formulario: la pantalla ya se ve, pero «root con un hijo» no llega nunca.
 
-| Primera pantalla estimada (mediana) | PACAI UI Lang 3 | OpenUI Lang 1.0 | PACAI JSON |
+| Primera pantalla estimada (mediana) | PACAI UI Lang | OpenUI Lang 1.0 | PACAI JSON |
 |---|---:|---:|---:|
 | 52 tareas · Luna · primer contenido | 0,68 s | **0,55 s** | 1,41 s |
 | 52 tareas · Haiku · primer contenido | 1,06 s | **0,98 s** | 2,04 s |
@@ -380,24 +385,24 @@ traen las respuestas de §6.2 y §6.3.
 | 46 briefs · Luna · criterio de OpenUI | **1,05 s** (antes 1,40) | 1,10 s | 1,89 s |
 | 46 briefs · Haiku · criterio de OpenUI | 1,73 s (antes 2,12) | **1,58 s** | 3,47 s |
 
-«Antes» es la estimación de §10.2 de perfil-ui, cuando UI Lang 3 sólo publicaba líneas enteras.
+«Antes» es la estimación de §10.2 de perfil-ui, cuando UI Lang sólo publicaba líneas enteras.
 
-- **La línea pendiente cerrada acerca a UI Lang 3 a OpenUI:** recorta 0,1–0,4 s.
+- **La línea pendiente cerrada acerca a UI Lang a OpenUI:** recorta 0,1–0,4 s.
 - **Con el primer contenido, la diferencia es de 0,01–0,15 s.**
   - En los briefs con Luna hay empate.
   - En las 52 tareas, lo que queda es casi todo la valla: `pacai-ui-lang view=tickets` ocupa 9 tokens y
     `openui-lang` 5, unos 0,08 s a 50 tokens/s. Es el precio de nombrar la vista, que PACAI necesita.
 - **El JSON tarda el doble,** porque sólo se lee con la línea entera.
-- **Con la respuesta cortada,** al 25 % del texto OpenUI enseña el 32–38 % de los nodos y UI Lang 3 el 0–29 %.
+- **Con la respuesta cortada,** al 25 % del texto OpenUI enseña el 32–38 % de los nodos y UI Lang el 0–29 %.
   Al 50 %, 55–63 % frente a 40–53 %. En las tareas, el primer nodo de UI Lang suele ser `root` con su lista de
   hijos, y un hijo sólo se ve cuando llegan los anteriores.
 
 ### 6.7 Conclusiones
 
-- **En nuestras tareas, UI Lang 3 hace lo pedido más veces y cuesta menos.** Saca 410 exactas, frente a 407 de
+- **En nuestras tareas, UI Lang hace lo pedido más veces y cuesta menos.** Saca 410 exactas, frente a 407 de
   OpenUI y 400 del JSON. Cuesta un 23 % menos que OpenUI y un 37 % menos que el JSON por pantalla exacta. En
   validez a la primera, OpenUI gana por 3 pantallas de 416.
-- **En los briefs de OpenUI, empate en validez** (78–79 %) y UI Lang 3 es el más barato por pantalla válida.
+- **En los briefs de OpenUI, empate en validez** (78–79 %) y UI Lang es el más barato por pantalla válida.
 - **Todo lo que valida se dibuja.** El renderizador no encontró pantallas en blanco ni excepciones en 3377
   respuestas de 15 modelos.
 - **Dónde gana OpenUI:** en tolerancia, porque dibuja aunque haya errores, y en los briefs largos con Luna. En el
@@ -417,7 +422,7 @@ python scripts/renderizar_ui.py docs/pacai/datos/formatos-ui-tareas.jsonl docs/p
 
 `renderizar_ui.py` necesita Google Chrome (`--chrome RUTA` o la variable `CHROME` si no está en `/Applications`).
 
-Con gasto (antes, pide permiso), un modelo nuevo con UI Lang 3:
+Con gasto (antes, pide permiso), un modelo nuevo con UI Lang:
 
 ```bash
 python scripts/comparar_formatos_ui.py medir --proveedor ollama --models gemma4:31b-cloud --brazos lang --repeticiones 1 --salida datos.jsonl

@@ -87,7 +87,7 @@ _PALABRA = re.compile(r'[^\s"{}\[\]>,=]+')
 _JSON = json.JSONDecoder()
 
 
-# Los modelos con los que PACAI UI Lang 3 cumple el criterio de adopción (perfil-ui.md §10: ≥95 % de pantallas
+# Los modelos con los que PACAI UI Lang cumple el criterio de adopción (perfil-ui.md §10: ≥95 % de pantallas
 # válidas a la primera, límite inferior de Wilson ≥90 % y al menos un 20 % menos de coste por pantalla exacta que el
 # JSON con ejemplos). Es informativo: el formato va encendido con todos (`para_modelo`).
 MODELOS_MEDIDOS = frozenset({'gpt-6-luna', 'claude-haiku-5-5'})

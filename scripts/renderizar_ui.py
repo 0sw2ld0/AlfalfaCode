@@ -10,7 +10,7 @@ Es la métrica «pantallas que se dibujan» del benchmark de OpenUI (su renderiz
 Para cada respuesta:
 
 1. Se calcula la pantalla que llegaría a la app, con el motor de hoy:
-   - **UI Lang 3 y el JSON de PACAI:** si el motor acepta el bloque, sus nodos `pacai.ui/1`; si lo rechaza, no hay
+   - **UI Lang y el JSON de PACAI:** si el motor acepta el bloque, sus nodos `pacai.ui/1`; si lo rechaza, no hay
      pantalla (el motor pide una corrección al modelo y la app no recibe nada).
    - **OpenUI Lang 1.0:** lo que lea su lector aunque haya errores, como hace el renderizador de OpenUI.
 2. Se dibuja con `docs/demos/pacai-ui/ui.js` (el mismo que copia la extensión de VS Code) y `estilo.css`, en una página
