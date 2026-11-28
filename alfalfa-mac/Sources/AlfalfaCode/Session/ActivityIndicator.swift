@@ -2,9 +2,12 @@ import AlfalfaKit
 import AppKit
 import SwiftUI
 
-/// La hoja de alfalfa del indicador de actividad: tres foliolos y un tallo, dibujados con
-/// Canvas para que se vean nítidos a 14–18 pt. Pensando y trabajando se anima (ver
-/// `LeafMotion`); esperando un permiso queda quieta en ámbar y al terminar, quieta en verde.
+/// La alfalfa del indicador de actividad, dibujada con Canvas para que se vea nítida a 14–24 pt.
+///
+/// Dentro de una sesión (`\.alfalfaGrowth` con valor) es la planta que crece con el contexto:
+/// brote al empezar, en flor cerca de la compactación (ver `AlfalfaPlant`). Sin ese valor es la
+/// hoja trifoliada suelta de siempre. Pensando y trabajando se anima (ver `LeafMotion`);
+/// esperando un permiso queda quieta en ámbar y al terminar, quieta en verde.
 ///
 /// El reloj de la animación se para cuando la ventana no se ve (otra app delante, minimizada,
 /// otro escritorio) y en las fases quietas, así que no gasta CPU.
@@ -16,13 +19,24 @@ struct AlfalfaActivityIcon: View {
     var size: CGFloat = 16
     /// La ventana se ve; si no, el dibujo queda quieto.
     var visible = true
+    /// Otro color en vez del de la fase (la barra lateral pinta la planta con el del estado).
+    var tint: Color?
 
     var body: some View {
-        let animated = LeafMotion.isAnimated(phase) && visible
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animated)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            Canvas { graphics, canvasSize in
-                draw(in: &graphics, size: canvasSize, time: time)
+        Group {
+            if let growth {
+                AlfalfaPlantCanvas(growth: growth, phase: phase, animated: animated, color: color, flower: flower,
+                                   reduceMotion: reduceMotion)
+                    // Al cambiar el contexto la planta crece (o rebrota tras compactar) poco a
+                    // poco: las hojas nuevas se despliegan. Con «Reducir movimiento», de golpe.
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 1.6), value: growth)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animated)) { context in
+                    let time = context.date.timeIntervalSinceReferenceDate
+                    Canvas { graphics, canvasSize in
+                        draw(in: &graphics, size: canvasSize, time: time)
+                    }
+                }
             }
         }
         .frame(width: size, height: size)
@@ -33,14 +47,24 @@ struct AlfalfaActivityIcon: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.alfalfaGrowth) private var growth
+
+    private var animated: Bool { LeafMotion.isAnimated(phase) && visible }
 
     private var color: Color {
+        if let tint { return tint }
         let light = colorScheme == .light
         switch phase {
         // En claro, tonos más oscuros: el verde de la marca sobre blanco no llega a 3:1.
         case .waiting: return light ? Color(hex: 0xA86B12) : Theme.warning
         default: return light ? Color(hex: 0x3B8F45) : Theme.alfalfa
         }
+    }
+
+    /// Las flores de la alfalfa son violeta; esperando permiso, todo en ámbar.
+    private var flower: Color {
+        if phase == .waiting { return color }
+        return colorScheme == .light ? Color(hex: 0x7452BD) : Color(hex: 0xB49AEB)
     }
 
     // MARK: - Métodos privados
@@ -74,30 +98,37 @@ struct AlfalfaActivityIcon: View {
                 .scaledBy(x: pose.scale, y: pose.scale)
             var layer = graphics
             layer.opacity = pose.opacity
-            layer.fill(Self.leaflet(length: side * 0.42, width: side * 0.32).applying(transform), with: shading)
+            layer.fill(AlfalfaPlantDrawing.obovate(length: side * 0.42, width: side * 0.32).applying(transform), with: shading)
         }
     }
 
-    /// Un foliolo obovado (estrecho en la base, ancho cerca de la punta) que nace en (0, 0) y
-    /// apunta hacia arriba.
-    private static func leaflet(length: CGFloat, width: CGFloat) -> Path {
-        let half = width / 2
-        var path = Path()
-        path.move(to: .zero)
-        path.addCurve(to: CGPoint(x: half, y: -length * 0.66),
-                      control1: CGPoint(x: half * 0.25, y: -length * 0.18),
-                      control2: CGPoint(x: half, y: -length * 0.40))
-        path.addCurve(to: CGPoint(x: 0, y: -length),
-                      control1: CGPoint(x: half, y: -length * 0.90),
-                      control2: CGPoint(x: half * 0.45, y: -length))
-        path.addCurve(to: CGPoint(x: -half, y: -length * 0.66),
-                      control1: CGPoint(x: -half * 0.45, y: -length),
-                      control2: CGPoint(x: -half, y: -length * 0.90))
-        path.addCurve(to: .zero,
-                      control1: CGPoint(x: -half, y: -length * 0.40),
-                      control2: CGPoint(x: -half * 0.25, y: -length * 0.18))
-        path.closeSubpath()
-        return path
+}
+
+/// La planta con su reloj. `growth` se anima (Animatable): durante la transición SwiftUI pinta
+/// los valores intermedios y las hojas nuevas asoman y se abren.
+private struct AlfalfaPlantCanvas: View, Animatable {
+    var growth: Double
+    let phase: LiveActivity.Phase
+    let animated: Bool
+    let color: Color
+    let flower: Color
+    let reduceMotion: Bool
+
+    var animatableData: Double {
+        get { growth }
+        set { growth = newValue }
+    }
+
+    var body: some View {
+        let plant = AlfalfaPlant(growth: growth)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animated)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            Canvas { graphics, canvasSize in
+                AlfalfaPlantDrawing(plant: plant, phase: animated ? phase : .done, time: time,
+                                    reduceMotion: reduceMotion, leaf: color, flower: flower)
+                    .draw(in: &graphics, size: canvasSize)
+            }
+        }
     }
 }
 

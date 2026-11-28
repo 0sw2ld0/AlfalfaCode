@@ -1,0 +1,44 @@
+[
+  {
+    "camino_a_compactar" : 0,
+    "etapa" : "brote",
+    "hojas" : 0,
+    "paso" : "Sesión nueva",
+    "usado" : 0
+  },
+  {
+    "camino_a_compactar" : 17,
+    "etapa" : "plántula",
+    "hojas" : 2,
+    "paso" : "Leyendo el proyecto",
+    "usado" : 14
+  },
+  {
+    "camino_a_compactar" : 40,
+    "etapa" : "planta joven",
+    "hojas" : 3,
+    "paso" : "Primeros cambios",
+    "usado" : 32
+  },
+  {
+    "camino_a_compactar" : 65,
+    "etapa" : "planta crecida",
+    "hojas" : 7,
+    "paso" : "Pasando pruebas",
+    "usado" : 52
+  },
+  {
+    "camino_a_compactar" : 95,
+    "etapa" : "en flor",
+    "hojas" : 10,
+    "paso" : "Cerca de compactar",
+    "usado" : 76
+  },
+  {
+    "camino_a_compactar" : 8,
+    "etapa" : "brote",
+    "hojas" : 1,
+    "paso" : "Tras compactar",
+    "usado" : 7
+  }
+]
